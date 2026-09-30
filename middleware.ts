@@ -96,7 +96,13 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
+  // /api is excluded: API routes authenticate themselves (session cookie,
+  // a signature like send-email-hook's, or a service-role key) rather than
+  // relying on this middleware's user-session redirect, and a webhook
+  // caller like Supabase has no session cookie to present — without this
+  // exclusion it was getting redirected to /login and bouncing off that
+  // page's GET-only handler with a 405 (2026-09-30, doc00 changelog).
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
