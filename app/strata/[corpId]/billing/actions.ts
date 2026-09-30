@@ -45,15 +45,58 @@ async function siteUrl() {
   return `${proto}://${host}`;
 }
 
-async function getOrCreateStripeCustomer(corporationId: string) {
+// Deliberately simple — just enough to catch a mistyped or empty field
+// before it reaches Stripe. The DB-level check (0009 migration) is the
+// backstop for anything that skips this (e.g. a future admin API).
+function isValidEmail(value: string): boolean {
+  return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(value);
+}
+
+function requireBillingEmail(formData: FormData): string {
+  const email = String(formData.get("billingEmail") ?? "").trim();
+  if (!email || !isValidEmail(email)) {
+    throw new Error(
+      "Enter a valid billing contact email — this is who receives invoices and receipts."
+    );
+  }
+  return email;
+}
+
+/**
+ * The billing contact (doc01 §4b) — who Stripe actually emails invoices
+ * and receipts to. Often the Treasurer or the strata's management
+ * company, not necessarily the admin doing the subscribing, and it
+ * changes over time (a Treasurer rotates out, the corporation switches
+ * management companies) independently of who holds the admin role — so
+ * it's captured once at subscribe time and stays editable afterward via
+ * `updateBillingEmail` below, rather than being derived from the signed-in
+ * user's own account email.
+ */
+async function getOrCreateStripeCustomer(corporationId: string, billingEmail: string) {
   const admin = createAdminClient();
+  const stripe = getStripe();
   const { data: existing } = await admin
     .from("subscriptions")
     .select("stripe_customer_id")
     .eq("corporation_id", corporationId)
     .maybeSingle();
 
-  if (existing?.stripe_customer_id) return existing.stripe_customer_id;
+  if (existing?.stripe_customer_id) {
+    // Keep the Stripe Customer's email in sync with whatever was just
+    // submitted, in case it changed since the customer record was first
+    // created (e.g. resubscribing under a new Treasurer). Also re-assert
+    // `name` as the strata plan number — self-heals any Customer created
+    // before `name` was pinned to corporationId below.
+    await stripe.customers.update(existing.stripe_customer_id, {
+      email: billingEmail,
+      name: corporationId,
+    });
+    await admin
+      .from("subscriptions")
+      .update({ billing_email: billingEmail })
+      .eq("corporation_id", corporationId);
+    return existing.stripe_customer_id;
+  }
 
   const { data: corp } = await admin
     .from("strata_corporations")
@@ -61,30 +104,47 @@ async function getOrCreateStripeCustomer(corporationId: string) {
     .eq("strata_plan_number", corporationId)
     .single();
 
-  const stripe = getStripe();
   const customer = await stripe.customers.create({
-    name: corp?.building_name ?? corp?.legal_name ?? corporationId,
+    // The Customer's `name` is the strata plan number itself (e.g.
+    // "EPS1234") — corporationId here *is* that number
+    // (subscriptions.corporation_id references
+    // strata_corporations.strata_plan_number) — deliberately, because it's
+    // immutable, unlike a building name or legal name, either of which can
+    // change (a rename, a legal-name correction) without the corporation's
+    // identity changing. `description` carries the human-readable name for
+    // anyone scanning the Stripe dashboard, but `name` is what's durable.
+    name: corporationId,
+    description: corp?.building_name ?? corp?.legal_name ?? undefined,
+    email: billingEmail,
     metadata: { corporation_id: corporationId },
   });
 
-  // Upsert a placeholder row so the customer id is on file even before
-  // any webhook fires — status stays at its 'deactivated' default until
-  // the webhook confirms an actual active subscription.
+  // Upsert a placeholder row so the customer id (and billing email) is on
+  // file even before any webhook fires — status stays at its
+  // 'deactivated' default until the webhook confirms an actual active
+  // subscription.
   await admin
     .from("subscriptions")
     .upsert(
-      { corporation_id: corporationId, stripe_customer_id: customer.id },
+      { corporation_id: corporationId, stripe_customer_id: customer.id, billing_email: billingEmail },
       { onConflict: "corporation_id" }
     );
 
   return customer.id;
 }
 
-/** "Subscribe" / "Change plan" CTA — sends the admin to Stripe Checkout
- * for a new subscription, or to replace the existing one. Checkout (not a
- * hand-built card form) so PAD/Interac and 3DS are handled by Stripe. */
-export async function startCheckout(corporationId: string, interval: BillingInterval) {
+/** "Subscribe" CTA — sends the admin to Stripe Checkout for a new
+ * subscription. Checkout (not a hand-built card form) so PAD/Interac and
+ * 3DS are handled by Stripe. Takes the billing contact email from the
+ * form (required — see requireBillingEmail) rather than assuming the
+ * signed-in admin's own account email. */
+export async function startCheckout(
+  corporationId: string,
+  interval: BillingInterval,
+  formData: FormData
+) {
   await requireAdmin(corporationId);
+  const billingEmail = requireBillingEmail(formData);
 
   const admin = createAdminClient();
   const { data: corp } = await admin
@@ -94,7 +154,7 @@ export async function startCheckout(corporationId: string, interval: BillingInte
     .single();
   if (!corp) throw new Error("Corporation not found.");
 
-  const customerId = await getOrCreateStripeCustomer(corporationId);
+  const customerId = await getOrCreateStripeCustomer(corporationId, billingEmail);
   const { base, perUnit } = getPriceIds(interval);
   const origin = await siteUrl();
 
@@ -141,6 +201,36 @@ export async function openBillingPortal(corporationId: string) {
   });
 
   redirect(portal.url);
+}
+
+/**
+ * Update the billing contact email on its own, independent of any other
+ * subscription change — doc01 §4b. Needs to work whether or not a Stripe
+ * Customer exists yet (an admin can set this ahead of subscribing), and
+ * whether or not the corporation currently has an active subscription (a
+ * Treasurer handover shouldn't require touching the plan at all).
+ */
+export async function updateBillingEmail(corporationId: string, formData: FormData) {
+  await requireAdmin(corporationId);
+  const billingEmail = requireBillingEmail(formData);
+
+  const admin = createAdminClient();
+  const { data: sub } = await admin
+    .from("subscriptions")
+    .select("stripe_customer_id")
+    .eq("corporation_id", corporationId)
+    .maybeSingle();
+
+  if (sub?.stripe_customer_id) {
+    await getStripe().customers.update(sub.stripe_customer_id, { email: billingEmail });
+  }
+
+  await admin
+    .from("subscriptions")
+    .upsert(
+      { corporation_id: corporationId, billing_email: billingEmail },
+      { onConflict: "corporation_id" }
+    );
 }
 
 /** "Change billing interval" — swaps the existing subscription's two

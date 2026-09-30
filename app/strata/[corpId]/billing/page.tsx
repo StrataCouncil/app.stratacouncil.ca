@@ -4,7 +4,13 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getStripe } from "@/lib/stripe/client";
 import { calculateBilling } from "@/lib/stripe/prices";
-import { startCheckout, changePlan, cancelSubscription, openBillingPortal } from "./actions";
+import {
+  startCheckout,
+  changePlan,
+  cancelSubscription,
+  openBillingPortal,
+  updateBillingEmail,
+} from "./actions";
 
 /**
  * Billing — admin-only (doc01 §7 item 7: subscribing is admin-gated, no
@@ -59,6 +65,7 @@ export default async function BillingPage({
   const interval = (sub?.billing_interval as "monthly" | "annual" | undefined) ?? "monthly";
   const unitCount = corp.unit_count;
   const { subtotal, gst, total } = calculateBilling(unitCount, interval);
+  const billingEmail = sub?.billing_email ?? "";
 
   // A real card/PAD label needs a live Stripe read — acceptable here
   // since this is a low-traffic, admin-only page, not a hot path.
@@ -166,38 +173,58 @@ export default async function BillingPage({
             </p>
           )}
 
-          {isAdmin && (
+          {isAdmin && subscribed && (
             <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
-              {subscribed ? (
-                <>
-                  <form action={changePlan.bind(null, corpId, interval === "annual" ? "monthly" : "annual")}>
-                    <button className="button button-secondary" data-testid="change-plan-cta">
-                      Switch to {interval === "annual" ? "monthly" : "annual"}
-                    </button>
-                  </form>
-                  {!sub?.cancel_at && (
-                    <form action={cancelSubscription.bind(null, corpId)}>
-                      <button className="button button-secondary" data-testid="cancel-subscription-cta">
-                        Cancel subscription
-                      </button>
-                    </form>
-                  )}
-                </>
-              ) : (
-                <>
-                  <form action={startCheckout.bind(null, corpId, "monthly")}>
-                    <button className="button button-primary" data-testid="billing-subscribe-cta">
-                      Subscribe &mdash; monthly
-                    </button>
-                  </form>
-                  <form action={startCheckout.bind(null, corpId, "annual")}>
-                    <button className="button button-secondary" data-testid="billing-subscribe-annual-cta">
-                      Subscribe &mdash; annual
-                    </button>
-                  </form>
-                </>
+              <form action={changePlan.bind(null, corpId, interval === "annual" ? "monthly" : "annual")}>
+                <button className="button button-secondary" data-testid="change-plan-cta">
+                  Switch to {interval === "annual" ? "monthly" : "annual"}
+                </button>
+              </form>
+              {!sub?.cancel_at && (
+                <form action={cancelSubscription.bind(null, corpId)}>
+                  <button className="button button-secondary" data-testid="cancel-subscription-cta">
+                    Cancel subscription
+                  </button>
+                </form>
               )}
             </div>
+          )}
+
+          {isAdmin && !subscribed && (
+            <form style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+              <div className="field">
+                <label htmlFor="billingEmail">Billing contact email</label>
+                <input
+                  id="billingEmail"
+                  name="billingEmail"
+                  type="email"
+                  required
+                  defaultValue={billingEmail}
+                  placeholder="treasurer@example.com"
+                  data-testid="billing-email-input"
+                />
+                <span className="field__hint">
+                  Who receives invoices and receipts — the Treasurer or your strata
+                  management company, not necessarily you. Editable any time afterward.
+                </span>
+              </div>
+              <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
+                <button
+                  formAction={startCheckout.bind(null, corpId, "monthly")}
+                  className="button button-primary"
+                  data-testid="billing-subscribe-cta"
+                >
+                  Subscribe &mdash; monthly
+                </button>
+                <button
+                  formAction={startCheckout.bind(null, corpId, "annual")}
+                  className="button button-secondary"
+                  data-testid="billing-subscribe-annual-cta"
+                >
+                  Subscribe &mdash; annual
+                </button>
+              </div>
+            </form>
           )}
         </div>
 
@@ -259,6 +286,49 @@ export default async function BillingPage({
                 </form>
               )}
             </>
+          )}
+        </div>
+
+        <div className="card" data-testid="billing-contact-card">
+          <h3>Billing contact</h3>
+          <p>
+            Who Stripe sends invoices and receipts to &mdash; usually the Treasurer or
+            your strata management company. Update this whenever that person changes;
+            it doesn&rsquo;t need to match whoever&rsquo;s signed in here.
+          </p>
+          {subscribed || deactivated ? (
+            isAdmin ? (
+              <form
+                action={updateBillingEmail.bind(null, corpId)}
+                style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}
+              >
+                <div className="field">
+                  <label htmlFor="billing-contact-email">Billing contact email</label>
+                  <input
+                    id="billing-contact-email"
+                    name="billingEmail"
+                    type="email"
+                    required
+                    defaultValue={billingEmail}
+                    placeholder="treasurer@example.com"
+                    data-testid="billing-contact-email-input"
+                  />
+                </div>
+                <button
+                  className="button button-secondary button-small"
+                  style={{ alignSelf: "flex-start" }}
+                  data-testid="update-billing-email-cta"
+                >
+                  Save billing contact
+                </button>
+              </form>
+            ) : (
+              <p className="card__meta">
+                {billingEmail || "Not set yet — an admin needs to add one."}
+              </p>
+            )
+          ) : (
+            <p className="card__meta">Set when you subscribe, above.</p>
           )}
         </div>
       </div>
