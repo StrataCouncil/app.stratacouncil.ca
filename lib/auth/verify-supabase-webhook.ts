@@ -102,7 +102,7 @@ export async function verifySupabaseWebhook(params: {
 
   const cryptoKey = await crypto.subtle.importKey(
     "raw",
-    keyBytes,
+    keyBytes as BufferSource,
     { name: "HMAC", hash: "SHA-256" },
     false,
     ["sign"]
@@ -110,7 +110,7 @@ export async function verifySupabaseWebhook(params: {
   const signatureBytes = await crypto.subtle.sign(
     "HMAC",
     cryptoKey,
-    new TextEncoder().encode(signedContent)
+    new TextEncoder().encode(signedContent) as BufferSource
   );
   const expectedSignature = bytesToBase64(signatureBytes);
 
