@@ -156,7 +156,7 @@ export function StratasphereChat({
 }) {
   const [conversations, setConversations] = useState(initialConversations);
   const [projects, setProjects] = useState(initialProjects);
-  const [activeId, setActiveId] = useState(conversations[0]?.id);
+  const [activeId, setActiveId] = useState<string | undefined>(conversations[0]?.id);
   const active = conversations.find((c) => c.id === activeId) ?? conversations[0];
   const [draft, setDraft] = useState("");
   const [newProjectOpen, setNewProjectOpen] = useState(false);
