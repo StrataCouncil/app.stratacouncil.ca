@@ -61,9 +61,10 @@ async function syncSubscription(sub: Stripe.Subscription) {
   // each Subscription Item in its 2025 API versions; read both shapes so
   // this keeps working regardless of which API version the account is
   // pinned to (Checkout Sessions created above don't set this explicitly).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const subAny = sub as any;
   const periodEndUnix: number | null =
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (sub as any).current_period_end ?? sub.items.data[0]?.current_period_end ?? null;
+    subAny.current_period_end ?? subAny.items?.data?.[0]?.current_period_end ?? null;
   const currentPeriodEnd = periodEndUnix ? new Date(periodEndUnix * 1000).toISOString() : null;
 
   await admin
