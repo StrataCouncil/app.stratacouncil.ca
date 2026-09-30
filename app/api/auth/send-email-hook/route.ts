@@ -54,9 +54,19 @@ interface SendEmailHookPayload {
   };
 }
 
+/**
+ * Deliberately NOT built from `email_data.site_url`: that field does not
+ * reliably reflect Supabase Auth's configured Site URL for hook payloads
+ * (confirmed 2026-09-30 — it kept coming through as the Supabase project's
+ * own *.supabase.co domain even after Site URL was set correctly in the
+ * dashboard, sending confirm links to Supabase's bare API gateway instead
+ * of the app). We know our own production URL, so we use that directly.
+ * NEXT_PUBLIC_APP_URL lets a preview deployment override it if needed.
+ */
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://app.stratacouncil.ca";
+
 function buildConfirmUrl(emailData: SendEmailHookPayload["email_data"]): string {
-  const base = emailData.site_url || "https://app.stratacouncil.ca";
-  const url = new URL("/auth/confirm", base);
+  const url = new URL("/auth/confirm", APP_URL);
   url.searchParams.set("token_hash", emailData.token_hash);
   url.searchParams.set("type", emailData.email_action_type);
   if (emailData.redirect_to) {
