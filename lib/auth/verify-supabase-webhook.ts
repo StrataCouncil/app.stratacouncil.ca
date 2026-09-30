@@ -91,28 +91,41 @@ export async function verifySupabaseWebhook(params: {
     );
   }
 
-  if (!secret.startsWith("whsec_")) {
-    throw new WebhookVerificationError(
-      "SUPABASE_WEBHOOK_SECRET is missing the expected 'whsec_' prefix."
-    );
+  // Supabase's dashboard shows the secret as "v1,whsec_<base64>" (it
+  // supports space-separated multiple secrets for rotation, each prefixed
+  // with its version). Strip any "vN," prefix from each entry before use.
+  const rawSecrets = secret
+    .split(" ")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  if (rawSecrets.length === 0) {
+    throw new WebhookVerificationError("SUPABASE_WEBHOOK_SECRET is empty.");
   }
-  const keyBytes = base64ToBytes(secret.slice("whsec_".length));
 
   const signedContent = `${id}.${timestamp}.${rawBody}`;
+  const encodedContent = new TextEncoder().encode(signedContent) as BufferSource;
 
-  const cryptoKey = await crypto.subtle.importKey(
-    "raw",
-    keyBytes as BufferSource,
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"]
-  );
-  const signatureBytes = await crypto.subtle.sign(
-    "HMAC",
-    cryptoKey,
-    new TextEncoder().encode(signedContent) as BufferSource
-  );
-  const expectedSignature = bytesToBase64(signatureBytes);
+  const expectedSignatures: string[] = [];
+  for (const rawSecret of rawSecrets) {
+    const withoutVersion = rawSecret.includes(",")
+      ? rawSecret.split(",").pop()!
+      : rawSecret;
+    if (!withoutVersion.startsWith("whsec_")) {
+      throw new WebhookVerificationError(
+        "SUPABASE_WEBHOOK_SECRET is missing the expected 'whsec_' prefix."
+      );
+    }
+    const keyBytes = base64ToBytes(withoutVersion.slice("whsec_".length));
+    const cryptoKey = await crypto.subtle.importKey(
+      "raw",
+      keyBytes as BufferSource,
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["sign"]
+    );
+    const signatureBytes = await crypto.subtle.sign("HMAC", cryptoKey, encodedContent);
+    expectedSignatures.push(bytesToBase64(signatureBytes));
+  }
 
   // webhook-signature looks like "v1,<base64sig> v1,<base64sig2>" (space-separated,
   // multiple entries during secret rotation).
@@ -127,7 +140,7 @@ export async function verifySupabaseWebhook(params: {
     .filter((entry) => entry.version === "v1" && entry.sig);
 
   const isValid = candidates.some((candidate) =>
-    timingSafeEqual(candidate.sig, expectedSignature)
+    expectedSignatures.some((expected) => timingSafeEqual(candidate.sig, expected))
   );
 
   if (!isValid) {
