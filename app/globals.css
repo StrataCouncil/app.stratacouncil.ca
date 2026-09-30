@@ -1,0 +1,2251 @@
+/* app.stratacouncil.ca — design tokens
+   Source of truth: Neurata project doc `05-brand-design-system.md` §3–5.
+   Duplicated from stratacouncil-marketing per that doc's §6 recommendation
+   (start with duplication, revisit a shared package only if drift becomes
+   a real problem). Keep these two token blocks in sync by hand. */
+
+:root {
+  --ink: #1b2a41;
+  --paper: #f8f6f1;
+  --surface: #ffffff;
+  --line: #e3dfd5;
+
+  --accent: #b4602f;
+  --accent-dark: #8f4b24;
+  --muted: #6b7280;
+
+  --free: #2f7355;
+  --free-bg: #e6f0ea;
+  --locked: #9ca3af;
+  --locked-bg: #f1f0ec;
+
+  --danger: #a6342a;
+  --danger-bg: #f5e1de;
+
+  --radius-sm: 6px;
+  --radius-lg: 12px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  padding: 0;
+  margin: 0;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-work-sans), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-fraunces), Georgia, serif;
+  font-weight: 600;
+  line-height: 1.15;
+  margin: 0;
+}
+
+a {
+  color: inherit;
+}
+
+img,
+svg {
+  display: block;
+  max-width: 100%;
+}
+
+button {
+  font-family: inherit;
+}
+
+.wrap {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+/* Buttons — same system as the marketing site */
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 0.95rem;
+  padding: 0.75em 1.4em;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.button-primary {
+  background: var(--accent);
+  color: var(--paper);
+}
+
+.button-primary:hover {
+  background: var(--accent-dark);
+}
+
+.button-secondary {
+  background: transparent;
+  color: var(--ink);
+  border-color: var(--line);
+}
+
+.button-secondary:hover {
+  border-color: var(--ink);
+}
+
+.button-small {
+  padding: 0.5em 1em;
+  font-size: 0.85rem;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35em;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0.3em 0.75em;
+  border-radius: 999px;
+  background: var(--free-bg);
+  color: var(--free);
+}
+
+.pill--locked {
+  background: var(--locked-bg);
+  color: var(--muted);
+}
+
+.pill--federal {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.pill--live {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+/* App shell — top nav, corp switcher */
+
+.app-header {
+  background: var(--ink);
+  color: var(--paper);
+  border-bottom: 1px solid rgba(248, 246, 241, 0.1);
+}
+
+.app-header__inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 72px;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  padding-top: 0.75rem;
+  padding-bottom: 0.75rem;
+}
+
+.app-header__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6em;
+  text-decoration: none;
+  font-family: var(--font-fraunces), Georgia, serif;
+  font-weight: 600;
+  font-size: 1.15rem;
+  color: inherit;
+  flex: none;
+}
+
+.app-header__mark {
+  width: 32px;
+  height: 32px;
+}
+
+.app-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+}
+
+.app-nav a {
+  text-decoration: none;
+  color: rgba(248, 246, 241, 0.75);
+  font-weight: 500;
+  font-size: 0.95rem;
+  padding: 0.5em 0.9em;
+  border-radius: var(--radius-sm);
+}
+
+.app-nav a:hover {
+  color: var(--paper);
+}
+
+.app-nav a[data-active="true"] {
+  color: var(--paper);
+  background: rgba(248, 246, 241, 0.1);
+}
+
+/* Account menu — replaces the old bare "Sign out" link in the header.
+   Trigger is styled for the dark header it sits in; the dropdown panel
+   itself reuses the same light-surface popover treatment as
+   `.strata-switcher__menu` below, since it floats above the header onto
+   the page background either way. */
+.account-menu {
+  position: relative;
+  flex: none;
+}
+
+.account-menu__trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+  padding: 0.35em 0.7em 0.35em 0.35em;
+  border-radius: 999px;
+  background: transparent;
+  border: 1px solid transparent;
+  font-family: inherit;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: rgba(248, 246, 241, 0.9);
+  cursor: pointer;
+}
+
+.account-menu__trigger:hover {
+  border-color: rgba(248, 246, 241, 0.25);
+}
+
+.account-menu__avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex: none;
+}
+
+.account-menu__avatar--initials {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent);
+  color: var(--paper);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.account-menu__chevron {
+  width: 13px;
+  height: 13px;
+  opacity: 0.7;
+}
+
+.account-menu__panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.5rem);
+  width: 240px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 8px 24px rgba(27, 42, 65, 0.12);
+  padding: 0.4rem;
+  z-index: 30;
+}
+
+.account-menu__panel-header {
+  display: flex;
+  flex-direction: column;
+  padding: 0.6rem 0.7rem 0.7rem;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 0.3rem;
+}
+
+.account-menu__panel-header strong {
+  font-size: 0.9rem;
+}
+
+.account-menu__panel-header span {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.account-menu__item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  text-decoration: none;
+  background: none;
+  border: none;
+  font: inherit;
+  color: var(--ink);
+  font-size: 0.88rem;
+  padding: 0.55rem 0.7rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.account-menu__item:hover {
+  background: var(--paper);
+}
+
+.account-menu__item--signout {
+  color: var(--danger);
+}
+
+/* Below ~720px the nav wraps onto its own row rather than squeezing —
+   this is the header that appears on Council Training/Home too, so it
+   has to hold up on a phone, unlike the Stratasphere content below.
+   This block MUST come after the unconditional `.app-header__inner`,
+   `.app-header__brand` and `.app-nav` rules above: `.app-nav`'s base
+   rule sets `flex: 1` (shorthand for flex-basis: 0%), and since it has
+   the same specificity as `.app-nav` here, whichever is declared later
+   in the file wins on every viewport where both could apply — this
+   block has to be last so its flex-basis: 100% actually sticks on
+   mobile instead of silently getting reset back to 0%. */
+@media (max-width: 720px) {
+  .app-header__inner {
+    justify-content: flex-start;
+  }
+
+  .app-header__brand span {
+    display: none;
+  }
+
+  .app-nav {
+    order: 3;
+    flex-basis: 100%;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+  }
+
+  .app-nav a {
+    padding: 0.4em 0.7em;
+    font-size: 0.88rem;
+  }
+}
+
+/* Page shell */
+
+.page {
+  /* padding-top/bottom only — a plain `padding` shorthand here would
+     zero out the left/right 24px that .wrap sets on this same element,
+     since they'd both be setting the same property. */
+  padding-top: 56px;
+  padding-bottom: 96px;
+}
+
+.page-header {
+  margin-bottom: 2.5rem;
+}
+
+.page-header h1 {
+  font-size: clamp(1.75rem, 3vw, 2.25rem);
+}
+
+.page-header p {
+  margin: 0.6rem 0 0;
+  color: var(--muted);
+  font-size: 1.05rem;
+  max-width: 640px;
+}
+
+/* Strata switcher — moved off the global header (Home/Council Training
+   aren't corp-scoped at all) into the one place it's actually relevant:
+   the top of the Stratasphere™ section itself. */
+
+.page-header--with-switcher {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.strata-switcher {
+  position: relative;
+  flex: none;
+}
+
+.strata-switcher__trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+  padding: 0.5em 0.9em;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  font-size: 0.88rem;
+  font-family: inherit;
+  cursor: pointer;
+  color: var(--ink);
+}
+
+.strata-switcher__trigger:hover {
+  border-color: var(--ink);
+}
+
+.strata-switcher__label {
+  color: var(--muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.strata-switcher__name {
+  font-weight: 600;
+}
+
+.strata-switcher__chevron {
+  width: 14px;
+  height: 14px;
+  color: var(--muted);
+}
+
+.strata-switcher__menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.4rem);
+  width: 260px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 8px 24px rgba(27, 42, 65, 0.12);
+  padding: 0.4rem;
+  z-index: 20;
+}
+
+.strata-switcher__option {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 0.6rem 0.7rem;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.88rem;
+  color: var(--ink);
+}
+
+.strata-switcher__option:hover {
+  background: var(--paper);
+}
+
+.strata-switcher__option[data-selected="true"] {
+  background: var(--paper);
+}
+
+.strata-switcher__option-meta {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.strata-switcher__check {
+  color: var(--free);
+  flex: none;
+}
+
+.strata-switcher__connect {
+  display: block;
+  text-decoration: none;
+  color: var(--accent);
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 0.7rem 0.7rem 0.5rem;
+  border-top: 1px solid var(--line);
+  margin-top: 0.3rem;
+}
+
+/* Nudge banner — persistent CTA (doc03 Stage 3) */
+
+.nudge-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 2.5rem;
+}
+
+.nudge-banner p {
+  margin: 0.25rem 0 0;
+  color: var(--muted);
+}
+
+/* Card grid — training tracks, playbooks */
+
+.grid-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1.25rem;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.card h3 {
+  font-size: 1.1rem;
+}
+
+.card p {
+  color: var(--muted);
+  line-height: 1.55;
+  margin: 0;
+  font-size: 0.92rem;
+}
+
+.progress-track {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--locked-bg);
+  overflow: hidden;
+}
+
+.progress-track__fill {
+  height: 100%;
+  background: var(--free);
+  border-radius: 999px;
+}
+
+/* Knowledge library — search, filters, resource cards */
+
+.kb-search {
+  width: 100%;
+  max-width: 480px;
+  padding: 0.7em 1em;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font-family: inherit;
+  font-size: 0.95rem;
+  color: var(--ink);
+  margin-bottom: 1rem;
+  display: block;
+}
+
+.kb-search:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.kb-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.kb-filter-pill {
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 0.45em 0.9em;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.kb-filter-pill:hover {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+.kb-filter-pill[data-active="true"] {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--paper);
+}
+
+.kb-filter-pill__count {
+  opacity: 0.7;
+  font-weight: 400;
+}
+
+.kb-card__meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.kb-card__meta-row-right {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.kb-review-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 0.25em 0.6em;
+  border-radius: 999px;
+}
+
+.kb-review-badge--due {
+  background: #fbe9e2;
+  color: #9a3a1f;
+}
+
+.kb-filter-pill--due[data-active="true"] {
+  background: #9a3a1f;
+  border-color: #9a3a1f;
+}
+
+.kb-card__kind {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+}
+
+.kb-card__kind--emergency_playbook {
+  color: #b4302f;
+}
+
+.kb-card__checklist {
+  margin: 0;
+  padding-left: 1.1rem;
+  font-size: 0.85rem;
+  color: var(--ink);
+  line-height: 1.6;
+}
+
+.kb-card__checklist-more {
+  color: var(--muted);
+  list-style: none;
+  margin-left: -1.1rem;
+  font-size: 0.8rem;
+}
+
+.kb-card__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.kb-tag {
+  font-size: 0.72rem;
+  color: var(--muted);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.2em 0.6em;
+}
+
+.card__meta {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+/* Module list */
+
+.module-list {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.module-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.1rem 1.5rem;
+  border-bottom: 1px solid var(--line);
+}
+
+/* Below this width the title/meta text is tall enough to make the
+   inline-right button placement inconsistent row to row — some rows
+   had it beside the title, others wrapped it below. Stack every row
+   the same way instead of leaving it to content length. */
+@media (max-width: 560px) {
+  .module-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+    padding: 1rem;
+  }
+
+  .module-row button {
+    align-self: flex-start;
+  }
+}
+
+.module-row:last-child {
+  border-bottom: none;
+}
+
+.module-row__title {
+  font-weight: 600;
+}
+
+.module-row__meta {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-top: 0.2rem;
+}
+
+.module-row__status {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  background: var(--locked-bg);
+  color: var(--muted);
+}
+
+.module-row__status[data-done="true"] {
+  background: var(--free-bg);
+  color: var(--free);
+}
+
+/* Meetings list — a module-row can carry more than one action button
+   (Upcoming: Edit Agenda + Export + Launch Meeting), unlike every other
+   module-row's single trailing button, so its actions get their own
+   flex-wrapping group rather than relying on .module-row's own layout. */
+.meeting-row__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+@media (max-width: 560px) {
+  .meeting-row__actions {
+    justify-content: flex-start;
+  }
+}
+
+/* Stratasphere™ sub-nav */
+
+.substrata-nav {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 0;
+  margin-bottom: 2.5rem;
+}
+
+.substrata-nav a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  text-decoration: none;
+  color: var(--muted);
+  font-weight: 500;
+  font-size: 0.92rem;
+  padding: 0.75em 0.9em;
+  border-bottom: 2px solid transparent;
+}
+
+.substrata-nav a:hover {
+  color: var(--ink);
+}
+
+.substrata-nav a[data-active="true"] {
+  color: var(--ink);
+  border-bottom-color: var(--accent);
+}
+
+.substrata-nav .lock-icon {
+  font-size: 0.75rem;
+  color: var(--locked);
+}
+
+/* Lock / upgrade panel for gated sections */
+
+.lock-panel {
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-lg);
+  padding: 3rem 2rem;
+  text-align: center;
+  background: var(--surface);
+}
+
+.lock-panel h2 {
+  font-size: 1.35rem;
+  margin-bottom: 0.6rem;
+}
+
+.lock-panel p {
+  color: var(--muted);
+  max-width: 480px;
+  margin: 0 auto 1.5rem;
+  line-height: 1.6;
+}
+
+/* Roster matrix */
+
+/* Wraps the table for the rounded-corner border; the table itself must
+   NOT carry overflow:hidden — that clips the absolutely-positioned
+   .role-editor popover (a descendant of a <td>) on every row but the
+   first, which is what made role editing look broken: the checkboxes
+   were being cut off by the table's own clipping box. */
+.roster-table-wrap {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  overflow: visible;
+  background: var(--surface);
+}
+
+.roster-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--surface);
+}
+
+.roster-table-wrap .roster-table {
+  border-radius: var(--radius-lg);
+}
+
+.roster-table-wrap .roster-table tr:first-child th:first-child {
+  border-top-left-radius: var(--radius-lg);
+}
+
+.roster-table-wrap .roster-table tr:first-child th:last-child {
+  border-top-right-radius: var(--radius-lg);
+}
+
+.roster-table-wrap .roster-table tr:last-child td:first-child {
+  border-bottom-left-radius: var(--radius-lg);
+}
+
+.roster-table-wrap .roster-table tr:last-child td:last-child {
+  border-bottom-right-radius: var(--radius-lg);
+}
+
+.roster-table th,
+.roster-table td {
+  padding: 0.9rem 1rem;
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.9rem;
+}
+
+.roster-table th {
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  background: var(--paper);
+}
+
+.roster-table tr:last-child td {
+  border-bottom: none;
+}
+
+.roster-table td[data-center="true"],
+.roster-table th[data-center="true"] {
+  text-align: center;
+}
+
+.completion-dot {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--locked-bg);
+  border: 1px solid var(--line);
+}
+
+.completion-dot[data-done="true"] {
+  background: var(--free);
+  border-color: var(--free);
+}
+
+.role-tag {
+  display: inline-flex;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.2em 0.6em;
+  border-radius: 999px;
+  background: var(--locked-bg);
+  color: var(--ink);
+  margin: 0 0.25em 0.25em 0;
+}
+
+.roster-table__meta {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-top: 0.15rem;
+}
+
+.roster-table__na {
+  color: var(--locked);
+}
+
+.roster-table__roles-cell {
+  position: relative;
+}
+
+.roster-table__edit-roles {
+  display: inline-block;
+  background: transparent;
+  border: none;
+  color: var(--accent);
+  font-size: 0.78rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  padding: 0.2em 0.4em;
+  margin-left: 0.15em;
+}
+
+.roster-table__edit-roles:hover {
+  text-decoration: underline;
+}
+
+.roster-table__remove-trigger {
+  color: var(--danger, #b4432a);
+}
+
+.role-editor {
+  position: absolute;
+  left: 1rem;
+  top: 100%;
+  z-index: 20;
+  width: 220px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 8px 24px rgba(27, 42, 65, 0.12);
+  padding: 0.75rem;
+}
+
+.role-editor__title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 0.5rem;
+}
+
+.role-editor__option {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  font-size: 0.88rem;
+  font-weight: 400;
+  padding: 0.3rem 0;
+  cursor: pointer;
+}
+
+.role-editor__option[data-disabled="true"] {
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+.role-editor__option[data-disabled="true"] input {
+  cursor: not-allowed;
+}
+
+.role-editor__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--line);
+}
+
+/* Invite a member — sits above the roster table as its own card, not a
+   modal, so sending an invite and seeing the pending list stay on
+   screen together (doc01 §1's admin-initiated `corporation_invites`). */
+.roster-invites__form {
+  display: flex;
+  gap: 0.5rem;
+  margin: 0.75rem 0 0.25rem;
+}
+
+.roster-invites__form input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.5em 0.75em;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md, 8px);
+  font-size: 0.9rem;
+  font-family: inherit;
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.roster-invites__error {
+  color: var(--danger, #b4432a);
+  font-size: 0.82rem;
+  margin: 0.4rem 0 0;
+}
+
+.roster-invites__list {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  border-top: 1px solid var(--line);
+}
+
+.roster-invites__list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.65rem 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.roster-invites__email {
+  display: block;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.roster-invites__revoke {
+  flex-shrink: 0;
+  background: transparent;
+  border: none;
+  color: var(--danger, #b4432a);
+  font-size: 0.78rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  padding: 0.2em 0.4em;
+}
+
+.roster-invites__revoke:hover {
+  text-decoration: underline;
+}
+
+.roster-invites__confirm {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+/* Requests to join — self-serve, admin-approved (doc01 §1). Reuses the
+   invite list's row layout for the pending-request list, but Approve
+   opens a heavier confirm panel than anything else in this roster
+   surface, since it's the one action here that grants a stranger
+   standing access. */
+.roster-join-requests__list {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  border-top: 1px solid var(--line);
+}
+
+.roster-join-requests__list > li {
+  padding: 0.65rem 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.roster-join-requests__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.roster-join-requests__actions {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.roster-join-requests__approve-panel {
+  position: static;
+  width: auto;
+  max-width: 420px;
+  margin-top: 0.75rem;
+}
+
+.roster-join-requests__warning {
+  border-left: 3px solid var(--danger);
+  background: var(--danger-bg);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  padding: 0.7rem 0.9rem;
+  margin-bottom: 0.85rem;
+}
+
+.roster-join-requests__warning strong {
+  display: block;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--danger);
+  margin-bottom: 0.3rem;
+}
+
+.roster-join-requests__warning p {
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+/* Type-to-confirm — shared by the join-request Approve panel and
+   RosterTable's Remove panel, both deliberately heavier than a plain
+   Cancel/Confirm pair since each grants or revokes standing access. */
+.confirm-panel {
+  position: static;
+  width: auto;
+  max-width: 340px;
+}
+
+.confirm-panel__label {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-bottom: 0.35rem;
+}
+
+.confirm-panel__input {
+  display: block;
+  width: 100%;
+  padding: 0.5em 0.75em;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md, 8px);
+  font-size: 0.9rem;
+  font-family: inherit;
+  background: var(--surface);
+  color: var(--ink);
+  margin-bottom: 0.25rem;
+}
+
+.confirm-panel button[disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Admin entry point — Billing lives off Council & Roles rather than in
+   the main Stratasphere™ sub-nav, since it's admin-only (doc01 §7 item 7)
+   and not a content tab everyone connected should see. */
+
+.admin-entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+  margin-top: 1.5rem;
+}
+
+.admin-entry p {
+  color: var(--muted);
+  margin: 0;
+  font-size: 0.92rem;
+}
+
+/* Billing */
+
+.billing-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.billing-lines {
+  border-top: 1px solid var(--line);
+  padding-top: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.billing-line {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+
+.billing-line--subtotal {
+  border-top: 1px dashed var(--line);
+  padding-top: 0.5rem;
+  color: var(--ink);
+}
+
+.billing-line--total {
+  font-weight: 700;
+  color: var(--ink);
+  font-size: 1rem;
+}
+
+.billing-interval-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.billing-interval-option {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 0.75rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.billing-interval-option[data-selected="true"] {
+  border-color: var(--accent);
+  background: rgba(180, 96, 47, 0.07);
+}
+
+/* Document folders */
+
+.folder-card__icon {
+  width: 26px;
+  height: 26px;
+  color: var(--accent);
+}
+
+.sync-note {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem 1.5rem;
+  margin-top: 1.5rem;
+}
+
+.sync-note p {
+  color: var(--muted);
+  margin: 0.25rem 0 0;
+  font-size: 0.88rem;
+}
+
+.sync-note button[disabled] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* Stratasphere™ assistant — ChatGPT-shaped chat UI */
+
+.chat-shell {
+  display: flex;
+  height: 640px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.chat-sidebar {
+  width: 260px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem;
+  background: var(--paper);
+  border-right: 1px solid var(--line);
+}
+
+.chat-sidebar__new {
+  width: 100%;
+}
+
+.chat-sidebar__list {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.chat-sidebar__item {
+  display: flex;
+  align-items: center;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.chat-sidebar__item:hover {
+  background: var(--surface);
+}
+
+.chat-sidebar__item[data-active="true"] {
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.chat-sidebar__item-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 0.6rem 0.7rem;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+/* Hidden until the row is hovered (or the thread is pinned, so "Unpin"
+   stays discoverable without hovering) — same reveal-on-hover pattern
+   as the roster's Edit/Remove actions, just triggered by the row instead
+   of the button itself. */
+.chat-sidebar__pin {
+  flex-shrink: 0;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  padding: 0.3em 0.6em;
+  margin-right: 0.3rem;
+  border-radius: var(--radius-sm);
+  opacity: 0;
+}
+
+.chat-sidebar__item:hover .chat-sidebar__pin,
+.chat-sidebar__pin[data-pinned="true"] {
+  opacity: 1;
+}
+
+.chat-sidebar__pin:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.chat-sidebar__pin[data-pinned="true"] {
+  color: var(--accent);
+}
+
+.chat-sidebar__item-actions {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+
+/* The Move popover — same lightweight-popover pattern as RosterTable's
+   role editor, just triggered by a hover-revealed text button instead
+   of a persistent "Edit" link. Keep the trigger visible while its own
+   menu is open, even after the mouse leaves the row. */
+.chat-sidebar__move-wrap {
+  position: relative;
+}
+
+.chat-sidebar__move-wrap:has(.chat-sidebar__move-menu) .chat-sidebar__pin {
+  opacity: 1;
+}
+
+.chat-sidebar__move-menu {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  z-index: 20;
+  width: 180px;
+  max-height: 220px;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 8px 24px rgba(27, 42, 65, 0.12);
+  padding: 0.35rem;
+}
+
+.chat-sidebar__move-option {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 0.4em 0.6em;
+  font-size: 0.8rem;
+  font-family: inherit;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.chat-sidebar__move-option:hover {
+  background: var(--paper);
+}
+
+.chat-sidebar__move-option[data-selected="true"] {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.chat-sidebar__item-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chat-sidebar__item-meta {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.chat-sidebar__section + .chat-sidebar__section {
+  margin-top: 0.5rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--line);
+}
+
+.chat-sidebar__section-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.2rem 0.7rem 0.4rem;
+}
+
+.chat-sidebar__section-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-right: 0.4rem;
+}
+
+.chat-sidebar__section-title-row .chat-sidebar__section-title {
+  padding-right: 0;
+}
+
+.chat-sidebar__section-action {
+  flex-shrink: 0;
+  background: transparent;
+  border: none;
+  color: var(--accent);
+  font-size: 0.72rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  padding: 0.15em 0.4em;
+}
+
+.chat-sidebar__section-action:hover {
+  text-decoration: underline;
+}
+
+.chat-sidebar__new-project-form {
+  padding: 0.2rem 0.7rem 0.6rem;
+}
+
+.chat-sidebar__new-project-form input {
+  width: 100%;
+  padding: 0.4em 0.6em;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  font-size: 0.8rem;
+  font-family: inherit;
+  background: var(--surface);
+  color: var(--ink);
+  margin-bottom: 0.4rem;
+}
+
+.chat-sidebar__new-project-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.4rem;
+}
+
+.chat-sidebar__project {
+  margin-bottom: 0.3rem;
+}
+
+.chat-sidebar__project-name {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--accent);
+  padding: 0.2rem 0.7rem;
+}
+
+.chat-sidebar__project .chat-sidebar__item {
+  padding-left: 1.4rem;
+}
+
+.chat-sidebar__project-empty {
+  font-size: 0.72rem;
+  color: var(--muted);
+  font-style: italic;
+  padding: 0.2rem 0.7rem 0.5rem 1.4rem;
+}
+
+.chat-sidebar__date-label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 0.5rem 0.7rem 0.15rem;
+}
+
+.chat-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.chat-kb-banner {
+  font-size: 0.78rem;
+  color: var(--muted);
+  background: var(--paper);
+  border-bottom: 1px solid var(--line);
+  padding: 0.6rem 1.25rem;
+}
+
+.chat-transcript {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.chat-message {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.chat-message[data-role="user"] {
+  align-items: flex-end;
+}
+
+.chat-message[data-role="assistant"] {
+  align-items: flex-start;
+}
+
+.chat-message__bubble {
+  max-width: 70%;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-lg);
+  font-size: 0.92rem;
+  line-height: 1.55;
+}
+
+.chat-message[data-role="user"] .chat-message__bubble {
+  background: var(--accent);
+  color: var(--paper);
+  border-bottom-right-radius: 4px;
+}
+
+.chat-message[data-role="assistant"] .chat-message__bubble {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-bottom-left-radius: 4px;
+}
+
+.chat-message__citations {
+  max-width: 70%;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.chat-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 0.5rem;
+  padding: 2rem;
+}
+
+.chat-empty p {
+  max-width: 420px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.chat-composer {
+  display: flex;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.chat-composer input {
+  flex: 1;
+  font-family: inherit;
+  font-size: 0.92rem;
+  padding: 0.65em 0.9em;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.chat-composer input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.chat-composer button[disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Auth forms */
+
+.auth-shell {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 400px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 2.5rem;
+}
+
+.auth-card__mark {
+  width: 40px;
+  height: 40px;
+  color: var(--ink);
+}
+
+.auth-card h1 {
+  font-size: 1.5rem;
+  margin-bottom: 0.4rem;
+}
+
+.auth-card p {
+  color: var(--muted);
+  margin: 0 0 1.75rem;
+  font-size: 0.92rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-bottom: 1.1rem;
+}
+
+.field label {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.field input {
+  font-family: inherit;
+  font-size: 0.95rem;
+  padding: 0.65em 0.85em;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.field input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.field input:disabled {
+  color: var(--muted);
+  background: var(--locked-bg);
+  cursor: not-allowed;
+}
+
+.field__hint {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+/* Checkbox fields (e.g. Terms & Privacy consent at signup) — same .field
+   rhythm, but the label wraps the checkbox rather than sitting above it. */
+
+.field--checkbox label {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  font-size: 0.85rem;
+  font-weight: 400;
+  cursor: pointer;
+}
+
+.field--checkbox input {
+  margin-top: 0.2rem;
+  flex: none;
+  width: 1rem;
+  height: 1rem;
+  accent-color: var(--accent, #b4602f);
+}
+
+.field--checkbox a {
+  color: var(--accent, #b4602f);
+  text-decoration: underline;
+}
+
+/* Account page */
+
+.account-settings__photo-row {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.account-settings__avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex: none;
+}
+
+.account-settings__avatar--initials {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent);
+  color: var(--paper);
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.account-settings__photo-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.account-settings__remove-photo {
+  background: transparent;
+  border: none;
+  color: var(--danger);
+  font-size: 0.82rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  padding: 0.2em 0.4em;
+}
+
+.account-settings__remove-photo:hover {
+  text-decoration: underline;
+}
+
+.account-settings__field-row {
+  display: flex;
+  gap: 0.6rem;
+}
+
+.account-settings__field-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.account-settings__security-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.account-settings__danger-zone {
+  border-color: var(--danger-bg);
+}
+
+.account-settings__danger-zone p {
+  color: var(--muted);
+  line-height: 1.55;
+  font-size: 0.92rem;
+}
+
+.account-settings__delete-trigger {
+  align-self: flex-start;
+  background: transparent;
+  border: 1px solid var(--danger);
+  color: var(--danger);
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 0.9rem;
+  padding: 0.65em 1.2em;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.account-settings__delete-trigger:hover {
+  background: var(--danger-bg);
+}
+
+.account-settings__delete-panel {
+  position: static;
+  width: auto;
+  max-width: 340px;
+}
+
+/* Shared danger-callout treatment — same visual language as
+   `.roster-join-requests__warning`, generically named since it's used
+   here for the account-deletion-requested banner rather than anything
+   roster-specific. */
+.account-danger-panel {
+  border-left: 3px solid var(--danger);
+  background: var(--danger-bg);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  padding: 0.85rem 1.1rem;
+}
+
+.account-danger-panel strong {
+  display: block;
+  font-size: 0.85rem;
+  color: var(--danger);
+  margin-bottom: 0.3rem;
+}
+
+.account-danger-panel p {
+  margin: 0 0 0.75rem;
+  color: var(--ink);
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.auth-card .button {
+  width: 100%;
+  margin-top: 0.5rem;
+}
+
+.auth-card__footer {
+  margin-top: 1.5rem;
+  font-size: 0.88rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+/* Mandatory 2FA — enroll/challenge screens (doc03 Stage 2a) */
+
+.totp-setup {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+
+.totp-setup__qr {
+  width: 180px;
+  height: 180px;
+  background: #fff;
+  border-radius: var(--radius-sm);
+  padding: 0.5rem;
+}
+
+.totp-setup__secret {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  text-align: center;
+}
+
+.totp-setup__secret code {
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 0.85rem;
+  letter-spacing: 0.03em;
+  padding: 0.4em 0.6em;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  word-break: break-all;
+}
+
+.link-button {
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--accent, #b4602f);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.link-button:hover {
+  color: var(--accent-dark, #94491f);
+}
+
+.link-button:disabled {
+  color: var(--muted);
+  cursor: not-allowed;
+  text-decoration: none;
+}
+
+.backup-codes {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.6rem;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.backup-codes code {
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 0.92rem;
+  text-align: center;
+  padding: 0.5em 0.4em;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+}
+
+.backup-codes__actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.backup-codes__actions .button {
+  flex: 1;
+  width: auto;
+  margin-top: 0;
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .backup-codes,
+  .backup-codes * {
+    visibility: visible;
+  }
+  .backup-codes {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    border: none;
+  }
+}
+
+/* Desktop-only gate for Stratasphere™ — Council Training has to work on
+   any device (people study on their phones), but the governance tools
+   (roster tables, meeting mode, documents) assume real screen space and
+   aren't designed for a phone. CSS-only: no client JS, no hydration
+   flash — the notice and the real content are both always in the
+   markup, and the media query decides which one is visible. */
+
+.screen-gate-notice {
+  display: none;
+}
+
+@media (max-width: 899px) {
+  .screen-gate-content {
+    display: none;
+  }
+
+  .screen-gate-notice {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 1rem;
+    padding: 4rem 1.5rem;
+    max-width: 420px;
+    margin: 0 auto;
+  }
+
+  .screen-gate-notice h2 {
+    font-size: 1.35rem;
+  }
+
+  .screen-gate-notice p {
+    color: var(--muted);
+    line-height: 1.6;
+    margin: 0;
+  }
+}
+
+/* Knowledge library — locked template cards + article detail page */
+
+/* Index cards are deliberately compact — title, badges, and enough of
+   the summary to actually be readable (~3 lines, roughly 100+
+   characters) — so a grid of them scans like a list of headlines
+   rather than a stack of full article previews. First pass at this cut
+   the summary down to one clamped line at 5-per-row, which went too far
+   the other way and made the grid unreadable; this settles in between,
+   landing 3–4 cards per row at normal viewport widths rather than a
+   fixed count, since that's what the minmax below actually produces at
+   different widths. */
+.kb-grid {
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 1.1rem;
+}
+
+.kb-card {
+  cursor: pointer;
+  padding: 1.35rem;
+  gap: 0.55rem;
+  transition: border-color 0.15s ease, opacity 0.15s ease;
+}
+
+.kb-card h3 {
+  font-size: 1.05rem;
+  line-height: 1.35;
+}
+
+.kb-card p {
+  font-size: 0.88rem;
+  line-height: 1.5;
+  /* Clamp to three lines (roughly 100+ characters) so an unusually long
+     summary can't blow the card back out to full article-preview
+     height — the detail page always renders the complete sentence
+     regardless. */
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.kb-card:hover {
+  border-color: var(--accent);
+}
+
+.kb-card[data-locked="true"] {
+  opacity: 0.6;
+}
+
+.kb-card[data-locked="true"]:hover {
+  opacity: 0.8;
+  border-color: var(--locked);
+}
+
+.kb-lock-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 0.25em 0.6em;
+  border-radius: 999px;
+  background: var(--locked-bg);
+  color: var(--locked);
+  white-space: nowrap;
+}
+
+.kb-article__back {
+  display: inline-block;
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-bottom: 1.25rem;
+}
+
+.kb-article__back:hover {
+  color: var(--ink);
+}
+
+.kb-article {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  gap: 2.5rem;
+  align-items: start;
+}
+
+.kb-article__main {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+}
+
+.kb-article__title {
+  font-size: 1.6rem;
+  margin: 0 0 0.5rem;
+}
+
+.kb-article__summary {
+  color: var(--muted);
+  font-size: 1.02rem;
+  line-height: 1.6;
+  margin: 0 0 0.4rem;
+}
+
+.kb-article__body {
+  margin-top: 1.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+}
+
+.kb-article__body p {
+  line-height: 1.7;
+  color: var(--ink);
+  margin: 0;
+}
+
+.kb-article__section {
+  margin-top: 1.75rem;
+}
+
+.kb-article__section h2 {
+  font-size: 1.05rem;
+  margin-bottom: 0.6rem;
+}
+
+.kb-article__checklist {
+  font-size: 0.92rem;
+}
+
+.kb-article__callout {
+  margin-top: 1.5rem;
+  border-left: 3px solid var(--accent);
+  background: var(--paper);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  padding: 0.9rem 1.1rem;
+}
+
+.kb-article__callout strong {
+  display: block;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--accent);
+  margin-bottom: 0.3rem;
+}
+
+.kb-article__callout p {
+  margin: 0;
+  color: var(--ink);
+  line-height: 1.6;
+}
+
+.kb-article__sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.kb-sidebar-block {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem;
+}
+
+.kb-sidebar-block h3 {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+  margin: 0 0 0.75rem;
+}
+
+.kb-sidebar-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.kb-sidebar-list li {
+  font-size: 0.85rem;
+  color: var(--ink);
+  line-height: 1.5;
+}
+
+.kb-sidebar-list--links li {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.kb-sidebar-list--links a {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.kb-sidebar-list--links a:hover {
+  color: var(--accent);
+}
+
+.kb-sidebar-list__kind {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+@media (max-width: 900px) {
+  .kb-article {
+    grid-template-columns: 1fr;
+  }
+}

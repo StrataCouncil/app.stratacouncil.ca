@@ -1,0 +1,102 @@
+import { createServerClient } from "@supabase/ssr";
+import { NextResponse, type NextRequest } from "next/server";
+
+// Reachable without a session. Everything else redirects to /login.
+const PUBLIC_PATHS = ["/login", "/signup", "/auth/confirm"];
+
+function isPublicPath(pathname: string) {
+  return PUBLIC_PATHS.some(
+    (path) => pathname === path || pathname.startsWith(`${path}/`)
+  );
+}
+
+/**
+ * Refreshes the Supabase auth session on every request. Required with
+ * @supabase/ssr's cookie-based auth — without this, a Server Component's
+ * session can go stale mid-visit since Server Components can't write
+ * cookies themselves (server.ts's setAll() no-ops there by design).
+ *
+ * Also the route guard: everything except PUBLIC_PATHS requires a
+ * session (doc03 — the whole app past signup/login is behind auth), and
+ * a signed-in user hitting /login or /signup is sent straight to the
+ * dashboard instead of being shown the form again.
+ *
+ * 2FA is NOT enforced here — reversed 2026-09-29 (doc00 changelog, doc01
+ * §2, doc03 Stage 2/2a). A magic-link session is sufficient on its own;
+ * nothing redirects to /auth/mfa/enroll or /auth/mfa/challenge any more.
+ * This is a deliberate, temporary call: 2FA (TOTP, built and working —
+ * lib/auth/mfa.ts, the enroll/challenge screens, backup codes, all of it)
+ * adds real setup friction to a free-tier signup funnel with zero revenue
+ * to justify it yet, and this audience (a first-time volunteer council
+ * member) is judged unlikely to get through an authenticator-app setup
+ * step unassisted. The gate is commented out, not deleted, and the whole
+ * TOTP implementation stays in the codebase, reachable by visiting
+ * /auth/mfa/enroll directly — re-enabling 2FA later is uncommenting the
+ * block below (and deciding whether to also require it retroactively for
+ * already-signed-up accounts), not rebuilding anything. See doc01 §2 for
+ * the full reasoning and the plan to revisit once there's a paying
+ * customer base to justify the added friction (and, separately, once SMS
+ * via Twilio is worth its own cost — doc04 §7b).
+ *
+ * Kept for later, not wired in:
+ *   const { data: factorsData } = await supabase.auth.mfa.listFactors();
+ *   const hasVerifiedTotpFactor = Boolean(
+ *     factorsData?.totp?.some((f) => f.status === "verified")
+ *   );
+ *   if (!hasVerifiedTotpFactor) redirect to /auth/mfa/enroll
+ *   const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+ *   if (aal?.currentLevel !== "aal2" && no valid backup-code cookie) redirect to /auth/mfa/challenge
+ */
+export async function middleware(request: NextRequest) {
+  let response = NextResponse.next({ request });
+
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll();
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value }) =>
+            request.cookies.set(name, value)
+          );
+          response = NextResponse.next({ request });
+          cookiesToSet.forEach(({ name, value, options }) =>
+            response.cookies.set(name, value, options)
+          );
+        },
+      },
+    }
+  );
+
+  // Touches the session so an expired access token gets refreshed via
+  // the request's refresh token before any Server Component runs.
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const { pathname } = request.nextUrl;
+  const publicPath = isPublicPath(pathname);
+
+  if (!user && !publicPath) {
+    const loginUrl = new URL("/login", request.url);
+    return NextResponse.redirect(loginUrl);
+  }
+
+  if (user && (pathname === "/login" || pathname === "/signup")) {
+    return NextResponse.redirect(new URL("/", request.url));
+  }
+
+  // MFA gate intentionally not wired in — see the comment above. A signed-in
+  // user proceeds straight through regardless of 2FA enrollment status.
+
+  return response;
+}
+
+export const config = {
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+  ],
+};
