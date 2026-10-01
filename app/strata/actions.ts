@@ -7,6 +7,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { inviteIsPending, notifyInviteAccepted } from "@/lib/email/invite-accepted";
 import { EMAIL_RE, isJurisdictionCode, normalizeStrataPlanNumber } from "@/lib/strata";
+import { extractDocumentText } from "@/lib/kb/extract";
+import { stripPII } from "@/lib/pii";
+import { askClaudeJson } from "@/lib/ai/claude";
+import { reconcilePlan } from "@/lib/strata-plan";
 
 /**
  * Server Actions behind /strata — connecting to a strata (doc01 §4,
@@ -203,10 +207,122 @@ export async function createStrataPlanUpload(file: {
   return { ok: true, path: data.path, token: data.token };
 }
 
+export type PlanParseResult =
+  | {
+      ok: true;
+      status: "parsed";
+      lots: number | null;
+      lotsCheck: "consistent" | "differs" | "unchecked";
+      unitEntitlementTotal: number | null;
+      filedYear: number | null;
+    }
+  | { ok: true; status: "no_text" | "failed" }
+  | { ok: true; status: "wrong_plan"; found: string[] }
+  | { ok: false; error: string };
+
+const PLAN_SCHEMA = {
+  type: "object",
+  properties: {
+    lots: { type: "integer", description: "Number of strata lots; 0 if the plan doesn't show it." },
+    totalUnitEntitlement: { type: "number", description: "Aggregate unit entitlement total; 0 if not shown." },
+    filedYear: { type: "integer", description: "Year the plan was filed or deposited at the LTSA; 0 if not shown." },
+  },
+  required: ["lots", "totalUnitEntitlement", "filedYear"],
+  additionalProperties: false,
+};
+
+/**
+ * Reads an uploaded Strata Plan right after upload: checks it's the plan
+ * that was looked up, and takes the number of strata lots from the plan
+ * itself so nobody types it in. The text is read on our servers; only a
+ * PII-stripped copy goes to the AI. A scanned plan (no text layer) isn't
+ * sent anywhere: the requester types the lot count and the reviewer checks
+ * it against the plan. The result is stored server-side and is what
+ * `submitCreationRequest` uses, so the browser can't change it.
+ */
+export async function parseStrataPlan(strataPlanNumber: string, planStoragePath: string): Promise<PlanParseResult> {
+  const ctx = await requireUser();
+  if (!ctx) return { ok: false, error: "Please sign in again." };
+  const sp = normalizeStrataPlanNumber(strataPlanNumber);
+  if (!sp) return { ok: false, error: "Enter a valid Strata Plan number." };
+  if (!planStoragePath.startsWith(`${ctx.user.id}/`) || planStoragePath.includes("..")) {
+    return { ok: false, error: "Upload the Strata Plan again." };
+  }
+
+  const admin = createAdminClient();
+  const save = (row: Record<string, unknown>) =>
+    admin.from("strata_plan_parses").upsert({
+      storage_path: planStoragePath,
+      requested_by: ctx.user.id,
+      strata_plan_number: sp,
+      plan_number_matches: false,
+      ...row,
+    });
+
+  const { data: file, error: downloadError } = await admin.storage.from(STRATA_PLAN_BUCKET).download(planStoragePath);
+  if (downloadError || !file) return { ok: false, error: "The upload didn't finish. Upload the plan again." };
+
+  try {
+    const extracted = await extractDocumentText(new Uint8Array(await file.arrayBuffer()), "plan.pdf", "application/pdf");
+    if (extracted.status !== "ok") {
+      await save({ status: "no_text" });
+      return { ok: true, status: "no_text" };
+    }
+    const text = extracted.text;
+
+    const precheck = reconcilePlan(text, sp, { lots: null, totalUnitEntitlement: null, filedYear: null });
+    if (!precheck.planNumberMatches) {
+      await save({ status: "parsed", plan_number_matches: false });
+      return { ok: true, status: "wrong_plan", found: precheck.otherPlanNumbers };
+    }
+
+    const ai = await askClaudeJson<{ lots: number; totalUnitEntitlement: number; filedYear: number }>({
+      effort: "low",
+      maxTokens: 2000,
+      system:
+        "You read British Columbia LTSA Strata Plans. Report the number of strata lots (the highest strata lot number, " +
+        "or the row count of the Schedule of Unit Entitlement), the aggregate unit entitlement total, and the year the plan " +
+        "was filed or deposited. Use 0 for anything the text doesn't show. Some names and addresses are redacted; ignore them.",
+      messages: [{ role: "user", content: `Strata Plan text:\n\n${stripPII(text).slice(0, 150000)}` }],
+      schema: PLAN_SCHEMA,
+    });
+    const parsed = reconcilePlan(text, sp, {
+      lots: ai.lots || null,
+      totalUnitEntitlement: ai.totalUnitEntitlement || null,
+      filedYear: ai.filedYear || null,
+    });
+    await save({
+      status: "parsed",
+      plan_number_matches: true,
+      lots: parsed.lots,
+      lots_check: parsed.lotsCheck,
+      unit_entitlement_total: parsed.unitEntitlementTotal,
+      filed_year: parsed.filedYear,
+    });
+    if (!parsed.lots) return { ok: true, status: "failed" };
+    return {
+      ok: true,
+      status: "parsed",
+      lots: parsed.lots,
+      lotsCheck: parsed.lotsCheck,
+      unitEntitlementTotal: parsed.unitEntitlementTotal,
+      filedYear: parsed.filedYear,
+    };
+  } catch (error) {
+    console.error("[parseStrataPlan]", error instanceof Error ? error.message : error);
+    await save({ status: "failed" });
+    return { ok: true, status: "failed" };
+  }
+}
+
 export interface CreationRequestInput {
   strataPlanNumber: string;
   legalName: string;
+  buildingName: string;
   address: string;
+  /** Picked from the address lookup rather than typed. */
+  addressVerified: boolean;
+  /** Only used when the plan couldn't be read (scanned); otherwise the plan's count wins. */
   unitCount: number;
   jurisdiction: string;
   planStoragePath: string;
@@ -226,7 +342,7 @@ export async function submitCreationRequest(input: CreationRequestInput): Promis
   const strataPlanNumber = normalizeStrataPlanNumber(input.strataPlanNumber);
   const legalName = input.legalName.trim();
   const address = input.address.trim();
-  const unitCount = Math.trunc(Number(input.unitCount));
+  const buildingName = input.buildingName.trim().slice(0, 200);
   const attestation = {
     fullName: input.attestationFullName.trim(),
     address: input.attestationAddress.trim(),
@@ -237,9 +353,6 @@ export async function submitCreationRequest(input: CreationRequestInput): Promis
   if (!strataPlanNumber) return { ok: false, error: "Enter a valid Strata Plan number, e.g. BCS-1234." };
   if (!legalName) return { ok: false, error: "Enter the corporation's legal name." };
   if (!address) return { ok: false, error: "Enter the corporation's civic address." };
-  if (!Number.isFinite(unitCount) || unitCount < 1 || unitCount > 5000) {
-    return { ok: false, error: "Enter the number of strata lots on the plan." };
-  }
   if (!isJurisdictionCode(input.jurisdiction)) return { ok: false, error: "Choose a jurisdiction." };
   if (!attestation.fullName || !attestation.address || !attestation.phone) {
     return { ok: false, error: "Complete every attestation field." };
@@ -254,6 +367,26 @@ export async function submitCreationRequest(input: CreationRequestInput): Promis
   }
 
   const admin = createAdminClient();
+
+  // The lot count comes from the plan as read on upload (parseStrataPlan),
+  // never from the browser, unless the plan couldn't be read.
+  const { data: parse } = await admin
+    .from("strata_plan_parses")
+    .select("status, plan_number_matches, lots, lots_check, unit_entitlement_total, filed_year")
+    .eq("storage_path", input.planStoragePath)
+    .eq("requested_by", user.id)
+    .eq("strata_plan_number", strataPlanNumber)
+    .maybeSingle();
+  if (!parse) return { ok: false, error: "Upload the Strata Plan again so it can be read." };
+  if (parse.status === "parsed" && !parse.plan_number_matches) {
+    return { ok: false, error: `That file isn't the Strata Plan for ${strataPlanNumber}. Upload the right plan.` };
+  }
+  const fromPlan = parse.status === "parsed" && Boolean(parse.lots);
+  const unitCount = fromPlan ? (parse.lots as number) : Math.trunc(Number(input.unitCount));
+  if (!Number.isFinite(unitCount) || unitCount < 1 || unitCount > 5000) {
+    return { ok: false, error: "Enter the number of strata lots shown on the plan." };
+  }
+
   const [folder, fileName] = input.planStoragePath.split("/");
   const { data: stored } = await admin.storage
     .from(STRATA_PLAN_BUCKET)
@@ -299,6 +432,12 @@ export async function submitCreationRequest(input: CreationRequestInput): Promis
     parsed_address: address,
     parsed_unit_count: unitCount,
     parsed_jurisdiction: input.jurisdiction,
+    building_name: buildingName || null,
+    address_verified: Boolean(input.addressVerified),
+    unit_count_source: fromPlan ? "plan" : "manual",
+    lots_check: fromPlan ? parse.lots_check : null,
+    parsed_unit_entitlement_total: parse.unit_entitlement_total,
+    parsed_filed_year: parse.filed_year,
     requested_by: user.id,
     attestation_full_name: attestation.fullName,
     attestation_address: attestation.address,

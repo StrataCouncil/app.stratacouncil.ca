@@ -3,6 +3,8 @@ import type Stripe from "stripe";
 import { getStripe } from "@/lib/stripe/client";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { computeCommittedUntil } from "@/lib/stripe/prices";
+import { sendTransactionalEmail } from "@/lib/email/mailtrap";
+import { invoiceCopyEmail } from "@/lib/email/templates";
 
 /**
  * Stripe webhook receiver — the only place `subscriptions.status` (and
@@ -106,6 +108,44 @@ async function deactivate(sub: Stripe.Subscription) {
     .eq("corporation_id", corporationId);
 }
 
+/**
+ * subscriptions.billing_email can list several contacts (0018). Stripe
+ * emails its receipt to the Customer's email (the first); everyone else
+ * gets a copy with the hosted invoice link. Best effort.
+ */
+async function copyInvoiceToContacts(invoice: Stripe.Invoice) {
+  const customerId = typeof invoice.customer === "string" ? invoice.customer : invoice.customer?.id;
+  if (!customerId || !invoice.hosted_invoice_url) return;
+  const admin = createAdminClient();
+  const { data: sub } = await admin
+    .from("subscriptions")
+    .select("corporation_id, billing_email")
+    .eq("stripe_customer_id", customerId)
+    .maybeSingle();
+  const others = (sub?.billing_email ?? "")
+    .split(",")
+    .map((e: string) => e.trim())
+    .filter(Boolean)
+    .slice(1);
+  if (!sub || others.length === 0) return;
+  const { data: corp } = await admin
+    .from("strata_corporations")
+    .select("building_name, legal_name")
+    .eq("strata_plan_number", sub.corporation_id)
+    .maybeSingle();
+  const message = invoiceCopyEmail({
+    corporationName: corp?.building_name ?? corp?.legal_name ?? sub.corporation_id,
+    amount: (invoice.amount_paid / 100).toLocaleString("en-CA", { style: "currency", currency: "CAD" }),
+    invoiceUrl: invoice.hosted_invoice_url,
+    invoiceNumber: invoice.number ?? null,
+  });
+  for (const to of others) {
+    await sendTransactionalEmail({ to, ...message }).catch((error) =>
+      console.error("stripe-webhook: invoice copy failed:", error instanceof Error ? error.message : error)
+    );
+  }
+}
+
 export async function POST(request: NextRequest) {
   const rawBody = await request.text();
   const signature = request.headers.get("stripe-signature");
@@ -148,6 +188,9 @@ export async function POST(request: NextRequest) {
         }
         break;
       }
+      case "invoice.paid":
+        await copyInvoiceToContacts(event.data.object as Stripe.Invoice);
+        break;
       default:
         // Unhandled event types are expected and fine to ignore — we
         // only subscribed to these in the Stripe dashboard on purpose.

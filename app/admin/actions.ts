@@ -36,6 +36,7 @@ export async function approveCreationRequest(
   const address = String(formData.get("address") ?? "").trim();
   const unitCount = Math.trunc(Number(formData.get("unitCount")));
   const jurisdiction = String(formData.get("jurisdiction") ?? "");
+  const buildingName = String(formData.get("buildingName") ?? "").trim().slice(0, 200);
 
   if (!strataPlanNumber) return { ok: false, error: "Enter a valid Strata Plan number, e.g. BCS-1234." };
   if (!legalName || !address) return { ok: false, error: "Legal name and address are required." };
@@ -50,6 +51,7 @@ export async function approveCreationRequest(
     p_address: address,
     p_unit_count: unitCount,
     p_jurisdiction: jurisdiction,
+    p_building_name: buildingName || null,
   });
 
   if (error) {
@@ -72,7 +74,7 @@ export async function approveCreationRequest(
     await notifyUser(
       request.requested_by,
       creationRequestApprovedEmail({
-        corporationName: legalName,
+        corporationName: buildingName || legalName,
         strataPlanNumber,
         openUrl: new URL(`/strata/${strataPlanNumber}`, APP_URL).toString(),
       })

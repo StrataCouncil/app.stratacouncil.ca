@@ -181,3 +181,23 @@ export function inviteAcceptedEmail(params: {
   const text = `${whoText} accepted your invitation and joined ${params.corporationName} on StrataCouncil.ca.\n\nThey have no roles yet. Assign them on Council & Roles. If this isn't who you meant to invite, remove them there:\n\n${params.openUrl}`;
   return { subject: `${whoText} joined ${params.corporationName}`, html, text };
 }
+
+/**
+ * A copy of a paid Stratasphere invoice for each billing contact after the
+ * first (Stripe emails the receipt to the first one itself).
+ */
+export function invoiceCopyEmail(params: {
+  corporationName: string;
+  amount: string;
+  invoiceUrl: string;
+  invoiceNumber: string | null;
+}) {
+  const name = escapeHtml(params.corporationName);
+  const html = wrap(`
+    <p style="margin:0 0 16px;font-size:16px;color:${INK};">A Stratasphere&trade; payment of <strong>${escapeHtml(params.amount)}</strong> for <strong>${name}</strong> went through.</p>
+    <p style="margin:0 0 8px;font-size:14px;color:${INK};">You're receiving this copy because you're listed as a billing contact.${params.invoiceNumber ? ` Invoice ${escapeHtml(params.invoiceNumber)}.` : ""}</p>
+    ${button(params.invoiceUrl, "View invoice and receipt")}
+  `);
+  const text = `A Stratasphere payment of ${params.amount} for ${params.corporationName} went through.${params.invoiceNumber ? ` Invoice ${params.invoiceNumber}.` : ""}\n\nYou're receiving this copy because you're listed as a billing contact. View the invoice and receipt:\n\n${params.invoiceUrl}`;
+  return { subject: `Stratasphere payment received: ${params.corporationName}`, html, text };
+}

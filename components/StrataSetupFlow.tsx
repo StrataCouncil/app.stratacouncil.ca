@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import {
   createStrataPlanUpload,
+  parseStrataPlan,
   lookupStrata,
   requestToJoin,
   submitCreationRequest,
@@ -12,6 +13,8 @@ import {
 } from "@/app/strata/actions";
 import { createClient } from "@/lib/supabase/client";
 import { jurisdictions } from "@/lib/strata";
+import { legalNameFor } from "@/lib/strata-plan";
+import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 
 /**
  * The connect-a-strata flow on /strata (doc01 §4): Strata Plan number
@@ -32,6 +35,12 @@ type UploadState =
   | { status: "idle" }
   | { status: "uploading"; fileName: string }
   | { status: "done"; fileName: string; path: string }
+  | { status: "error"; error: string };
+
+type ParseState =
+  | { status: "idle" | "reading" | "no_text" | "failed" }
+  | { status: "parsed"; lots: number; unitEntitlementTotal: number | null; filedYear: number | null }
+  | { status: "wrong_plan"; found: string[] }
   | { status: "error"; error: string };
 
 const ATTESTATION_TEXT =
@@ -188,8 +197,11 @@ function CreationRequestForm({
   onSubmitted: () => void;
 }) {
   const [upload, setUpload] = useState<UploadState>({ status: "idle" });
-  const [legalName, setLegalName] = useState("");
+  const [parse, setParse] = useState<ParseState>({ status: "idle" });
+  const [legalName, setLegalName] = useState(() => legalNameFor(strataPlanNumber));
+  const [buildingName, setBuildingName] = useState("");
   const [address, setAddress] = useState("");
+  const [addressVerified, setAddressVerified] = useState(false);
   const [unitCount, setUnitCount] = useState("");
   const [jurisdiction, setJurisdiction] = useState("BC");
   const [attestFullName, setAttestFullName] = useState(defaultFullName);
@@ -217,6 +229,20 @@ function CreationRequestForm({
       return;
     }
     setUpload({ status: "done", fileName: file.name, path: ticket.path });
+
+    // Read the plan: check it's this strata's plan, and take the lot count from it.
+    setParse({ status: "reading" });
+    const result = await parseStrataPlan(strataPlanNumber, ticket.path);
+    if (!result.ok) setParse({ status: "error", error: result.error });
+    else if (result.status === "parsed" && result.lots)
+      setParse({
+        status: "parsed",
+        lots: result.lots,
+        unitEntitlementTotal: result.unitEntitlementTotal,
+        filedYear: result.filedYear,
+      });
+    else if (result.status === "wrong_plan") setParse({ status: "wrong_plan", found: result.found });
+    else setParse({ status: result.status === "no_text" ? "no_text" : "failed" });
   }
 
   async function submit(e: React.FormEvent) {
@@ -230,7 +256,9 @@ function CreationRequestForm({
     const result = await submitCreationRequest({
       strataPlanNumber,
       legalName,
+      buildingName,
       address,
+      addressVerified,
       unitCount: Number(unitCount),
       jurisdiction,
       planStoragePath: upload.path,
@@ -297,52 +325,84 @@ function CreationRequestForm({
 
       <fieldset className="setup-form__section">
         <legend>2. Plan details</legend>
-        <div className="sync-note" data-testid="parsing-not-built-notice">
-          Reading these from the Strata Plan automatically isn&rsquo;t built
-          yet &mdash; please enter them from the plan. Our team checks them
-          against your upload before anything is created.
-        </div>
-        <div className="field">
-          <label htmlFor="cr-sp">Strata Plan number</label>
-          <input id="cr-sp" type="text" value={strataPlanNumber} readOnly />
+        <PlanReading parse={parse} strataPlanNumber={strataPlanNumber} />
+        <div className="setup-form__row">
+          <div className="field">
+            <label htmlFor="cr-sp">Strata Plan number</label>
+            <input id="cr-sp" type="text" value={strataPlanNumber} readOnly />
+          </div>
+          <div className="field">
+            <label htmlFor="cr-units">Number of strata lots</label>
+            {parse.status === "parsed" ? (
+              <>
+                <input id="cr-units" type="text" value={parse.lots} readOnly data-testid="parsed-lots" />
+                <span className="field__hint">Read from the plan.</span>
+              </>
+            ) : parse.status === "no_text" || parse.status === "failed" ? (
+              <>
+                <input
+                  id="cr-units"
+                  type="number"
+                  min={1}
+                  max={5000}
+                  value={unitCount}
+                  onChange={(e) => setUnitCount(e.target.value)}
+                  required
+                  data-testid="manual-lots"
+                />
+                <span className="field__hint">From the plan&rsquo;s Schedule of Unit Entitlement. Our team checks it.</span>
+              </>
+            ) : (
+              <input id="cr-units" type="text" value="" placeholder="Read from the plan" readOnly />
+            )}
+          </div>
         </div>
         <div className="field">
           <label htmlFor="cr-legal-name">Legal name</label>
           <input
             id="cr-legal-name"
             type="text"
-            placeholder={`The Owners, Strata Plan ${strataPlanNumber}`}
             value={legalName}
             onChange={(e) => setLegalName(e.target.value)}
             required
           />
         </div>
         <div className="field">
-          <label htmlFor="cr-address">Civic address</label>
-          <input id="cr-address" type="text" value={address} onChange={(e) => setAddress(e.target.value)} required />
+          <label htmlFor="cr-building">
+            Building name <span className="field__optional">(optional)</span>
+          </label>
+          <input
+            id="cr-building"
+            type="text"
+            value={buildingName}
+            onChange={(e) => setBuildingName(e.target.value)}
+            maxLength={200}
+            placeholder="e.g. The Mackenzie"
+            data-testid="building-name"
+          />
+          <span className="field__hint">The name people know the building by. It isn&rsquo;t on the Strata Plan, and you can change it later.</span>
         </div>
-        <div className="setup-form__row">
-          <div className="field">
-            <label htmlFor="cr-units">Number of strata lots</label>
-            <input
-              id="cr-units"
-              type="number"
-              min={1}
-              value={unitCount}
-              onChange={(e) => setUnitCount(e.target.value)}
-              required
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="cr-jurisdiction">Jurisdiction</label>
-            <select id="cr-jurisdiction" value={jurisdiction} onChange={(e) => setJurisdiction(e.target.value)}>
-              {jurisdictions.map((j) => (
-                <option key={j.code} value={j.code}>
-                  {j.label}
-                </option>
-              ))}
-            </select>
-          </div>
+        <div className="field">
+          <label htmlFor="cr-jurisdiction">Province or territory</label>
+          <select id="cr-jurisdiction" value={jurisdiction} onChange={(e) => setJurisdiction(e.target.value)}>
+            {jurisdictions.map((j) => (
+              <option key={j.code} value={j.code}>
+                {j.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="field">
+          <label htmlFor="cr-address">Civic address</label>
+          <AddressAutocomplete
+            id="cr-address"
+            value={address}
+            jurisdiction={jurisdiction}
+            onChange={(a, verified) => {
+              setAddress(a);
+              setAddressVerified(verified);
+            }}
+          />
         </div>
       </fieldset>
 
@@ -388,11 +448,64 @@ function CreationRequestForm({
       <button
         type="submit"
         className="button button-primary"
-        disabled={submitting || upload.status !== "done" || !attestConfirmed}
+        disabled={
+          submitting ||
+          upload.status !== "done" ||
+          !attestConfirmed ||
+          parse.status === "reading" ||
+          parse.status === "wrong_plan" ||
+          parse.status === "error" ||
+          parse.status === "idle"
+        }
         data-testid="creation-request-submit"
       >
         {submitting ? "Submitting…" : "Submit for review"}
       </button>
     </form>
   );
+}
+
+/** What reading the uploaded plan found, shown above the plan details. */
+function PlanReading({ parse, strataPlanNumber }: { parse: ParseState; strataPlanNumber: string }) {
+  switch (parse.status) {
+    case "idle":
+      return <p className="sync-note">Upload the plan above. We read the number of strata lots from it.</p>;
+    case "reading":
+      return (
+        <p className="sync-note" role="status" data-testid="plan-reading">
+          Reading your Strata Plan&hellip; this can take up to a minute for a large plan.
+        </p>
+      );
+    case "parsed":
+      return (
+        <p className="sync-note sync-note--ok" role="status" data-testid="plan-parsed">
+          Strata Plan {strataPlanNumber} read: {parse.lots} strata lots
+          {parse.unitEntitlementTotal ? `, total unit entitlement ${parse.unitEntitlementTotal.toLocaleString("en-CA")}` : ""}
+          {parse.filedYear ? `, filed ${parse.filedYear}` : ""}.
+        </p>
+      );
+    case "wrong_plan":
+      return (
+        <p className="roster-invites__error" role="alert" data-testid="plan-wrong">
+          That file doesn&rsquo;t look like the Strata Plan for {strataPlanNumber}
+          {parse.found.length ? ` (it mentions ${parse.found.join(", ")})` : ""}. Upload the right plan.
+        </p>
+      );
+    case "no_text":
+      return (
+        <p className="sync-note" role="status" data-testid="plan-scanned">
+          This plan is a scanned image, so it can&rsquo;t be read automatically. Enter the number of strata lots from the
+          plan; our team checks it before the strata is created.
+        </p>
+      );
+    case "failed":
+      return (
+        <p className="sync-note" role="status" data-testid="plan-unread">
+          We couldn&rsquo;t find the number of strata lots in this plan. Enter it from the plan; our team checks it before
+          the strata is created.
+        </p>
+      );
+    case "error":
+      return <p className="roster-invites__error" role="alert">{parse.error}</p>;
+  }
 }

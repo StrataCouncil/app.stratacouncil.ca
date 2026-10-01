@@ -3601,3 +3601,234 @@ li[data-done="true"] .checklist__mark {
   margin-top: 0.75rem;
   padding: 0 0.5rem;
 }
+
+/* The Knowledge Library stays usable on phones (ScreenGate). */
+@media (max-width: 899px) {
+  .screen-gate-content--mobile-ok {
+    display: block;
+  }
+}
+
+@media (max-width: 899px) {
+  .substrata-nav [data-desktop-only="true"] {
+    display: none;
+  }
+}
+
+/* Council & Roles: editors open as dialogs; one credential circle per track. */
+.role-editor--modal {
+  position: static;
+  width: auto;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  background: transparent;
+}
+.roster-table__row-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+}
+.roster-table td {
+  vertical-align: middle;
+}
+.roster-table__training-head abbr {
+  text-decoration: none;
+  cursor: help;
+}
+.roster-table .training-dot {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-width: 2px;
+}
+.training-dot[data-earned="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.roster-table__legend {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin: 0;
+  padding: 0.75rem 1rem 1rem;
+  border-top: 1px solid var(--line);
+}
+
+/* Strata creation: plan reading status and address lookup */
+.sync-note--ok {
+  border-style: solid;
+  border-color: rgba(47, 125, 79, 0.35);
+  background: rgba(47, 125, 79, 0.06);
+  color: var(--ink);
+}
+.field__optional {
+  font-weight: 400;
+  color: var(--muted);
+}
+.address-lookup {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.address-lookup__list {
+  position: absolute;
+  top: 2.75rem;
+  left: 0;
+  right: 0;
+  z-index: 30;
+  list-style: none;
+  margin: 0;
+  padding: 0.25rem 0;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 2px 6px rgba(27, 42, 65, 0.12);
+}
+.address-lookup__list li {
+  padding: 0.5rem 0.85rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.address-lookup__list li[data-highlight="true"],
+.address-lookup__list li:hover {
+  background: var(--locked-bg);
+}
+
+/* Billing: subscribe step by step */
+.billing-steps {
+  gap: 1.5rem;
+}
+.billing-steps__bar {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.5rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  counter-reset: step;
+}
+.billing-steps__bar li {
+  counter-increment: step;
+  border-top: 3px solid var(--line);
+  padding-top: 0.6rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+.billing-steps__bar li::before {
+  content: counter(step) ". ";
+}
+.billing-steps__bar li[data-state="current"] {
+  border-color: var(--accent);
+  color: var(--ink);
+}
+.billing-steps__bar li[data-state="done"] {
+  border-color: var(--ink);
+}
+.billing-steps__bar li[data-state="done"] a {
+  color: var(--ink);
+}
+.billing-step {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+.billing-step h3 {
+  margin: 0;
+}
+.billing-step__form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-width: 560px;
+  align-items: flex-start;
+}
+.billing-step__form .field {
+  align-self: stretch;
+}
+.billing-step__actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.billing-plans {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+.billing-plan {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1.25rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  color: var(--ink);
+  text-decoration: none;
+  background: var(--surface);
+}
+.billing-plan:hover {
+  border-color: var(--ink);
+}
+.billing-plan--recommended {
+  border: 2px solid var(--accent);
+  background: rgba(180, 96, 47, 0.04);
+}
+.billing-plan__badge {
+  align-self: flex-start;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #fff;
+  background: var(--accent);
+  border-radius: 4px;
+  padding: 0.2rem 0.5rem;
+}
+.billing-plan strong {
+  font-size: 1.1rem;
+}
+.billing-plan__price {
+  font-size: 1.6rem;
+  font-weight: 700;
+}
+.billing-plan__price small {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--muted);
+  margin-left: 0.25rem;
+}
+.billing-plan__saving {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #2f7d4f;
+}
+.billing-plan .button {
+  align-self: flex-start;
+  margin-top: 0.5rem;
+}
+.billing-review {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0;
+}
+.billing-review div {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: 1rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--line);
+}
+.billing-review dt {
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+.billing-review dd {
+  margin: 0;
+}
+.billing-pay {
+  min-width: 260px;
+}
