@@ -1019,8 +1019,8 @@ export function relatedKnowledgeResources(
 }
 
 /**
- * Document folder structure — matches the real Neurata folder picker
- * exactly (9 named folders, this order), not the doc01 `documents.category`
+ * Document folder structure — 9 named folders, this order, not the doc01
+ * `documents.category`
  * schema enum, which is narrower than what the product actually ships.
  * The schema doc will need updating to match; this UI is the source of
  * truth for the taxonomy going forward.
@@ -1144,15 +1144,14 @@ export const minutesRecords: MinutesRecord[] = [
  * below are the same two meetings that Minutes already lists as
  * "Finalized in Meeting Mode," not a separate coincidence.
  *
- * This mirrors Neurata's own meetings list exactly, per the source
- * product: one list, every meeting in it regardless of status, with the
+ * One list, every meeting in it regardless of status, with the
  * action beside each row determined by where it sits in that lifecycle —
  * Launch (DRAFT) → Resume (LIVE) → Finalize (ADJOURNED, still DRAFT
  * minutes) → an Adjourned tag once minutes are FINAL. Grouped into three
  * sections here (Upcoming / Active / Adjourned) rather than left as one
  * flat list, since status is exactly what the section headings already
- * say — the row-level action logic is what actually has to match Neurata,
- * not the presence or absence of section dividers around it.
+ * say — the row-level action logic is what matters, not the presence or
+ * absence of section dividers around it.
  */
 export type Meeting = {
   id: string;
@@ -1246,9 +1245,8 @@ export const roleLabels: Record<string, string> = {
 };
 
 /**
- * Strata lots — the property roll, one row per registered lot (doc02's
- * confirmed field set from the full Neurata handoff, not a UI-only
- * invention): SL# (`lotNumber`, the AI-facing identifier used throughout
+ * Strata lots — the property roll, one row per registered lot (doc02
+ * §2's field set): SL# (`lotNumber`, the AI-facing identifier used throughout
  * Stratasphere™ context), the physical `unitNumber` (distinct from the
  * lot number — same idea as a legal description vs. a street address),
  * `unitEntitlement` (proportional voting weight, not yet wired into vote

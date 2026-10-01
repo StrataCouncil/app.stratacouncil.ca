@@ -9,12 +9,12 @@ import {
 
 /**
  * One row, one action — which action depends entirely on `status` (and,
- * for an adjourned meeting, `minutesState`), matching Neurata's own
- * meetings list:
+ * for an adjourned meeting, `minutesState`) — the meeting lifecycle from
+ * doc01 §4:
  *
  * - `DRAFT` (Upcoming): Launch Meeting, plus Edit Agenda and Export —
- *   editing the agenda and exporting it are both real Neurata affordances
- *   that live beside the meeting before it starts, not just Launch alone.
+ *   editing the agenda and exporting it both live beside the meeting
+ *   before it starts, not just Launch alone.
  * - `LIVE` (Active): Resume Meeting — "Resume," not "Join" or "Open,"
  *   since Meeting Mode is chair-only/single-operator (doc01 §4): there's
  *   no one else who could be joining a session already in progress.

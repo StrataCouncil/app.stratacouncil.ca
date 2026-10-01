@@ -15,10 +15,8 @@ const categories = Object.keys(documentCategoryLabels) as DocumentCategory[];
  * (doc01 §4b); full browse/search of the indexed repository is gated.
  * Both states render here rather than hiding the page entirely.
  *
- * Folder structure matches the real Neurata folder picker exactly (9
- * named folders — see `documentCategoryLabels`) rather than a UI-invented
- * taxonomy, the same way this project's own doc repo is organized into
- * named folders instead of one flat list.
+ * Folder structure is a fixed set of 9 named folders (see
+ * `documentCategoryLabels`) rather than one flat list.
  */
 export default function DocumentsPage() {
   const subscribed = currentCorporation.subscriptionStatus === "active";
