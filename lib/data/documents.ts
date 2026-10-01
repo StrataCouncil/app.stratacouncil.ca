@@ -97,3 +97,16 @@ export async function documentCountsByCategory(corpId: string) {
   }
   return { counts, uncategorized };
 }
+
+/** Historic minutes uploaded on the Minutes tab, newest first. */
+export async function listHistoricMinutes(corpId: string) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("documents")
+    .select(COLUMNS)
+    .eq("corporation_id", corpId)
+    .eq("source_type", "historic_minutes")
+    .order("uploaded_at", { ascending: false });
+  if (error) console.error("[listHistoricMinutes]", error.message);
+  return ((data ?? []) as unknown as Row[]).map(toDocument);
+}

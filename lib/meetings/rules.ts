@@ -87,12 +87,20 @@ export function minutesSummary(it: AgendaItem): string {
     m.abstain > 0
       ? `${m.for} in favour, ${m.against} opposed, ${m.abstain} abstaining`
       : `${m.for} in favour, ${m.against} opposed`;
-  let text = `MOTION: Moved by ${m.mover || "—"}, seconded by ${m.sec || "—"}.\nVOTE: ${tally} — ${outcome} by ${label} vote.`;
+  const note = motionNote(it);
+  return `MOTION: Moved by ${m.mover || "—"}, seconded by ${m.sec || "—"}.\nVOTE: ${tally} — ${outcome} by ${label} vote.${note ? ` ${note}` : ""}`;
+}
+
+/** The standing note a decided motion carries in the minutes, if any. */
+export function motionNote(it: AgendaItem): string {
+  const m = it.motion;
+  if (!m) return "";
+  const outcome = m.outcome ?? "CARRIED";
   if (m.dt === "THREE_QUARTER" && outcome === "CARRIED" && m.for + m.against > 0) {
-    text += " (Note: 3/4 vote resolutions require a one-week implementation delay unless immediate action is required for safety.)";
+    return "(Note: 3/4 vote resolutions require a one-week implementation delay unless immediate action is required for safety.)";
   }
-  if (outcome === "DEFEATED") text += " No further action to be taken on this matter at this time.";
-  return text;
+  if (outcome === "DEFEATED") return "No further action to be taken on this matter at this time.";
+  return "";
 }
 
 /** Items with a motion that were neither decided nor explicitly deferred. */

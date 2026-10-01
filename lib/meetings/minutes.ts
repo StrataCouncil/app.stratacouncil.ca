@@ -2,6 +2,7 @@ import {
   groupByCategory,
   isAdjournment,
   isCallToOrder,
+  isNextMeeting,
   meetingFormatLabels,
   meetingTypeLabels,
   type AgendaItem,
@@ -9,7 +10,7 @@ import {
   type MeetingFormat,
   type MeetingType,
 } from "./agenda.ts";
-import { minutesSummary, quorum, type AttendanceStatus } from "./rules.ts";
+import { minutesSummary, motionNote, quorum, type AttendanceStatus } from "./rules.ts";
 
 /**
  * Minutes as structured data (meetings.minutes_content), built once at
@@ -64,6 +65,24 @@ export interface MinutesContent {
   sections: Array<{ name: string; items: MinutesItem[] }>;
 }
 
+/**
+ * The item's minutes text. A decided motion's mover, seconder and vote are
+ * shown from the structured motion, so an untouched auto-generated summary
+ * is reduced to its standing note instead of repeating them; anything the
+ * chair wrote is kept as written.
+ */
+function summaryFor(it: AgendaItem): string {
+  const written = it.minutesSummary.trim();
+  const n = it.nextMeeting;
+  if (isNextMeeting(it) && n?.date && !written) {
+    return `The next meeting is scheduled for ${n.date}${n.time ? ` at ${n.time}` : ""}${n.location ? `, ${n.location}` : ""}.`;
+  }
+  const auto = minutesSummary(it);
+  if (written && written !== auto.trim()) return written;
+  if (it.motion && it.done && !it.consensus) return motionNote(it);
+  return auto;
+}
+
 export function buildMinutes(input: {
   corporation: { planNumber: string; name: string; address: string | null };
   meeting: {
@@ -96,7 +115,7 @@ export function buildMinutes(input: {
         id: it.id,
         num: it.num,
         title: it.text,
-        summary: it.minutesSummary || minutesSummary(it),
+        summary: summaryFor(it),
         deferred: it.deferred && !it.done,
         motion:
           it.motion && (it.motion.text || it.done)
@@ -111,7 +130,8 @@ export function buildMinutes(input: {
                 dt: it.motion.dt,
               }
             : null,
-        nextMeeting: it.nextMeeting && (it.nextMeeting.date || it.nextMeeting.location) ? it.nextMeeting : undefined,
+        // Shown separately only when the chair wrote their own summary.
+        nextMeeting: it.nextMeeting?.date && it.minutesSummary.trim() ? it.nextMeeting : undefined,
       })
     ),
   }));
