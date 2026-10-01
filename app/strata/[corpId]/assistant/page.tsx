@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { StrataSphereNav } from "@/components/StrataSphereNav";
 import { StratasphereChat } from "@/components/StratasphereChat";
-import { conversations, currentCorporation, projects } from "@/lib/placeholder-data";
+import { getStrataAccess } from "@/lib/data/strata";
+import { conversations, projects } from "@/lib/placeholder-data";
 
 /**
  * Standalone Stratasphere™ assistant — never free, not even during the
@@ -9,8 +10,13 @@ import { conversations, currentCorporation, projects } from "@/lib/placeholder-d
  * ever free. Subscribed renders the real chat UI (`StratasphereChat`);
  * everything else stays the existing lock-panel pattern.
  */
-export default function AssistantPage() {
-  const subscribed = currentCorporation.subscriptionStatus === "active";
+export default async function AssistantPage({
+  params,
+}: {
+  params: Promise<{ corpId: string }>;
+}) {
+  const { corpId } = await params;
+  const subscribed = (await getStrataAccess(corpId))?.subscribed ?? false;
 
   return (
     <>
@@ -29,7 +35,7 @@ export default function AssistantPage() {
               during your one free meeting.
             </p>
             <Link
-              href={`/strata/${currentCorporation.id}/billing`}
+              href={`/strata/${corpId}/billing`}
               className="button button-primary"
               data-testid="assistant-subscribe-cta"
             >

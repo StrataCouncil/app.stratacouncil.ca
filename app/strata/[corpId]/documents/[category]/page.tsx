@@ -2,7 +2,6 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { StrataSphereNav } from "@/components/StrataSphereNav";
 import {
-  currentCorporation,
   documentCategoryDescriptions,
   documentCategoryLabels,
   documents,
@@ -17,9 +16,9 @@ export function generateStaticParams() {
 export default async function DocumentCategoryPage({
   params,
 }: {
-  params: Promise<{ category: string }>;
+  params: Promise<{ corpId: string; category: string }>;
 }) {
-  const { category } = await params;
+  const { corpId, category } = await params;
   const label = documentCategoryLabels[category as DocumentCategory];
   if (!label) notFound();
 
@@ -30,7 +29,7 @@ export default async function DocumentCategoryPage({
       <StrataSphereNav active="documents" />
 
       <Link
-        href={`/strata/${currentCorporation.id}/documents`}
+        href={`/strata/${corpId}/documents`}
         className="card__meta"
         style={{ display: "inline-block", marginBottom: "0.75rem" }}
       >

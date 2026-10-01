@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { StrataSphereNav } from "@/components/StrataSphereNav";
+import { getStrataAccess } from "@/lib/data/strata";
 import {
-  currentCorporation,
   isTemplateLocked,
   knowledgeResourceKindLabels,
   knowledgeResources,
@@ -32,11 +32,11 @@ export default async function KnowledgeResourcePage({
 }: {
   params: Promise<{ corpId: string; resourceId: string }>;
 }) {
-  const { resourceId } = await params;
+  const { corpId, resourceId } = await params;
   const resource = knowledgeResources.find((r) => r.id === resourceId);
   if (!resource) notFound();
 
-  const subscribed = currentCorporation.subscriptionStatus === "active";
+  const subscribed = (await getStrataAccess(corpId))?.subscribed ?? false;
   const locked = isTemplateLocked(resource, subscribed);
   const related = relatedKnowledgeResources(resource, knowledgeResources);
 
@@ -44,7 +44,7 @@ export default async function KnowledgeResourcePage({
     <>
       <StrataSphereNav active="guides" />
 
-      <Link href={`/strata/${currentCorporation.id}/guides`} className="kb-article__back">
+      <Link href={`/strata/${corpId}/guides`} className="kb-article__back">
         &larr; Knowledge library
       </Link>
 
@@ -85,7 +85,7 @@ export default async function KnowledgeResourcePage({
                 free for every connected member.
               </p>
               <Link
-                href={`/strata/${currentCorporation.id}/billing`}
+                href={`/strata/${corpId}/billing`}
                 className="button button-primary"
                 data-testid="template-subscribe-cta"
               >
@@ -153,7 +153,7 @@ export default async function KnowledgeResourcePage({
               <ul className="kb-sidebar-list kb-sidebar-list--links">
                 {related.map((r) => (
                   <li key={r.id}>
-                    <Link href={`/strata/${currentCorporation.id}/guides/${r.id}`}>
+                    <Link href={`/strata/${corpId}/guides/${r.id}`}>
                       {r.title}
                     </Link>
                     <span className="kb-sidebar-list__kind">

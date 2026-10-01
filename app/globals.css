@@ -793,9 +793,71 @@ button {
   border-bottom-color: var(--accent);
 }
 
-.substrata-nav .lock-icon {
-  font-size: 0.75rem;
+.substrata-nav__locked {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  font: inherit;
+  font-weight: 500;
+  font-size: 0.92rem;
+  padding: 0.75em 0.9em;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
   color: var(--locked);
+  cursor: pointer;
+}
+
+.substrata-nav__locked:hover,
+.substrata-nav__locked:focus-visible {
+  color: var(--muted);
+}
+
+.substrata-nav__lock {
+  flex: none;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(27, 42, 65, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  z-index: 50;
+}
+
+.modal {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 1.75rem;
+  max-width: 460px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  box-shadow: 0 2px 6px rgba(27, 42, 65, 0.12);
+}
+
+.modal h2 {
+  font-size: 1.25rem;
+  margin: 0;
+}
+
+.modal p {
+  margin: 0;
+  color: var(--muted);
 }
 
 /* Lock / upgrade panel for gated sections */

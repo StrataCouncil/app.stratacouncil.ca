@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
-import {
-  connectedCorporations,
-  currentProfile,
-  tracks,
-} from "@/lib/placeholder-data";
+import { getConnectedCorporations } from "@/lib/data/corporations";
+import { getCurrentProfile } from "@/lib/data/profile";
+import { tracks } from "@/lib/placeholder-data";
+import { corporationRoleLabels, isCorporationRole } from "@/lib/strata";
+import { createClient } from "@/lib/supabase/server";
 
 /**
  * Home — the landing screen after sign-in. An overview, not a worklist:
@@ -12,8 +12,28 @@ import {
  * stands, and what needs your attention next. Council Training's own
  * track list lives at `/training`; this page summarizes it rather than
  * repeating it.
+ *
+ * Profile and connected stratas are real; training progress is still
+ * placeholder data until Education is on real tables.
  */
-export default function HomePage() {
+export default async function HomePage() {
+  const [profile, corporations] = await Promise.all([getCurrentProfile(), getConnectedCorporations()]);
+
+  const supabase = await createClient();
+  const { data: roleRows } = profile
+    ? await supabase
+        .from("corporation_role_assignments")
+        .select("corporation_id, role")
+        .eq("user_id", profile.id)
+    : { data: [] };
+  const rolesByCorp = new Map<string, string[]>();
+  for (const r of roleRows ?? []) {
+    if (!isCorporationRole(r.role)) continue;
+    rolesByCorp.set(r.corporation_id, [...(rolesByCorp.get(r.corporation_id) ?? []), corporationRoleLabels[r.role]]);
+  }
+  const firstCorp = corporations[0];
+  const firstName = profile?.fullName.trim().split(" ")[0];
+
   const completed = tracks.filter((t) => t.certificateIssued);
   const inProgress = tracks.filter(
     (t) => !t.certificateIssued && t.completedModules > 0
@@ -26,18 +46,15 @@ export default function HomePage() {
     <AppShell active="home">
       <div className="wrap page">
         <div className="page-header">
-          <h1>Welcome back, {currentProfile.fullName.split(" ")[0]}</h1>
+          <h1>{firstName ? `Welcome back, ${firstName}` : "Welcome back"}</h1>
           <p>Here&rsquo;s where things stand across your training and your strata.</p>
         </div>
 
         <div className="grid-cards" style={{ marginBottom: "2.5rem" }}>
           <div className="card">
             <h3>Your profile</h3>
-            <p>{currentProfile.fullName}</p>
-            <p style={{ marginTop: "-0.5rem" }}>{currentProfile.email}</p>
-            <span className="card__meta">
-              Member since {currentProfile.memberSince}
-            </span>
+            <p>{profile?.fullName || "Name not set"}</p>
+            <p style={{ marginTop: "-0.5rem" }}>{profile?.email}</p>
             <Link
               href="/account"
               className="button button-secondary button-small"
@@ -65,16 +82,16 @@ export default function HomePage() {
           <div className="card">
             <h3>Connected stratas</h3>
             <p>
-              {connectedCorporations.length === 0
+              {corporations.length === 0
                 ? "You're not connected to a strata yet."
-                : `Connected to ${connectedCorporations.length} strata corporation${connectedCorporations.length === 1 ? "" : "s"}.`}
+                : `Connected to ${corporations.length} strata corporation${corporations.length === 1 ? "" : "s"}.`}
             </p>
             <Link
-              href="/strata"
+              href={corporations.length === 0 ? "/strata" : "/strata?connect=1"}
               className="button button-secondary button-small"
               style={{ alignSelf: "flex-start" }}
             >
-              {connectedCorporations.length === 0 ? "Set up your strata" : "Connect another"}
+              {corporations.length === 0 ? "Set up your strata" : "Connect another"}
             </Link>
           </div>
         </div>
@@ -111,54 +128,42 @@ export default function HomePage() {
           </>
         )}
 
-        <h2 style={{ marginBottom: "1rem" }}>Your stratas</h2>
-        <div className="grid-cards" style={{ marginBottom: "2.5rem" }}>
-          {connectedCorporations.map(({ corporation, roles }) => (
-            <Link
-              key={corporation.id}
-              href={`/strata/${corporation.id}`}
-              className="card"
-            >
-              <h3>{corporation.buildingName}</h3>
-              <p>{corporation.address}</p>
-              <span className="card__meta">
-                {roles.length ? roles.join(", ") : "Connected member"} &middot;{" "}
-                {corporation.subscriptionStatus === "active"
-                  ? "Stratasphere™ active"
-                  : "Free tier"}
-              </span>
-            </Link>
-          ))}
-        </div>
+        {firstCorp && (
+          <>
+            <h2 style={{ marginBottom: "1rem" }}>Your stratas</h2>
+            <div className="grid-cards" style={{ marginBottom: "2.5rem" }}>
+              {corporations.map((corporation) => {
+                const roles = rolesByCorp.get(corporation.id) ?? [];
+                return (
+                  <Link key={corporation.id} href={`/strata/${corporation.id}`} className="card">
+                    <h3>{corporation.buildingName ?? corporation.legalName}</h3>
+                    <p>{corporation.address}</p>
+                    <span className="card__meta">
+                      {roles.length ? roles.join(", ") : "Connected member"} &middot;{" "}
+                      {corporation.subscriptionStatus === "active" ? "Stratasphere™ active" : "Free tier"}
+                    </span>
+                  </Link>
+                );
+              })}
+            </div>
 
-        <h2 style={{ marginBottom: "1rem" }}>Resources</h2>
-        <div className="grid-cards">
-          <Link
-            href={`/strata/${connectedCorporations[0]?.corporation.id ?? ""}/guides`}
-            className="card"
-          >
-            <h3>Knowledge library</h3>
-            <p>A free library of playbooks, guides, financial insights and legislation updates for every connected member &mdash; plus policy templates with Stratasphere&trade;.</p>
-          </Link>
-          <Link
-            href={`/strata/${connectedCorporations[0]?.corporation.id ?? ""}/documents`}
-            className="card"
-          >
-            <h3>Documents</h3>
-            <p>Upload bylaws, minutes and financials &mdash; indexed the moment they&rsquo;re added.</p>
-          </Link>
-          <Link
-            href={`/strata/${connectedCorporations[0]?.corporation.id ?? ""}/meetings`}
-            className="card"
-          >
-            <h3>Meeting mode</h3>
-            <p>
-              {connectedCorporations[0]?.corporation.freeMeetingUsed
-                ? "Your free meeting has been used."
-                : "Your one free meeting is ready whenever council needs it."}
-            </p>
-          </Link>
-        </div>
+            <h2 style={{ marginBottom: "1rem" }}>Resources</h2>
+            <div className="grid-cards">
+              <Link href={`/strata/${firstCorp.id}/guides`} className="card">
+                <h3>Knowledge library</h3>
+                <p>A free library of playbooks, guides, financial insights and legislation updates for every connected member &mdash; plus policy templates with Stratasphere&trade;.</p>
+              </Link>
+              <Link href={`/strata/${firstCorp.id}/documents`} className="card">
+                <h3>Documents</h3>
+                <p>Upload bylaws, minutes and financials &mdash; free, and kept permanently.</p>
+              </Link>
+              <Link href={`/strata/${firstCorp.id}/meetings`} className="card">
+                <h3>Meetings</h3>
+                <p>Build agendas, run meetings and produce minutes.</p>
+              </Link>
+            </div>
+          </>
+        )}
       </div>
     </AppShell>
   );

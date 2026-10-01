@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { StrataSphereNav } from "@/components/StrataSphereNav";
 import { MeetingsList } from "@/components/MeetingsList";
-import { currentCorporation, meetings } from "@/lib/placeholder-data";
+import { getStrataAccess } from "@/lib/data/strata";
+import { meetings } from "@/lib/placeholder-data";
 
 /**
  * Meetings — every meeting for this corporation, whatever state it's in,
@@ -14,9 +15,15 @@ import { currentCorporation, meetings } from "@/lib/placeholder-data";
  * meeting, not about seeing this list, so the "Create meeting" panel
  * below still branches on subscription/trial status the same as before.
  */
-export default function MeetingsPage() {
-  const subscribed = currentCorporation.subscriptionStatus === "active";
-  const trialAvailable = !currentCorporation.freeMeetingUsed;
+export default async function MeetingsPage({
+  params,
+}: {
+  params: Promise<{ corpId: string }>;
+}) {
+  const { corpId } = await params;
+  const access = await getStrataAccess(corpId);
+  const subscribed = access?.subscribed ?? false;
+  const trialAvailable = !(access?.freeMeetingUsed ?? true);
 
   return (
     <>
@@ -46,7 +53,7 @@ export default function MeetingsPage() {
             minutes, decisions &mdash; stays fully accessible either way.
           </p>
           <Link
-            href={`/strata/${currentCorporation.id}/billing`}
+            href={`/strata/${corpId}/billing`}
             className="button button-primary"
             data-testid="meetings-subscribe-cta"
           >

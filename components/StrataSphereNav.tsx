@@ -1,35 +1,22 @@
-import Link from "next/link";
-import { currentCorporation } from "@/lib/placeholder-data";
+"use client";
 
-const subscribed = currentCorporation.subscriptionStatus === "active";
+import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
+import { useStrata } from "@/components/StrataContext";
 
 /**
  * StrataSphere sub-nav (doc03 "second level"): free sections show fully
- * open, gated sections show a lock affordance rather than being hidden —
- * the tab should read as "your strata's home, some of it unlocked, some
- * of it not," never as a paywall.
+ * open, gated sections stay visible but greyed with a lock — the tab
+ * should read as "your strata's home, some of it unlocked, some of it
+ * not," never as a paywall that hides things. Clicking a locked section
+ * doesn't navigate; it explains what unlocks it and points the admin at
+ * billing (subscribing is admin-only, doc01 §7 item 7).
  *
- * No standalone "Decisions" item: the decision ledger isn't a place a
- * user navigates to, it's a byproduct — every decision recorded live in
- * Meeting Mode, or parsed out of uploaded historic minutes, lands there
- * automatically. It still exists as a record (and the AI assistant reads
- * it), just not as its own menu destination.
- *
- * No "Calendar" item either — that's a future feature, not built yet.
- *
- * Knowledge Library leads the list on purpose (doc01 §3b): it's free,
- * requires no corporation setup beyond being connected, and is the one
- * section a brand-new council member gets immediate value from before
- * anything else here means much to them — playbooks, policy templates,
- * operational guides, financial insights, legislation updates and
- * emergency playbooks, not just situation playbooks (hence the renamed
- * label, up from "Guides & Playbooks").
+ * No standalone "Decisions" item — the decision ledger feeds the AI's
+ * context and has no browse surface (doc01 §4a). No "Calendar" either —
+ * not built in V1 (doc01 §7 item 21).
  */
-const items: Array<{
-  slug: string;
-  label: string;
-  gated: boolean;
-}> = [
+const items: Array<{ slug: string; label: string; gated: boolean }> = [
   { slug: "guides", label: "Knowledge Library", gated: false },
   { slug: "", label: "Council & Roles", gated: false },
   { slug: "lots", label: "Strata Lots", gated: false },
@@ -39,19 +26,137 @@ const items: Array<{
   { slug: "assistant", label: "Stratasphere™", gated: true },
 ];
 
-export function StrataSphereNav({ active }: { active: string }) {
+function LockIcon() {
   return (
-    <nav className="substrata-nav" aria-label="Stratasphere">
-      {items.map((item) => (
-        <Link
-          key={item.slug || "home"}
-          href={`/strata/${currentCorporation.id}${item.slug ? `/${item.slug}` : ""}`}
-          data-active={active === (item.slug || "home")}
-        >
-          {item.label}
-          {item.gated && !subscribed && <span className="lock-icon">&#128274;</span>}
-        </Link>
-      ))}
-    </nav>
+    <svg
+      className="substrata-nav__lock"
+      viewBox="0 0 24 24"
+      width="13"
+      height="13"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="5" y="11" width="14" height="10" rx="2" />
+      <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+    </svg>
+  );
+}
+
+export function StrataSphereNav({ active }: { active: string }) {
+  const { corpId, subscribed, isAdmin } = useStrata();
+  const [prompt, setPrompt] = useState<string | null>(null);
+
+  return (
+    <>
+      <nav className="substrata-nav" aria-label="Stratasphere">
+        {items.map((item) => {
+          const key = item.slug || "home";
+          const locked = item.gated && !subscribed;
+          if (locked) {
+            return (
+              <button
+                key={key}
+                type="button"
+                className="substrata-nav__locked"
+                data-active={active === key}
+                aria-disabled="true"
+                onClick={() => setPrompt(item.label)}
+                data-testid={`nav-locked-${key}`}
+              >
+                {item.label}
+                <LockIcon />
+                <span className="visually-hidden"> (requires a subscription)</span>
+              </button>
+            );
+          }
+          return (
+            <Link
+              key={key}
+              href={`/strata/${corpId}${item.slug ? `/${item.slug}` : ""}`}
+              data-active={active === key}
+              data-testid={`nav-${key}`}
+            >
+              {item.label}
+            </Link>
+          );
+        })}
+      </nav>
+      {prompt && (
+        <SubscribePrompt
+          feature={prompt}
+          corpId={corpId}
+          isAdmin={isAdmin}
+          onClose={() => setPrompt(null)}
+        />
+      )}
+    </>
+  );
+}
+
+function SubscribePrompt({
+  feature,
+  corpId,
+  isAdmin,
+  onClose,
+}: {
+  feature: string;
+  corpId: string;
+  isAdmin: boolean;
+  onClose: () => void;
+}) {
+  const closeRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    closeRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div
+        className="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="subscribe-prompt-title"
+        onClick={(e) => e.stopPropagation()}
+        data-testid="subscribe-prompt"
+      >
+        <h2 id="subscribe-prompt-title">{feature} needs a subscription</h2>
+        <p>
+          The Stratasphere&trade; AI assistant, searching your documents, and
+          running meetings beyond your one free meeting all come with a
+          Stratasphere&trade; subscription. Roles, the roster, documents and
+          the Knowledge Library stay free either way.
+        </p>
+        {!isAdmin && (
+          <p className="card__meta">
+            Only your strata&rsquo;s admin can subscribe &mdash; ask them to set
+            it up from Billing.
+          </p>
+        )}
+        <div className="role-editor__actions">
+          <button ref={closeRef} type="button" className="button button-secondary" onClick={onClose}>
+            Not now
+          </button>
+          {isAdmin && (
+            <Link
+              href={`/strata/${corpId}/billing`}
+              className="button button-primary"
+              data-testid="subscribe-prompt-billing"
+            >
+              See plans
+            </Link>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }

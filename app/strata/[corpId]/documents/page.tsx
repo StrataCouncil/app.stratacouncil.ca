@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { StrataSphereNav } from "@/components/StrataSphereNav";
+import { getStrataAccess } from "@/lib/data/strata";
 import {
-  currentCorporation,
   documentCategoryDescriptions,
   documentCategoryLabels,
   documents,
@@ -18,8 +18,13 @@ const categories = Object.keys(documentCategoryLabels) as DocumentCategory[];
  * Folder structure is a fixed set of 9 named folders (see
  * `documentCategoryLabels`) rather than one flat list.
  */
-export default function DocumentsPage() {
-  const subscribed = currentCorporation.subscriptionStatus === "active";
+export default async function DocumentsPage({
+  params,
+}: {
+  params: Promise<{ corpId: string }>;
+}) {
+  const { corpId } = await params;
+  const subscribed = (await getStrataAccess(corpId))?.subscribed ?? false;
 
   return (
     <>
@@ -45,7 +50,7 @@ export default function DocumentsPage() {
               return (
                 <Link
                   key={category}
-                  href={`/strata/${currentCorporation.id}/documents/${category}`}
+                  href={`/strata/${corpId}/documents/${category}`}
                   className="card folder-card"
                 >
                   <svg
@@ -94,7 +99,7 @@ export default function DocumentsPage() {
             and the Stratasphere&trade; assistant.
           </p>
           <Link
-            href={`/strata/${currentCorporation.id}/billing`}
+            href={`/strata/${corpId}/billing`}
             className="button button-primary"
             data-testid="documents-subscribe-cta"
           >
