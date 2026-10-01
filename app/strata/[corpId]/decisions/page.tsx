@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { SubscribeCta } from "@/components/SubscribeCta";
 import { StrataSphereNav } from "@/components/StrataSphereNav";
 
 /**
@@ -6,12 +6,7 @@ import { StrataSphereNav } from "@/components/StrataSphereNav";
  * any more (see `StrataSphereNav`'s comment) — this route stays for the
  * data/record itself, just unlinked from the sub-nav.
  */
-export default async function DecisionsPage({
-  params,
-}: {
-  params: Promise<{ corpId: string }>;
-}) {
-  const { corpId } = await params;
+export default function DecisionsPage() {
   return (
     <>
       <StrataSphereNav active="decisions" />
@@ -23,13 +18,7 @@ export default async function DecisionsPage({
           searchable and indexed for the Stratasphere&trade; assistant.
           Unlocks with a subscription.
         </p>
-        <Link
-          href={`/strata/${corpId}/billing`}
-          className="button button-primary"
-          data-testid="decisions-subscribe-cta"
-        >
-          Subscribe to Stratasphere&trade;
-        </Link>
+        <SubscribeCta testId="decisions-subscribe-cta" />
       </div>
     </>
   );

@@ -52,6 +52,7 @@ export const corporationRoles = [
   "vice_president",
   "treasurer",
   "secretary",
+  "member_at_large",
   "manager",
 ] as const;
 
@@ -63,15 +64,19 @@ export const corporationRoleLabels: Record<CorporationRole, string> = {
   vice_president: "Vice President",
   treasurer: "Treasurer",
   secretary: "Secretary",
+  member_at_large: "Member at Large",
   manager: "Manager",
 };
+
+/** Roles that make someone a council member (and their lot a council lot). */
+export const councilRoles: readonly CorporationRole[] = ["president", "vice_president", "treasurer", "secretary", "member_at_large"];
 
 export function isCorporationRole(value: string): value is CorporationRole {
   return (corporationRoles as readonly string[]).includes(value);
 }
 
 export function isSingleHolderRole(role: CorporationRole): boolean {
-  return role !== "manager";
+  return role !== "manager" && role !== "member_at_large";
 }
 
 export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;

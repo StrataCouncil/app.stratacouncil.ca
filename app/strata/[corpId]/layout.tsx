@@ -69,7 +69,7 @@ export default async function StrataSphereLayout({
             <StrataSwitcher corporations={corporations} currentId={currentCorporation.id} />
           </div>
 
-          {!subscribed && (
+          {!subscribed && access?.isAdmin && (
             <div className="nudge-banner">
               <div>
                 <strong>Stratasphere&trade; isn&rsquo;t subscribed yet</strong>

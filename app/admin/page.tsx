@@ -28,7 +28,7 @@ export default async function AdminConsolePage() {
     <AppShell active="admin">
       <div className="wrap page">
         <div className="page-header">
-          <h1>Admin console</h1>
+          <h1>Super Admin console</h1>
           <p>
             Platform-staff only. Review new corporation requests, and search
             any corporation by Strata Plan number or building name &mdash;

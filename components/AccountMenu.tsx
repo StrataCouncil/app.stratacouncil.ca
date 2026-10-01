@@ -17,9 +17,8 @@ function initials(fullName: string) {
  * Server Component) instead of importing the `currentProfile` mock
  * directly — a Client Component can't call the server-side Supabase
  * client itself, so the data has to come in from its server parent.
- * There's no real avatar-upload backend (no `avatar_url` column on
- * `profiles`), so this always shows initials now rather than a stale
- * mock image URL.
+ * Shows the profile photo when there is one (a signed URL from
+ * `getCurrentProfile`), otherwise initials.
  */
 export function AccountMenu({ profile }: { profile: CurrentProfile | null }) {
   const [open, setOpen] = useState(false);
@@ -36,9 +35,14 @@ export function AccountMenu({ profile }: { profile: CurrentProfile | null }) {
         data-testid="account-menu-trigger"
         aria-expanded={open}
       >
-        <span className="account-menu__avatar account-menu__avatar--initials" aria-hidden="true">
-          {initials(displayName)}
-        </span>
+        {profile.avatarUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={profile.avatarUrl} alt="" className="account-menu__avatar" />
+        ) : (
+          <span className="account-menu__avatar account-menu__avatar--initials" aria-hidden="true">
+            {initials(displayName)}
+          </span>
+        )}
         <span className="account-menu__name">{firstName}</span>
         <svg viewBox="0 0 16 16" className="account-menu__chevron" aria-hidden="true">
           <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />

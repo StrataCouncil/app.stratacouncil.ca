@@ -3492,3 +3492,112 @@ li[data-done="true"] .checklist__mark {
   border-color: var(--line);
   background: var(--paper);
 }
+
+.roster-table__lot {
+  font: inherit;
+  font-size: 0.88rem;
+  padding: 0.25rem 0.4rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--paper);
+}
+.roster-table__warn {
+  font-size: 0.75rem;
+  color: var(--danger);
+  margin-top: 0.25rem;
+}
+.roster-table__training-head {
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+.training-dots {
+  display: inline-flex;
+  gap: 3px;
+}
+.training-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1.5px solid var(--locked);
+}
+.roster-table-wrap {
+  overflow-x: auto;
+}
+
+/* Billing: card head row with a status tag, full-width sections */
+.billing-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.billing-card__head h3 {
+  margin: 0;
+}
+
+.billing-tag {
+  display: inline-block;
+  padding: 0.15rem 0.55rem;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+.billing-tag--ok {
+  background: rgba(47, 125, 79, 0.12);
+  color: #2f7d4f;
+}
+
+.billing-tag--warn {
+  background: rgba(196, 138, 30, 0.14);
+  color: #94650f;
+}
+
+.billing-tag--off {
+  background: var(--line);
+  color: var(--muted);
+}
+
+.billing-section {
+  margin-top: 1.25rem;
+}
+
+.billing-period-select {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.billing-total-row td {
+  font-weight: 700;
+  background: rgba(0, 0, 0, 0.025);
+}
+
+.billing-total-row td:last-child {
+  color: var(--accent);
+}
+
+.item-editor__motion-tools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 0.35rem;
+}
+
+.mm-nav__chair {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin-top: 0.75rem;
+  padding: 0 0.5rem;
+}

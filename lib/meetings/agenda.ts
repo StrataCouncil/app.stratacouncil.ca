@@ -107,6 +107,8 @@ export interface AgendaItem {
   nextMeeting?: { date: string; time: string; location: string };
   /** Added during the meeting, after the agenda was approved. */
   addedDuringMeeting?: boolean;
+  /** Elect Chairperson item only: who was nominated. */
+  nominee?: string;
 }
 
 function rid(prefix: string) {
@@ -258,22 +260,100 @@ export function agendaFromTemplate(type: MeetingType): AgendaItem[] {
   return ensureBookends(agenda.map(autoPopulate));
 }
 
-/** Standard motion wording and minutes text for the procedural items. */
+export const isElectChair = (it: Pick<AgendaItem, "text">) => {
+  const t = it.text.toLowerCase();
+  return t.includes("elect") && t.includes("chair");
+};
+
+/**
+ * Standard motion wording for the items the meeting templates use, in the
+ * form BC strata minutes conventionally record them. Matched on the item
+ * text so an item gets its wording however it was added (template, the
+ * "add item" field, or a parsed agenda). Bracketed parts are for the
+ * chair or secretary to fill in. Anything else is a custom item: its
+ * motion can be drafted with AI and is always editable.
+ */
+const standardMotions: Array<[(t: string) => boolean, string]> = [
+  [(t) => t.includes("elect") && t.includes("chair"), "THAT [name] be elected to chair this meeting."],
+  [(t) => isApproveAgenda({ text: t }), "THAT the agenda be approved as presented."],
+  [
+    (t) => t.includes("minute") && t.includes("previous") && t.includes("agm"),
+    "THAT the minutes of the previous Annual General Meeting be approved as circulated.",
+  ],
+  [
+    (t) => t.includes("minute") && t.includes("previous") && t.includes("council"),
+    "THAT the minutes of the previous council meeting be approved as circulated.",
+  ],
+  [
+    (t) => (t.includes("minute") || t.includes("notes")) && t.includes("previous") && t.includes("approve"),
+    "THAT the minutes of the previous meeting be approved as circulated.",
+  ],
+  [
+    (t) => t.includes("ratify") && t.includes("rule"),
+    "THAT the rules made by council since the previous annual general meeting, as circulated with the notice of meeting, be ratified under section 125 of the Strata Property Act.",
+  ],
+  [
+    (t) => t.includes("budget") && t.includes("approve"),
+    "THAT the budget for the fiscal year ending [date], as circulated with the notice of meeting, be approved.",
+  ],
+  [
+    (t) => t.includes("election") && t.includes("council"),
+    "THAT the following owners be elected to strata council for the coming year: [names].",
+  ],
+  [
+    (t) => t.includes("financial statement"),
+    "THAT the financial statements for the period ending [date] be approved as presented.",
+  ],
+  [
+    (t) => t.includes("collections") || t.includes("receivable"),
+    "THAT council approve the collection steps on outstanding accounts as presented.",
+  ],
+  [
+    (t) => t.includes("bylaw enforcement"),
+    "THAT council proceed with the bylaw enforcement steps as presented, in accordance with section 135 of the Strata Property Act.",
+  ],
+  [
+    (t) => t.includes("committee recommendation"),
+    "THAT the committee recommend to council that [describe the recommendation].",
+  ],
+  [(t) => t.includes("requisitioned matter"), "THAT [describe the requisitioned resolution]."],
+  [
+    (t) => t.includes("3/4 vote") || t.includes("three-quarter") || t.includes("3/4 resolution"),
+    "BE IT RESOLVED by a 3/4 vote of the owners that [describe the resolution].",
+  ],
+  [(t) => t.includes("new business"), "THAT [describe the resolution]."],
+  [(t) => t.includes("adjourn"), "THAT the meeting be adjourned."],
+];
+
+export const electChairMotion = (nominee: string) =>
+  `THAT ${nominee.trim() || "[name]"} be elected to chair this meeting.`;
+
+/** Whoever the meeting elected as chair, if it has. The last carried election wins. */
+export function electedChair(agenda: AgendaItem[]): string | null {
+  let chair: string | null = null;
+  for (const it of agenda) {
+    if (isElectChair(it) && it.done && it.motion?.outcome === "CARRIED" && it.nominee?.trim()) chair = it.nominee.trim();
+  }
+  return chair;
+}
+
+/** The standard wording for an item, or null for a custom item. */
+export function standardMotionText(text: string): string | null {
+  const t = text.toLowerCase().replace(/\s+/g, " ");
+  for (const [match, wording] of standardMotions) if (match(t)) return wording;
+  return null;
+}
+
+/** Standard motion wording for template items; never overwrites what was typed. */
 export function autoPopulate(it: AgendaItem): AgendaItem {
   const next = { ...it, motion: it.motion ? { ...it.motion } : null };
-  const t = next.text.toLowerCase();
-  if (isApproveAgenda(next) && next.motion && !next.motion.text) {
-    next.motion.text = "THAT the agenda be approved as presented.";
+  if (isAdjournment(next) && !next.motion) {
+    next.motion = newMotion();
+    next.type = "FOR_APPROVAL";
   }
-  if (t.includes("approve") && t.includes("minute") && t.includes("previous") && next.motion && !next.motion.text) {
-    next.motion.text = "THAT the minutes of the previous meeting be approved as circulated.";
-  }
-  if (isAdjournment(next)) {
-    if (!next.motion) {
-      next.motion = newMotion();
-      next.type = "FOR_APPROVAL";
-    }
-    if (!next.motion.text) next.motion.text = "THAT the meeting be adjourned.";
+  if (next.motion && !next.motion.text) {
+    const wording = standardMotionText(next.text);
+    if (wording) next.motion.text = wording;
   }
   return next;
 }
@@ -334,6 +414,7 @@ export function normalizeAgenda(raw: unknown): AgendaItem[] {
         atts: Array.isArray(r.atts) ? (r.atts as Attachment[]) : [],
         nextMeeting: (r.nextMeeting as AgendaItem["nextMeeting"]) ?? undefined,
         addedDuringMeeting: Boolean(r.addedDuringMeeting) || undefined,
+        nominee: typeof r.nominee === "string" && r.nominee.trim() ? r.nominee.slice(0, 200) : undefined,
       };
     });
 }

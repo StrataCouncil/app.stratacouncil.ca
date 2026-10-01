@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { StrataSphereNav } from "@/components/StrataSphereNav";
 import { MeetingDetailsForm } from "@/components/meetings/MeetingDetailsForm";
 import { getStrataAccess } from "@/lib/data/strata";
-import { presidentName } from "@/lib/data/meetings";
+import { chairCandidates } from "@/lib/data/meetings";
 
 export default async function NewMeetingPage({ params }: { params: Promise<{ corpId: string }> }) {
   const { corpId } = await params;
@@ -19,7 +19,7 @@ export default async function NewMeetingPage({ params }: { params: Promise<{ cor
       <h2 style={{ marginBottom: "1rem" }}>New meeting</h2>
       {access.canRunMeetings ? (
         <div className="card" style={{ maxWidth: 640 }}>
-          <MeetingDetailsForm corpId={corpId} defaultChair={await presidentName(corpId)} />
+          <MeetingDetailsForm corpId={corpId} chairOptions={await chairCandidates(corpId)} />
         </div>
       ) : (
         <p className="roster-notice">

@@ -5,11 +5,14 @@ import {
   removeMember,
   saveMemberRoles,
   setMeetingPermission,
+  setMemberLot,
 } from "@/app/strata/[corpId]/roster-actions";
 import type { RosterMember } from "@/lib/data/roster";
+import { tracks } from "@/lib/placeholder-data";
 import {
   corporationRoleLabels,
   corporationRoles,
+  councilRoles,
   isSingleHolderRole,
   type CorporationRole,
 } from "@/lib/strata";
@@ -22,7 +25,10 @@ const REMOVE_CONFIRM_PHRASE = "remove council member";
  * sees it; only the admin gets the controls.
  *
  * Roles (doc01 §4): admin, president, vice president, treasurer,
- * secretary — one holder each — and manager, which can have several.
+ * secretary — one holder each — and member at large and manager, which
+ * can have several. Council members are tied to their strata lot (the
+ * admin picks it here); that's what makes a lot a council lot for
+ * council-meeting attendance and quorum.
  * Assigning a one-holder role that someone else holds moves it, which is
  * how a seat changes hands; the editor says so before saving. Admin works
  * the same way: there's always exactly one, it's handed over by assigning
@@ -44,12 +50,14 @@ const REMOVE_CONFIRM_PHRASE = "remove council member";
 export function RosterTable({
   corporationId,
   members,
+  lots,
   isAdmin,
   currentUserId,
   jurisdiction,
 }: {
   corporationId: string;
   members: RosterMember[];
+  lots: string[];
   isAdmin: boolean;
   currentUserId: string;
   jurisdiction: string;
@@ -127,6 +135,13 @@ export function RosterTable({
     });
   }
 
+  function changeLot(member: RosterMember, lot: string) {
+    startTransition(async () => {
+      const result = await setMemberLot(corporationId, member.userId, lot || null);
+      setError(member.userId, result.ok ? null : result.error);
+    });
+  }
+
   function remove(member: RosterMember) {
     startTransition(async () => {
       const result = await removeMember(corporationId, member.userId);
@@ -145,8 +160,14 @@ export function RosterTable({
         <thead>
           <tr>
             <th>Member</th>
+            <th>Strata lot</th>
             <th>Roles</th>
             <th data-center="true">Can run meetings</th>
+            {tracks.map((t) => (
+              <th key={t.slug} data-center="true" className="roster-table__training-head" title={`${t.title} training`}>
+                {t.title.replace(/ \(.*\)$/, "")}
+              </th>
+            ))}
           </tr>
         </thead>
         <tbody>
@@ -168,6 +189,30 @@ export function RosterTable({
                   )}
                   <div className="roster-table__meta">{member.email}</div>
                   {!active && <span className="pill pill--locked">Invited</span>}
+                </td>
+                <td>
+                  {isAdmin && active ? (
+                    <select
+                      className="roster-table__lot"
+                      value={member.lotNumber ?? ""}
+                      onChange={(e) => changeLot(member, e.target.value)}
+                      disabled={pending}
+                      aria-label={`${member.fullName}: strata lot`}
+                      data-testid={`member-lot-${member.userId}`}
+                    >
+                      <option value="">—</option>
+                      {lots.map((l) => (
+                        <option key={l} value={l}>
+                          {l}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    member.lotNumber ?? <span className="roster-table__na">&mdash;</span>
+                  )}
+                  {!member.lotNumber && member.roles.some((r) => councilRoles.includes(r)) && (
+                    <div className="roster-table__warn">Council members need a strata lot</div>
+                  )}
                 </td>
                 <td className="roster-table__roles-cell">
                   {member.roles.length === 0 ? (
@@ -334,6 +379,16 @@ export function RosterTable({
                     </td>
                   );
                 })()}
+                {tracks.map((t) => (
+                  <td key={t.slug} data-center="true">
+                    {/* Training credentials aren't wired up yet: an empty circle per module. */}
+                    <span className="training-dots" aria-label={`${t.title}: not started`}>
+                      {Array.from({ length: t.moduleCount }, (_, i) => (
+                        <span key={i} className="training-dot" />
+                      ))}
+                    </span>
+                  </td>
+                ))}
               </tr>
             );
           })}

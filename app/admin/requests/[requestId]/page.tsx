@@ -28,7 +28,7 @@ export default async function CreationRequestPage({
     <AppShell active="admin">
       <div className="wrap page">
         <Link href="/admin" className="kb-article__back">
-          &larr; Admin console
+          &larr; Super Admin console
         </Link>
 
         <div className="page-header">

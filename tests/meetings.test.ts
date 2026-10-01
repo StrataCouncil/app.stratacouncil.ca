@@ -134,3 +134,16 @@ test("item scripts follow the decision type", () => {
   assert.match(itemScript(makeItem("Adjournment", "x")) ?? "", /motion to adjourn/);
   assert.match(itemScript(makeItem("Report", "x")) ?? "", /for information/);
 });
+
+test("template items get standard motion wording; custom items don't", async () => {
+  const { standardMotionText, autoPopulate: populate } = await import("../lib/meetings/agenda.ts");
+  for (const type of meetingTypes) {
+    for (const it of agendaFromTemplate(type)) {
+      if (it.motion) assert.ok(it.motion.text.length > 0, `${type}: "${it.text}" has no motion wording`);
+    }
+  }
+  assert.equal(standardMotionText("Approve Minutes of Previous Council Meeting"), "THAT the minutes of the previous council meeting be approved as circulated.");
+  assert.equal(standardMotionText("Replace lobby carpet"), null);
+  const typed = populate(makeItem("Approve Agenda", "Admin", { type: "FOR_APPROVAL", motion: newMotion("MAJORITY", "THAT the agenda be approved as amended.") }));
+  assert.equal(typed.motion?.text, "THAT the agenda be approved as amended.");
+});

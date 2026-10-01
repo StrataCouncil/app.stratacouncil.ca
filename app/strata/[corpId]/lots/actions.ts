@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import {
   ownerTypes,
+  parseEmails,
   parseRosterCsv,
   rosterFieldLabels,
   rosterFields,
@@ -164,7 +165,7 @@ export type LotEdit = {
 
 export type SaveLotResult = { ok: true } | { ok: false; error: string };
 
-const lotRoles = ["president", "vice_president", "treasurer", "secretary"];
+const lotRoles = ["president", "vice_president", "treasurer", "secretary", "member_at_large"];
 
 /**
  * Direct edit of one lot (doc02 §2a): the ten roster fields plus the four
@@ -188,9 +189,10 @@ export async function saveLot(
   const strataFees = number(edit.strataFees, "Strata fees");
   for (const v of [unitEntitlement, strataFees]) if (typeof v === "string") return { ok: false, error: v };
 
-  const email = text(edit.email);
+  const emails = edit.email?.trim() ? parseEmails(edit.email) : null;
+  if (emails && !emails.ok) return { ok: false, error: `"${emails.invalid}" isn't a valid owner email.` };
+  const email = emails?.ok ? emails.value : null;
   const councilEmail = text(edit.councilEmail);
-  if (email && !EMAIL_RE.test(email)) return { ok: false, error: "Enter a valid owner email." };
   if (councilEmail && !EMAIL_RE.test(councilEmail)) {
     return { ok: false, error: "Enter a valid council delegate email." };
   }

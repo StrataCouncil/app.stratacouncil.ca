@@ -120,7 +120,12 @@ export function RosterInvites({
                 <span className="roster-invites__email">{invite.email}</span>
                 <span className="card__meta">
                   Invited{invite.invitedByName && <> by {invite.invitedByName}</>} &middot;{" "}
-                  {new Date(invite.createdAt).toLocaleDateString("en-CA")}
+                  {new Date(invite.createdAt).toLocaleDateString("en-CA")} &middot;{" "}
+                  {new Date(invite.expiresAt).getTime() < Date.now() ? (
+                    <strong>Expired, resend to renew</strong>
+                  ) : (
+                    <>Expires {new Date(invite.expiresAt).toLocaleDateString("en-CA")}</>
+                  )}
                 </span>
               </div>
               {revokingId === invite.id ? (

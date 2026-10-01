@@ -22,7 +22,7 @@ import {
   type ResolutionType,
 } from "@/lib/meetings/agenda";
 import { createDocumentUploads } from "@/app/strata/[corpId]/documents/actions";
-import { addLinkAttachment, registerAgendaAttachments } from "@/app/strata/[corpId]/meetings/actions";
+import { addLinkAttachment, draftMotion, registerAgendaAttachments } from "@/app/strata/[corpId]/meetings/actions";
 
 /**
  * Edit one agenda item: title, category, resolution type, background,
@@ -58,6 +58,25 @@ export function ItemEditor({
   const [linkLabel, setLinkLabel] = useState("");
   const titleRef = useRef<HTMLInputElement>(null);
   const simple = isAdjournment(draft) || isNextMeeting(draft);
+
+  async function draft_() {
+    if (!draft.motion) return;
+    setBusy("Drafting motion…");
+    setError(null);
+    const res = await draftMotion(corpId, meetingId, {
+      text: draft.text,
+      background: draft.background,
+      financial: draft.financial,
+      risks: draft.risks,
+      decisionType: draft.motion.dt,
+    });
+    setBusy(null);
+    if (!res.ok) {
+      setError(res.error);
+      return;
+    }
+    setDraft((d) => (d.motion ? { ...d, motion: { ...d.motion, text: res.motionText } } : d));
+  }
 
   // Focus once on open; Escape closes unless an upload is in flight.
   const escape = useRef(() => {});
@@ -193,6 +212,18 @@ export function ItemEditor({
                   onChange={(e) => set("motion", { ...draft.motion!, text: e.target.value })}
                   data-testid="item-motion"
                 />
+                <span className="field__hint item-editor__motion-tools">
+                  Standard wording fills in for template items. For anything else, draft it with AI and edit as needed.
+                  <button
+                    type="button"
+                    className="button button-secondary button-small"
+                    onClick={draft_}
+                    disabled={busy !== null}
+                    data-testid="item-draft-motion"
+                  >
+                    {busy === "Drafting motion…" ? "Drafting…" : "Draft with AI"}
+                  </button>
+                </span>
               </label>
               <label className="field">
                 <span>Decision type</span>

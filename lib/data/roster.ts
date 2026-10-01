@@ -22,6 +22,8 @@ export interface RosterMember {
   joinedAt: string | null;
   /** The "Can run meetings" switch; admin and secretary hold it through their role regardless. */
   canRunMeetings: boolean;
+  /** The strata lot this member is tied to (council members need one). */
+  lotNumber: string | null;
   roles: CorporationRole[];
 }
 
@@ -30,6 +32,7 @@ export interface PendingInvite {
   email: string;
   invitedByName: string | null;
   createdAt: string;
+  expiresAt: string;
 }
 
 export interface PendingJoinRequest {
@@ -45,6 +48,8 @@ export interface CorporationRoster {
   isAdmin: boolean;
   jurisdiction: string;
   members: RosterMember[];
+  /** Every strata lot on the roster, for tying members to their lot. */
+  lots: string[];
   invites: PendingInvite[];
   joinRequests: PendingJoinRequest[];
 }
@@ -58,7 +63,7 @@ export async function getCorporationRoster(
   } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const [directory, roles, corporation] = await Promise.all([
+  const [directory, roles, corporation, lots] = await Promise.all([
     supabase.rpc("corporation_member_directory", { p_corporation_id: corporationId }),
     supabase
       .from("corporation_role_assignments")
@@ -69,6 +74,7 @@ export async function getCorporationRoster(
       .select("jurisdiction")
       .eq("strata_plan_number", corporationId)
       .maybeSingle(),
+    supabase.from("owners_and_council").select("lot_number").eq("corporation_id", corporationId).order("lot_number"),
   ]);
 
   for (const [label, result] of [
@@ -95,6 +101,7 @@ export async function getCorporationRoster(
       status: "active" | "invited";
       joined_at: string | null;
       can_run_meetings: boolean;
+      lot_number: string | null;
     }) => ({
       userId: m.user_id,
       fullName: m.full_name || m.email || "Unnamed member",
@@ -102,6 +109,7 @@ export async function getCorporationRoster(
       status: m.status,
       joinedAt: m.joined_at,
       canRunMeetings: m.can_run_meetings,
+      lotNumber: m.lot_number ?? null,
       roles: rolesByUser.get(m.user_id) ?? [],
     })
   );
@@ -115,7 +123,7 @@ export async function getCorporationRoster(
     const [inviteRows, requestRows] = await Promise.all([
       supabase
         .from("corporation_invites")
-        .select("id, invited_email, invited_by, created_at")
+        .select("id, invited_email, invited_by, created_at, expires_at")
         .eq("corporation_id", corporationId)
         .eq("status", "pending")
         .order("created_at"),
@@ -135,6 +143,7 @@ export async function getCorporationRoster(
       email: i.invited_email,
       invitedByName: i.invited_by === user.id ? "you" : nameById.get(i.invited_by) ?? null,
       createdAt: i.created_at,
+      expiresAt: i.expires_at,
     }));
 
     joinRequests = (requestRows.data ?? []).map(
@@ -153,6 +162,7 @@ export async function getCorporationRoster(
     isAdmin,
     jurisdiction: corporation.data?.jurisdiction ?? "",
     members,
+    lots: (lots.data ?? []).map((l) => l.lot_number as string),
     invites,
     joinRequests,
   };

@@ -10,6 +10,10 @@ import {
   meetingTypes,
 } from "@/lib/meetings/agenda";
 import { createMeeting, updateMeetingDetails, type MeetingDetailsInput } from "@/app/strata/[corpId]/meetings/actions";
+import type { ChairCandidate } from "@/lib/data/meetings";
+
+const ELECT = "__elect";
+const OTHER = "__other";
 
 /** Type, date, time, time zone, format, location, chair label. Create or edit. */
 export function MeetingDetailsForm({
@@ -17,13 +21,13 @@ export function MeetingDetailsForm({
   meetingId,
   initial,
   onDone,
-  defaultChair,
+  chairOptions = [],
 }: {
   corpId: string;
   meetingId?: string;
   initial?: MeetingDetailsInput;
   onDone?: () => void;
-  defaultChair?: string | null;
+  chairOptions?: ChairCandidate[];
 }) {
   const router = useRouter();
   const [form, setForm] = useState<MeetingDetailsInput>(
@@ -34,9 +38,20 @@ export function MeetingDetailsForm({
       timezone: "America/Vancouver",
       format: "in_person",
       location: "",
-      chairName: defaultChair ?? "",
+      chairName: chairOptions[0]?.name ?? "",
     }
   );
+  // Chair: one of the usual office holders, elected at the meeting, or
+  // someone else typed in.
+  const [chairChoice, setChairChoice] = useState(() => {
+    const name = initial ? initial.chairName : (chairOptions[0]?.name ?? "");
+    if (!name) return ELECT;
+    return chairOptions.some((c) => c.name === name) ? name : OTHER;
+  });
+  function chooseChair(value: string) {
+    setChairChoice(value);
+    setForm((f) => ({ ...f, chairName: value === ELECT ? "" : value === OTHER ? "" : value }));
+  }
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -118,8 +133,30 @@ export function MeetingDetailsForm({
         </label>
         <label className="field field--wide">
           <span>Chair</span>
-          <input value={form.chairName} onChange={set("chairName")} maxLength={200} placeholder="Usually the president" />
+          <select value={chairChoice} onChange={(e) => chooseChair(e.target.value)} data-testid="meeting-chair">
+            {chairOptions.map((c) => (
+              <option key={`${c.office}-${c.name}`} value={c.name}>
+                {c.name} ({c.office})
+              </option>
+            ))}
+            <option value={ELECT}>Elected at the meeting</option>
+            <option value={OTHER}>Someone else…</option>
+          </select>
+          {chairChoice === OTHER && (
+            <input
+              value={form.chairName}
+              onChange={set("chairName")}
+              maxLength={200}
+              placeholder="Chair's name"
+              required
+              style={{ marginTop: "0.5rem" }}
+              data-testid="meeting-chair-other"
+            />
+          )}
           <span className="field__hint">
+            {chairChoice === ELECT
+              ? "The meeting nominates and votes on a chair in Meeting Mode. "
+              : "Usually the President, or the Vice President or Manager when they can't. "}
             Shown on the agenda and minutes. Running the meeting is a separate permission.
           </span>
         </label>

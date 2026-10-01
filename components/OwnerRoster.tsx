@@ -16,6 +16,7 @@ const roleLabels: Record<string, string> = {
   vice_president: "Vice President",
   treasurer: "Treasurer",
   secretary: "Secretary",
+  member_at_large: "Member at Large",
 };
 
 const fmt = (n: number) => n.toLocaleString("en-CA", { style: "currency", currency: "CAD" });
