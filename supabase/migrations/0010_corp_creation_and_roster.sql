@@ -25,9 +25,11 @@ create unique index corporation_invites_one_pending
   on public.corporation_invites (corporation_id, lower(invited_email))
   where status = 'pending';
 
--- One open creation request per person per Strata Plan number.
+-- One open creation request per Strata Plan number, from anyone (doc01 §1:
+-- "another pending request already exists for this SP#? → rejected"). The
+-- second requester waits for the first to be resolved, then joins.
 create unique index corporation_creation_requests_one_pending
-  on public.corporation_creation_requests (requested_by, parsed_strata_plan_number)
+  on public.corporation_creation_requests (parsed_strata_plan_number)
   where status = 'pending';
 
 -- ── Storage: uploaded Strata Plans ─────────────────────────────────────
@@ -53,6 +55,23 @@ as $$
   from public.strata_corporations c
   where auth.uid() is not null
     and c.strata_plan_number = p_strata_plan_number;
+$$;
+
+-- Whether anyone has a pending creation request for this SP# — the
+-- requests themselves are requester-only under RLS, but the lookup step
+-- has to know, so the second person is told instead of hitting a
+-- duplicate-key error after uploading the plan.
+create or replace function public.strata_plan_has_pending_request(p_strata_plan_number text)
+returns boolean
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select auth.uid() is not null and exists (
+    select 1 from public.corporation_creation_requests
+    where parsed_strata_plan_number = p_strata_plan_number and status = 'pending'
+  );
 $$;
 
 -- ── Roster reads ───────────────────────────────────────────────────────

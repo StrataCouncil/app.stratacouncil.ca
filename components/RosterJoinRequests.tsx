@@ -90,7 +90,7 @@ export function RosterJoinRequests({
                     Cancel
                   </button>
                   <button
-                    className="button button-primary button-small"
+                    className="button button-danger button-small"
                     onClick={() => resolve(request.id, false)}
                     disabled={pending}
                     data-testid={`join-request-deny-confirm-${request.id}`}

@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { APP_URL } from "@/lib/app-url";
 import { MailtrapSendError, sendTransactionalEmail } from "@/lib/email/mailtrap";
-import { corporationInviteEmail } from "@/lib/email/templates";
+import { notifyUser } from "@/lib/email/notify";
+import { corporationInviteEmail, joinRequestApprovedEmail } from "@/lib/email/templates";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { EMAIL_RE, isCorporationRole } from "@/lib/strata";
@@ -67,22 +68,14 @@ function refresh(corporationId: string) {
  * 'magiclink' for an existing account. Nothing is sent by Supabase —
  * generateLink only returns the token; we email it ourselves.
  */
-async function mintAcceptLink(params: {
-  email: string;
-  inviteId: string;
-  fullName?: string;
-  hasAccount: boolean;
-}) {
+async function mintAcceptLink(params: { email: string; inviteId: string; hasAccount: boolean }) {
   const admin = createAdminClient();
 
+  // No name is passed for a new account: the invitee gives their own on
+  // the /welcome step right after clicking (doc01 §4a) — full_name is
+  // theirs to set, and it locks once they complete a training module.
   const generate = (type: "invite" | "magiclink") =>
-    type === "invite"
-      ? admin.auth.admin.generateLink({
-          type: "invite",
-          email: params.email,
-          options: params.fullName ? { data: { full_name: params.fullName } } : undefined,
-        })
-      : admin.auth.admin.generateLink({ type: "magiclink", email: params.email });
+    admin.auth.admin.generateLink({ type, email: params.email });
 
   let result = await generate(params.hasAccount ? "magiclink" : "invite");
   // An auth user can exist without our having seen a profile for it (e.g.
@@ -133,17 +126,12 @@ async function findProfileByEmail(email: string) {
   return data;
 }
 
-export async function sendInvite(
-  corporationId: string,
-  rawEmail: string,
-  rawFullName: string
-): Promise<ActionResult> {
+export async function sendInvite(corporationId: string, rawEmail: string): Promise<ActionResult> {
   const ctx = await requireAdmin(corporationId);
   if (!ctx) return fail("Only this strata's admin can send invites.");
   const { supabase, user } = ctx;
 
   const email = rawEmail.trim().toLowerCase();
-  const fullName = rawFullName.trim();
   if (!EMAIL_RE.test(email)) return fail("Enter a valid email address.");
 
   const existingProfile = await findProfileByEmail(email);
@@ -176,7 +164,6 @@ export async function sendInvite(
     link = await mintAcceptLink({
       email,
       inviteId: invite.id,
-      fullName: fullName || undefined,
       hasAccount: Boolean(existingProfile),
     });
   } catch (error) {
@@ -310,6 +297,29 @@ export async function resolveJoinRequest(
     p_approve: approve,
   });
   if (error) return dbError(error, "Couldn't update that request. Only this strata's admin can.");
+
+  // "An approval notification is what brings the requester back in"
+  // (doc03 Stage 4). The RPC succeeding is what proved the caller is admin.
+  if (approve) {
+    const [{ data: request }, { data: corp }] = await Promise.all([
+      supabase.from("corporation_join_requests").select("requested_by").eq("id", requestId).single(),
+      supabase
+        .from("strata_corporations")
+        .select("legal_name, building_name")
+        .eq("strata_plan_number", corporationId)
+        .single(),
+    ]);
+    if (request) {
+      await notifyUser(
+        request.requested_by,
+        joinRequestApprovedEmail({
+          corporationName: corp?.building_name || corp?.legal_name || corporationId,
+          openUrl: new URL(`/strata/${corporationId}`, APP_URL).toString(),
+        })
+      );
+    }
+  }
+
   refresh(corporationId);
   return { ok: true };
 }

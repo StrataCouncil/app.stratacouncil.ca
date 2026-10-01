@@ -31,8 +31,10 @@ const REMOVE_CONFIRM_PHRASE = "remove council member";
  * people (Standard Bylaw 13(2)); the editor enforces that up front and
  * the database trigger (0002) is the backstop.
  *
- * Meeting permissions are two independent per-member toggles
- * (`can_create_meetings`, `can_chair_meetings`), set by the admin.
+ * Meeting permissions are two independent per-member switches
+ * (`can_create_meetings`, `can_chair_meetings`), set by the admin. The
+ * admin holds both implicitly through the role (doc01 §4), so theirs read
+ * on and are locked.
  *
  * "Remove" (council turnover) asks for a typed confirmation phrase —
  * removal keeps the membership row as 'removed' for history, but the
@@ -239,7 +241,7 @@ export function RosterTable({
                           Cancel
                         </button>
                         <button
-                          className="button button-primary button-small"
+                          className="button button-danger button-small"
                           onClick={() => remove(member)}
                           disabled={
                             pending ||
@@ -313,24 +315,33 @@ export function RosterTable({
                   )}
                 </td>
                 {(["can_create_meetings", "can_chair_meetings"] as const).map((permission) => {
+                  const label =
+                    permission === "can_create_meetings" ? "can create meetings" : "can chair meetings";
+                  // The admin holds both implicitly through the role itself
+                  // (doc01 §4: `role = 'admin' OR can_…`), so their switch
+                  // reads on and can't be turned off from here.
+                  const implicit = isAdminHolder;
                   const value =
-                    permission === "can_create_meetings"
+                    implicit ||
+                    (permission === "can_create_meetings"
                       ? member.canCreateMeetings
-                      : member.canChairMeetings;
+                      : member.canChairMeetings);
                   return (
                     <td key={permission} data-center="true">
-                      <label className="roster-table__toggle">
-                        <input
-                          type="checkbox"
-                          checked={value}
-                          disabled={!isAdmin || !active || pending}
-                          onChange={(e) => togglePermission(member, permission, e.target.checked)}
-                          aria-label={`${member.fullName}: ${
-                            permission === "can_create_meetings" ? "can create meetings" : "can chair meetings"
-                          }`}
-                          data-testid={`${permission}-${member.userId}`}
-                        />
-                      </label>
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={value}
+                        aria-label={`${member.fullName}: ${label}`}
+                        title={implicit ? "Included with the Admin role" : undefined}
+                        className="permission-switch"
+                        disabled={!isAdmin || !active || implicit || pending}
+                        onClick={() => togglePermission(member, permission, !value)}
+                        data-testid={`${permission}-${member.userId}`}
+                      >
+                        <span className="permission-switch__thumb" aria-hidden="true" />
+                      </button>
+                      {implicit && <div className="roster-table__meta">via Admin</div>}
                     </td>
                   );
                 })}

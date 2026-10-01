@@ -143,7 +143,20 @@ export function StrataSetupFlow({
         </div>
       )}
 
+      {lookup?.status === "not_found" && lookup.pendingCreationRequestByOther && (
+        <div className="card setup-result" data-testid="creation-request-pending-other">
+          <span className="pill">{lookup.strataPlanNumber}</span>
+          <h3>Someone has already asked to add this strata</h3>
+          <p>
+            Their request is being reviewed now. Once it&rsquo;s approved,
+            look up {lookup.strataPlanNumber} again and you&rsquo;ll be able to
+            request to join &mdash; or ask whoever set it up to invite you.
+          </p>
+        </div>
+      )}
+
       {lookup?.status === "not_found" &&
+        !lookup.pendingCreationRequestByOther &&
         (lookup.pendingCreationRequest ? (
           <div className="card setup-result" data-testid="creation-request-pending">
             <span className="pill">{lookup.strataPlanNumber}</span>

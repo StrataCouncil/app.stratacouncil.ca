@@ -8,7 +8,8 @@ import { createClient } from "@/lib/supabase/server";
  * showing an "Accept?" page is the point: the click in the email *was* the
  * acceptance. `accept_corporation_invite()` (0010) checks the invite's
  * email matches the signed-in account and is idempotent, so following the
- * link twice is harmless.
+ * link twice is harmless. An account `generateLink()` just created has no
+ * name, so it goes through /welcome first.
  *
  * Signed-out visitors never reach this — middleware sends them to /login.
  * If the email link itself expired, /auth/confirm already bounced them to
@@ -32,5 +33,20 @@ export async function GET(
     redirect(`/strata?connect=1&error=${encodeURIComponent(message)}`);
   }
 
-  redirect(`/strata/${corporationId}`);
+  // A brand-new invitee's account has no name yet — collect it in one
+  // step before they land in the strata (doc01 §4a).
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("full_name")
+    .eq("id", user!.id)
+    .single();
+
+  const destination = `/strata/${corporationId}`;
+  if (!profile?.full_name?.trim()) {
+    redirect(`/welcome?next=${encodeURIComponent(destination)}`);
+  }
+  redirect(destination);
 }

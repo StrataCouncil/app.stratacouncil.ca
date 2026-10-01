@@ -116,3 +116,45 @@ export function corporationInviteEmail(params: {
     text,
   };
 }
+
+/**
+ * Corporation-creation review outcome (doc01 §1, doc03 Stage 4) — sent by
+ * application code when a Super Admin resolves a request; "notified by
+ * email to sign back in" on approval.
+ */
+export function creationRequestApprovedEmail(params: {
+  corporationName: string;
+  strataPlanNumber: string;
+  openUrl: string;
+}) {
+  const name = escapeHtml(params.corporationName);
+  const sp = escapeHtml(params.strataPlanNumber);
+  const html = wrap(`
+    <p style="margin:0 0 16px;font-size:16px;color:${INK};"><strong>${name}</strong> (${sp}) is now set up on StrataCouncil.ca, and you&rsquo;re its admin.</p>
+    <p style="margin:0 0 8px;font-size:14px;color:${INK};">Sign in to invite your council, assign roles, and start uploading your strata&rsquo;s documents.</p>
+    ${button(params.openUrl, "Open your strata")}
+  `);
+  const text = `${params.corporationName} (${params.strataPlanNumber}) is now set up on StrataCouncil.ca, and you're its admin.\n\nSign in to invite your council, assign roles, and start uploading your strata's documents:\n\n${params.openUrl}`;
+  return { subject: `${params.strataPlanNumber} is set up on StrataCouncil.ca`, html, text };
+}
+
+export function creationRequestDeniedEmail(params: { strataPlanNumber: string }) {
+  const sp = escapeHtml(params.strataPlanNumber);
+  const html = wrap(`
+    <p style="margin:0 0 16px;font-size:16px;color:${INK};">We weren&rsquo;t able to approve your request to add ${sp} to StrataCouncil.ca.</p>
+    <p style="margin:0;font-size:14px;color:${INK};">If you think this is a mistake, or the strata is already on the platform under a different plan number, reply to support@stratacouncil.ca and we&rsquo;ll take another look.</p>
+  `);
+  const text = `We weren't able to approve your request to add ${params.strataPlanNumber} to StrataCouncil.ca.\n\nIf you think this is a mistake, or the strata is already on the platform under a different plan number, contact support@stratacouncil.ca and we'll take another look.`;
+  return { subject: `Your request to add ${params.strataPlanNumber}`, html, text };
+}
+
+/** A join request approved by the corporation's admin (doc03 Stage 4). */
+export function joinRequestApprovedEmail(params: { corporationName: string; openUrl: string }) {
+  const name = escapeHtml(params.corporationName);
+  const html = wrap(`
+    <p style="margin:0 0 16px;font-size:16px;color:${INK};">Your request to join <strong>${name}</strong> on StrataCouncil.ca was approved.</p>
+    ${button(params.openUrl, "Open your strata")}
+  `);
+  const text = `Your request to join ${params.corporationName} on StrataCouncil.ca was approved:\n\n${params.openUrl}`;
+  return { subject: `You've joined ${params.corporationName} on StrataCouncil.ca`, html, text };
+}

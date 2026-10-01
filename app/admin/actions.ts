@@ -2,6 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { APP_URL } from "@/lib/app-url";
+import { notifyUser } from "@/lib/email/notify";
+import { creationRequestApprovedEmail, creationRequestDeniedEmail } from "@/lib/email/templates";
 import { createClient } from "@/lib/supabase/server";
 import { isJurisdictionCode, normalizeStrataPlanNumber } from "@/lib/strata";
 
@@ -16,6 +19,8 @@ import { isJurisdictionCode, normalizeStrataPlanNumber } from "@/lib/strata";
  * The reviewer submits the identity fields they verified against the
  * uploaded Strata Plan — corrected if the requester got something wrong —
  * and those, not the originally typed values, become the corporation.
+ *
+ * Either outcome emails the requester (doc03 Stage 4), best-effort.
  */
 
 export type ReviewResult = { ok: false; error: string } | undefined;
@@ -54,6 +59,23 @@ export async function approveCreationRequest(
     };
   }
 
+  // "Approved → requester notified by email to sign back in" (doc03 Stage 4).
+  const { data: request } = await supabase
+    .from("corporation_creation_requests")
+    .select("requested_by")
+    .eq("id", requestId)
+    .single();
+  if (request) {
+    await notifyUser(
+      request.requested_by,
+      creationRequestApprovedEmail({
+        corporationName: legalName,
+        strataPlanNumber,
+        openUrl: new URL(`/strata/${strataPlanNumber}`, APP_URL).toString(),
+      })
+    );
+  }
+
   revalidatePath("/admin");
   redirect(`/admin/${strataPlanNumber}`);
 }
@@ -70,12 +92,17 @@ export async function denyCreationRequest(requestId: string): Promise<ReviewResu
     .update({ status: "denied", reviewed_by: user.id, resolved_at: new Date().toISOString() })
     .eq("id", requestId)
     .eq("status", "pending")
-    .select("id");
+    .select("id, requested_by, parsed_strata_plan_number");
 
   if (error || !data?.length) {
     console.error("[denyCreationRequest]", error?.message);
     return { ok: false, error: "Couldn't deny this request — it may already be resolved." };
   }
+
+  await notifyUser(
+    data[0].requested_by,
+    creationRequestDeniedEmail({ strataPlanNumber: data[0].parsed_strata_plan_number ?? "your strata" })
+  );
 
   revalidatePath("/admin");
   redirect("/admin");

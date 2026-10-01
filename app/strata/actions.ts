@@ -47,7 +47,14 @@ export type LookupResult =
       membershipStatus: "active" | "invited" | "removed" | null;
       pendingJoinRequest: boolean;
     }
-  | { status: "not_found"; strataPlanNumber: string; pendingCreationRequest: boolean };
+  | {
+      status: "not_found";
+      strataPlanNumber: string;
+      /** This user's own request for this SP# is waiting on review. */
+      pendingCreationRequest: boolean;
+      /** Someone else's request for this SP# is waiting on review. */
+      pendingCreationRequestByOther: boolean;
+    };
 
 export async function lookupStrata(input: string): Promise<LookupResult> {
   const strataPlanNumber = normalizeStrataPlanNumber(input);
@@ -91,15 +98,23 @@ export async function lookupStrata(input: string): Promise<LookupResult> {
     };
   }
 
-  const { data: pendingCreation } = await supabase
-    .from("corporation_creation_requests")
-    .select("id")
-    .eq("requested_by", user.id)
-    .eq("parsed_strata_plan_number", strataPlanNumber)
-    .eq("status", "pending")
-    .maybeSingle();
+  const [{ data: pendingCreation }, { data: anyPending }] = await Promise.all([
+    supabase
+      .from("corporation_creation_requests")
+      .select("id")
+      .eq("requested_by", user.id)
+      .eq("parsed_strata_plan_number", strataPlanNumber)
+      .eq("status", "pending")
+      .maybeSingle(),
+    supabase.rpc("strata_plan_has_pending_request", { p_strata_plan_number: strataPlanNumber }),
+  ]);
 
-  return { status: "not_found", strataPlanNumber, pendingCreationRequest: Boolean(pendingCreation) };
+  return {
+    status: "not_found",
+    strataPlanNumber,
+    pendingCreationRequest: Boolean(pendingCreation),
+    pendingCreationRequestByOther: !pendingCreation && anyPending === true,
+  };
 }
 
 export type SimpleResult = { ok: true } | { ok: false; error: string };
@@ -134,7 +149,18 @@ export async function acceptInvite(inviteId: string) {
     const message = error?.code === "P0001" ? error.message : "Couldn't accept that invitation.";
     redirect(`/strata?connect=1&error=${encodeURIComponent(message)}`);
   }
-  redirect(`/strata/${corporationId}`);
+
+  // Same as /invite/[id]: an invite-created account may have no name yet.
+  const { data: profile } = await ctx.supabase
+    .from("profiles")
+    .select("full_name")
+    .eq("id", ctx.user.id)
+    .single();
+  const destination = `/strata/${corporationId}`;
+  if (!profile?.full_name?.trim()) {
+    redirect(`/welcome?next=${encodeURIComponent(destination)}`);
+  }
+  redirect(destination);
 }
 
 export type UploadTicket =
@@ -278,7 +304,11 @@ export async function submitCreationRequest(input: CreationRequestInput): Promis
   if (error) {
     await admin.from("documents").delete().eq("id", document.id);
     if (error.code === "23505") {
-      return { ok: false, error: `You already have a pending request for ${strataPlanNumber}.` };
+      // One pending request per SP#, from anyone (doc01 §1).
+      return {
+        ok: false,
+        error: `A request to add ${strataPlanNumber} is already being reviewed. Once it's approved, look it up again to request to join.`,
+      };
     }
     console.error("[submitCreationRequest]", error.code, error.message);
     return { ok: false, error: "Couldn't submit your request. Please try again." };

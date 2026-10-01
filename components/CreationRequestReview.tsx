@@ -108,7 +108,7 @@ export function CreationRequestReview({ request }: { request: CreationRequestDet
             </button>
             <button
               type="button"
-              className="button button-primary button-small"
+              className="button button-danger button-small"
               onClick={deny}
               disabled={busy}
               data-testid="review-deny-confirm"

@@ -14,7 +14,8 @@ import { EMAIL_RE } from "@/lib/strata";
  * The email carries a `generateLink()` sign-in link (roster-actions.ts):
  * one click signs the invitee in — creating their account if they don't
  * have one — and connects them. No approval step on the admin's end, no
- * separate signup form on theirs. Until then they show on the roster as
+ * separate signup form on theirs; a brand-new invitee gives their name in
+ * one short step after the click (/welcome). Until then they show on the roster as
  * "Invited". Links expire, so pending invites can be re-sent.
  */
 export function RosterInvites({
@@ -25,7 +26,6 @@ export function RosterInvites({
   invites: PendingInvite[];
 }) {
   const [email, setEmail] = useState("");
-  const [fullName, setFullName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [revokingId, setRevokingId] = useState<string | null>(null);
@@ -41,10 +41,9 @@ export function RosterInvites({
     setError(null);
     setNotice(null);
     startTransition(async () => {
-      const result = await sendInvite(corporationId, trimmed, fullName);
+      const result = await sendInvite(corporationId, trimmed);
       if (result.ok) {
         setEmail("");
-        setFullName("");
         setNotice(result.notice ?? null);
       } else {
         setError(result.error);
@@ -83,13 +82,6 @@ export function RosterInvites({
       </p>
 
       <form className="roster-invites__form" onSubmit={send}>
-        <input
-          type="text"
-          placeholder="Name (optional)"
-          value={fullName}
-          onChange={(e) => setFullName(e.target.value)}
-          data-testid="invite-name-input"
-        />
         <input
           type="email"
           placeholder="name@example.com"
@@ -142,7 +134,7 @@ export function RosterInvites({
                     Cancel
                   </button>
                   <button
-                    className="button button-primary button-small"
+                    className="button button-danger button-small"
                     onClick={() => revoke(invite.id)}
                     disabled={pending}
                     data-testid={`invite-revoke-confirm-${invite.id}`}
