@@ -347,17 +347,12 @@ export async function saveMemberRoles(
 export async function setMeetingPermission(
   corporationId: string,
   userId: string,
-  permission: "can_create_meetings" | "can_chair_meetings",
   value: boolean
 ): Promise<ActionResult> {
-  if (permission !== "can_create_meetings" && permission !== "can_chair_meetings") {
-    return fail("Unknown permission.");
-  }
-
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("corporation_memberships")
-    .update({ [permission]: value })
+    .update({ can_run_meetings: value })
     .eq("corporation_id", corporationId)
     .eq("user_id", userId)
     .eq("status", "active")

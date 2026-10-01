@@ -31,10 +31,11 @@ const REMOVE_CONFIRM_PHRASE = "remove council member";
  * people (Standard Bylaw 13(2)); the editor enforces that up front and
  * the database trigger (0002) is the backstop.
  *
- * Meeting permissions are two independent per-member switches
- * (`can_create_meetings`, `can_chair_meetings`), set by the admin. The
- * admin holds both implicitly through the role (doc01 §4), so theirs read
- * on and are locked.
+ * Running meetings — creating and editing agendas, launching Meeting
+ * Mode, recording votes, finalizing minutes — is the secretary's job, so
+ * the secretary and the admin hold it through their roles. One switch,
+ * set by the admin, extends it to anyone else (small councils); for the
+ * role holders it reads on and is locked.
  *
  * "Remove" (council turnover) asks for a typed confirmation phrase —
  * removal keeps the membership row as 'removed' for history, but the
@@ -119,13 +120,9 @@ export function RosterTable({
     });
   }
 
-  function togglePermission(
-    member: RosterMember,
-    permission: "can_create_meetings" | "can_chair_meetings",
-    value: boolean
-  ) {
+  function togglePermission(member: RosterMember, value: boolean) {
     startTransition(async () => {
-      const result = await setMeetingPermission(corporationId, member.userId, permission, value);
+      const result = await setMeetingPermission(corporationId, member.userId, value);
       setError(member.userId, result.ok ? null : result.error);
     });
   }
@@ -149,8 +146,7 @@ export function RosterTable({
           <tr>
             <th>Member</th>
             <th>Roles</th>
-            <th data-center="true">Can create meetings</th>
-            <th data-center="true">Can chair meetings</th>
+            <th data-center="true">Can run meetings</th>
           </tr>
         </thead>
         <tbody>
@@ -314,37 +310,30 @@ export function RosterTable({
                     </div>
                   )}
                 </td>
-                {(["can_create_meetings", "can_chair_meetings"] as const).map((permission) => {
-                  const label =
-                    permission === "can_create_meetings" ? "can create meetings" : "can chair meetings";
-                  // The admin holds both implicitly through the role itself
-                  // (doc01 §4: `role = 'admin' OR can_…`), so their switch
-                  // reads on and can't be turned off from here.
-                  const implicit = isAdminHolder;
-                  const value =
-                    implicit ||
-                    (permission === "can_create_meetings"
-                      ? member.canCreateMeetings
-                      : member.canChairMeetings);
+                {(() => {
+                  // Admin and secretary run meetings through the role itself,
+                  // so their switch reads on and can't be turned off here.
+                  const via = isAdminHolder ? "Admin" : member.roles.includes("secretary") ? "Secretary" : null;
+                  const value = via !== null || member.canRunMeetings;
                   return (
-                    <td key={permission} data-center="true">
+                    <td data-center="true">
                       <button
                         type="button"
                         role="switch"
                         aria-checked={value}
-                        aria-label={`${member.fullName}: ${label}`}
-                        title={implicit ? "Included with the Admin role" : undefined}
+                        aria-label={`${member.fullName}: can run meetings`}
+                        title={via ? `Included with the ${via} role` : undefined}
                         className="permission-switch"
-                        disabled={!isAdmin || !active || implicit || pending}
-                        onClick={() => togglePermission(member, permission, !value)}
-                        data-testid={`${permission}-${member.userId}`}
+                        disabled={!isAdmin || !active || via !== null || pending}
+                        onClick={() => togglePermission(member, !value)}
+                        data-testid={`can_run_meetings-${member.userId}`}
                       >
                         <span className="permission-switch__thumb" aria-hidden="true" />
                       </button>
-                      {implicit && <div className="roster-table__meta">via Admin</div>}
+                      {via && <div className="roster-table__meta">via {via}</div>}
                     </td>
                   );
-                })}
+                })()}
               </tr>
             );
           })}

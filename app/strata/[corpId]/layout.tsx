@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
+import { StrataContextProvider } from "@/components/StrataContext";
 import { StrataSwitcher } from "@/components/StrataSwitcher";
 import { getConnectedCorporations } from "@/lib/data/corporations";
+import { getStrataAccess } from "@/lib/data/strata";
 
 /**
  * Stratasphere™ is desktop-only — the governance tools (roster tables,
@@ -36,6 +38,7 @@ export default async function StrataSphereLayout({
   }
 
   const subscribed = currentCorporation.subscriptionStatus === "active";
+  const access = await getStrataAccess(corpId);
 
   return (
     <AppShell active="strata">
@@ -87,7 +90,11 @@ export default async function StrataSphereLayout({
             </div>
           )}
 
-          {children}
+          <StrataContextProvider
+            value={{ corpId: currentCorporation.id, subscribed, isAdmin: access?.isAdmin ?? false }}
+          >
+            {children}
+          </StrataContextProvider>
         </div>
       </div>
     </AppShell>

@@ -1,13 +1,17 @@
 import Link from "next/link";
 import { StrataSphereNav } from "@/components/StrataSphereNav";
-import { currentCorporation } from "@/lib/placeholder-data";
 
 /**
  * Decision ledger — StrataSphere-gated (doc01 §4a). Not a nav destination
  * any more (see `StrataSphereNav`'s comment) — this route stays for the
  * data/record itself, just unlinked from the sub-nav.
  */
-export default function DecisionsPage() {
+export default async function DecisionsPage({
+  params,
+}: {
+  params: Promise<{ corpId: string }>;
+}) {
+  const { corpId } = await params;
   return (
     <>
       <StrataSphereNav active="decisions" />
@@ -20,7 +24,7 @@ export default function DecisionsPage() {
           Unlocks with a subscription.
         </p>
         <Link
-          href={`/strata/${currentCorporation.id}/billing`}
+          href={`/strata/${corpId}/billing`}
           className="button button-primary"
           data-testid="decisions-subscribe-cta"
         >

@@ -1,6 +1,7 @@
 import { StrataSphereNav } from "@/components/StrataSphereNav";
 import { KnowledgeLibrary } from "@/components/KnowledgeLibrary";
-import { currentCorporation, knowledgeResources } from "@/lib/placeholder-data";
+import { getStrataAccess } from "@/lib/data/strata";
+import { knowledgeResources } from "@/lib/placeholder-data";
 
 /**
  * The Knowledge Library — jurisdiction-scoped (doc01 §3b), free with one
@@ -14,8 +15,13 @@ import { currentCorporation, knowledgeResources } from "@/lib/placeholder-data";
  * search/filter behavior and each card's own page (`/guides/[resourceId]`)
  * for the full article.
  */
-export default function GuidesPage() {
-  const subscribed = currentCorporation.subscriptionStatus === "active";
+export default async function GuidesPage({
+  params,
+}: {
+  params: Promise<{ corpId: string }>;
+}) {
+  const { corpId } = await params;
+  const subscribed = (await getStrataAccess(corpId))?.subscribed ?? false;
 
   return (
     <>
@@ -29,7 +35,7 @@ export default function GuidesPage() {
       </p>
       <KnowledgeLibrary
         resources={knowledgeResources}
-        corpId={currentCorporation.id}
+        corpId={corpId}
         subscribed={subscribed}
       />
     </>

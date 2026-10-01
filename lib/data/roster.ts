@@ -20,8 +20,8 @@ export interface RosterMember {
   email: string;
   status: "active" | "invited";
   joinedAt: string | null;
-  canCreateMeetings: boolean;
-  canChairMeetings: boolean;
+  /** The "Can run meetings" switch; admin and secretary hold it through their role regardless. */
+  canRunMeetings: boolean;
   roles: CorporationRole[];
 }
 
@@ -94,16 +94,14 @@ export async function getCorporationRoster(
       email: string | null;
       status: "active" | "invited";
       joined_at: string | null;
-      can_create_meetings: boolean;
-      can_chair_meetings: boolean;
+      can_run_meetings: boolean;
     }) => ({
       userId: m.user_id,
       fullName: m.full_name || m.email || "Unnamed member",
       email: m.email ?? "",
       status: m.status,
       joinedAt: m.joined_at,
-      canCreateMeetings: m.can_create_meetings,
-      canChairMeetings: m.can_chair_meetings,
+      canRunMeetings: m.can_run_meetings,
       roles: rolesByUser.get(m.user_id) ?? [],
     })
   );
