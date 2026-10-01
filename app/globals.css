@@ -2382,3 +2382,112 @@ button {
   color: var(--muted);
   margin: 0 0 1rem;
 }
+
+/* Strata Lots — owner roster upload and per-lot editor (doc02 §2a) */
+
+.roster-upload {
+  margin-bottom: 1.5rem;
+}
+
+.roster-upload__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.roster-upload__file {
+  position: relative;
+  cursor: pointer;
+}
+
+.roster-upload__file input[type="file"] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  overflow: hidden;
+}
+
+.roster-upload__file:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.roster-upload__errors {
+  background: var(--danger-bg);
+  color: var(--danger);
+  border-radius: var(--radius-sm);
+  padding: 0.75rem 1rem;
+  font-size: 0.88rem;
+}
+
+.roster-upload__errors ul {
+  margin: 0.4rem 0 0;
+  padding-left: 1.2rem;
+}
+
+.roster-upload__preview {
+  border-top: 1px solid var(--line);
+  padding-top: 0.75rem;
+  font-size: 0.9rem;
+}
+
+.roster-upload__preview p {
+  margin: 0 0 0.5rem;
+}
+
+.roster-upload__preview summary {
+  cursor: pointer;
+  color: var(--accent);
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.roster-upload__changes {
+  max-height: 20rem;
+  overflow-y: auto;
+  margin: 0 0 0.75rem;
+  padding-left: 1.2rem;
+  font-size: 0.85rem;
+}
+
+.roster-upload__changes ul {
+  padding-left: 1rem;
+  margin: 0.15rem 0 0.4rem;
+  color: var(--muted);
+}
+
+.roster-upload__from {
+  text-decoration: line-through;
+}
+
+.lot-editor {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 1rem 1.25rem;
+  margin: 0.25rem 0 0.75rem;
+}
+
+.lot-editor__section {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 0.75rem 0 0;
+  padding: 0.75rem 0 0;
+}
+
+.lot-editor__section legend {
+  font-weight: 600;
+  padding-right: 0.5rem;
+}
+
+.lot-editor__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+  gap: 0 1rem;
+}
+
+.lot-editor .field {
+  margin-bottom: 0.75rem;
+}
