@@ -16,11 +16,7 @@ import { acceptInvite } from "./actions";
  * Shows, in order: invites waiting for this account (accept here if the
  * email link expired), the user's own open requests, then the SP# lookup
  * (components/StrataSetupFlow.tsx).
- *
- * TEMPORARY: renders raw debug info (signed-in user id/email, the real
- * query result) directly on the page instead of only logging server-side
- * — Vercel's log UI was too much friction to debug through live. Remove
- * this block once the redirect bug is confirmed fixed.
+
  */
 
 const requestStatusLabels: Record<string, string> = {
@@ -36,9 +32,6 @@ export default async function StrataSetupPage({
 }) {
   const { connect, error: errorMessage } = await searchParams;
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
 
   const corporations = await getConnectedCorporations();
   if (corporations.length > 0 && !connect) {
@@ -92,24 +85,6 @@ export default async function StrataSetupPage({
   return (
     <AppShell>
       <div className="wrap page">
-        <div
-          style={{
-            background: "#fff3cd",
-            border: "1px solid #d4a017",
-            borderRadius: 8,
-            padding: "1rem",
-            margin: "1rem 0",
-            fontFamily: "monospace",
-            fontSize: "0.85rem",
-            whiteSpace: "pre-wrap",
-          }}
-        >
-          {"DEBUG (temporary)\n"}
-          {`signed in as: ${user ? `${user.id} / ${user.email}` : "NO USER"}\n`}
-          {`connected corporations found: ${corporations.length}\n`}
-          {JSON.stringify(corporations, null, 2)}
-        </div>
-
         <div className="screen-gate-notice">
           <span className="pill pill--locked">Desktop required</span>
           <h2>Stratasphere&trade; is best experienced on a larger screen</h2>
