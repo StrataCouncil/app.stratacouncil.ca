@@ -1,4 +1,5 @@
 -- Fixes and additions from the first end-to-end test (2026-10-01).
+-- Safe to run more than once. Run the whole file in one go.
 --
 -- 1. Member at Large: a council role any number of members can hold.
 -- 2. Owner type is one of exactly three: Owner Occupant, Owner
@@ -14,16 +15,16 @@
 --    (file name + source), so they can be indexed.
 
 -- ── 1. Member at Large ─────────────────────────────────────────────────
-alter table public.corporation_role_assignments drop constraint corporation_role_assignments_role_check;
+alter table public.corporation_role_assignments drop constraint if exists corporation_role_assignments_role_check;
 alter table public.corporation_role_assignments add constraint corporation_role_assignments_role_check
   check (role in ('admin', 'president', 'vice_president', 'treasurer', 'secretary', 'member_at_large', 'manager'));
 
-drop index public.corporation_role_assignments_one_holder;
+drop index if exists public.corporation_role_assignments_one_holder;
 create unique index corporation_role_assignments_one_holder
   on public.corporation_role_assignments (corporation_id, role)
   where role not in ('manager', 'member_at_large');
 
-alter table public.owners_and_council drop constraint owners_and_council_role_check;
+alter table public.owners_and_council drop constraint if exists owners_and_council_role_check;
 alter table public.owners_and_council add constraint owners_and_council_role_check
   check (role is null or role in ('president', 'vice_president', 'treasurer', 'secretary', 'member_at_large'));
 
@@ -85,14 +86,14 @@ end;
 $$;
 
 -- ── 2. Owner type ──────────────────────────────────────────────────────
-alter table public.owners_and_council drop constraint owners_and_council_owner_type_check;
-update public.owners_and_council set owner_type = case owner_type when 'owner' then 'owner_occupant' else null end
+alter table public.owners_and_council drop constraint if exists owners_and_council_owner_type_check;
+update public.owners_and_council set owner_type = case when owner_type in ('owner', 'owner_occupant') then 'owner_occupant' when owner_type in ('owner_absentee', 'developer') then owner_type else null end
   where owner_type is not null;
 alter table public.owners_and_council add constraint owners_and_council_owner_type_check
   check (owner_type is null or owner_type in ('owner_occupant', 'owner_absentee', 'developer'));
 
 -- ── 3. Council members tied to lots ────────────────────────────────────
-alter table public.corporation_memberships add column lot_number text;
+alter table public.corporation_memberships add column if not exists lot_number text;
 
 -- The lot roster's council flags follow from members: a lot is a council
 -- lot when an active member with a council role is tied to it. Lots an
@@ -214,7 +215,7 @@ begin
 end;
 $$;
 
-drop function public.corporation_member_directory(text);
+drop function if exists public.corporation_member_directory(text);
 create function public.corporation_member_directory(p_corporation_id text)
 returns table (
   user_id uuid,
@@ -240,8 +241,8 @@ as $$
 $$;
 
 -- ── 4. Invites expire after 7 days ─────────────────────────────────────
-alter table public.corporation_invites add column expires_at timestamptz not null default (now() + interval '7 days');
-update public.corporation_invites set expires_at = created_at + interval '7 days';
+alter table public.corporation_invites add column if not exists expires_at timestamptz not null default (now() + interval '7 days');
+update public.corporation_invites set expires_at = created_at + interval '7 days' where status = 'pending' and expires_at > created_at + interval '7 days';
 
 create or replace function public.accept_corporation_invite(p_invite_id uuid)
 returns text
@@ -322,11 +323,12 @@ as $$
 $$;
 
 -- ── 5. Super Admins read decision ledgers ──────────────────────────────
+drop policy if exists "super admin reads decisions" on public.decisions;
 create policy "super admin reads decisions" on public.decisions
   for select using (public.is_super_admin());
 
 -- ── 6. Profile photos ──────────────────────────────────────────────────
-alter table public.profiles add column avatar_path text;
+alter table public.profiles add column if not exists avatar_path text;
 insert into storage.buckets (id, name, public, file_size_limit)
 values ('avatars', 'avatars', false, 5242880)
 on conflict (id) do nothing;
