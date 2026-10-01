@@ -169,7 +169,7 @@ export async function saveAgenda(
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("meetings")
-    .update({ agenda: sanitizeAgenda(agenda) })
+    .update({ agenda: ensureBookends(sanitizeAgenda(agenda)) })
     .eq("id", meetingId)
     .eq("corporation_id", corpId)
     .eq("updated_at", expectedUpdatedAt)

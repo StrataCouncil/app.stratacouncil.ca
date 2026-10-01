@@ -109,3 +109,28 @@ test("normalizeAgenda tolerates junk and old shapes", () => {
   assert.equal(agenda[0].motion?.dt, "MAJORITY");
   assert.deepEqual(normalizeAgenda("nope"), []);
 });
+
+import { callToOrderScript, itemScript, zonedInstant } from "../lib/meetings/scripts.ts";
+
+test("zonedInstant converts the meeting's wall clock, across DST", () => {
+  assert.equal(zonedInstant("2026-07-01", "19:00", "America/Vancouver").toISOString(), "2026-07-02T02:00:00.000Z");
+  assert.equal(zonedInstant("2026-12-01", "19:00", "America/Vancouver").toISOString(), "2026-12-02T03:00:00.000Z");
+  assert.equal(zonedInstant("2026-12-01", "09:30", "America/St_Johns").toISOString(), "2026-12-01T13:00:00.000Z");
+});
+
+test("scripts: no-quorum branch only once someone is marked", () => {
+  const base = { type: "council" as const, planNumber: "EPS9048", chair: null, required: 3, timezone: "America/Vancouver", now: new Date("2026-11-05T03:02:00Z") };
+  assert.equal(callToOrderScript({ ...base, quorumMet: false, counted: 0 }).title, "Call to Order script");
+  const none = callToOrderScript({ ...base, quorumMet: false, counted: 2 });
+  assert.match(none.title, /No quorum/);
+  assert.match(none.lines.join(" "), /2 members present, and 3 are required/);
+  assert.match(callToOrderScript({ ...base, type: "agm", quorumMet: true, counted: 40 }).lines[0], /Annual General Meeting of the Owners of Strata Plan EPS9048 to order at 7:02/);
+  assert.match(callToOrderScript({ ...base, quorumMet: true, counted: 3 }).lines[0], /Good evening/);
+});
+
+test("item scripts follow the decision type", () => {
+  const it = makeItem("Roof", "x", { type: "FOR_APPROVAL", motion: newMotion("THREE_QUARTER") });
+  assert.match(itemScript(it) ?? "", /Three-Quarter/);
+  assert.match(itemScript(makeItem("Adjournment", "x")) ?? "", /motion to adjourn/);
+  assert.match(itemScript(makeItem("Report", "x")) ?? "", /for information/);
+});

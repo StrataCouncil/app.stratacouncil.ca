@@ -59,14 +59,17 @@ export function ItemEditor({
   const titleRef = useRef<HTMLInputElement>(null);
   const simple = isAdjournment(draft) || isNextMeeting(draft);
 
+  // Focus once on open; Escape closes unless an upload is in flight.
+  const escape = useRef(() => {});
+  escape.current = () => {
+    if (!busy) onClose();
+  };
   useEffect(() => {
     titleRef.current?.focus();
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !busy) onClose();
-    };
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && escape.current();
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [busy, onClose]);
+  }, []);
 
   const set = <K extends keyof AgendaItem>(key: K, value: AgendaItem[K]) => setDraft((d) => ({ ...d, [key]: value }));
 

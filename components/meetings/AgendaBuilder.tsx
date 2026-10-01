@@ -7,6 +7,8 @@ import {
   autoPopulate,
   ensureBookends,
   groupByCategory,
+  isAdjournment,
+  isCallToOrder,
   makeItem,
   newCategoryId,
   renumber,
@@ -98,10 +100,18 @@ export function AgendaBuilder({
   const cats = groupByCategory(agenda);
   const categoryNames = [...new Set(agenda.map((i) => i.cat).filter(Boolean))];
 
+  // Call to Order stays first and Adjournment stays last.
+  const canMove = (idx: number, delta: -1 | 1) => {
+    const target = idx + delta;
+    if (idx < 0 || target < 0 || target >= agenda.length) return false;
+    const isBookend = (i: AgendaItem) => isCallToOrder(i) || isAdjournment(i);
+    return !isBookend(agenda[idx]) && !isBookend(agenda[target]);
+  };
+
   function moveItem(id: string, delta: -1 | 1) {
     const idx = agenda.findIndex((i) => i.id === id);
     const target = idx + delta;
-    if (idx < 0 || target < 0 || target >= agenda.length) return;
+    if (!canMove(idx, delta)) return;
     const next = [...agenda];
     const [item] = next.splice(idx, 1);
     // Moving past the edge of its category joins the neighbouring one.
@@ -110,11 +120,15 @@ export function AgendaBuilder({
     update(next);
   }
 
+  const catHasBookend = (ci: number) => cats[ci]?.items.some((i) => isCallToOrder(i) || isAdjournment(i)) ?? true;
+  const canMoveCat = (ci: number, delta: -1 | 1) =>
+    ci + delta >= 0 && ci + delta < cats.length && !catHasBookend(ci) && !catHasBookend(ci + delta);
+
   function moveCategory(catId: string, delta: -1 | 1) {
     const order = cats.map((c) => c.id);
     const idx = order.indexOf(catId);
     const target = idx + delta;
-    if (target < 0 || target >= order.length) return;
+    if (!canMoveCat(idx, delta)) return;
     [order[idx], order[target]] = [order[target], order[idx]];
     update(order.flatMap((id) => agenda.filter((i) => i.catId === id)));
   }
@@ -249,15 +263,17 @@ export function AgendaBuilder({
               maxLength={120}
             />
             <div className="agenda-row__tools">
-              <button type="button" className="icon-button" onClick={() => moveCategory(cat.id, -1)} disabled={ci === 0} aria-label={`Move ${cat.name} up`}>
+              <button type="button" className="icon-button" onClick={() => moveCategory(cat.id, -1)} disabled={!canMoveCat(ci, -1)} aria-label={`Move ${cat.name} up`}>
                 <Arrow up />
               </button>
-              <button type="button" className="icon-button" onClick={() => moveCategory(cat.id, 1)} disabled={ci === cats.length - 1} aria-label={`Move ${cat.name} down`}>
+              <button type="button" className="icon-button" onClick={() => moveCategory(cat.id, 1)} disabled={!canMoveCat(ci, 1)} aria-label={`Move ${cat.name} down`}>
                 <Arrow />
               </button>
-              <button type="button" className="link-button agenda-danger" onClick={() => deleteCategory(cat.id)}>
-                Delete
-              </button>
+              {!catHasBookend(ci) && (
+                <button type="button" className="link-button agenda-danger" onClick={() => deleteCategory(cat.id)}>
+                  Delete
+                </button>
+              )}
             </div>
           </div>
           <ol className="agenda-items">
@@ -274,18 +290,20 @@ export function AgendaBuilder({
                   {notes[it.id] && <span className="card__meta">Note</span>}
                   <span className={`rtag rtag--${it.type.toLowerCase()}`}>{resolutionTypeShort[it.type]}</span>
                   <div className="agenda-row__tools">
-                    <button type="button" className="icon-button" onClick={() => moveItem(it.id, -1)} disabled={idx === 0} aria-label={`Move ${it.text} up`}>
+                    <button type="button" className="icon-button" onClick={() => moveItem(it.id, -1)} disabled={!canMove(idx, -1)} aria-label={`Move ${it.text} up`}>
                       <Arrow up />
                     </button>
-                    <button type="button" className="icon-button" onClick={() => moveItem(it.id, 1)} disabled={idx === agenda.length - 1} aria-label={`Move ${it.text} down`}>
+                    <button type="button" className="icon-button" onClick={() => moveItem(it.id, 1)} disabled={!canMove(idx, 1)} aria-label={`Move ${it.text} down`}>
                       <Arrow />
                     </button>
                     <button type="button" className="link-button" onClick={() => setEditing(it)}>
                       Edit
                     </button>
-                    <button type="button" className="link-button agenda-danger" onClick={() => deleteItem(it.id)} aria-label={`Delete ${it.text}`}>
-                      Delete
-                    </button>
+                    {!isCallToOrder(it) && !isAdjournment(it) && (
+                      <button type="button" className="link-button agenda-danger" onClick={() => deleteItem(it.id)} aria-label={`Delete ${it.text}`}>
+                        Delete
+                      </button>
+                    )}
                   </div>
                 </li>
               );
