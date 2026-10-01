@@ -3,8 +3,8 @@
 -- Supabase SQL editor only when starting over.
 --
 -- Files in Storage are NOT removed by this (Supabase only allows that
--- through the Storage API): empty the `strata-plans` and
--- `corporation-documents` buckets in the dashboard afterwards.
+-- through the Storage API): empty the `strata-plans`,
+-- `corporation-documents` and `avatars` buckets in the dashboard afterwards.
 
 begin;
 
