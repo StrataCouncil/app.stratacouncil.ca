@@ -1,71 +1,45 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { StrataSphereNav } from "@/components/StrataSphereNav";
-import {
-  documentCategoryDescriptions,
-  documentCategoryLabels,
-  documents,
-  type DocumentCategory,
-} from "@/lib/placeholder-data";
+import { DocumentUpload } from "@/components/DocumentUpload";
+import { DocumentList } from "@/components/DocumentList";
+import { getStrataAccess } from "@/lib/data/strata";
+import { listDocuments } from "@/lib/data/documents";
+import { documentCategoryDescriptions, documentCategoryLabels, isDocumentCategory } from "@/lib/documents";
 
-export function generateStaticParams() {
-  return Object.keys(documentCategoryLabels).map((category) => ({ category }));
-}
-
-/** One folder's contents — a flat list, newest upload first. */
+/** One folder's contents, newest upload first. */
 export default async function DocumentCategoryPage({
   params,
 }: {
   params: Promise<{ corpId: string; category: string }>;
 }) {
   const { corpId, category } = await params;
-  const label = documentCategoryLabels[category as DocumentCategory];
-  if (!label) notFound();
-
-  const folderDocuments = documents.filter((d) => d.category === category);
+  if (!isDocumentCategory(category)) notFound();
+  if (!(await getStrataAccess(corpId))) notFound();
+  const documents = await listDocuments(corpId, category);
+  const label = documentCategoryLabels[category];
 
   return (
     <>
       <StrataSphereNav active="documents" />
-
-      <Link
-        href={`/strata/${corpId}/documents`}
-        className="card__meta"
-        style={{ display: "inline-block", marginBottom: "0.75rem" }}
-      >
+      <Link href={`/strata/${corpId}/documents`} className="card__meta" style={{ display: "inline-block", marginBottom: "0.75rem" }}>
         &larr; All folders
       </Link>
 
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "1rem", flexWrap: "wrap", marginBottom: "1.5rem" }}>
+      <div className="doc-header">
         <div>
           <h2>{label}</h2>
-          <p className="card__meta" style={{ marginTop: "0.3rem" }}>
-            {documentCategoryDescriptions[category as DocumentCategory]}
-          </p>
+          <p className="card__meta">{documentCategoryDescriptions[category]}</p>
         </div>
-        <button className="button button-secondary" data-testid="upload-to-category">
-          Upload to {label}
-        </button>
+        {category !== "agenda_attachments" && (
+          <DocumentUpload corpId={corpId} defaultCategory={category} label={`Upload to ${label}`} />
+        )}
       </div>
 
-      {folderDocuments.length === 0 ? (
+      {documents.length === 0 ? (
         <p className="card__meta">Nothing in this folder yet.</p>
       ) : (
-        <div className="module-list" data-testid="document-list">
-          {folderDocuments.map((doc) => (
-            <div className="module-row" key={doc.id}>
-              <div>
-                <div className="module-row__title">{doc.title}</div>
-                <div className="module-row__meta">
-                  Uploaded by {doc.uploadedBy} &middot; {doc.uploadedAt}
-                </div>
-              </div>
-              <button className="button button-secondary button-small" data-testid={`open-document-${doc.id}`}>
-                Open
-              </button>
-            </div>
-          ))}
-        </div>
+        <DocumentList corpId={corpId} documents={documents} />
       )}
     </>
   );

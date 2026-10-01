@@ -2553,3 +2553,67 @@ button {
 .lot-editor .field {
   margin-bottom: 0.75rem;
 }
+
+/* ── Documents ─────────────────────────────────────────────────────── */
+.doc-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+}
+.doc-header .card__meta {
+  margin-top: 0.3rem;
+}
+.doc-row__title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.doc-row__kind {
+  margin-left: 0.5rem;
+  font-size: 0.7rem;
+}
+.doc-status {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  background: var(--locked-bg);
+  color: var(--muted);
+}
+.doc-status--indexed {
+  background: var(--free-bg);
+  color: var(--free);
+}
+.doc-status--failed,
+.doc-status--needs_text {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+.doc-move__options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin: 0.75rem 0;
+}
+.doc-move__option {
+  text-align: left;
+  font: inherit;
+  font-size: 0.9rem;
+  padding: 0.6rem 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+}
+.doc-move__option:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+.doc-move__option[aria-pressed="true"] {
+  border-color: var(--accent);
+  cursor: default;
+}
