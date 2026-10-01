@@ -165,16 +165,21 @@ const SEAL_CLOSE = "";
 const SEALED = /([-]+)/g;
 
 class Vault {
-  private items: string[] = [];
-  seal = (s: string) => {
-    const idx = (this.items.push(s) - 1)
+  private items: Array<{ text: string; original?: string }> = [];
+  private refByOriginal = new Map<string, string>();
+  readonly refs = new Map<string, string>();
+
+  /** `original` is what was replaced; pseudonymizing restores it later. */
+  seal = (text: string, original?: string) => {
+    const idx = (this.items.push({ text, original }) - 1)
       .toString(16)
       .split("")
       .map((c) => String.fromCharCode(0xe100 + parseInt(c, 16)))
       .join("");
     return SEAL_OPEN + idx + SEAL_CLOSE;
   };
-  restore(text: string) {
+
+  restore(text: string, mode: "strip" | "pseudonymize" = "strip") {
     return text.replace(SEALED, (_, idx: string) => {
       const n = parseInt(
         idx
@@ -183,7 +188,17 @@ class Vault {
           .join(""),
         16
       );
-      return this.items[n] ?? "";
+      const item = this.items[n];
+      if (!item) return "";
+      if (mode === "strip" || item.original === undefined) return item.text;
+      const key = item.original.trim();
+      let ref = this.refByOriginal.get(key);
+      if (!ref) {
+        ref = `[REF-${this.refByOriginal.size + 1}]`;
+        this.refByOriginal.set(key, ref);
+        this.refs.set(ref, key);
+      }
+      return ref;
     });
   }
 }
@@ -223,14 +238,14 @@ function sealFixed(text: string, v: Vault) {
         try {
           const u = new URL(url);
           const rest = url.length > u.origin.length + 1;
-          return v.seal(u.origin + (rest ? "/[path redacted]" : url.slice(u.origin.length)));
+          return v.seal(u.origin + (rest ? "/[path redacted]" : url.slice(u.origin.length)), url);
         } catch {
-          return v.seal("[link redacted]");
+          return v.seal("[link redacted]", url);
         }
       })
-      .replace(/[\p{L}\p{N}._%+-]+@[\p{L}\p{N}.-]+\.\p{L}{2,}/gu, () => v.seal(P.email))
-      .replace(/\bSL\s?-?\d{1,4}\b/g, v.seal)
-      .replace(/\b(?:BCS|EPS|LMS|VAS|VIS|KAS|NES|NWS|EPP|BCP|LMP|VIP|KAP)\s?-?\d{2,6}\b/g, v.seal)
+      .replace(/[\p{L}\p{N}._%+-]+@[\p{L}\p{N}.-]+\.\p{L}{2,}/gu, (m) => v.seal(P.email, m))
+      .replace(/\bSL\s?-?\d{1,4}\b/g, (m) => v.seal(m))
+      .replace(/\b(?:BCS|EPS|LMS|VAS|VIS|KAS|NES|NWS|EPP|BCP|LMP|VIP|KAP)\s?-?\d{2,6}\b/g, (m) => v.seal(m))
   );
 }
 
@@ -249,7 +264,7 @@ function stripKnown(text: string, people: KnownPerson[], v: Vault) {
   let out = text;
   for (const p of named) {
     const parts = p.name.split(" ");
-    const replacement = v.seal(p.lot ?? P.member);
+    const replacement = (m: string) => v.seal(p.lot ?? P.member, m);
     const variants = [p.name];
     if (parts.length >= 2) {
       const first = parts[0];
@@ -278,7 +293,7 @@ function stripKnown(text: string, people: KnownPerson[], v: Vault) {
     }
   }
   for (const t of [...tokens].sort((a, b) => b.length - a.length)) {
-    out = out.replace(new RegExp(bound(escapeRegExp(t)), "gu"), () => v.seal(P.name));
+    out = out.replace(new RegExp(bound(escapeRegExp(t)), "gu"), (m) => v.seal(P.name, m));
   }
 
   // Known first names that are also ordinary words ("Will", "Mark", "Bill")
@@ -295,10 +310,10 @@ function stripKnown(text: string, people: KnownPerson[], v: Vault) {
     const titles = [...TITLE_WORDS].join("|");
     out = out
       .replace(new RegExp(`(?<=\\b(?:${titles})\\.?\\s+)${escapeRegExp(t)}(?![\\p{L}\\p{N}])`, "giu"), (m) =>
-        m[0] === m[0].toUpperCase() ? v.seal(P.name) : m
+        m[0] === m[0].toUpperCase() ? v.seal(P.name, m) : m
       )
-      .replace(new RegExp(`(?<![\\p{L}\\p{N}])(?:${escapeRegExp(t)}|${escapeRegExp(t.toUpperCase())})(?=${SPEECH_AFTER.source.slice(1)})`, "gu"), () =>
-        v.seal(P.name)
+      .replace(new RegExp(`(?<![\\p{L}\\p{N}])(?:${escapeRegExp(t)}|${escapeRegExp(t.toUpperCase())})(?=${SPEECH_AFTER.source.slice(1)})`, "gu"), (m) =>
+        v.seal(P.name, m)
       );
   }
   return out;
@@ -309,7 +324,7 @@ const STREET_TYPES =
 
 /** Layer 2: structured identifiers. Order matters (most specific first). */
 function stripPatterns(text: string, v: Vault) {
-  const s = (placeholder: string) => () => v.seal(placeholder);
+  const s = (placeholder: string) => (m: string) => v.seal(placeholder, m);
   return (
     text
       // Dates of birth, when labelled as such.
@@ -320,7 +335,7 @@ function stripPatterns(text: string, v: Vault) {
       // Payment cards: 13–19 digits, optional space/dash groups, Luhn-valid.
       .replace(/(?<![\d-])(?:\d[ -]?){12,18}\d(?![\d-])/g, (m) => {
         const digits = m.replace(/\D/g, "");
-        return digits.length >= 13 && digits.length <= 19 && luhn(digits) ? v.seal(P.card) : m;
+        return digits.length >= 13 && digits.length <= 19 && luhn(digits) ? v.seal(P.card, m) : m;
       })
       // Bank: transit(5)-institution(3)-account(7–12), any separator.
       .replace(/(?<!\d)\d{5}[ -]?\d{3}[ -]?\d{7,12}(?!\d)/g, s(P.bank))
@@ -350,7 +365,7 @@ function stripPatterns(text: string, v: Vault) {
       )
       // Licence plates and policy/account-style identifiers.
       .replace(/\b[A-Z]{2,4}[ -]?\d{3,12}\b|\b\d{3}[ -]?[A-Z]{3}\b|\b[A-Z]{2}\d[ -]?\d{2}[A-Z]\b/g, (m) =>
-        KEEP_CODES.has(m.replace(/[\s\d-]/g, "")) ? m : v.seal(P.id)
+        KEEP_CODES.has(m.replace(/[\s\d-]/g, "")) ? m : v.seal(P.id, m)
       )
       .replace(
         /\b(?:policy|account|acct|member|client|customer|licen[cs]e|plate|file|claim|certificate|cert|driver'?s licen[cs]e|DL|passport|health card|PHN|MSP|care card)\s*(?:#|no\.?|number|num\.?)\s*:?\s*[A-Z0-9][A-Z0-9-]{3,}/gi,
@@ -421,10 +436,11 @@ function stripLikelyNames(text: string, v: Vault) {
       if (!redact[k]) continue;
       let end = k;
       while (end + 1 < words.length && redact[end + 1]) end++;
-      out += run.slice(cursor, words[k].at) + v.seal(P.name);
+      const poss = words[end].text.match(/['’]s$/);
+      const segmentEnd = words[end].at + words[end].text.length - (poss ? poss[0].length : 0);
+      out += run.slice(cursor, words[k].at) + v.seal(P.name, run.slice(words[k].at, segmentEnd));
       cursor = words[end].at + words[end].text.length;
       // Keep a possessive on the last redacted word ("Johnson's" → "[name redacted]'s").
-      const poss = words[end].text.match(/['’]s$/);
       if (poss) out += poss[0];
       k = end;
     }
@@ -432,14 +448,35 @@ function stripLikelyNames(text: string, v: Vault) {
   });
 }
 
-export function stripPII(text: string, people: KnownPerson[] = []): string {
-  if (!text) return text;
-  const v = new Vault();
+function run(text: string, people: KnownPerson[], v: Vault) {
   // Private-use characters are our seal markers; nothing legitimate uses them.
-  let out = text.replace(/[-]/g, " ");
+  let out = text.replace(/[\uE000-\uF8FF]/g, " ");
   out = sealFixed(out, v);
   out = stripKnown(out, people, v);
   out = stripPatterns(out, v);
-  out = stripLikelyNames(out, v);
-  return v.restore(out);
+  return stripLikelyNames(out, v);
+}
+
+export function stripPII(text: string, people: KnownPerson[] = []): string {
+  if (!text) return text;
+  const v = new Vault();
+  return v.restore(run(text, people, v));
+}
+
+/**
+ * Like stripPII, but every replaced value becomes a numbered reference
+ * ("[REF-3]") instead of a generic placeholder, and the mapping stays
+ * here. For tasks where the AI's answer comes back to us and should show
+ * the real names again — parsing an uploaded agenda — without the names
+ * ever leaving: send `text`, then pass the reply through `restore`.
+ * The same value always gets the same reference within one call.
+ */
+export function pseudonymize(text: string, people: KnownPerson[] = []) {
+  const v = new Vault();
+  const out = text ? v.restore(run(text, people, v), "pseudonymize") : text;
+  const refs = new Map(v.refs);
+  return {
+    text: out,
+    restore: (reply: string) => reply.replace(/\[REF-(\d+)\]/g, (ref) => refs.get(ref) ?? ref),
+  };
 }

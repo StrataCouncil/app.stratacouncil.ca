@@ -1,0 +1,415 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { getStrataAccess } from "@/lib/data/strata";
+import { presidentName } from "@/lib/data/meetings";
+import {
+  autoPopulate,
+  ensureBookends,
+  makeItem,
+  meetingFormats,
+  meetingTypes,
+  newCategoryId,
+  newMotion,
+  normalizeAgenda,
+  NEEDS_MOTION,
+  resolutionTypes,
+  type AgendaItem,
+  type Attachment,
+  type ResolutionType,
+} from "@/lib/meetings/agenda";
+import { registerUploadedDocuments, type UploadedFile } from "@/app/strata/[corpId]/documents/actions";
+import { extractDocumentText } from "@/lib/kb/extract";
+import { loadStripContext } from "@/lib/kb/privacy";
+import { pseudonymize } from "@/lib/pii";
+import { askClaudeJson, ClaudeRefusalError } from "@/lib/ai/claude";
+import { queueDocumentIndexing } from "@/lib/kb/queue";
+
+/**
+ * Meetings before they start (doc03 Stage 5a): create, edit details, build
+ * the agenda, attach files and links, keep private notes, delete a draft,
+ * launch. RLS (0014) is the gate for all of it — these actions only shape
+ * input and report errors in plain language.
+ */
+
+type Fail = { ok: false; error: string };
+type Ok<T = object> = { ok: true } & T;
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const TIME_RE = /^\d{2}:\d{2}$/;
+
+async function runner(corpId: string) {
+  const access = await getStrataAccess(corpId);
+  if (!access) return null;
+  if (!access.canRunMeetings) return null;
+  return access;
+}
+
+function refresh(corpId: string, meetingId?: string) {
+  revalidatePath(`/strata/${corpId}/meetings`);
+  if (meetingId) revalidatePath(`/strata/${corpId}/meetings/${meetingId}`, "layout");
+}
+
+export interface MeetingDetailsInput {
+  type: string;
+  meetingDate: string;
+  startTime: string;
+  timezone: string;
+  format: string;
+  location: string;
+  chairName: string;
+}
+
+function validateDetails(input: MeetingDetailsInput): string | null {
+  if (!(meetingTypes as readonly string[]).includes(input.type)) return "Choose a meeting type.";
+  if (!DATE_RE.test(input.meetingDate)) return "Choose a meeting date.";
+  if (input.startTime && !TIME_RE.test(input.startTime)) return "Enter a valid start time.";
+  if (!(meetingFormats as readonly string[]).includes(input.format)) return "Choose a format.";
+  if (!/^[A-Za-z_]+\/[A-Za-z_]+$/.test(input.timezone)) return "Choose a time zone.";
+  if (input.location.length > 500 || input.chairName.length > 200) return "That's too long.";
+  return null;
+}
+
+export async function createMeeting(corpId: string, input: MeetingDetailsInput): Promise<Ok<{ id: string }> | Fail> {
+  const access = await runner(corpId);
+  if (!access) return { ok: false, error: "Only the secretary, the admin, or someone they've allowed can create meetings." };
+  const invalid = validateDetails(input);
+  if (invalid) return { ok: false, error: invalid };
+
+  const supabase = await createClient();
+  const chair = input.chairName.trim() || (await presidentName(corpId)) || null;
+  const { data, error } = await supabase
+    .from("meetings")
+    .insert({
+      corporation_id: access.corpId,
+      type: input.type,
+      meeting_date: input.meetingDate,
+      start_time: input.startTime || null,
+      timezone: input.timezone,
+      format: input.format,
+      location: input.location.trim() || null,
+      chair_name: chair,
+      created_by: access.userId,
+    })
+    .select("id")
+    .single();
+  if (error || !data) {
+    console.error("[createMeeting]", error?.code, error?.message);
+    return { ok: false, error: "Couldn't create the meeting. Please try again." };
+  }
+  refresh(corpId);
+  return { ok: true, id: data.id };
+}
+
+export async function updateMeetingDetails(
+  corpId: string,
+  meetingId: string,
+  input: MeetingDetailsInput
+): Promise<Ok | Fail> {
+  if (!(await runner(corpId))) return { ok: false, error: "You can't edit this meeting." };
+  const invalid = validateDetails(input);
+  if (invalid) return { ok: false, error: invalid };
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("meetings")
+    .update({
+      type: input.type,
+      meeting_date: input.meetingDate,
+      start_time: input.startTime || null,
+      timezone: input.timezone,
+      format: input.format,
+      location: input.location.trim() || null,
+      chair_name: input.chairName.trim() || null,
+    })
+    .eq("id", meetingId)
+    .eq("corporation_id", corpId)
+    .select("id");
+  if (error) {
+    console.error("[updateMeetingDetails]", error.code, error.message);
+    return { ok: false, error: "Couldn't save the meeting details." };
+  }
+  if (!data?.length) return { ok: false, error: "This meeting is being run by someone else, or its minutes are final." };
+  refresh(corpId, meetingId);
+  return { ok: true };
+}
+
+/** Clean an agenda coming back from the browser before it's stored. */
+function sanitizeAgenda(raw: unknown): AgendaItem[] {
+  const clip = (s: string, n: number) => s.slice(0, n);
+  return normalizeAgenda(raw)
+    .slice(0, 300)
+    .map((it, i) => ({
+      ...it,
+      num: i + 1,
+      text: clip(it.text, 300) || "Untitled item",
+      cat: clip(it.cat, 120),
+      background: clip(it.background, 20000),
+      financial: clip(it.financial, 10000),
+      risks: clip(it.risks, 10000),
+      minutesSummary: clip(it.minutesSummary, 20000),
+      motion: NEEDS_MOTION.includes(it.type) || it.motion ? (it.motion ?? newMotion()) : null,
+      atts: (it.atts ?? []).slice(0, 50),
+    }));
+}
+
+/**
+ * Save the whole agenda. `expectedUpdatedAt` guards against two people
+ * editing the same draft at once: if the meeting changed since this
+ * editor loaded it, nothing is written and the editor is told to reload.
+ */
+export async function saveAgenda(
+  corpId: string,
+  meetingId: string,
+  agenda: unknown,
+  expectedUpdatedAt: string
+): Promise<Ok<{ updatedAt: string }> | Fail> {
+  if (!(await runner(corpId))) return { ok: false, error: "You can't edit this agenda." };
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("meetings")
+    .update({ agenda: sanitizeAgenda(agenda) })
+    .eq("id", meetingId)
+    .eq("corporation_id", corpId)
+    .eq("updated_at", expectedUpdatedAt)
+    .select("updated_at");
+  if (error) {
+    console.error("[saveAgenda]", error.code, error.message);
+    return { ok: false, error: "Couldn't save the agenda." };
+  }
+  if (!data?.length) {
+    return {
+      ok: false,
+      error: "This agenda changed somewhere else since you opened it (or the meeting is being run by someone else). Reload to see the latest.",
+    };
+  }
+  refresh(corpId, meetingId);
+  return { ok: true, updatedAt: data[0].updated_at };
+}
+
+export async function deleteMeeting(corpId: string, meetingId: string): Promise<Ok | Fail> {
+  if (!(await runner(corpId))) return { ok: false, error: "You can't delete this meeting." };
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("meetings")
+    .delete()
+    .eq("id", meetingId)
+    .eq("corporation_id", corpId)
+    .select("id");
+  if (error) {
+    console.error("[deleteMeeting]", error.code, error.message);
+    return { ok: false, error: "Couldn't delete the meeting." };
+  }
+  if (!data?.length) return { ok: false, error: "Only meetings that haven't been launched can be deleted." };
+  refresh(corpId);
+  return { ok: true };
+}
+
+/** Private note on one item (empty deletes it). */
+export async function saveItemNote(corpId: string, meetingId: string, itemId: string, body: string): Promise<Ok | Fail> {
+  const supabase = await createClient();
+  const trimmed = body.slice(0, 5000);
+  const { error } = trimmed.trim()
+    ? await supabase
+        .from("meeting_item_notes")
+        .upsert({ meeting_id: meetingId, item_id: itemId, body: trimmed, updated_at: new Date().toISOString() })
+    : await supabase.from("meeting_item_notes").delete().eq("meeting_id", meetingId).eq("item_id", itemId);
+  if (error) {
+    console.error("[saveItemNote]", error.code, error.message);
+    return { ok: false, error: "Couldn't save the note." };
+  }
+  return { ok: true };
+}
+
+/**
+ * Files attached to an agenda item: written to the repository's Agenda
+ * Attachments folder (system-assigned, doc01 §4) and indexed like any
+ * other document.
+ */
+export async function registerAgendaAttachments(
+  corpId: string,
+  meetingId: string,
+  itemId: string,
+  files: UploadedFile[]
+): Promise<Ok<{ attachments: Attachment[] }> | Fail> {
+  if (!(await runner(corpId))) return { ok: false, error: "You can't add attachments to this agenda." };
+  const result = await registerUploadedDocuments(corpId, "agenda_attachments", files, {
+    sourceType: "agenda_attachment",
+    meetingId,
+    agendaItemId: itemId,
+  });
+  if (!result.ok) return result;
+  return {
+    ok: true,
+    attachments: result.documentIds.map((documentId, i) => ({
+      id: `a_${documentId}`,
+      kind: "document" as const,
+      documentId,
+      title: files[i].name,
+    })),
+  };
+}
+
+/**
+ * A link attachment: stored as a document in Agenda Attachments and
+ * fetched once in the background (with the link guard) so its content is
+ * indexed for Stratasphere like any other attachment.
+ */
+export async function addLinkAttachment(
+  corpId: string,
+  meetingId: string,
+  itemId: string,
+  rawUrl: string,
+  label: string
+): Promise<Ok<{ attachment: Attachment }> | Fail> {
+  const access = await runner(corpId);
+  if (!access) return { ok: false, error: "You can't add attachments to this agenda." };
+  let url: URL;
+  try {
+    url = new URL(rawUrl.trim());
+  } catch {
+    return { ok: false, error: "Enter a full link, starting with https://" };
+  }
+  if (url.protocol !== "https:" && url.protocol !== "http:") return { ok: false, error: "Only web links (http or https) can be attached." };
+  const title = (label.trim() || url.hostname).slice(0, 300);
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("documents")
+    .insert({
+      corporation_id: access.corpId,
+      category: "agenda_attachments",
+      title,
+      file_name: null,
+      source_type: "link",
+      url: url.toString(),
+      uploaded_by: access.userId,
+      meeting_id: meetingId,
+      agenda_item_id: itemId,
+    })
+    .select("id")
+    .single();
+  if (error || !data) {
+    console.error("[addLinkAttachment]", error?.code, error?.message);
+    return { ok: false, error: "Couldn't add that link." };
+  }
+  await queueDocumentIndexing([data.id]);
+  revalidatePath(`/strata/${corpId}/documents`, "layout");
+  return { ok: true, attachment: { id: `a_${data.id}`, kind: "link", documentId: data.id, url: url.toString(), title } };
+}
+
+const AGENDA_SCHEMA = {
+  type: "object",
+  properties: {
+    items: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          cat: { type: "string" },
+          text: { type: "string" },
+          type: { type: "string", enum: [...resolutionTypes] },
+          background: { type: "string" },
+          financial: { type: "string" },
+          risks: { type: "string" },
+          motionText: { type: "string" },
+        },
+        required: ["cat", "text", "type", "background", "financial", "risks", "motionText"],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ["items"],
+  additionalProperties: false,
+};
+
+/**
+ * Build an agenda from an uploaded one. The file is read here; names and
+ * other personal details are swapped for numbered references before the
+ * text goes to the AI, and swapped back in the parsed result — so the
+ * agenda shows real names but none were ever sent.
+ */
+export async function parseUploadedAgenda(corpId: string, formData: FormData): Promise<Ok<{ agenda: AgendaItem[] }> | Fail> {
+  const access = await runner(corpId);
+  if (!access) return { ok: false, error: "You can't edit this agenda." };
+  if (!access.subscribed && access.freeMeetingUsed) {
+    return { ok: false, error: "Reading an uploaded agenda uses Stratasphere AI, which needs a subscription." };
+  }
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) return { ok: false, error: "Choose an agenda file." };
+  if (file.size > 10 * 1024 * 1024) return { ok: false, error: "That file is over 10 MB." };
+
+  const extracted = await extractDocumentText(new Uint8Array(await file.arrayBuffer()), file.name, file.type).catch(
+    () => null
+  );
+  if (!extracted || extracted.status === "unsupported") return { ok: false, error: "Upload a PDF, Word (.docx) or text file." };
+  if (extracted.status === "needs_text") {
+    return { ok: false, error: "That PDF has no text in it (it looks scanned). Upload a searchable copy, or build the agenda by hand." };
+  }
+  if (extracted.text.trim().length < 20) return { ok: false, error: "That file looks empty." };
+
+  const ctx = await loadStripContext(createAdminClient(), access.corpId);
+  const p = pseudonymize(extracted.text.slice(0, 40000), ctx.people);
+
+  let parsed: { items: Array<Record<string, string>> };
+  try {
+    parsed = await askClaudeJson({
+      effort: "low",
+      maxTokens: 16000,
+      system:
+        "You turn a BC strata corporation's meeting agenda into structured items. Keep the agenda's own wording and order. " +
+        "Placeholders like [REF-3] stand for names and other details; copy them exactly where they appear. " +
+        "Use FOR_APPROVAL, FOR_DECISION, FOR_RATIFICATION or FOR_DIRECTION only where the agenda shows something to be voted on; otherwise FOR_INFORMATION or FOR_DISCUSSION. " +
+        "Use empty strings for anything the agenda doesn't say.",
+      messages: [{ role: "user", content: `Agenda:\n\n${p.text}` }],
+      schema: AGENDA_SCHEMA,
+    });
+  } catch (err) {
+    console.error("[parseUploadedAgenda]", err instanceof Error ? err.message : err);
+    return {
+      ok: false,
+      error:
+        err instanceof ClaudeRefusalError
+          ? "Stratasphere couldn't read that agenda. Build it by hand instead."
+          : "Couldn't read that agenda automatically. Try again, or build it by hand.",
+    };
+  }
+
+  const catIds = new Map<string, string>();
+  const agenda = parsed.items.slice(0, 200).map((raw) => {
+    const cat = p.restore(raw.cat || "Agenda");
+    if (!catIds.has(cat)) catIds.set(cat, newCategoryId());
+    const type = (resolutionTypes as readonly string[]).includes(raw.type) ? (raw.type as ResolutionType) : "FOR_INFORMATION";
+    const needs = NEEDS_MOTION.includes(type);
+    return autoPopulate(
+      makeItem(p.restore(raw.text), cat, {
+        catId: catIds.get(cat)!,
+        type,
+        background: p.restore(raw.background ?? ""),
+        financial: p.restore(raw.financial ?? ""),
+        risks: p.restore(raw.risks ?? ""),
+        motion: needs ? newMotion("MAJORITY", p.restore(raw.motionText ?? "")) : null,
+      })
+    );
+  });
+  return { ok: true, agenda: ensureBookends(agenda) };
+}
+
+export async function launchMeeting(
+  corpId: string,
+  meetingId: string
+): Promise<Ok<{ result: string }> | Fail & { subscriptionRequired?: boolean }> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("launch_meeting", { p_meeting_id: meetingId });
+  if (error) {
+    const subscriptionRequired = error.hint === "subscription_required";
+    const known =
+      subscriptionRequired ||
+      /already being run|already been adjourned|Build the agenda/.test(error.message);
+    if (!known) console.error("[launchMeeting]", error.code, error.message);
+    return { ok: false, error: known ? error.message : "Couldn't launch the meeting.", subscriptionRequired };
+  }
+  refresh(corpId, meetingId);
+  return { ok: true, result: data as string };
+}

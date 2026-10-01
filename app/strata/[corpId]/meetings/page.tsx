@@ -1,68 +1,174 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { StrataSphereNav } from "@/components/StrataSphereNav";
-import { MeetingsList } from "@/components/MeetingsList";
 import { getStrataAccess } from "@/lib/data/strata";
-import { meetings } from "@/lib/placeholder-data";
+import { listMeetings, type MeetingRecord } from "@/lib/data/meetings";
+import { createClient } from "@/lib/supabase/server";
+import { meetingTypeLabels } from "@/lib/meetings/agenda";
+import { formatMeetingWhen } from "@/lib/meetings/format";
 
 /**
- * Meetings — every meeting for this corporation, whatever state it's in,
- * one list (`MeetingsList`, grouped by status). This is the menu item
- * previously labeled "Meeting Mode" (nav renamed to just "Meetings" —
- * "Meeting Mode" stays the name of the in-progress, chair-only session
- * itself, doc01 §4/doc02 §5, it's just no longer what the nav tab is
- * called). One full free meeting before subscribing (doc01 §4b, doc03
- * Stage 5a), then gated — that gate is about *creating and running* a
- * meeting, not about seeing this list, so the "Create meeting" panel
- * below still branches on subscription/trial status the same as before.
+ * Meetings. Before the free meeting is used, the first-meeting checklist
+ * (doc03 Stage 5a) leads: roster, documents, create a meeting, review its
+ * agenda, launch. Draft meetings are unlimited; launching one is what uses
+ * the free meeting.
  */
-export default async function MeetingsPage({
-  params,
-}: {
-  params: Promise<{ corpId: string }>;
-}) {
+export default async function MeetingsPage({ params }: { params: Promise<{ corpId: string }> }) {
   const { corpId } = await params;
   const access = await getStrataAccess(corpId);
-  const subscribed = access?.subscribed ?? false;
-  const trialAvailable = !(access?.freeMeetingUsed ?? true);
+  if (!access) notFound();
+  const meetings = await listMeetings(corpId);
+  const trialAvailable = !access.freeMeetingUsed;
+
+  const supabase = await createClient();
+  const [{ count: namedLots }, { count: documents }] = await Promise.all([
+    supabase.from("owners_and_council").select("id", { count: "exact", head: true }).eq("corporation_id", corpId).not("full_name", "is", null),
+    supabase.from("documents").select("id", { count: "exact", head: true }).eq("corporation_id", corpId),
+  ]);
+
+  const steps = [
+    { label: "Add your owners to the lot roster", done: (namedLots ?? 0) > 0, href: `/strata/${corpId}/lots` },
+    { label: "Upload your governance documents", done: (documents ?? 0) > 0, href: `/strata/${corpId}/documents`, hint: "Bylaws, rules, past minutes, financials — so Stratasphere has real material to work with." },
+    { label: "Create your first meeting", done: meetings.length > 0, href: access.canRunMeetings ? `/strata/${corpId}/meetings/new` : undefined },
+    { label: "Review the agenda", done: meetings.some((m) => m.agenda.length > 0), href: meetings[0] ? `/strata/${corpId}/meetings/${meetings[0].id}` : undefined },
+    { label: "Launch Meeting Mode", done: meetings.some((m) => m.launchedAt), hint: "This uses your one free meeting." },
+  ];
+
+  const upcoming = meetings.filter((m) => m.status !== "ADJOURNED");
+  const past = meetings.filter((m) => m.status === "ADJOURNED");
 
   return (
     <>
       <StrataSphereNav active="meetings" />
-      <h2 style={{ marginBottom: "1rem" }}>Meetings</h2>
-
-      {subscribed || trialAvailable ? (
-        <div className="card" style={{ maxWidth: 480, marginBottom: "2rem" }}>
-          <h3>
-            {subscribed ? "Start a meeting" : "Your free meeting is ready"}
-          </h3>
-          <p>
-            {subscribed
-              ? "Council, AGM, SGM or committee — set the type, date and format to begin."
-              : "Full functionality, full document access, no restrictions. Ends when the meeting is adjourned and finalized."}
+      <div className="doc-header">
+        <div>
+          <h2>Meetings</h2>
+          <p className="card__meta">
+            {access.subscribed
+              ? "Council meetings, AGMs, SGMs and committee meetings."
+              : trialAvailable
+                ? "Your first meeting is free: the full product, no card needed."
+                : "Your free meeting has been used. Everything from it stays here."}
           </p>
-          <button className="button button-primary" style={{ alignSelf: "flex-start" }} data-testid="start-meeting">
-            Create meeting
-          </button>
         </div>
-      ) : (
-        <div className="lock-panel" style={{ marginBottom: "2rem" }}>
-          <h2>Your free meeting has been used</h2>
-          <p>
-            Subscribe to Stratasphere&trade; to run another meeting.
-            Everything from your free meeting &mdash; documents, finalized
-            minutes, decisions &mdash; stays fully accessible either way.
-          </p>
-          <Link
-            href={`/strata/${corpId}/billing`}
-            className="button button-primary"
-            data-testid="meetings-subscribe-cta"
-          >
-            Subscribe to Stratasphere&trade;
+        {access.canRunMeetings && (
+          <Link href={`/strata/${corpId}/meetings/new`} className="button button-primary" data-testid="start-meeting">
+            New meeting
           </Link>
+        )}
+      </div>
+
+      {!access.subscribed && trialAvailable && (
+        <section className="card checklist" data-testid="first-meeting-checklist">
+          <h3>Your first meeting</h3>
+          <ol className="checklist__steps">
+            {steps.map((s) => (
+              <li key={s.label} data-done={s.done}>
+                <span className="checklist__mark" aria-hidden="true">
+                  {s.done ? <Check /> : null}
+                </span>
+                <span>
+                  {s.href && !s.done ? <Link href={s.href}>{s.label}</Link> : s.label}
+                  <span className="visually-hidden">{s.done ? " (done)" : " (to do)"}</span>
+                  {s.hint && !s.done && <span className="checklist__hint">{s.hint}</span>}
+                </span>
+              </li>
+            ))}
+          </ol>
+          {!access.canRunMeetings && (
+            <p className="card__meta">Meetings are set up and run by your secretary or admin, or anyone they&rsquo;ve allowed.</p>
+          )}
+        </section>
+      )}
+
+      {!access.subscribed && !trialAvailable && (
+        <div className="lock-panel" style={{ marginBottom: "2rem" }}>
+          <h2>Run your next meeting with Stratasphere&trade;</h2>
+          <p>
+            You can keep setting up draft meetings and agendas. Launching one needs a subscription. Documents, finalized
+            minutes and everything from your free meeting stay fully accessible either way.
+          </p>
+          {access.isAdmin ? (
+            <Link href={`/strata/${corpId}/billing`} className="button button-primary" data-testid="meetings-subscribe-cta">
+              See plans
+            </Link>
+          ) : (
+            <p className="card__meta">Only your strata&rsquo;s admin can subscribe.</p>
+          )}
         </div>
       )}
 
-      <MeetingsList initialMeetings={meetings} />
+      <MeetingSection title="Upcoming and in progress" meetings={upcoming} corpId={corpId} userId={access.userId} empty="No meetings scheduled." />
+      {past.length > 0 && <MeetingSection title="Past meetings" meetings={past} corpId={corpId} userId={access.userId} />}
     </>
+  );
+}
+
+function MeetingSection({
+  title,
+  meetings,
+  corpId,
+  userId,
+  empty,
+}: {
+  title: string;
+  meetings: MeetingRecord[];
+  corpId: string;
+  userId: string;
+  empty?: string;
+}) {
+  return (
+    <section style={{ marginTop: "1.5rem" }}>
+      <h3 style={{ marginBottom: "0.75rem" }}>{title}</h3>
+      {meetings.length === 0 ? (
+        <p className="card__meta">{empty}</p>
+      ) : (
+        <div className="module-list" data-testid="meetings-list">
+          {meetings.map((m) => (
+            <div className="module-row" key={m.id} data-testid={`meeting-${m.id}`}>
+              <div>
+                <div className="module-row__title">
+                  <Link href={`/strata/${corpId}/meetings/${m.id}`}>{meetingTypeLabels[m.type]}</Link>
+                </div>
+                <div className="module-row__meta">
+                  {formatMeetingWhen(m)} &middot; {statusLabel(m)}
+                  {m.isTrial ? " · Free meeting" : ""}
+                </div>
+              </div>
+              <div className="meeting-row__actions">
+                {m.launchedBy === userId && m.status !== "ADJOURNED" ? (
+                  <Link href={`/strata/${corpId}/meetings/${m.id}/run`} className="button button-primary button-small">
+                    Resume
+                  </Link>
+                ) : m.status === "ADJOURNED" ? (
+                  <Link href={`/strata/${corpId}/meetings/${m.id}/minutes`} className="button button-secondary button-small">
+                    {m.minutesState === "FINAL" ? "Minutes" : "Review minutes"}
+                  </Link>
+                ) : (
+                  <Link href={`/strata/${corpId}/meetings/${m.id}`} className="button button-secondary button-small">
+                    Agenda
+                  </Link>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function statusLabel(m: MeetingRecord) {
+  if (m.status === "ADJOURNED") return m.minutesState === "FINAL" ? "Minutes final" : "Adjourned, minutes in draft";
+  if (m.status === "LIVE") return `In progress${m.launchedByName ? ` (${m.launchedByName})` : ""}`;
+  if (m.launchedAt) return `Launched${m.launchedByName ? ` by ${m.launchedByName}` : ""}`;
+  return m.agenda.length ? "Draft" : "Draft, no agenda yet";
+}
+
+function Check() {
+  return (
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M5 12l5 5 9-10" />
+    </svg>
   );
 }

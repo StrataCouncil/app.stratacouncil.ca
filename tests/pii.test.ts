@@ -99,3 +99,25 @@ t("many redactions (vault > 16)", Array.from({length: 40}, (_, i) => `Owner${i}@
 // Pinned here so a change in behaviour is noticed either way.
 t("limit: lone unknown first name, no cue", "ask Kevin about it", eq("ask Kevin about it"), []);
 t("limit: lower-case unknown name", "spoke to john smith", eq("spoke to john smith"), []);
+
+// Pseudonymizing: names leave as references and come back as themselves.
+import { pseudonymize } from "../lib/pii.ts";
+
+test("pseudonymize replaces with stable references and restores them", () => {
+  const p = pseudonymize("Sally Johnson raised the leak. Call 604-555-1234. John Smith agreed with Sally Johnson.", people);
+  assert.ok(!p.text.includes("Sally") && !p.text.includes("Johnson") && !p.text.includes("John Smith") && !p.text.includes("555"), p.text);
+  const refs = p.text.match(/\[REF-\d+\]/g) ?? [];
+  assert.equal(refs[0], refs[3], "same person, same reference");
+  assert.equal(new Set(refs).size, 3);
+  const reply = `Item: Leak raised by ${refs[0]}; contact ${refs[1]}; seconded by ${refs[2]}`;
+  assert.equal(p.restore(reply), "Item: Leak raised by Sally Johnson; contact 604-555-1234; seconded by John Smith");
+});
+
+test("pseudonymize keeps lot refs and plan numbers as they are", () => {
+  const p = pseudonymize("SL061 at EPS9048", []);
+  assert.equal(p.text, "SL061 at EPS9048");
+});
+
+test("pseudonymize leaves unknown references in a reply alone", () => {
+  assert.equal(pseudonymize("nothing here", []).restore("[REF-9] stays"), "[REF-9] stays");
+});

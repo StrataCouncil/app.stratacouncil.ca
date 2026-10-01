@@ -16,6 +16,9 @@ export interface StrataAccess {
   freeMeetingUsed: boolean;
   roles: string[];
   isAdmin: boolean;
+  /** Secretary, admin, or the "Can run meetings" switch (0014). */
+  canRunMeetings: boolean;
+  userId: string;
 }
 
 export const getStrataAccess = cache(async (corpId: string): Promise<StrataAccess | null> => {
@@ -25,7 +28,7 @@ export const getStrataAccess = cache(async (corpId: string): Promise<StrataAcces
   } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const [{ data: corp }, { data: sub }, { data: roleRows }] = await Promise.all([
+  const [{ data: corp }, { data: sub }, { data: roleRows }, { data: canRun }] = await Promise.all([
     supabase
       .from("strata_corporations")
       .select("strata_plan_number, free_meeting_used")
@@ -37,6 +40,7 @@ export const getStrataAccess = cache(async (corpId: string): Promise<StrataAcces
       .select("role")
       .eq("corporation_id", corpId)
       .eq("user_id", user.id),
+    supabase.rpc("can_run_meetings", { target_corporation_id: corpId }),
   ]);
   if (!corp) return null;
 
@@ -47,5 +51,7 @@ export const getStrataAccess = cache(async (corpId: string): Promise<StrataAcces
     freeMeetingUsed: corp.free_meeting_used,
     roles,
     isAdmin: roles.includes("admin"),
+    canRunMeetings: canRun === true,
+    userId: user.id,
   };
 });
