@@ -108,18 +108,33 @@ export async function getLotRoll(corpId: string) {
 }
 
 /** Default chair label: whoever holds the president role (BC SPA convention). */
-export async function presidentName(corpId: string) {
+export type ChairCandidate = { name: string; office: "President" | "Vice President" | "Manager" };
+
+/** The usual chairs, in order: President, Vice President, Manager(s). */
+export async function chairCandidates(corpId: string): Promise<ChairCandidate[]> {
   const supabase = await createClient();
-  const { data } = await supabase.rpc("corporation_member_directory", { p_corporation_id: corpId });
-  const { data: roles } = await supabase
-    .from("corporation_role_assignments")
-    .select("user_id")
-    .eq("corporation_id", corpId)
-    .eq("role", "president")
-    .maybeSingle();
-  if (!roles) return null;
-  const match = (data ?? []).find((m: { user_id: string }) => m.user_id === roles.user_id) as
-    | { full_name: string | null }
-    | undefined;
-  return match?.full_name ?? null;
+  const [{ data: members }, { data: roles }] = await Promise.all([
+    supabase.rpc("corporation_member_directory", { p_corporation_id: corpId }),
+    supabase
+      .from("corporation_role_assignments")
+      .select("user_id, role")
+      .eq("corporation_id", corpId)
+      .in("role", ["president", "vice_president", "manager"]),
+  ]);
+  const nameOf = new Map(
+    ((members ?? []) as { user_id: string; full_name: string | null; email: string | null }[]).map((m) => [
+      m.user_id,
+      m.full_name || m.email || null,
+    ])
+  );
+  const offices = { president: "President", vice_president: "Vice President", manager: "Manager" } as const;
+  const order = ["president", "vice_president", "manager"] as const;
+  const out: ChairCandidate[] = [];
+  for (const role of order) {
+    for (const r of (roles ?? []).filter((x) => x.role === role)) {
+      const name = nameOf.get(r.user_id);
+      if (name) out.push({ name, office: offices[role] });
+    }
+  }
+  return out;
 }

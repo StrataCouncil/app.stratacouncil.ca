@@ -107,9 +107,9 @@ export function corporationInviteEmail(params: {
     <p style="margin:0 0 16px;font-size:16px;color:${INK};">${inviterName} invited you to join <strong>${corporationName}</strong> on StrataCouncil.ca.</p>
     <p style="margin:0 0 8px;font-size:14px;color:${INK};">Click below to accept. If you don&rsquo;t have an account yet, this creates one &mdash; there&rsquo;s nothing else to fill in.</p>
     ${button(params.acceptUrl, "Accept invitation")}
-    <p style="margin:16px 0 0;font-size:13px;color:${MUTED};">This link can only be used once and expires after a while. If it has expired, sign in at app.stratacouncil.ca with this email address and the invitation will be waiting for you. If you weren&rsquo;t expecting this, you can ignore it.</p>
+    <p style="margin:16px 0 0;font-size:13px;color:${MUTED};">The invitation expires in 7 days, and this link can only be used once. If the link has expired but the invitation hasn&rsquo;t, sign in at app.stratacouncil.ca with this email address and it will be waiting for you. If you weren&rsquo;t expecting this, you can ignore it.</p>
   `);
-  const text = `${params.inviterName} invited you to join ${params.corporationName} on StrataCouncil.ca.\n\nAccept the invitation:\n\n${params.acceptUrl}\n\nIf you don't have an account yet, this creates one. The link can only be used once and expires after a while — if it has expired, sign in at app.stratacouncil.ca with this email address and the invitation will be waiting for you.`;
+  const text = `${params.inviterName} invited you to join ${params.corporationName} on StrataCouncil.ca.\n\nAccept the invitation:\n\n${params.acceptUrl}\n\nIf you don't have an account yet, this creates one. The invitation expires in 7 days, and the link can only be used once. If the link has expired but the invitation hasn't, sign in at app.stratacouncil.ca with this email address and it will be waiting for you.`;
   return {
     subject: `You're invited to join ${params.corporationName} on StrataCouncil.ca`,
     html,
@@ -157,4 +157,27 @@ export function joinRequestApprovedEmail(params: { corporationName: string; open
   `);
   const text = `Your request to join ${params.corporationName} on StrataCouncil.ca was approved:\n\n${params.openUrl}`;
   return { subject: `You've joined ${params.corporationName} on StrataCouncil.ca`, html, text };
+}
+
+/**
+ * To a corporation's admins when someone accepts an invitation. The new
+ * member has no roles until an admin assigns them, so an invite sent to the
+ * wrong address is caught here and can be removed before it matters.
+ */
+export function inviteAcceptedEmail(params: {
+  corporationName: string;
+  memberName: string;
+  memberEmail: string;
+  openUrl: string;
+}) {
+  const name = escapeHtml(params.corporationName);
+  const who = escapeHtml(params.memberName ? `${params.memberName} (${params.memberEmail})` : params.memberEmail);
+  const html = wrap(`
+    <p style="margin:0 0 16px;font-size:16px;color:${INK};">${who} accepted your invitation and joined <strong>${name}</strong> on StrataCouncil.ca.</p>
+    <p style="margin:0 0 8px;font-size:14px;color:${INK};">They have no roles yet. Assign them on Council &amp; Roles. If this isn&rsquo;t who you meant to invite, remove them there.</p>
+    ${button(params.openUrl, "Open Council & Roles")}
+  `);
+  const whoText = params.memberName ? `${params.memberName} (${params.memberEmail})` : params.memberEmail;
+  const text = `${whoText} accepted your invitation and joined ${params.corporationName} on StrataCouncil.ca.\n\nThey have no roles yet. Assign them on Council & Roles. If this isn't who you meant to invite, remove them there:\n\n${params.openUrl}`;
+  return { subject: `${whoText} joined ${params.corporationName}`, html, text };
 }

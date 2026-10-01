@@ -1,4 +1,4 @@
-import { EMAIL_RE } from "./strata";
+import { EMAIL_RE } from "./strata.ts";
 
 /**
  * Owner/lot roster CSV (doc02 §2a): the column mapping, parsing, and
@@ -50,14 +50,25 @@ export const rosterFieldLabels: Record<RosterField, string> = {
   strata_fees: "Strata fees",
 };
 
-export const ownerTypes = ["owner", "tenant", "strata_agent"] as const;
+export const ownerTypes = ["owner_occupant", "owner_absentee", "developer"] as const;
 export type OwnerType = (typeof ownerTypes)[number];
 
 export const ownerTypeLabels: Record<OwnerType, string> = {
-  owner: "Owner",
-  tenant: "Tenant",
-  strata_agent: "Strata agent",
+  owner_occupant: "Owner Occupant",
+  owner_absentee: "Owner Absentee",
+  developer: "Developer",
 };
+
+/**
+ * A cell may hold more than one email (co-owners), separated by spaces,
+ * commas or semicolons. Returns them normalized as "a@x.ca, b@y.ca", or
+ * the first invalid one.
+ */
+export function parseEmails(raw: string): { ok: true; value: string } | { ok: false; invalid: string } {
+  const parts = raw.split(/[\s,;]+/).map((p) => p.trim()).filter(Boolean);
+  for (const p of parts) if (!EMAIL_RE.test(p)) return { ok: false, invalid: p };
+  return { ok: true, value: parts.join(", ") };
+}
 
 /** One parsed upload row. A null field means the cell was blank: no change. */
 export type RosterUploadRow = { lot_number: string } & {
@@ -144,9 +155,9 @@ function parseNumber(raw: string): number | null | "invalid" {
 
 function parseOwnerType(raw: string): OwnerType | "invalid" {
   const key = raw.toLowerCase().replace(/[^a-z]/g, "");
-  if (key === "owner") return "owner";
-  if (key === "tenant") return "tenant";
-  if (key === "strataagent" || key === "agent") return "strata_agent";
+  if (key === "owneroccupant" || key === "occupant") return "owner_occupant";
+  if (key === "ownerabsentee" || key === "absentee") return "owner_absentee";
+  if (key === "developer") return "developer";
   return "invalid";
 }
 
@@ -212,8 +223,10 @@ export function parseRosterCsv(text: string): RosterParseResult {
       strata_fees: null,
     };
 
-    if (row.email && !EMAIL_RE.test(row.email)) {
-      errors.push(`Row ${line} (${lot}): "${row.email}" isn't a valid email.`);
+    if (row.email) {
+      const emails = parseEmails(row.email);
+      if (emails.ok) row.email = emails.value;
+      else errors.push(`Row ${line} (${lot}): "${emails.invalid}" isn't a valid email.`);
     }
     for (const field of ["unit_entitlement", "strata_fees"] as const) {
       const n = parseNumber(value(field));
@@ -227,7 +240,7 @@ export function parseRosterCsv(text: string): RosterParseResult {
     if (rawType) {
       const type = parseOwnerType(rawType);
       if (type === "invalid") {
-        errors.push(`Row ${line} (${lot}): Owner Type "${rawType}" should be Owner, Tenant, or Strata Agent.`);
+        errors.push(`Row ${line} (${lot}): Owner Type "${rawType}" should be Owner Occupant, Owner Absentee, or Developer.`);
       } else {
         row.owner_type = type;
       }

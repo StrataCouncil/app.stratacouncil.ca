@@ -4,9 +4,9 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getStrataAccess } from "@/lib/data/strata";
-import { presidentName } from "@/lib/data/meetings";
 import {
   autoPopulate,
+  decisionTypeLabels,
   ensureBookends,
   makeItem,
   meetingFormats,
@@ -17,7 +17,10 @@ import {
   NEEDS_MOTION,
   resolutionTypes,
   type AgendaItem,
+  meetingTypeLabels,
   type Attachment,
+  type DecisionType,
+  type MeetingType,
   type ResolutionType,
 } from "@/lib/meetings/agenda";
 import { registerUploadedDocuments, type UploadedFile } from "@/app/strata/[corpId]/documents/actions";
@@ -25,6 +28,7 @@ import { extractDocumentText } from "@/lib/kb/extract";
 import { loadStripContext } from "@/lib/kb/privacy";
 import { pseudonymize } from "@/lib/pii";
 import { askClaudeJson, ClaudeRefusalError } from "@/lib/ai/claude";
+import { isGeneralMeeting } from "@/lib/meetings/rules";
 import { queueDocumentIndexing } from "@/lib/kb/queue";
 
 /**
@@ -79,7 +83,8 @@ export async function createMeeting(corpId: string, input: MeetingDetailsInput):
   if (invalid) return { ok: false, error: invalid };
 
   const supabase = await createClient();
-  const chair = input.chairName.trim() || (await presidentName(corpId)) || null;
+  // Blank means the chair is elected at the meeting (Meeting Mode).
+  const chair = input.chairName.trim() || null;
   const { data, error } = await supabase
     .from("meetings")
     .insert({
@@ -396,11 +401,109 @@ export async function parseUploadedAgenda(corpId: string, formData: FormData): P
   return { ok: true, agenda: ensureBookends(agenda) };
 }
 
+const MOTION_SCHEMA = {
+  type: "object",
+  properties: { motionText: { type: "string" } },
+  required: ["motionText"],
+  additionalProperties: false,
+};
+
+/**
+ * Draft motion wording for a custom agenda item. Only the item's own text
+ * goes out, with names and other personal details swapped for numbered
+ * references first and swapped back in the reply. The draft lands in the
+ * editable motion field; nothing is saved until the item is.
+ */
+export async function draftMotion(
+  corpId: string,
+  meetingId: string,
+  input: { text: string; background: string; financial: string; risks: string; decisionType: DecisionType }
+): Promise<Ok<{ motionText: string }> | Fail> {
+  const access = await runner(corpId);
+  if (!access) return { ok: false, error: "You can't edit this agenda." };
+  if (!access.subscribed && access.freeMeetingUsed) {
+    return { ok: false, error: "Drafting a motion uses Stratasphere AI, which needs a subscription." };
+  }
+  if (!input.text.trim()) return { ok: false, error: "Give the item a title first." };
+
+  const supabase = await createClient();
+  const { data: meeting } = await supabase
+    .from("meetings")
+    .select("type")
+    .eq("id", meetingId)
+    .eq("corporation_id", access.corpId)
+    .maybeSingle();
+  const meetingLabel = meeting ? meetingTypeLabels[meeting.type as MeetingType] : "meeting";
+
+  const ctx = await loadStripContext(createAdminClient(), access.corpId);
+  const p = pseudonymize(
+    [
+      `Agenda item: ${input.text.slice(0, 500)}`,
+      input.background.trim() && `Background: ${input.background.slice(0, 4000)}`,
+      input.financial.trim() && `Financial implications: ${input.financial.slice(0, 2000)}`,
+      input.risks.trim() && `Risks / compliance: ${input.risks.slice(0, 2000)}`,
+      `Decision type: ${decisionTypeLabels[input.decisionType]}`,
+    ]
+      .filter(Boolean)
+      .join("\n"),
+    ctx.people
+  );
+
+  try {
+    const out = await askClaudeJson<{ motionText: string }>({
+      effort: "low",
+      maxTokens: 1000,
+      system:
+        `You draft motions for a BC strata corporation's ${meetingLabel}, in the form minutes record them. ` +
+        "Write one motion as a single sentence starting with \"THAT\" (or \"BE IT RESOLVED by a 3/4 vote of the owners that\" for a 3/4 resolution, and the matching wording for 80% or unanimous resolutions). " +
+        "Be specific to the item, use plain language, and cite the Strata Property Act only where the item clearly calls for it. " +
+        "Placeholders like [REF-3] stand for names and other details; copy them exactly. Use [square brackets] for anything the item doesn't say, such as an amount or date. " +
+        "Never invent facts.",
+      messages: [{ role: "user", content: p.text }],
+      schema: MOTION_SCHEMA,
+    });
+    const motionText = p.restore(out.motionText ?? "").trim();
+    if (!motionText) return { ok: false, error: "Stratasphere couldn't draft a motion for that item. Write it by hand." };
+    return { ok: true, motionText };
+  } catch (err) {
+    console.error("[draftMotion]", err instanceof Error ? err.message : err);
+    return {
+      ok: false,
+      error:
+        err instanceof ClaudeRefusalError
+          ? "Stratasphere couldn't draft a motion for that item. Write it by hand."
+          : "Couldn't draft a motion. Try again, or write it by hand.",
+    };
+  }
+}
+
 export async function launchMeeting(
   corpId: string,
   meetingId: string
 ): Promise<Ok<{ result: string }> | Fail & { subscriptionRequired?: boolean }> {
   const supabase = await createClient();
+  // Council and committee meetings take attendance and quorum from the
+  // council lots, so there must be some.
+  const { data: meeting } = await supabase
+    .from("meetings")
+    .select("type")
+    .eq("id", meetingId)
+    .eq("corporation_id", corpId)
+    .maybeSingle();
+  if (meeting && !isGeneralMeeting(meeting.type as MeetingType)) {
+    const { count } = await supabase
+      .from("owners_and_council")
+      .select("lot_number", { count: "exact", head: true })
+      .eq("corporation_id", corpId)
+      .eq("is_council_member", true);
+    if (!count) {
+      return {
+        ok: false,
+        error:
+          "No council members are tied to a strata lot yet. On Council & Roles, set each council member's strata lot, then launch.",
+      };
+    }
+  }
   const { data, error } = await supabase.rpc("launch_meeting", { p_meeting_id: meetingId });
   if (error) {
     const subscriptionRequired = error.hint === "subscription_required";

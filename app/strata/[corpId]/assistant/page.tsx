@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { SubscribeCta } from "@/components/SubscribeCta";
 import { StrataSphereNav } from "@/components/StrataSphereNav";
 import { StratasphereChat } from "@/components/StratasphereChat";
 import { getStrataAccess } from "@/lib/data/strata";
@@ -34,13 +34,7 @@ export default async function AssistantPage({
               subscription &mdash; it&rsquo;s never part of the free tier, even
               during your one free meeting.
             </p>
-            <Link
-              href={`/strata/${corpId}/billing`}
-              className="button button-primary"
-              data-testid="assistant-subscribe-cta"
-            >
-              Subscribe to Stratasphere&trade;
-            </Link>
+            <SubscribeCta testId="assistant-subscribe-cta" />
           </div>
         </>
       )}

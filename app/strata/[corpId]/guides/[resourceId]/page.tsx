@@ -1,3 +1,4 @@
+import { SubscribeCta } from "@/components/SubscribeCta";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { StrataSphereNav } from "@/components/StrataSphereNav";
@@ -84,13 +85,7 @@ export default async function KnowledgeResourcePage({
                 Playbooks, guides, financial insights and legislation updates stay
                 free for every connected member.
               </p>
-              <Link
-                href={`/strata/${corpId}/billing`}
-                className="button button-primary"
-                data-testid="template-subscribe-cta"
-              >
-                Subscribe to Stratasphere&trade;
-              </Link>
+              <SubscribeCta testId="template-subscribe-cta" />
             </div>
           ) : (
             <>

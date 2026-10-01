@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { inviteIsPending, notifyInviteAccepted } from "@/lib/email/invite-accepted";
 import { EMAIL_RE, isJurisdictionCode, normalizeStrataPlanNumber } from "@/lib/strata";
 
 /**
@@ -142,6 +143,7 @@ export async function acceptInvite(inviteId: string) {
   const ctx = await requireUser();
   if (!ctx) redirect("/login");
 
+  const wasPending = await inviteIsPending(inviteId);
   const { data: corporationId, error } = await ctx.supabase.rpc("accept_corporation_invite", {
     p_invite_id: inviteId,
   });
@@ -149,6 +151,7 @@ export async function acceptInvite(inviteId: string) {
     const message = error?.code === "P0001" ? error.message : "Couldn't accept that invitation.";
     redirect(`/strata?connect=1&error=${encodeURIComponent(message)}`);
   }
+  if (wasPending) await notifyInviteAccepted(corporationId, ctx.user.id);
 
   // Same as /invite/[id]: an invite-created account may have no name yet.
   const { data: profile } = await ctx.supabase
@@ -275,6 +278,10 @@ export async function submitCreationRequest(input: CreationRequestInput): Promis
       corporation_id: null,
       category: "legal_governance",
       title: `Strata Plan ${strataPlanNumber} (${input.planFileName.slice(0, 200)})`,
+      // Always a PDF (checked at upload); the extension is what marks it indexable.
+      file_name: /\.pdf$/i.test(input.planFileName) ? input.planFileName.slice(0, 300) : `${input.planFileName.slice(0, 290) || "strata-plan"}.pdf`,
+      mime_type: "application/pdf",
+      source_type: "strata_plan",
       storage_path: `${STRATA_PLAN_BUCKET}/${input.planStoragePath}`,
       uploaded_by: user.id,
     })

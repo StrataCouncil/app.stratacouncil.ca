@@ -32,6 +32,7 @@ export function CouncilRoster({
       <RosterTable
         corporationId={corporationId}
         members={roster.members}
+        lots={roster.lots}
         isAdmin={roster.isAdmin}
         currentUserId={roster.currentUserId}
         jurisdiction={roster.jurisdiction}

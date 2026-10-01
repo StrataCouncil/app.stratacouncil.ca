@@ -5,6 +5,7 @@ import { getAllCorporations } from "@/lib/data/admin";
 import { getCurrentProfile } from "@/lib/data/profile";
 import { createClient } from "@/lib/supabase/server";
 import { corporationRoleLabels, isCorporationRole } from "@/lib/strata";
+import { meetingTypeLabels, type MeetingType } from "@/lib/meetings/agenda";
 
 const subscriptionLabels: Record<string, string> = {
   active: "Stratasphere™ active",
@@ -23,7 +24,7 @@ const subscriptionLabels: Record<string, string> = {
  *
  * The roster comes from `corporation_member_directory()` and
  * `corporation_role_assignments`, both of which allow a Super Admin to
- * read (0010).
+ * read (0010). The decision ledger is readable for support (0017).
  */
 export default async function AdminCorporationDetailPage({
   params,
@@ -38,13 +39,33 @@ export default async function AdminCorporationDetailPage({
   if (!corporation) notFound();
 
   const supabase = await createClient();
-  const [{ data: members }, { data: roleRows }] = await Promise.all([
+  const [{ data: members }, { data: roleRows }, { data: decisionRows, error: decisionsError }] = await Promise.all([
     supabase.rpc("corporation_member_directory", { p_corporation_id: corpId }),
     supabase
       .from("corporation_role_assignments")
       .select("user_id, role")
       .eq("corporation_id", corpId),
+    supabase
+      .from("decisions")
+      .select("id, title, motion_text, mover, seconder, votes_for, votes_against, votes_abstain, decided_at, meeting_type, source")
+      .eq("corporation_id", corpId)
+      .order("decided_at", { ascending: false })
+      .limit(500),
   ]);
+  if (decisionsError) console.error("[admin decisions]", decisionsError.message);
+  const decisions = (decisionRows ?? []) as {
+    id: string;
+    title: string | null;
+    motion_text: string | null;
+    mover: string | null;
+    seconder: string | null;
+    votes_for: number | null;
+    votes_against: number | null;
+    votes_abstain: number | null;
+    decided_at: string;
+    meeting_type: string | null;
+    source: string;
+  }[];
 
   const roster = ((members ?? []) as {
     user_id: string;
@@ -67,7 +88,7 @@ export default async function AdminCorporationDetailPage({
     <AppShell active="admin">
       <div className="wrap page">
         <Link href="/admin" className="kb-article__back">
-          &larr; Admin console
+          &larr; Super Admin console
         </Link>
 
         <div className="page-header">
@@ -128,6 +149,44 @@ export default async function AdminCorporationDetailPage({
                         ))
                       )}
                     </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <h2 style={{ margin: "2.5rem 0 1rem" }}>Decision ledger</h2>
+        {decisions.length === 0 ? (
+          <p className="roster-notice">No decisions recorded yet.</p>
+        ) : (
+          <div className="roster-table-wrap">
+            <table className="roster-table" data-testid="admin-decisions-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Decision</th>
+                  <th>Moved / seconded</th>
+                  <th data-center="true">For / against / abstain</th>
+                  <th>Source</th>
+                </tr>
+              </thead>
+              <tbody>
+                {decisions.map((d) => (
+                  <tr key={d.id}>
+                    <td style={{ whiteSpace: "nowrap" }}>{d.decided_at.slice(0, 10)}</td>
+                    <td>
+                      <strong>{d.title || "Untitled motion"}</strong>
+                      {d.motion_text && <div className="roster-table__meta">{d.motion_text}</div>}
+                    </td>
+                    <td>
+                      {d.mover || "—"}
+                      <div className="roster-table__meta">{d.seconder || "—"}</div>
+                    </td>
+                    <td data-center="true">
+                      {d.votes_for ?? "—"} / {d.votes_against ?? "—"} / {d.votes_abstain ?? "—"}
+                    </td>
+                    <td>{d.source === "historic_minutes" ? "Historic minutes" : (meetingTypeLabels[d.meeting_type as MeetingType] ?? "Meeting")}</td>
                   </tr>
                 ))}
               </tbody>

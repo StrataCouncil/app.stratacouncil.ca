@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { inviteIsPending, notifyInviteAccepted } from "@/lib/email/invite-accepted";
 
 /**
  * Where an invite email's link lands, after /auth/confirm has signed the
@@ -21,6 +22,7 @@ export async function GET(
 ) {
   const { inviteId } = await params;
   const supabase = await createClient();
+  const wasPending = await inviteIsPending(inviteId);
 
   const { data: corporationId, error } = await supabase.rpc("accept_corporation_invite", {
     p_invite_id: inviteId,
@@ -38,6 +40,7 @@ export async function GET(
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  if (wasPending) await notifyInviteAccepted(corporationId, user!.id);
   const { data: profile } = await supabase
     .from("profiles")
     .select("full_name")

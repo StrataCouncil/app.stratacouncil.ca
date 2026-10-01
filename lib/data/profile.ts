@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
  * Real replacement for lib/placeholder-data.ts's `currentProfile` mock.
@@ -18,6 +19,8 @@ export interface CurrentProfile {
   phone: string | null;
   isSuperAdmin: boolean;
   twoFactorEnabled: boolean;
+  /** Short-lived signed URL for the profile photo, if there is one. */
+  avatarUrl: string | null;
 }
 
 export async function getCurrentProfile(): Promise<CurrentProfile | null> {
@@ -37,7 +40,7 @@ export async function getCurrentProfile(): Promise<CurrentProfile | null> {
 
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
-    .select("id, full_name, email, phone, is_super_admin")
+    .select("id, full_name, email, phone, is_super_admin, avatar_path")
     .eq("id", user.id)
     .single();
 
@@ -57,6 +60,15 @@ export async function getCurrentProfile(): Promise<CurrentProfile | null> {
   const twoFactorEnabled =
     factors?.totp?.some((f) => f.status === "verified") ?? false;
 
+  let avatarUrl: string | null = null;
+  if (profile.avatar_path) {
+    const { data: signed, error: signError } = await createAdminClient()
+      .storage.from("avatars")
+      .createSignedUrl(profile.avatar_path, 60 * 60);
+    if (signError) console.error("[getCurrentProfile] avatar url:", signError.message);
+    avatarUrl = signed?.signedUrl ?? null;
+  }
+
   return {
     id: profile.id,
     fullName: profile.full_name,
@@ -64,5 +76,6 @@ export async function getCurrentProfile(): Promise<CurrentProfile | null> {
     phone: profile.phone,
     isSuperAdmin: profile.is_super_admin,
     twoFactorEnabled,
+    avatarUrl,
   };
 }

@@ -1,0 +1,105 @@
+# Columns: Strata Lot, Owner Name, Email, Unit Number, Unit Entitlement, Owner Type, Parking Stall(s), Storage Locker(s), Bike Rack(s), Strata Fees
+# Council role is set directly in the app.
+Strata Lot,Owner Name,Email,Unit Number,Unit Entitlement,Owner Type,Parking Stall(s),Storage Locker(s),Bike Rack(s),Strata Fees
+SL001,Owner 1 &/or Partner 1 Holdings Ltd.,owner1@example.com,1106,122,Owner Occupant,6,1,11 & 12,539.91
+SL002,Owner 2 &/or Partner 2 Holdings Ltd.,owner2@example.com co2@example.ca,1108,116,Owner Occupant,4,2,15 & 16,513.36
+SL003,(Developer) 0000000 BC Ltd,owner3@example.com,1110,116,Developer,12,3,19 & 20,513.36
+SL004,Owner 4 &/or Partner 4 Holdings Ltd.,owner4@example.com,1112,129,Owner Absentee,11,4,23 & 24,570.89
+SL005,Owner 5 &/or Partner 5 Holdings Ltd.,owner5@example.com,1113,130,Developer,14,5,25 & 26,575.32
+SL006,(Developer) 0000000 BC Ltd,owner6@example.com,1111,116,Developer,13,6,21 & 22,513.36
+SL007,Owner 7 &/or Partner 7 Holdings Ltd.,owner7@example.com,1109,117,Developer,7,7,17 & 18,517.78
+SL008,Owner 8 &/or Partner 8 Holdings Ltd.,owner8@example.com,1107,122,Developer,25,8,13 & 14,539.91
+SL009,(Developer) 0000000 BC Ltd,owner9@example.com,1105,123,Developer,3 & 15,9,9 & 10,544.34
+SL010,Owner 10 &/or Partner 10 Holdings Ltd.,owner10@example.com,1103,116,Developer,2,10,5 & 6,513.36
+SL011,Owner 11 &/or Partner 11 Holdings Ltd.,owner11@example.com,1101,156,Owner Absentee,58 & 59,11,1 & 2,690.38
+SL012,(Developer) 0000000 BC Ltd,owner12@example.com co12@example.ca,1102,130,Owner Occupant,1,12,3 & 4,575.32
+SL013,Owner 13 &/or Partner 13 Holdings Ltd.,owner13@example.com,1104,117,Developer,8,13,7 & 8,517.78
+SL014,Owner 14 &/or Partner 14 Holdings Ltd.,owner14@example.com,1304,61,Owner Absentee,31,14,5 & 6,269.96
+SL015,(Developer) 0000000 BC Ltd,owner15@example.com,1306,90,Owner Absentee,30,15,7 & 8,398.3
+SL016,Owner 16 &/or Partner 16 Holdings Ltd.,owner16@example.com,1308,88,Owner Absentee,29,16,9 & 10,389.44
+SL017,Owner 17 &/or Partner 17 Holdings Ltd.,owner17@example.com,1307,120,Owner Absentee,16 & 17,17,31 & 32,531.06
+SL018,(Developer) 0000000 BC Ltd,owner18@example.com,1305,90,Owner Absentee,21,18,29 & 30,398.3
+SL019,Owner 19 &/or Partner 19 Holdings Ltd.,owner19@example.com,1303,90,Owner Absentee,19,19,3 & 4,398.3
+SL020,Owner 20 &/or Partner 20 Holdings Ltd.,owner20@example.com,1301,119,Developer,18,20,1 & 2,526.64
+SL021,(Developer) 0000000 BC Ltd,owner21@example.com,1302,120,Owner Absentee,9 & 10,21,27 & 28,531.06
+SL022,Owner 22 &/or Partner 22 Holdings Ltd.,owner22@example.com co22@example.ca,1404,60,Owner Occupant,27,22,17 & 18,265.53
+SL023,Owner 23 &/or Partner 23 Holdings Ltd.,owner23@example.com,1406,90,Developer,5,23,33 & 34,398.3
+SL024,(Developer) 0000000 BC Ltd,owner24@example.com,1408,88,Owner Absentee,24,24,37 & 38,389.44
+SL025,Owner 25 &/or Partner 25 Holdings Ltd.,owner25@example.com,1407,120,Owner Absentee,97,25,35 & 36,531.06
+SL026,Owner 26 &/or Partner 26 Holdings Ltd.,owner26@example.com,1405,90,Owner Absentee,22,26,19 & 20,398.3
+SL027,(Developer) 0000000 BC Ltd,owner27@example.com,1403,90,Owner Occupant,26,27,15 & 16,398.3
+SL028,Owner 28 &/or Partner 28 Holdings Ltd.,owner28@example.com,1401,119,Owner Absentee,28,28,11 & 12,526.64
+SL029,Owner 29 &/or Partner 29 Holdings Ltd.,owner29@example.com,1402,121,Owner Absentee,23 & 92,29,13 & 14,535.49
+SL030,(Developer) 0000000 BC Ltd,owner30@example.com,2104,64,Owner Absentee,46,30,45 & 46,283.23
+SL031,Owner 31 &/or Partner 31 Holdings Ltd.,owner31@example.com,2106,65,Owner Occupant,103,31,49 & 50,287.66
+SL032,Owner 32 &/or Partner 32 Holdings Ltd.,owner32@example.com co32@example.ca,2108,87,Owner Absentee,101,32,53 & 54,385.02
+SL033,(Developer) 0000000 BC Ltd,owner33@example.com,2107,120,Owner Absentee,105 & 107,33,51 & 52,531.06
+SL034,Owner 34 &/or Partner 34 Holdings Ltd.,owner34@example.com,2105,90,Owner Absentee,100,34,47 & 48,398.3
+SL035,Owner 35 &/or Partner 35 Holdings Ltd.,owner35@example.com,2103,90,Owner Absentee,34,35,43 & 44,398.3
+SL036,(Developer) 0000000 BC Ltd,owner36@example.com,2101,119,Developer,109,36,39 & 40,526.64
+SL037,Owner 37 &/or Partner 37 Holdings Ltd.,owner37@example.com,2102,121,Owner Absentee,37 & 39,37,41 & 42,535.49
+SL038,Owner 38 &/or Partner 38 Holdings Ltd.,owner38@example.com,2204,64,Owner Absentee,110,38,61 & 62,283.23
+SL039,(Developer) 0000000 BC Ltd,owner39@example.com,2206,65,Owner Absentee,111,39,65 & 66,287.66
+SL040,Owner 40 &/or Partner 40 Holdings Ltd.,owner40@example.com,2208,88,Owner Absentee,43 & 45,40,69 & 70,389.44
+SL041,Owner 41 &/or Partner 41 Holdings Ltd.,owner41@example.com,2207,120,Owner Occupant,51,41,67 & 68,531.06
+SL042,(Developer) 0000000 BC Ltd,owner42@example.com co42@example.ca,2205,90,Owner Absentee,47,42,63 & 64,398.3
+SL043,Owner 43 &/or Partner 43 Holdings Ltd.,owner43@example.com,2203,90,Owner Occupant,108,43,59 & 60,398.3
+SL044,Owner 44 &/or Partner 44 Holdings Ltd.,owner44@example.com,2201,119,Developer,33 & 35,44,55 & 56,526.64
+SL045,(Developer) 0000000 BC Ltd,owner45@example.com,2202,121,Developer,98,45,57 & 58,535.49
+SL046,Owner 46 &/or Partner 46 Holdings Ltd.,owner46@example.com,2304,61,Owner Occupant,117,46,77 & 78,269.96
+SL047,Owner 47 &/or Partner 47 Holdings Ltd.,owner47@example.com,2306,90,Owner Absentee,104 & 106,47,81 & 82,398.3
+SL048,(Developer) 0000000 BC Ltd,owner48@example.com,2308,87,Owner Absentee,112,48,85 & 86,385.02
+SL049,Owner 49 &/or Partner 49 Holdings Ltd.,owner49@example.com,2307,120,Owner Absentee,20,49,83 & 84,531.06
+SL050,Owner 50 &/or Partner 50 Holdings Ltd.,owner50@example.com,2305,90,Owner Absentee,50,50,79 & 80,398.3
+SL051,(Developer) 0000000 BC Ltd,owner51@example.com,2303,90,Developer,36,51,75 & 76,398.3
+SL052,Owner 52 &/or Partner 52 Holdings Ltd.,owner52@example.com co52@example.ca,2301,119,Owner Absentee,116,52,71 & 72,526.64
+SL053,Owner 53 &/or Partner 53 Holdings Ltd.,owner53@example.com,2302,121,Developer,38,53,73 & 74,535.49
+SL054,(Developer) 0000000 BC Ltd,owner54@example.com,2404,61,Owner Occupant,118,54,93 & 94,269.96
+SL055,Owner 55 &/or Partner 55 Holdings Ltd.,owner55@example.com,2406,90,Owner Occupant,42 & 44,55,97 & 98,398.3
+SL056,Owner 56 &/or Partner 56 Holdings Ltd.,owner56@example.com,2408,88,Owner Absentee,52,56,101 & 102,389.44
+SL057,(Developer) 0000000 BC Ltd,owner57@example.com,2407,120,Owner Absentee,99,57,99 & 100,531.06
+SL058,Owner 58 &/or Partner 58 Holdings Ltd.,owner58@example.com,2405,90,Owner Occupant,48,58,95 & 96,398.3
+SL059,Owner 59 &/or Partner 59 Holdings Ltd.,owner59@example.com,2403,90,Owner Absentee,102,59,91 & 92,398.3
+SL060,(Developer) 0000000 BC Ltd,owner60@example.com,2401,119,Owner Occupant,40,60,87 & 88,526.64
+SL061,Owner 61 &/or Partner 61 Holdings Ltd.,owner61@example.com,2402,121,Owner Absentee,54 & 56,61,89 & 90,535.49
+SL062,Owner 62 &/or Partner 62 Holdings Ltd.,owner62@example.com co62@example.ca,2504,86,Owner Absentee,113,62,109 & 110,380.59
+SL063,(Developer) 0000000 BC Ltd,owner63@example.com,2506,134,Owner Absentee,32,63,113 & 114,593.02
+SL064,Owner 64 &/or Partner 64 Holdings Ltd.,owner64@example.com,2505,136,Owner Absentee,49,64,111 & 112,601.87
+SL065,Owner 65 &/or Partner 65 Holdings Ltd.,owner65@example.com,2503,102,Developer,41,65,107 & 108,451.4
+SL066,(Developer) 0000000 BC Ltd,owner66@example.com,2501,135,Owner Absentee,61 & 62,66,103 & 104,597.44
+SL067,Owner 67 &/or Partner 67 Holdings Ltd.,owner67@example.com,2502,106,Owner Absentee,115,67,105 & 106,469.1
+SL068,Owner 68 &/or Partner 68 Holdings Ltd.,owner68@example.com,3106,122,Developer,57 & 60,68,123 & 124,539.91
+SL069,(Developer) 0000000 BC Ltd,owner69@example.com,3108,116,Developer,138,69,127 & 128,513.36
+SL070,Owner 70 &/or Partner 70 Holdings Ltd.,owner70@example.com,3110,116,Developer,139,70,131 & 132,513.36
+SL071,Owner 71 &/or Partner 71 Holdings Ltd.,owner71@example.com,3112,129,Developer,140,71,135 & 136,570.89
+SL072,(Developer) 0000000 BC Ltd,owner72@example.com co72@example.ca,3113,130,Owner Absentee,125,72,137 & 138,575.32
+SL073,Owner 73 &/or Partner 73 Holdings Ltd.,owner73@example.com,3111,116,Developer,89,73,133 & 134,513.36
+SL074,Owner 74 &/or Partner 74 Holdings Ltd.,owner74@example.com,3109,116,Owner Absentee,128 & 130,74,129 & 130,513.36
+SL075,(Developer) 0000000 BC Ltd,owner75@example.com,3107,123,Owner Absentee,67 & 68,75,125 & 126,544.34
+SL076,Owner 76 &/or Partner 76 Holdings Ltd.,owner76@example.com,3105,123,Owner Absentee,122,76,121 & 122,544.34
+SL077,Owner 77 &/or Partner 77 Holdings Ltd.,owner77@example.com,3103,116,Owner Absentee,71 & 74,77,117 & 118,513.36
+SL078,(Developer) 0000000 BC Ltd,owner78@example.com,3101,156,Owner Occupant,64 & 65,78,113 & 114,690.38
+SL079,Owner 79 &/or Partner 79 Holdings Ltd.,owner79@example.com,3102,130,Owner Occupant,123,79,115 & 116,575.32
+SL080,Owner 80 &/or Partner 80 Holdings Ltd.,owner80@example.com,3104,117,Developer,63 & 66,80,119 & 120,517.78
+SL081,(Developer) 0000000 BC Ltd,owner81@example.com,3304,60,Owner Absentee,55,81,145 & 146,265.53
+SL082,Owner 82 &/or Partner 82 Holdings Ltd.,owner82@example.com co82@example.ca,3306,90,Owner Occupant,132 & 134,82,149 & 150,398.3
+SL083,Owner 83 &/or Partner 83 Holdings Ltd.,owner83@example.com,3308,87,Owner Absentee,136,83,153 & 154,385.02
+SL084,(Developer) 0000000 BC Ltd,owner84@example.com,3307,120,Owner Absentee,53,84,151 & 152,531.06
+SL085,Owner 85 &/or Partner 85 Holdings Ltd.,owner85@example.com,3305,90,Owner Absentee,119,85,147 & 148,398.3
+SL086,Owner 86 &/or Partner 86 Holdings Ltd.,owner86@example.com,3303,90,Owner Absentee,121,86,143 & 144,398.3
+SL087,(Developer) 0000000 BC Ltd,owner87@example.com,3301,119,Owner Occupant,77 & 80,87,139 & 140,526.64
+SL088,Owner 88 &/or Partner 88 Holdings Ltd.,owner88@example.com,3302,121,Owner Absentee,120,88,141 & 142,535.49
+SL089,Owner 89 &/or Partner 89 Holdings Ltd.,owner89@example.com,3404,60,Owner Occupant,126,89,161 & 162,265.53
+SL090,(Developer) 0000000 BC Ltd,owner90@example.com,3406,90,Developer,86,90,165 & 166,398.3
+SL091,Owner 91 &/or Partner 91 Holdings Ltd.,owner91@example.com,3408,87,Owner Occupant,124,91,169 & 170,385.02
+SL092,Owner 92 &/or Partner 92 Holdings Ltd.,owner92@example.com co92@example.ca,3407,120,Owner Absentee,135,92,167 & 168,531.06
+SL093,(Developer) 0000000 BC Ltd,owner93@example.com,3405,90,Owner Absentee,131,93,163 & 164,398.3
+SL094,Owner 94 &/or Partner 94 Holdings Ltd.,owner94@example.com,3403,90,Owner Occupant,114,94,159 & 160,398.3
+SL095,Owner 95 &/or Partner 95 Holdings Ltd.,owner95@example.com,3401,119,Owner Occupant,69 & 70,95,155 & 156,526.64
+SL096,(Developer) 0000000 BC Ltd,owner96@example.com,3402,121,Developer,137,96,157 & 158,535.49
+SL097,Owner 97 &/or Partner 97 Holdings Ltd.,owner97@example.com,3504,86,Owner Absentee,83,97,177 & 178,380.59
+SL098,Owner 98 &/or Partner 98 Holdings Ltd.,owner98@example.com,3506,134,Owner Occupant,72 & 73,98,181 & 182,593.02
+SL099,(Developer) 0000000 BC Ltd,owner99@example.com,3505,136,Developer,78 & 79,99,179 & 180,601.87
+SL100,Owner 100 &/or Partner 100 Holdings Ltd.,owner100@example.com,3503,102,Owner Absentee,133,100,175 & 176,451.4
+SL101,Owner 101 &/or Partner 101 Holdings Ltd.,owner101@example.com,3501,135,Owner Absentee,75 & 76,101,171 & 172,597.44
+SL102,(Developer) 0000000 BC Ltd,owner102@example.com co102@example.ca,3502,106,Owner Absentee,127 & 129,102,173 & 174,469.1

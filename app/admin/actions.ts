@@ -6,6 +6,7 @@ import { APP_URL } from "@/lib/app-url";
 import { notifyUser } from "@/lib/email/notify";
 import { creationRequestApprovedEmail, creationRequestDeniedEmail } from "@/lib/email/templates";
 import { createClient } from "@/lib/supabase/server";
+import { queueDocumentIndexing } from "@/lib/kb/queue";
 import { isJurisdictionCode, normalizeStrataPlanNumber } from "@/lib/strata";
 
 /**
@@ -62,9 +63,11 @@ export async function approveCreationRequest(
   // "Approved → requester notified by email to sign back in" (doc03 Stage 4).
   const { data: request } = await supabase
     .from("corporation_creation_requests")
-    .select("requested_by")
+    .select("requested_by, strata_plan_document_id")
     .eq("id", requestId)
     .single();
+  // The Strata Plan is the corporation's first document: index it.
+  if (request?.strata_plan_document_id) await queueDocumentIndexing([request.strata_plan_document_id]);
   if (request) {
     await notifyUser(
       request.requested_by,

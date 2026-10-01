@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getMeeting, getLotRoll } from "@/lib/data/meetings";
-import { normalizeAgenda, meetingTypeLabels, type AgendaItem } from "@/lib/meetings/agenda";
+import { electedChair, normalizeAgenda, meetingTypeLabels, type AgendaItem } from "@/lib/meetings/agenda";
 import { deferUnresolved, minutesSummary, type AttendanceStatus } from "@/lib/meetings/rules";
 import { buildMinutes } from "@/lib/meetings/minutes";
 import { askStratasphere, type AssistantTurn } from "@/lib/ai/stratasphere";
@@ -39,13 +39,18 @@ export async function saveMeetingState(
 ): Promise<{ ok: true } | Fail> {
   const supabase = await createClient();
   const attendance = cleanAttendance(state.attendance);
+  const agenda = normalizeAgenda(state.agenda).slice(0, 300);
+  // A chair elected at the meeting becomes the meeting's chair (agenda,
+  // scripts and minutes).
+  const chair = electedChair(agenda);
   const { data, error } = await supabase
     .from("meetings")
     .update({
-      agenda: normalizeAgenda(state.agenda).slice(0, 300),
+      agenda,
       attendance,
       attendees: presentLots(attendance),
       agenda_approved: Boolean(state.agendaApproved),
+      ...(chair ? { chair_name: chair } : {}),
     })
     .eq("id", meetingId)
     .eq("corporation_id", corpId)

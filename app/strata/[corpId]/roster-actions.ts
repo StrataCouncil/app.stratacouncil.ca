@@ -226,6 +226,14 @@ export async function resendInvite(corporationId: string, inviteId: string): Pro
     .eq("corporation_id", corporationId)
     .maybeSingle();
   if (!invite || invite.status !== "pending") return fail("That invite is no longer pending.");
+  refresh(corporationId);
+
+  // A re-sent invite gets a fresh 7 days (0017).
+  const { error: renewError } = await supabase
+    .from("corporation_invites")
+    .update({ expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() })
+    .eq("id", inviteId);
+  if (renewError) return dbError(renewError, "Couldn't renew the invite.");
 
   const profile = await findProfileByEmail(invite.invited_email);
   const { data: inviter } = await supabase
@@ -360,6 +368,24 @@ export async function setMeetingPermission(
   if (error) return dbError(error, "Couldn't update meeting permissions.");
   if (!data?.length) return fail("Only this strata's admin can change meeting permissions.");
   refresh(corporationId);
+  return { ok: true };
+}
+
+/** Tie a member to their strata lot (council members need one). Admin only. */
+export async function setMemberLot(
+  corporationId: string,
+  userId: string,
+  lotNumber: string | null
+): Promise<ActionResult> {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("set_member_lot", {
+    p_corporation_id: corporationId,
+    p_user_id: userId,
+    p_lot_number: lotNumber || null,
+  });
+  if (error) return dbError(error, "Couldn't set that member's strata lot.");
+  refresh(corporationId);
+  revalidatePath(`/strata/${corporationId}/lots`);
   return { ok: true };
 }
 

@@ -5,7 +5,7 @@ import { AgendaBuilder } from "@/components/meetings/AgendaBuilder";
 import { AgendaView } from "@/components/meetings/AgendaView";
 import { DeleteMeetingButton, EditMeetingDetailsButton } from "@/components/meetings/MeetingActions";
 import { getStrataAccess } from "@/lib/data/strata";
-import { getMeeting, getMeetingNotes } from "@/lib/data/meetings";
+import { chairCandidates, getMeeting, getMeetingNotes } from "@/lib/data/meetings";
 import { meetingFormatLabels, meetingTypeLabels } from "@/lib/meetings/agenda";
 import { formatMeetingWhen } from "@/lib/meetings/format";
 
@@ -24,7 +24,9 @@ export default async function MeetingPage({ params }: { params: Promise<{ corpId
   const launchedByMe = meeting.launchedBy === access.userId;
   const launchedByOther = meeting.launchedBy !== null && !launchedByMe;
   const canEdit = access.canRunMeetings && meeting.status === "DRAFT" && meeting.launchedBy === null;
-  const notes = canEdit ? await getMeetingNotes(meetingId) : {};
+  const [notes, chairOptions] = canEdit
+    ? await Promise.all([getMeetingNotes(meetingId), chairCandidates(corpId)])
+    : [{}, []];
   const trialAvailable = !access.freeMeetingUsed;
 
   return (
@@ -40,7 +42,7 @@ export default async function MeetingPage({ params }: { params: Promise<{ corpId
           <p className="card__meta">
             {formatMeetingWhen(meeting)} &middot; {meetingFormatLabels[meeting.format]}
             {meeting.location ? <> &middot; {meeting.location}</> : null}
-            {meeting.chairName ? <> &middot; Chair: {meeting.chairName}</> : null}
+            <> &middot; Chair: {meeting.chairName || "elected at the meeting"}</>
           </p>
         </div>
         <div className="meeting-row__actions">
@@ -57,6 +59,7 @@ export default async function MeetingPage({ params }: { params: Promise<{ corpId
                 location: meeting.location ?? "",
                 chairName: meeting.chairName ?? "",
               }}
+              chairOptions={chairOptions}
             />
           )}
           {canEdit && <DeleteMeetingButton corpId={corpId} meetingId={meetingId} />}

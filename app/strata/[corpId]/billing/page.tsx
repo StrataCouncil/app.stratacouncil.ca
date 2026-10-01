@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getStripe } from "@/lib/stripe/client";
 import { calculateBilling } from "@/lib/stripe/prices";
+import { StatementsPeriodSelect } from "@/components/StatementsPeriodSelect";
 import {
   startCheckout,
   changePlan,
@@ -14,7 +15,12 @@ import {
 
 /**
  * Billing — admin-only (doc01 §7 item 7: subscribing is admin-gated, no
- * exception, same pattern as meeting creation). Not part of the
+ * exception, same pattern as meeting creation). Non-admins never see any
+ * billing information: they are sent back to Council & Roles.
+ *
+ * Layout: payment method and subscription side by side, then Account
+ * Statements (invoices from Stripe for a chosen period), then every strata
+ * this user administers with its monthly cost and the total. Not part of the
  * Stratasphere™ sub-nav (`StrataSphereNav`) since it isn't a content tab
  * every connected member should land on — it's reached from the "Admin"
  * entry point on Council & Roles instead. The parent layout
@@ -27,12 +33,64 @@ import {
  * rendering `currentCorporation`, since a real signed-in admin could be
  * viewing any strata they administer.
  */
+type StatementRow = {
+  id: string;
+  date: string;
+  description: string;
+  amount: number;
+  status: string;
+  receiptUrl: string | null;
+};
+
+/** Unix-second bounds for a statements period: all, ytd, 12, or YYYY-MM. */
+function periodBounds(period: string): { gte?: number; lt?: number } | null {
+  const now = new Date();
+  const ts = (d: Date) => Math.floor(d.getTime() / 1000);
+  if (period === "all") return {};
+  if (period === "ytd") return { gte: ts(new Date(now.getFullYear(), 0, 1)) };
+  if (period === "12") return { gte: ts(new Date(now.getFullYear(), now.getMonth() - 11, 1)) };
+  const m = period.match(/^(\d{4})-(\d{2})$/);
+  if (!m) return null;
+  const year = Number(m[1]);
+  const month = Number(m[2]) - 1;
+  return { gte: ts(new Date(year, month, 1)), lt: ts(new Date(year, month + 1, 1)) };
+}
+
+async function loadStatements(customerId: string, period: string): Promise<StatementRow[] | "error"> {
+  const bounds = periodBounds(period);
+  if (!bounds) return [];
+  try {
+    const invoices = await getStripe().invoices.list({
+      customer: customerId,
+      limit: 100,
+      created: { ...(bounds.gte ? { gte: bounds.gte } : {}), ...(bounds.lt ? { lt: bounds.lt } : {}) },
+    });
+    return invoices.data
+      .filter((inv) => inv.status !== "draft")
+      .map((inv) => ({
+        id: inv.id ?? inv.number ?? String(inv.created),
+        date: new Date(inv.created * 1000).toLocaleDateString("en-CA"),
+        description: inv.lines.data[0]?.description ?? "Stratasphere™ subscription",
+        amount: (inv.status === "paid" ? inv.amount_paid : inv.amount_due) / 100,
+        status: inv.status ?? "open",
+        receiptUrl: inv.invoice_pdf ?? inv.hosted_invoice_url ?? null,
+      }));
+  } catch (error) {
+    console.error("billing/page: failed to load invoices:", error);
+    return "error";
+  }
+}
+
 export default async function BillingPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ corpId: string }>;
+  searchParams: Promise<{ period?: string }>;
 }) {
   const { corpId } = await params;
+  const { period: rawPeriod } = await searchParams;
+  const period = rawPeriod && periodBounds(rawPeriod) ? rawPeriod : null;
 
   const supabase = await createClient();
   const {
@@ -40,25 +98,27 @@ export default async function BillingPage({
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
+  const { data: adminRows } = await supabase
+    .from("corporation_role_assignments")
+    .select("corporation_id")
+    .eq("user_id", user.id)
+    .eq("role", "admin");
+  const adminCorpIds = (adminRows ?? []).map((r) => r.corporation_id as string);
+  // No billing information at all for anyone who isn't this strata's admin.
+  if (!adminCorpIds.includes(corpId)) redirect(`/strata/${corpId}`);
+
   const admin = createAdminClient();
-  const [{ data: corp }, { data: sub }, { data: roleRow }] = await Promise.all([
+  const [{ data: corps }, { data: subs }] = await Promise.all([
     admin
       .from("strata_corporations")
-      .select("strata_plan_number, unit_count")
-      .eq("strata_plan_number", corpId)
-      .single(),
-    admin.from("subscriptions").select("*").eq("corporation_id", corpId).maybeSingle(),
-    supabase
-      .from("corporation_role_assignments")
-      .select("role")
-      .eq("corporation_id", corpId)
-      .eq("user_id", user.id)
-      .eq("role", "admin")
-      .maybeSingle(),
+      .select("strata_plan_number, building_name, legal_name, address, unit_count")
+      .in("strata_plan_number", adminCorpIds),
+    admin.from("subscriptions").select("*").in("corporation_id", adminCorpIds),
   ]);
 
+  const corp = (corps ?? []).find((c) => c.strata_plan_number === corpId);
   if (!corp) redirect(`/strata/${corpId}`);
-  const isAdmin = Boolean(roleRow);
+  const sub = (subs ?? []).find((s) => s.corporation_id === corpId) ?? null;
 
   const subscribed = sub?.status === "active";
   const deactivated = sub?.status === "deactivated" && Boolean(sub.activated_at);
@@ -69,7 +129,7 @@ export default async function BillingPage({
 
   // A real card/PAD label needs a live Stripe read — acceptable here
   // since this is a low-traffic, admin-only page, not a hot path.
-  let paymentMethodLabel: string | null = null;
+  let paymentMethod: { label: string; detail: string } | null = null;
   if (sub?.stripe_customer_id) {
     try {
       const pms = await getStripe().paymentMethods.list({
@@ -78,25 +138,48 @@ export default async function BillingPage({
       });
       const pm = pms.data[0];
       if (pm?.card) {
-        paymentMethodLabel = `${pm.card.brand.replace(/^\w/, (c) => c.toUpperCase())} ending ${pm.card.last4}`;
+        paymentMethod = {
+          label: `${pm.card.brand.replace(/^\w/, (c) => c.toUpperCase())} ending ${pm.card.last4}`,
+          detail: "Credit card on file. Charges are processed automatically each month.",
+        };
       } else if (pm?.acss_debit) {
-        paymentMethodLabel = `Pre-authorized debit ending ${pm.acss_debit.last4}`;
+        paymentMethod = {
+          label: `Pre-authorized debit ending ${pm.acss_debit.last4}`,
+          detail: "Canadian bank account on file. Pre-authorized debit is processed each month.",
+        };
       }
     } catch (error) {
       console.error("billing/page: failed to load payment method:", error);
     }
   }
 
-  const fmt = (n: number) =>
-    n.toLocaleString("en-CA", { style: "currency", currency: "CAD" });
+  const statements =
+    period && sub?.stripe_customer_id ? await loadStatements(sub.stripe_customer_id, period) : null;
+
+  const fmt = (n: number) => n.toLocaleString("en-CA", { style: "currency", currency: "CAD" });
   const fmtDate = (iso: string | null) =>
     iso
-      ? new Date(iso).toLocaleDateString("en-CA", {
-          year: "numeric",
-          month: "long",
-          day: "numeric",
-        })
+      ? new Date(iso).toLocaleDateString("en-CA", { year: "numeric", month: "long", day: "numeric" })
       : null;
+
+  const subsByCorp = new Map((subs ?? []).map((s) => [s.corporation_id as string, s]));
+  const corpRows = [...(corps ?? [])]
+    .sort((a, b) => a.strata_plan_number.localeCompare(b.strata_plan_number))
+    .map((c) => {
+      const s = subsByCorp.get(c.strata_plan_number);
+      const active = s?.status === "active";
+      const cInterval = (s?.billing_interval as "monthly" | "annual" | undefined) ?? "monthly";
+      return {
+        id: c.strata_plan_number as string,
+        name: (c.building_name ?? c.legal_name) as string,
+        address: c.address as string,
+        lots: c.unit_count as number,
+        status: active ? "Active" : s?.status === "deactivated" && s.activated_at ? "Deactivated" : "Not subscribed",
+        activated: active && s?.activated_at ? (s.activated_at as string).slice(0, 10) : null,
+        monthly: active ? calculateBilling(c.unit_count, cInterval).subtotal : null,
+      };
+    });
+  const totalMonthly = corpRows.reduce((sum, r) => sum + (r.monthly ?? 0), 0);
 
   return (
     <>
@@ -109,28 +192,91 @@ export default async function BillingPage({
       </Link>
 
       <div className="page-header" style={{ marginBottom: "1.75rem" }}>
-        <span className="pill">Admin</span>
-        <h2 style={{ margin: "0.6rem 0 0" }}>Billing &amp; subscription</h2>
+        <h2 style={{ margin: 0 }}>Billing</h2>
+        <p className="card__meta" style={{ marginTop: "0.35rem" }}>
+          Pre-authorized debit or credit card &middot; Billed monthly &middot; Admin only
+        </p>
       </div>
 
-      {!isAdmin && (
-        <div className="card" style={{ marginBottom: "1.5rem" }} data-testid="billing-not-admin-notice">
-          <p>Only a corporation admin can manage billing. You can see the current plan below.</p>
-        </div>
-      )}
-
       <div className="billing-grid">
+        <div className="card" data-testid="billing-payment-method-card">
+          <div className="billing-card__head">
+            <h3>Payment method</h3>
+            <span className={`billing-tag ${paymentMethod ? "billing-tag--ok" : "billing-tag--warn"}`}>
+              {paymentMethod ? "Active" : "Not set up"}
+            </span>
+          </div>
+          {paymentMethod ? (
+            <>
+              <div>
+                <strong>{paymentMethod.label}</strong>
+                <p className="card__meta">{paymentMethod.detail}</p>
+              </div>
+              <form action={openBillingPortal.bind(null, corpId)}>
+                <button className="button button-secondary button-small" data-testid="update-payment-method-cta">
+                  Update payment method
+                </button>
+              </form>
+            </>
+          ) : sub?.stripe_customer_id ? (
+            <>
+              <p>No payment method on file yet.</p>
+              <form action={openBillingPortal.bind(null, corpId)}>
+                <button className="button button-secondary button-small" data-testid="add-payment-method-cta">
+                  Add card or pre-authorized debit
+                </button>
+              </form>
+            </>
+          ) : (
+            <p className="card__meta">
+              You&rsquo;ll add a pre-authorized debit (recommended, Canadian bank account) or a
+              credit card when you subscribe. Stripe handles the details; nothing is stored here.
+            </p>
+          )}
+
+          {(subscribed || deactivated) && (
+            <form
+              action={updateBillingEmail.bind(null, corpId)}
+              style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}
+            >
+              <div className="field">
+                <label htmlFor="billing-contact-email">Billing email</label>
+                <input
+                  id="billing-contact-email"
+                  name="billingEmail"
+                  type="email"
+                  required
+                  defaultValue={billingEmail}
+                  placeholder="Receipts and billing notices are sent here"
+                  data-testid="billing-contact-email-input"
+                />
+                <span className="field__hint">
+                  Usually the Treasurer or your strata management company.
+                </span>
+              </div>
+              <button
+                className="button button-secondary button-small"
+                style={{ alignSelf: "flex-start" }}
+                data-testid="update-billing-email-cta"
+              >
+                Save billing email
+              </button>
+            </form>
+          )}
+        </div>
+
         <div className="card" data-testid="billing-plan-card">
-          <span
-            className={`pill ${subscribed ? "" : "pill--locked"}`}
-            style={{ alignSelf: "flex-start" }}
-          >
-            {subscribed ? "Active" : deactivated ? "Deactivated" : "Not subscribed"}
-          </span>
-          <h3>Stratasphere&trade; plan</h3>
+          <div className="billing-card__head">
+            <h3>Stratasphere&trade; subscription</h3>
+            <span
+              className={`billing-tag ${subscribed ? "billing-tag--ok" : deactivated ? "billing-tag--off" : "billing-tag--warn"}`}
+            >
+              {subscribed ? "Active" : deactivated ? "Deactivated" : "Not subscribed"}
+            </span>
+          </div>
           <p>
-            {interval === "annual" ? "$82.50/mo base + $2.08/unit/mo" : "$99/mo base + $2.49/unit/mo"}
-            , billed monthly {interval === "annual" ? "(annual commitment)" : ""}, {unitCount} units.
+            {interval === "annual" ? "$82.50/mo base + $2.08/lot/mo" : "$99/mo base + $2.49/lot/mo"}
+            {interval === "annual" ? ", 12-month commitment" : ", cancel any month"}, {unitCount} lots.
           </p>
 
           {(subscribed || deactivated) && (
@@ -167,13 +313,12 @@ export default async function BillingPage({
             </p>
           ) : (
             <p className="card__meta">
-              No payment required to create or run your strata &mdash; the document repository,
-              guides and roster stay free forever. A subscription unlocks Meeting Mode and the
-              Stratasphere&trade; assistant.
+              The document repository, guides and roster are free. A subscription unlocks Meeting
+              Mode and the Stratasphere&trade; assistant.
             </p>
           )}
 
-          {isAdmin && subscribed && (
+          {subscribed && (
             <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
               <form action={changePlan.bind(null, corpId, interval === "annual" ? "monthly" : "annual")}>
                 <button className="button button-secondary" data-testid="change-plan-cta">
@@ -190,22 +335,36 @@ export default async function BillingPage({
             </div>
           )}
 
-          {isAdmin && !subscribed && (
+          {!subscribed && (
             <form style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+              <div className="billing-interval-options">
+                <div className="billing-interval-option">
+                  <strong>Monthly</strong>
+                  <span className="card__meta">
+                    {fmt(calculateBilling(unitCount, "monthly").total)}/mo incl. GST, cancel any month
+                  </span>
+                </div>
+                <div className="billing-interval-option">
+                  <strong>Annual</strong>
+                  <span className="card__meta">
+                    {fmt(calculateBilling(unitCount, "annual").total)}/mo incl. GST, 12-month commitment,
+                    billed monthly
+                  </span>
+                </div>
+              </div>
               <div className="field">
-                <label htmlFor="billingEmail">Billing contact email</label>
+                <label htmlFor="billingEmail">Billing email</label>
                 <input
                   id="billingEmail"
                   name="billingEmail"
                   type="email"
                   required
                   defaultValue={billingEmail}
-                  placeholder="treasurer@example.com"
+                  placeholder="Receipts and billing notices are sent here"
                   data-testid="billing-email-input"
                 />
                 <span className="field__hint">
-                  Who receives invoices and receipts — the Treasurer or your strata
-                  management company, not necessarily you. Editable any time afterward.
+                  Usually the Treasurer or your strata management company, not necessarily you.
                 </span>
               </div>
               <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
@@ -227,132 +386,102 @@ export default async function BillingPage({
             </form>
           )}
         </div>
-
-        <div className="card" data-testid="billing-interval-card">
-          <h3>Monthly vs. annual</h3>
-          <p>
-            Both bill monthly &mdash; annual just locks in a lower rate for a 12-month
-            commitment, the way most software subscriptions work. No up-front lump sum,
-            no early-termination fee: cancel any time and it runs out the term you&rsquo;re
-            already in, then stops renewing.
-          </p>
-
-          <div className="billing-interval-options">
-            <div className="billing-interval-option" data-selected={interval === "monthly"}>
-              <strong>Monthly</strong>
-              <span className="card__meta">
-                {fmt(calculateBilling(unitCount, "monthly").total)}/mo, cancel any monthly
-                anniversary
-              </span>
-            </div>
-            <div className="billing-interval-option" data-selected={interval === "annual"}>
-              <strong>Annual</strong>
-              <span className="card__meta">
-                {fmt(calculateBilling(unitCount, "annual").total)}/mo, 12-month commitment
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <div className="card" data-testid="billing-payment-method-card">
-          <h3>Payment method</h3>
-          {paymentMethodLabel ? (
-            <>
-              <p>On file: {paymentMethodLabel}.</p>
-              {isAdmin && (
-                <form action={openBillingPortal.bind(null, corpId)}>
-                  <button
-                    className="button button-secondary button-small"
-                    style={{ alignSelf: "flex-start" }}
-                    data-testid="update-payment-method-cta"
-                  >
-                    Update payment method
-                  </button>
-                </form>
-              )}
-            </>
-          ) : (
-            <>
-              <p>No payment method on file yet.</p>
-              {isAdmin && sub?.stripe_customer_id && (
-                <form action={openBillingPortal.bind(null, corpId)}>
-                  <button
-                    className="button button-secondary button-small"
-                    style={{ alignSelf: "flex-start" }}
-                    data-testid="add-payment-method-cta"
-                  >
-                    Add card or PAD
-                  </button>
-                </form>
-              )}
-            </>
-          )}
-        </div>
-
-        <div className="card" data-testid="billing-contact-card">
-          <h3>Billing contact</h3>
-          <p>
-            Who Stripe sends invoices and receipts to &mdash; usually the Treasurer or
-            your strata management company. Update this whenever that person changes;
-            it doesn&rsquo;t need to match whoever&rsquo;s signed in here.
-          </p>
-          {subscribed || deactivated ? (
-            isAdmin ? (
-              <form
-                action={updateBillingEmail.bind(null, corpId)}
-                style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}
-              >
-                <div className="field">
-                  <label htmlFor="billing-contact-email">Billing contact email</label>
-                  <input
-                    id="billing-contact-email"
-                    name="billingEmail"
-                    type="email"
-                    required
-                    defaultValue={billingEmail}
-                    placeholder="treasurer@example.com"
-                    data-testid="billing-contact-email-input"
-                  />
-                </div>
-                <button
-                  className="button button-secondary button-small"
-                  style={{ alignSelf: "flex-start" }}
-                  data-testid="update-billing-email-cta"
-                >
-                  Save billing contact
-                </button>
-              </form>
-            ) : (
-              <p className="card__meta">
-                {billingEmail || "Not set yet — an admin needs to add one."}
-              </p>
-            )
-          ) : (
-            <p className="card__meta">Set when you subscribe, above.</p>
-          )}
-        </div>
       </div>
 
-      <h2 style={{ margin: "2.5rem 0 1rem" }}>Invoices</h2>
-      <div className="card" data-testid="invoices-stripe-card">
-        <p>
-          Invoices, receipts and payment history are managed by Stripe, not
-          duplicated here &mdash; that&rsquo;s the single source of truth for
-          what you&rsquo;ve been billed and when.
-        </p>
-        {isAdmin && sub?.stripe_customer_id ? (
-          <form action={openBillingPortal.bind(null, corpId)}>
-            <button
-              className="button button-secondary"
-              style={{ alignSelf: "flex-start" }}
-              data-testid="stripe-invoices-link"
-            >
-              View invoices in Stripe &rarr;
-            </button>
-          </form>
+      <div className="card billing-section" data-testid="billing-statements-card">
+        <div className="billing-card__head">
+          <h3>Account statements</h3>
+          {sub?.stripe_customer_id && <StatementsPeriodSelect value={period} />}
+        </div>
+        {!sub?.stripe_customer_id ? (
+          <p className="card__meta">No billing account yet. Statements appear here once you subscribe.</p>
+        ) : !period ? (
+          <p className="card__meta">Select a period to view statements.</p>
+        ) : statements === "error" ? (
+          <p className="card__meta">Could not load statements. Please try again.</p>
+        ) : !statements || statements.length === 0 ? (
+          <p className="card__meta">No statements found for the selected period.</p>
         ) : (
-          <p className="card__meta">Available once a subscription has been created.</p>
+          <div className="roster-table-wrap">
+            <table className="roster-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Description</th>
+                  <th>Status</th>
+                  <th style={{ textAlign: "right" }}>Amount</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {statements.map((s) => (
+                  <tr key={s.id}>
+                    <td style={{ whiteSpace: "nowrap" }}>{s.date}</td>
+                    <td>{s.description}</td>
+                    <td style={{ textTransform: "capitalize" }}>{s.status}</td>
+                    <td style={{ textAlign: "right", fontWeight: 600 }}>{fmt(s.amount)}</td>
+                    <td>
+                      {s.receiptUrl && (
+                        <a href={s.receiptUrl} target="_blank" rel="noreferrer" className="button button-secondary button-small">
+                          Receipt
+                        </a>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
+      </div>
+
+      <div className="card billing-section" data-testid="billing-corporations-card">
+        <h3>Strata corporations</h3>
+        <div className="roster-table-wrap">
+          <table className="roster-table">
+            <thead>
+              <tr>
+                <th>Strata corporation</th>
+                <th>Address</th>
+                <th data-center="true">Lots</th>
+                <th>Status</th>
+                <th>Activated</th>
+                <th style={{ textAlign: "right" }}>Monthly cost</th>
+              </tr>
+            </thead>
+            <tbody>
+              {corpRows.map((r) => (
+                <tr key={r.id}>
+                  <td>
+                    <Link href={`/strata/${r.id}/billing`} style={{ fontWeight: 600 }}>
+                      {r.id}
+                    </Link>
+                    <div className="roster-table__meta">{r.name}</div>
+                  </td>
+                  <td>{r.address || "—"}</td>
+                  <td data-center="true">{r.lots}</td>
+                  <td>
+                    <span
+                      className={`billing-tag ${r.status === "Active" ? "billing-tag--ok" : r.status === "Deactivated" ? "billing-tag--off" : "billing-tag--warn"}`}
+                    >
+                      {r.status}
+                    </span>
+                  </td>
+                  <td style={{ whiteSpace: "nowrap" }}>{r.activated ?? "—"}</td>
+                  <td style={{ textAlign: "right", fontWeight: 600 }}>
+                    {r.monthly !== null ? `${fmt(r.monthly)}/mo` : "—"}
+                  </td>
+                </tr>
+              ))}
+              <tr className="billing-total-row">
+                <td colSpan={5} style={{ textAlign: "right" }}>
+                  Total monthly subscription (before GST)
+                </td>
+                <td style={{ textAlign: "right" }}>{fmt(totalMonthly)}/mo</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </>
   );

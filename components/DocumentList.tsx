@@ -75,11 +75,11 @@ export function DocumentList({ corpId, documents }: { corpId: string; documents:
       <div className="module-list" data-testid="document-list">
         {documents.map((doc) => {
           const size = formatSize(doc.sizeBytes);
+          // Indexing starts by itself on upload. Re-index is for when it
+          // finished or failed, or a document has sat waiting too long.
+          const stuck = doc.indexingStatus === "pending" && Date.now() - new Date(doc.uploadedAt).getTime() > 10 * 60 * 1000;
           const canIndex =
-            doc.indexingStatus === "failed" ||
-            doc.indexingStatus === "pending" ||
-            doc.indexingStatus === "needs_text" ||
-            doc.indexingStatus === "indexed";
+            stuck || doc.indexingStatus === "failed" || doc.indexingStatus === "needs_text" || doc.indexingStatus === "indexed";
           return (
             <div className="module-row" key={doc.id} data-testid={`document-${doc.id}`}>
               <div style={{ minWidth: 0 }}>
@@ -114,7 +114,7 @@ export function DocumentList({ corpId, documents }: { corpId: string; documents:
                     disabled={pending}
                     data-testid={`reindex-document-${doc.id}`}
                   >
-                    {doc.indexingStatus === "indexed" ? "Re-index" : "Index"}
+                    Re-index
                   </button>
                 )}
                 <button

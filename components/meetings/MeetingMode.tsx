@@ -5,14 +5,17 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   decisionTypeLabels,
+  electChairMotion,
   groupByCategory,
   isAdjournment,
   isApproveAgenda,
   isCallToOrder,
+  isElectChair,
   isNextMeeting,
   makeItem,
   meetingTypeLabels,
   newCategoryId,
+  newMotion,
   renumber,
   resolutionTypeLabels,
   type AgendaItem,
@@ -73,6 +76,7 @@ export function MeetingMode(props: {
   const [agenda, setAgenda] = useState<AgendaItem[]>(props.initialAgenda);
   const [attendance, setAttendance] = useState<Record<string, AttendanceStatus>>(props.initialAttendance);
   const [agendaApproved, setAgendaApproved] = useState(props.initialAgendaApproved);
+  const [chair, setChair] = useState(props.chairName);
   const [startedAt, setStartedAt] = useState<string | null>(props.actualStartAt);
   const [current, setCurrent] = useState<string>(() => {
     if (!props.actualStartAt) return ATTENDANCE_VIEW;
@@ -178,6 +182,7 @@ export function MeetingMode(props: {
   // ── Decisions ───────────────────────────────────────────────────────
   function confirmDecision(it: AgendaItem) {
     const m = it.motion!;
+    if (isElectChair(it) && !it.nominee?.trim()) return setSaveError("Enter the nominee first.");
     if (!m.mover || !m.sec) return setSaveError("Choose a mover and a seconder first.");
     if (m.mover === m.sec) return setSaveError("The mover and seconder must be different lots.");
     const v = evaluateVote(m);
@@ -215,6 +220,7 @@ export function MeetingMode(props: {
     const next = renumber(agenda.map((i) => (i.id === it.id ? decided : i)));
     setAgenda(next);
     if (isApproveAgenda(it) && outcome === "CARRIED") setAgendaApproved(true);
+    if (isElectChair(it) && outcome === "CARRIED" && it.nominee?.trim()) setChair(it.nominee.trim());
     setConfirm(null);
     if (isAdjournment(it) && outcome === "CARRIED") return startAdjournment(next);
     goNext(it.id, next);
@@ -224,6 +230,7 @@ export function MeetingMode(props: {
     const m = it.motion!;
     if (!m.mover || !m.sec) return setSaveError("Choose a mover and a seconder first.");
     if (m.mover === m.sec) return setSaveError("The mover and seconder must be different lots.");
+    if (isElectChair(it) && !it.nominee?.trim()) return setSaveError("Enter the nominee first.");
     setSaveError(null);
     setConfirm({
       title: "Unanimous vote",
@@ -349,6 +356,23 @@ export function MeetingMode(props: {
     });
   }
 
+  /** Add an Elect Chairperson item right after Call to Order and go to it. */
+  function electChair() {
+    guardApproved(() => {
+      const it = makeItem("Elect Chairperson", "Chair", {
+        type: "FOR_APPROVAL",
+        motion: newMotion("MAJORITY", electChairMotion("")),
+        addedDuringMeeting: agendaApproved || undefined,
+      });
+      const at = agenda.findIndex(isCallToOrder) + 1;
+      const next = [...agenda];
+      next.splice(at, 0, it);
+      update(() => next);
+      setCurrent(it.id);
+      setPanel("none");
+    });
+  }
+
   function saveEdited(edited: AgendaItem, note: string) {
     const exists = agenda.some((i) => i.id === edited.id);
     update((a) => (exists ? a.map((i) => (i.id === edited.id ? edited : i)) : [...a, edited]));
@@ -441,6 +465,14 @@ export function MeetingMode(props: {
           <button type="button" className="button button-secondary button-small mm-nav__add" onClick={addItem} data-testid="mm-add-item">
             Add item
           </button>
+          <div className="mm-nav__chair card__meta">
+            Chair: {chair || "not set"}
+            {!agenda.some((i) => isElectChair(i) && !i.done) && (
+              <button type="button" className="link-button" onClick={electChair} data-testid="mm-elect-chair">
+                Elect a chair
+              </button>
+            )}
+          </div>
         </nav>
 
         <main className="mm__main">
@@ -466,7 +498,14 @@ export function MeetingMode(props: {
               </div>
               {roll.length === 0 ? (
                 <p className="roster-notice">
-                  No {general ? "lots" : "council members"} on the lot roster yet. Mark council members on the Strata Lots page first.
+                  {general ? (
+                    "No lots on the lot roster yet."
+                  ) : (
+                    <>
+                      No council members are tied to a strata lot yet. Set each council member&rsquo;s lot on{" "}
+                      <Link href={`/strata/${corpId}`}>Council &amp; Roles</Link>.
+                    </>
+                  )}
                 </p>
               ) : (
                 <div className="mm-roll">
@@ -502,7 +541,7 @@ export function MeetingMode(props: {
               startedAt={startedAt}
               timezone={timezone}
               busy={busy}
-              script={callToOrderScript({ type, planNumber: props.planNumber, chair: props.chairName, quorumMet: q.met, counted: q.counted, required: q.required, timezone })}
+              script={callToOrderScript({ type, planNumber: props.planNumber, chair, quorumMet: q.met, counted: q.counted, required: q.required, timezone })}
               onCall={doCallToOrder}
               onAdjournNoQuorum={adjournWithoutQuorum}
               onAttendance={() => setCurrent(ATTENDANCE_VIEW)}
@@ -770,6 +809,30 @@ function ItemPanel(props: {
             </label>
           ))}
         </div>
+      )}
+
+      {m && isElectChair(it) && (
+        <label className="field">
+          <span>Nominee for chair</span>
+          <input
+            value={it.nominee ?? ""}
+            onChange={(e) => onPatch({ nominee: e.target.value, motion: { ...m, text: electChairMotion(e.target.value) } })}
+            disabled={it.done}
+            maxLength={200}
+            placeholder="Who has been nominated"
+            list="mm-chair-nominees"
+            data-testid="mm-chair-nominee"
+          />
+          <datalist id="mm-chair-nominees">
+            {props.present
+              .map((l) => props.names[l])
+              .filter(Boolean)
+              .map((n) => (
+                <option key={n} value={n} />
+              ))}
+          </datalist>
+          <span className="field__hint">Once the motion carries, this person chairs the meeting and is named in the minutes.</span>
+        </label>
       )}
 
       {m && (

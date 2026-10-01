@@ -27,9 +27,12 @@ export function quorum(
   return { required, present, proxies, counted, met: counted >= required };
 }
 
-/** The roll for attendance: council lots for council/committee meetings, every lot for AGM/SGM. */
+/**
+ * The roll for attendance: council lots only for council/committee
+ * meetings (never every lot), every lot for AGM/SGM.
+ */
 export function attendanceRoll(type: MeetingType, lots: string[], councilLots: string[]) {
-  return isGeneralMeeting(type) || councilLots.length === 0 ? lots : councilLots;
+  return isGeneralMeeting(type) ? lots : councilLots;
 }
 
 /**

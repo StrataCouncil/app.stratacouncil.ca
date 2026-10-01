@@ -1,8 +1,9 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { updatePhone } from "@/app/account/actions";
+import { removeAvatar, updatePhone, uploadAvatar } from "@/app/account/actions";
 import type { CurrentProfile } from "@/lib/data/profile";
 
 function initials(fullName: string) {
@@ -36,8 +37,28 @@ function initials(fullName: string) {
  *   actively misleading, not just an honest placeholder, so this no
  *   longer simulates a fake "deleted" state the way the mock did.
  */
+/** Center-crop to a square and scale to at most 512px, as a JPEG. */
+async function squarePhoto(file: File): Promise<File> {
+  const bitmap = await createImageBitmap(file);
+  const side = Math.min(bitmap.width, bitmap.height);
+  const size = Math.min(side, 512);
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("No canvas");
+  ctx.drawImage(bitmap, (bitmap.width - side) / 2, (bitmap.height - side) / 2, side, side, 0, 0, size, size);
+  bitmap.close();
+  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.9));
+  if (!blob) throw new Error("Couldn't encode");
+  return new File([blob], "photo.jpg", { type: "image/jpeg" });
+}
+
 export function AccountSettings({ profile }: { profile: CurrentProfile }) {
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const router = useRouter();
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(profile.avatarUrl);
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
   const [phone, setPhone] = useState(profile.phone ?? "");
   const [phoneSaved, setPhoneSaved] = useState(false);
   const [savingPhone, setSavingPhone] = useState(false);
@@ -46,10 +67,35 @@ export function AccountSettings({ profile }: { profile: CurrentProfile }) {
 
   const displayName = profile.fullName.trim() || profile.email;
 
-  function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
+    e.target.value = "";
     if (!file) return;
-    setAvatarUrl(URL.createObjectURL(file));
+    setPhotoBusy(true);
+    setPhotoError(null);
+    try {
+      const photo = await squarePhoto(file);
+      const fd = new FormData();
+      fd.set("photo", photo);
+      const result = await uploadAvatar(fd);
+      if (!result.ok) return setPhotoError(result.error);
+      setAvatarUrl(URL.createObjectURL(photo));
+      router.refresh();
+    } catch {
+      setPhotoError("Couldn't read that image. Try a JPEG or PNG.");
+    } finally {
+      setPhotoBusy(false);
+    }
+  }
+
+  async function handleRemovePhoto() {
+    setPhotoBusy(true);
+    setPhotoError(null);
+    const result = await removeAvatar();
+    setPhotoBusy(false);
+    if (!result.ok) return setPhotoError(result.error);
+    setAvatarUrl(null);
+    router.refresh();
   }
 
   async function savePhone() {
@@ -86,15 +132,17 @@ export function AccountSettings({ profile }: { profile: CurrentProfile }) {
               type="button"
               className="button button-secondary button-small"
               onClick={() => fileInputRef.current?.click()}
+              disabled={photoBusy}
               data-testid="upload-photo"
             >
-              {avatarUrl ? "Change photo" : "Upload photo"}
+              {photoBusy ? "Saving…" : avatarUrl ? "Change photo" : "Upload photo"}
             </button>
             {avatarUrl && (
               <button
                 type="button"
                 className="account-settings__remove-photo"
-                onClick={() => setAvatarUrl(null)}
+                onClick={handleRemovePhoto}
+                disabled={photoBusy}
                 data-testid="remove-photo"
               >
                 Remove
@@ -103,17 +151,20 @@ export function AccountSettings({ profile }: { profile: CurrentProfile }) {
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/*"
+              accept="image/jpeg,image/png,image/webp"
               onChange={handlePhotoChange}
               style={{ display: "none" }}
               data-testid="photo-input"
             />
           </div>
         </div>
-        <span className="field__hint">
-          Preview only &mdash; there&rsquo;s no photo storage wired up yet,
-          so this doesn&rsquo;t persist past this session.
-        </span>
+        {photoError ? (
+          <p className="form-error" role="alert">
+            {photoError}
+          </p>
+        ) : (
+          <span className="field__hint">Shown on your account menu. JPEG, PNG or WebP, up to 5 MB.</span>
+        )}
       </div>
 
       <div className="card" style={{ marginBottom: "1.5rem" }}>

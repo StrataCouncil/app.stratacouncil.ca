@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { deleteMeeting, launchMeeting, type MeetingDetailsInput } from "@/app/strata/[corpId]/meetings/actions";
 import { MeetingDetailsForm } from "@/components/meetings/MeetingDetailsForm";
+import type { ChairCandidate } from "@/lib/data/meetings";
 
 function Dialog({ title, onClose, children, wide }: { title: string; onClose: () => void; children: React.ReactNode; wide?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -66,7 +67,7 @@ export function LaunchMeetingButton({
     <>
       <button
         type="button"
-        className="button button-primary"
+        className={`button ${agendaSaved ? "button-primary" : "button-secondary"}`}
         onClick={() => setOpen(true)}
         disabled={!agendaSaved}
         title={agendaSaved ? undefined : "Save the agenda first."}
@@ -120,10 +121,12 @@ export function EditMeetingDetailsButton({
   corpId,
   meetingId,
   initial,
+  chairOptions,
 }: {
   corpId: string;
   meetingId: string;
   initial: MeetingDetailsInput;
+  chairOptions: ChairCandidate[];
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -133,7 +136,7 @@ export function EditMeetingDetailsButton({
       </button>
       {open && (
         <Dialog title="Meeting details" onClose={() => setOpen(false)} wide>
-          <MeetingDetailsForm corpId={corpId} meetingId={meetingId} initial={initial} onDone={() => setOpen(false)} />
+          <MeetingDetailsForm corpId={corpId} meetingId={meetingId} initial={initial} chairOptions={chairOptions} onDone={() => setOpen(false)} />
         </Dialog>
       )}
     </>

@@ -49,7 +49,7 @@ export async function AppShell({
             </Link>
             {profile?.isSuperAdmin && (
               <Link href="/admin" data-active={active === "admin"}>
-                Admin
+                Super Admin
               </Link>
             )}
           </nav>

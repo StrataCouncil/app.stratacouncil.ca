@@ -243,7 +243,13 @@ export function AgendaBuilder({
         <span className="agenda-builder__state" role="status">
           {pending ? "Saving…" : dirty ? "Unsaved changes" : status}
         </span>
-        <button type="button" className="button button-secondary" onClick={save} disabled={pending || !dirty} data-testid="agenda-save">
+        <button
+          type="button"
+          className={`button ${dirty ? "button-primary" : "button-secondary"}`}
+          onClick={save}
+          disabled={pending || !dirty}
+          data-testid="agenda-save"
+        >
           Save agenda
         </button>
         {launch && (
