@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { APP_URL } from "@/lib/app-url";
 import { verifySupabaseWebhook, WebhookVerificationError } from "@/lib/auth/verify-supabase-webhook";
 import { sendTransactionalEmail, MailtrapSendError } from "@/lib/email/mailtrap";
 import {
@@ -61,9 +62,9 @@ interface SendEmailHookPayload {
  * own *.supabase.co domain even after Site URL was set correctly in the
  * dashboard, sending confirm links to Supabase's bare API gateway instead
  * of the app). We know our own production URL, so we use that directly.
- * NEXT_PUBLIC_APP_URL lets a preview deployment override it if needed.
+ * NEXT_PUBLIC_APP_URL lets a preview deployment override it if needed
+ * (lib/app-url.ts, shared with app-sent emails like corporation invites).
  */
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://app.stratacouncil.ca";
 
 function buildConfirmUrl(emailData: SendEmailHookPayload["email_data"]): string {
   const url = new URL("/auth/confirm", APP_URL);

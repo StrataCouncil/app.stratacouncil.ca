@@ -1,24 +1,28 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { AdminCorporationSearch } from "@/components/AdminCorporationSearch";
-import { allCorporations } from "@/lib/placeholder-data";
+import { getAllCorporations, getPendingCreationRequests } from "@/lib/data/admin";
 import { getCurrentProfile } from "@/lib/data/profile";
 
 /**
- * The Super Admin console — platform staff only. Now gated on the real
- * `profiles.is_super_admin` flag instead of the `currentProfile` mock,
- * which could show/hide this page for the wrong reason regardless of who
- * was actually signed in — a real gap given this is an authorization
- * check, not just cosmetic nav chrome. `AppShell`'s own nav link uses the
- * same real check now (components/AppShell.tsx); this is the server-side
- * backstop for anyone who navigates here directly.
+ * The Super Admin console — platform staff only, gated on the real
+ * `profiles.is_super_admin` flag (doc01 §4: a platform flag, not a
+ * corporation role). `AppShell`'s nav link uses the same check; this is
+ * the server-side backstop for anyone who navigates here directly.
  *
- * `AdminCorporationSearch`/`allCorporations` below is still placeholder
- * data — not part of this identity/billing pass.
+ * Two jobs: the review queue for new corporations (nothing is created
+ * until a request here is approved — doc01 §4), and search across every
+ * corporation on the platform, regardless of membership.
  */
 export default async function AdminConsolePage() {
   const profile = await getCurrentProfile();
   if (!profile?.isSuperAdmin) notFound();
+
+  const [requests, corporations] = await Promise.all([
+    getPendingCreationRequests(),
+    getAllCorporations(),
+  ]);
 
   return (
     <AppShell active="admin">
@@ -26,13 +30,52 @@ export default async function AdminConsolePage() {
         <div className="page-header">
           <h1>Admin console</h1>
           <p>
-            Platform-staff only. Search any corporation by Strata Plan
-            number or building name &mdash; this list isn&rsquo;t scoped to
-            corporations you&rsquo;re a connected member of.
+            Platform-staff only. Review new corporation requests, and search
+            any corporation by Strata Plan number or building name &mdash;
+            this list isn&rsquo;t scoped to corporations you&rsquo;re a
+            connected member of.
           </p>
         </div>
 
-        <AdminCorporationSearch corporations={allCorporations} />
+        <h2 style={{ marginBottom: "1rem" }}>New corporation requests</h2>
+        {requests.length === 0 ? (
+          <p className="roster-notice" data-testid="admin-no-requests">
+            Nothing waiting for review.
+          </p>
+        ) : (
+          <div className="roster-table-wrap" style={{ marginBottom: "2.5rem" }}>
+            <table className="roster-table" data-testid="admin-request-table">
+              <thead>
+                <tr>
+                  <th>Strata Plan</th>
+                  <th>Legal name</th>
+                  <th>Requested by</th>
+                  <th>Requested</th>
+                </tr>
+              </thead>
+              <tbody>
+                {requests.map((r) => (
+                  <tr key={r.id}>
+                    <td>
+                      <Link href={`/admin/requests/${r.id}`} data-testid={`admin-request-row-${r.id}`}>
+                        {r.strataPlanNumber}
+                      </Link>
+                    </td>
+                    <td>{r.legalName}</td>
+                    <td>
+                      {r.requesterName}
+                      <div className="roster-table__meta">{r.requesterEmail}</div>
+                    </td>
+                    <td>{new Date(r.requestedAt).toLocaleDateString("en-CA")}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <h2 style={{ marginBottom: "1rem" }}>Corporations</h2>
+        <AdminCorporationSearch corporations={corporations} />
       </div>
     </AppShell>
   );

@@ -62,7 +62,7 @@ export function StrataSwitcher({
             </Link>
           ))}
           <Link
-            href="/strata"
+            href="/strata?connect=1"
             className="strata-switcher__connect"
             data-testid="strata-switcher-connect"
           >

@@ -2249,3 +2249,99 @@ button {
     grid-template-columns: 1fr;
   }
 }
+
+/* Connect a strata (/strata) — lookup result and creation request form */
+
+.field select {
+  font-family: inherit;
+  font-size: 0.95rem;
+  padding: 0.65em 0.85em;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.setup-result,
+.setup-form {
+  max-width: 640px;
+  margin-top: 1.5rem;
+}
+
+.setup-result h3,
+.setup-form h3 {
+  margin: 0;
+}
+
+.setup-result p,
+.setup-form > p {
+  color: var(--muted);
+  margin: 0;
+}
+
+.setup-result .pill,
+.setup-form > .pill {
+  align-self: flex-start;
+}
+
+.setup-form__section {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 0.5rem 0 0;
+  padding: 1rem 0 0;
+}
+
+.setup-form__section legend {
+  font-weight: 600;
+  padding-right: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.setup-form__section .sync-note {
+  margin-bottom: 1.1rem;
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+
+.setup-form__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.setup-requests {
+  max-width: 640px;
+  margin-bottom: 1.5rem;
+}
+
+/* Council & Roles — per-member meeting permission toggles */
+
+.roster-table__toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.roster-table__toggle input {
+  width: 1rem;
+  height: 1rem;
+  accent-color: var(--accent);
+}
+
+.roster-table__toggle input:disabled {
+  cursor: not-allowed;
+}
+
+.role-editor__holder {
+  font-size: 0.75rem;
+  color: var(--muted);
+  margin-left: auto;
+  padding-left: 0.75rem;
+}
+
+.roster-notice {
+  font-size: 0.88rem;
+  color: var(--muted);
+  margin: 0 0 1rem;
+}

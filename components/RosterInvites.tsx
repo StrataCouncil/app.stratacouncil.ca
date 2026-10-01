@@ -1,68 +1,95 @@
 "use client";
 
-import { useState } from "react";
-import type { CorporationInvite } from "@/lib/placeholder-data";
-
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+import { useState, useTransition } from "react";
+import { resendInvite, revokeInvite, sendInvite } from "@/app/strata/[corpId]/roster-actions";
+import type { PendingInvite } from "@/lib/data/roster";
+import { EMAIL_RE } from "@/lib/strata";
 
 /**
- * Invite/revoke, by email — how a council actually turns over: the
- * outgoing secretary leaves, the admin invites their replacement. This
- * is the admin-initiated path (doc01 §1's `corporation_invites`),
- * distinct from a self-serve join request, which needs admin approval
- * on the way *in* rather than the admin having sent it.
+ * Invite/revoke by email — how a council actually turns over: the
+ * outgoing secretary leaves, the admin invites their replacement. The
+ * admin-initiated path (`corporation_invites`), distinct from a self-serve
+ * join request.
  *
- * Client-side state only, same honesty as `RosterTable`'s role editor —
- * there's no second account in this demo to actually accept an invite,
- * so a sent invite just sits here as "Pending" until revoked. Real
- * acceptance would move the person into the roster below with no
- * separate admin action needed.
+ * The email carries a `generateLink()` sign-in link (roster-actions.ts):
+ * one click signs the invitee in — creating their account if they don't
+ * have one — and connects them. No approval step on the admin's end, no
+ * separate signup form on theirs. Until then they show on the roster as
+ * "Invited". Links expire, so pending invites can be re-sent.
  */
-export function RosterInvites({ initialInvites }: { initialInvites: CorporationInvite[] }) {
-  const [invites, setInvites] = useState(initialInvites);
+export function RosterInvites({
+  corporationId,
+  invites,
+}: {
+  corporationId: string;
+  invites: PendingInvite[];
+}) {
   const [email, setEmail] = useState("");
+  const [fullName, setFullName] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [revokingId, setRevokingId] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
 
-  function sendInvite(e: React.FormEvent) {
+  function send(e: React.FormEvent) {
     e.preventDefault();
     const trimmed = email.trim();
     if (!EMAIL_RE.test(trimmed)) {
       setError("Enter a valid email address.");
       return;
     }
-    if (invites.some((i) => i.email.toLowerCase() === trimmed.toLowerCase())) {
-      setError("Already invited.");
-      return;
-    }
-    setInvites((prev) => [
-      ...prev,
-      {
-        id: `inv-${Date.now()}`,
-        email: trimmed,
-        invitedByName: "You",
-        invitedAt: "Just now",
-      },
-    ]);
-    setEmail("");
     setError(null);
+    setNotice(null);
+    startTransition(async () => {
+      const result = await sendInvite(corporationId, trimmed, fullName);
+      if (result.ok) {
+        setEmail("");
+        setFullName("");
+        setNotice(result.notice ?? null);
+      } else {
+        setError(result.error);
+      }
+    });
   }
 
-  function revokeInvite(id: string) {
-    setInvites((prev) => prev.filter((i) => i.id !== id));
-    setRevokingId(null);
+  function resend(id: string) {
+    setError(null);
+    setNotice(null);
+    startTransition(async () => {
+      const result = await resendInvite(corporationId, id);
+      if (result.ok) setNotice(result.notice ?? null);
+      else setError(result.error);
+    });
+  }
+
+  function revoke(id: string) {
+    setError(null);
+    setNotice(null);
+    startTransition(async () => {
+      const result = await revokeInvite(corporationId, id);
+      if (!result.ok) setError(result.error);
+      setRevokingId(null);
+    });
   }
 
   return (
     <div className="card roster-invites" data-testid="roster-invites">
       <h3>Invite a member</h3>
       <p className="card__meta" style={{ marginTop: "-0.4rem" }}>
-        They&rsquo;ll be prompted to create a StrataCouncil.ca account (or
-        sign in, if they already have one) and are added to this strata
-        the moment they accept &mdash; no approval step needed on your end.
+        They&rsquo;ll get an email with a link that signs them in &mdash;
+        creating their StrataCouncil.ca account if they don&rsquo;t have one
+        &mdash; and adds them to this strata in one click. No approval step
+        needed on your end.
       </p>
 
-      <form className="roster-invites__form" onSubmit={sendInvite}>
+      <form className="roster-invites__form" onSubmit={send}>
+        <input
+          type="text"
+          placeholder="Name (optional)"
+          value={fullName}
+          onChange={(e) => setFullName(e.target.value)}
+          data-testid="invite-name-input"
+        />
         <input
           type="email"
           placeholder="name@example.com"
@@ -73,13 +100,23 @@ export function RosterInvites({ initialInvites }: { initialInvites: CorporationI
           }}
           data-testid="invite-email-input"
         />
-        <button type="submit" className="button button-primary button-small" data-testid="invite-send">
-          Send invite
+        <button
+          type="submit"
+          className="button button-primary button-small"
+          disabled={pending}
+          data-testid="invite-send"
+        >
+          {pending ? "Working…" : "Send invite"}
         </button>
       </form>
       {error && (
         <p className="roster-invites__error" data-testid="invite-error">
           {error}
+        </p>
+      )}
+      {notice && (
+        <p className="card__meta" data-testid="invite-notice">
+          {notice}
         </p>
       )}
 
@@ -90,7 +127,8 @@ export function RosterInvites({ initialInvites }: { initialInvites: CorporationI
               <div>
                 <span className="roster-invites__email">{invite.email}</span>
                 <span className="card__meta">
-                  Invited by {invite.invitedByName} &middot; {invite.invitedAt}
+                  Invited{invite.invitedByName && <> by {invite.invitedByName}</>} &middot;{" "}
+                  {new Date(invite.createdAt).toLocaleDateString("en-CA")}
                 </span>
               </div>
               {revokingId === invite.id ? (
@@ -99,25 +137,38 @@ export function RosterInvites({ initialInvites }: { initialInvites: CorporationI
                   <button
                     className="button button-secondary button-small"
                     onClick={() => setRevokingId(null)}
+                    disabled={pending}
                   >
                     Cancel
                   </button>
                   <button
                     className="button button-primary button-small"
-                    onClick={() => revokeInvite(invite.id)}
+                    onClick={() => revoke(invite.id)}
+                    disabled={pending}
                     data-testid={`invite-revoke-confirm-${invite.id}`}
                   >
                     Confirm
                   </button>
                 </span>
               ) : (
-                <button
-                  className="roster-invites__revoke"
-                  onClick={() => setRevokingId(invite.id)}
-                  data-testid={`invite-revoke-${invite.id}`}
-                >
-                  Revoke
-                </button>
+                <span className="roster-join-requests__actions">
+                  <button
+                    className="roster-invites__revoke"
+                    onClick={() => resend(invite.id)}
+                    disabled={pending}
+                    data-testid={`invite-resend-${invite.id}`}
+                  >
+                    Resend
+                  </button>
+                  <button
+                    className="roster-invites__revoke"
+                    onClick={() => setRevokingId(invite.id)}
+                    disabled={pending}
+                    data-testid={`invite-revoke-${invite.id}`}
+                  >
+                    Revoke
+                  </button>
+                </span>
               )}
             </li>
           ))}
