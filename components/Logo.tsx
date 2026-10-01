@@ -3,8 +3,8 @@
  *
  * Rendered inline (not via <img src>) specifically so it can take its color
  * from CSS `color` on this element or an ancestor — the same mechanism the
- * rest of the design system uses for every other color (see the Neurata
- * project doc `05-brand-design-system.md` §6a). An <img>-referenced SVG
+ * rest of the design system uses for every other color (see project doc
+ * `05-brand-design-system.md` §6a). An <img>-referenced SVG
  * can't inherit `currentColor` from the page, which is why this is a
  * component rather than a static file reference.
  *

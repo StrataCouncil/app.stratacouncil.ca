@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
-import { allCorporations, currentCorporation, currentProfile, roleLabels, roster } from "@/lib/placeholder-data";
+import { getAllCorporations } from "@/lib/data/admin";
+import { getCurrentProfile } from "@/lib/data/profile";
+import { createClient } from "@/lib/supabase/server";
+import { corporationRoleLabels, isCorporationRole } from "@/lib/strata";
 
 const subscriptionLabels: Record<string, string> = {
   active: "Stratasphere™ active",
@@ -18,23 +21,47 @@ const subscriptionLabels: Record<string, string> = {
  * the specific reviewed action it is, not a general edit mode bolted
  * onto this page (doc01 §1).
  *
- * Only `currentCorporation` has the full roster this mockup builds out
- * elsewhere — the other seeded corporations intentionally don't get a
- * fabricated one; this page says so plainly rather than showing an empty
- * table that looks like a real "no members yet" state.
+ * The roster comes from `corporation_member_directory()` and
+ * `corporation_role_assignments`, both of which allow a Super Admin to
+ * read (0010).
  */
 export default async function AdminCorporationDetailPage({
   params,
 }: {
   params: Promise<{ corpId: string }>;
 }) {
-  if (!currentProfile.isSuperAdmin) notFound();
+  const profile = await getCurrentProfile();
+  if (!profile?.isSuperAdmin) notFound();
 
   const { corpId } = await params;
-  const corporation = allCorporations.find((c) => c.id === corpId);
+  const corporation = (await getAllCorporations()).find((c) => c.id === corpId);
   if (!corporation) notFound();
 
-  const hasMockedDetail = corporation.id === currentCorporation.id;
+  const supabase = await createClient();
+  const [{ data: members }, { data: roleRows }] = await Promise.all([
+    supabase.rpc("corporation_member_directory", { p_corporation_id: corpId }),
+    supabase
+      .from("corporation_role_assignments")
+      .select("user_id, role")
+      .eq("corporation_id", corpId),
+  ]);
+
+  const roster = ((members ?? []) as {
+    user_id: string;
+    full_name: string | null;
+    email: string | null;
+    status: string;
+  }[]).map((m) => ({
+    id: m.user_id,
+    name: m.full_name || m.email || "Unnamed member",
+    email: m.email ?? "",
+    status: m.status,
+    roles: (roleRows ?? [])
+      .filter((r) => r.user_id === m.user_id)
+      .map((r) => r.role)
+      .filter(isCorporationRole),
+  }));
+  const activeCount = roster.filter((m) => m.status === "active").length;
 
   return (
     <AppShell active="admin">
@@ -45,7 +72,7 @@ export default async function AdminCorporationDetailPage({
 
         <div className="page-header">
           <span className="pill pill--locked">{corporation.strataPlanNumber}</span>
-          <h1 style={{ marginTop: "0.6rem" }}>{corporation.buildingName}</h1>
+          <h1 style={{ marginTop: "0.6rem" }}>{corporation.buildingName ?? corporation.legalName}</h1>
           <p>{corporation.address}</p>
         </div>
 
@@ -64,68 +91,47 @@ export default async function AdminCorporationDetailPage({
               Free meeting {corporation.freeMeetingUsed ? "used" : "not yet used"}
             </p>
           </div>
-          {hasMockedDetail && (
-            <div className="card">
-              <h3>Roster</h3>
-              <p>{roster.length} connected members</p>
-              <Link
-                href={`/strata/${corporation.id}`}
-                className="button button-secondary button-small"
-                style={{ alignSelf: "flex-start" }}
-                data-testid="admin-open-stratasphere"
-              >
-                Open in Stratasphere&trade;
-              </Link>
-            </div>
-          )}
+          <div className="card">
+            <h3>Roster</h3>
+            <p>{activeCount} connected {activeCount === 1 ? "member" : "members"}</p>
+          </div>
         </div>
 
-        {hasMockedDetail ? (
-          <>
-            <h2 style={{ marginBottom: "1rem" }}>Roster</h2>
-            <div className="roster-table-wrap">
-              <table className="roster-table" data-testid="admin-roster-table">
-                <thead>
-                  <tr>
-                    <th>Member</th>
-                    <th>Roles</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {roster.map((member) => (
-                    <tr key={member.id}>
-                      <td>
-                        {member.name}
-                        {member.company && (
-                          <div className="roster-table__meta">{member.company}</div>
-                        )}
-                      </td>
-                      <td>
-                        {member.roles.length === 0
-                          ? <span className="roster-table__na">&mdash;</span>
-                          : member.roles.map((role) => (
-                              <span className="role-tag" key={role}>
-                                {roleLabels[role] ?? role}
-                              </span>
-                            ))}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </>
+        <h2 style={{ marginBottom: "1rem" }}>Roster</h2>
+        {roster.length === 0 ? (
+          <p className="roster-notice">No members.</p>
         ) : (
-          <div className="lock-panel" data-testid="admin-no-mock-data">
-            <h2>No detailed data mocked for this corporation</h2>
-            <p>
-              This demo only builds out full roster, documents and
-              governance data for Maple Ridge Terraces (BCS-4821). This
-              corporation exists here to show what the console&rsquo;s
-              search and list look like with more than one result &mdash;
-              in the real app, its roster, documents and subscription
-              history would render the same way.
-            </p>
+          <div className="roster-table-wrap">
+            <table className="roster-table" data-testid="admin-roster-table">
+              <thead>
+                <tr>
+                  <th>Member</th>
+                  <th>Roles</th>
+                </tr>
+              </thead>
+              <tbody>
+                {roster.map((member) => (
+                  <tr key={member.id}>
+                    <td>
+                      {member.name}
+                      <div className="roster-table__meta">{member.email}</div>
+                      {member.status !== "active" && <span className="pill pill--locked">Invited</span>}
+                    </td>
+                    <td>
+                      {member.roles.length === 0 ? (
+                        <span className="roster-table__na">&mdash;</span>
+                      ) : (
+                        member.roles.map((role) => (
+                          <span className="role-tag" key={role}>
+                            {corporationRoleLabels[role]}
+                          </span>
+                        ))
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>

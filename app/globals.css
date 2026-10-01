@@ -1,5 +1,5 @@
 /* app.stratacouncil.ca — design tokens
-   Source of truth: Neurata project doc `05-brand-design-system.md` §3–5.
+   Source of truth: project doc `05-brand-design-system.md` §3–5.
    Duplicated from stratacouncil-marketing per that doc's §6 recommendation
    (start with duplication, revisit a shared package only if drift becomes
    a real problem). Keep these two token blocks in sync by hand. */
@@ -2248,4 +2248,246 @@ button {
   .kb-article {
     grid-template-columns: 1fr;
   }
+}
+
+/* Connect a strata (/strata) — lookup result and creation request form */
+
+.field select {
+  font-family: inherit;
+  font-size: 0.95rem;
+  padding: 0.65em 0.85em;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.setup-result,
+.setup-form {
+  max-width: 640px;
+  margin-top: 1.5rem;
+}
+
+.setup-result h3,
+.setup-form h3 {
+  margin: 0;
+}
+
+.setup-result p,
+.setup-form > p {
+  color: var(--muted);
+  margin: 0;
+}
+
+.setup-result .pill,
+.setup-form > .pill {
+  align-self: flex-start;
+}
+
+.setup-form__section {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 0.5rem 0 0;
+  padding: 1rem 0 0;
+}
+
+.setup-form__section legend {
+  font-weight: 600;
+  padding-right: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.setup-form__section .sync-note {
+  margin-bottom: 1.1rem;
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+
+.setup-form__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.setup-requests {
+  max-width: 640px;
+  margin-bottom: 1.5rem;
+}
+
+/* Council & Roles — per-member meeting permission toggles */
+
+.permission-switch {
+  position: relative;
+  display: inline-block;
+  width: 2.25rem;
+  height: 1.25rem;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--locked-bg);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.permission-switch[aria-checked="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.permission-switch:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.permission-switch:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.permission-switch__thumb {
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: calc(1.25rem - 4px);
+  height: calc(1.25rem - 4px);
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: 0 1px 2px rgba(27, 42, 65, 0.25);
+  transition: transform 0.15s ease;
+}
+
+.permission-switch[aria-checked="true"] .permission-switch__thumb {
+  transform: translateX(1rem);
+}
+
+/* Destructive actions (deny, remove) — doc05 §3: --danger, never the accent */
+.button-danger {
+  background: var(--danger);
+  color: var(--paper);
+}
+
+.button-danger:hover:not(:disabled) {
+  filter: brightness(0.9);
+}
+
+.role-editor__holder {
+  font-size: 0.75rem;
+  color: var(--muted);
+  margin-left: auto;
+  padding-left: 0.75rem;
+}
+
+.roster-notice {
+  font-size: 0.88rem;
+  color: var(--muted);
+  margin: 0 0 1rem;
+}
+
+/* Strata Lots — owner roster upload and per-lot editor (doc02 §2a) */
+
+.roster-upload {
+  margin-bottom: 1.5rem;
+}
+
+.roster-upload__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.roster-upload__file {
+  position: relative;
+  cursor: pointer;
+}
+
+.roster-upload__file input[type="file"] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  overflow: hidden;
+}
+
+.roster-upload__file:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.roster-upload__errors {
+  background: var(--danger-bg);
+  color: var(--danger);
+  border-radius: var(--radius-sm);
+  padding: 0.75rem 1rem;
+  font-size: 0.88rem;
+}
+
+.roster-upload__errors ul {
+  margin: 0.4rem 0 0;
+  padding-left: 1.2rem;
+}
+
+.roster-upload__preview {
+  border-top: 1px solid var(--line);
+  padding-top: 0.75rem;
+  font-size: 0.9rem;
+}
+
+.roster-upload__preview p {
+  margin: 0 0 0.5rem;
+}
+
+.roster-upload__preview summary {
+  cursor: pointer;
+  color: var(--accent);
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.roster-upload__changes {
+  max-height: 20rem;
+  overflow-y: auto;
+  margin: 0 0 0.75rem;
+  padding-left: 1.2rem;
+  font-size: 0.85rem;
+}
+
+.roster-upload__changes ul {
+  padding-left: 1rem;
+  margin: 0.15rem 0 0.4rem;
+  color: var(--muted);
+}
+
+.roster-upload__from {
+  text-decoration: line-through;
+}
+
+.lot-editor {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 1rem 1.25rem;
+  margin: 0.25rem 0 0.75rem;
+}
+
+.lot-editor__section {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 0.75rem 0 0;
+  padding: 0.75rem 0 0;
+}
+
+.lot-editor__section legend {
+  font-weight: 600;
+  padding-right: 0.5rem;
+}
+
+.lot-editor__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+  gap: 0 1rem;
+}
+
+.lot-editor .field {
+  margin-bottom: 0.75rem;
 }

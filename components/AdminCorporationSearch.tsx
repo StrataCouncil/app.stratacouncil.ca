@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import type { Corporation } from "@/lib/placeholder-data";
+import type { AdminCorporation } from "@/lib/data/admin";
 
-const subscriptionLabels: Record<Corporation["subscriptionStatus"], string> = {
+const subscriptionLabels: Record<AdminCorporation["subscriptionStatus"], string> = {
   active: "Stratasphere™ active",
   none: "Free tier",
   deactivated: "Deactivated",
@@ -18,14 +18,14 @@ const subscriptionLabels: Record<Corporation["subscriptionStatus"], string> = {
  * scope, every corporation, independent of whether this profile holds
  * any `corporation_role_assignments` row for it at all (doc01 §1).
  */
-export function AdminCorporationSearch({ corporations }: { corporations: Corporation[] }) {
+export function AdminCorporationSearch({ corporations }: { corporations: AdminCorporation[] }) {
   const [query, setQuery] = useState("");
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return corporations;
     return corporations.filter((c) =>
-      [c.strataPlanNumber, c.buildingName, c.legalName, c.address]
+      [c.strataPlanNumber, c.buildingName ?? "", c.legalName, c.address]
         .join(" ")
         .toLowerCase()
         .includes(q)
@@ -68,7 +68,7 @@ export function AdminCorporationSearch({ corporations }: { corporations: Corpora
                     </Link>
                   </td>
                   <td>
-                    {c.buildingName}
+                    {c.buildingName ?? c.legalName}
                     <div className="roster-table__meta">{c.address}</div>
                   </td>
                   <td>{c.jurisdiction}</td>
