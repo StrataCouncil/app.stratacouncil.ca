@@ -1,22 +1,26 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
+import { getConnectedCorporations } from "@/lib/data/corporations";
 
 /**
  * Zero-corporation state (doc03 "Zero, one, and many connections") — the
- * "Set up your strata" CTA. A real build would only render this when the
- * signed-in user has no `corporation_memberships` rows; once one exists
- * this route is effectively replaced by redirecting straight into
- * `/strata/[corpId]`.
+ * "Set up your strata" CTA.
  *
- * The SP# lookup below is a UI shell for doc01 §1's "lookup-first, not
- * upload-first" flow: match an existing corp routes into a join request;
- * no match prompts a Strata Plan upload that becomes a pending, manually
- * reviewed creation request.
+ * Now actually checks the signed-in user's real `corporation_memberships`
+ * and redirects straight to `/strata/[corpId]` if they have one, instead
+ * of always showing this screen regardless of real connection state.
  *
- * Desktop-gated like the rest of /strata — see the layout for `/strata/
- * [corpId]` for why.
+ * The SP# lookup below is still a UI shell, not wired to a real
+ * lookup/upload/review backend yet — that's the corp-creation pipeline
+ * (doc01 §1), real work for a later pass, not this one.
  */
-export default function StrataSetupPage() {
+export default async function StrataSetupPage() {
+  const corporations = await getConnectedCorporations();
+  if (corporations.length > 0) {
+    redirect(`/strata/${corporations[0].id}`);
+  }
+
   return (
     <AppShell>
       <div className="wrap page">
@@ -50,7 +54,7 @@ export default function StrataSetupPage() {
                 We&rsquo;ll check if your strata is already on the platform.
               </span>
             </div>
-            <button className="button button-primary" data-testid="sp-lookup-submit">
+            <button className="button button-primary" disabled title="Not wired up yet — real work" data-testid="sp-lookup-submit">
               Look up my strata
             </button>
           </div>

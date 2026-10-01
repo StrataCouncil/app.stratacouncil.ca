@@ -4,27 +4,30 @@ import { CouncilRoster } from "@/components/CouncilRoster";
 import {
   corporationInvites,
   corporationJoinRequests,
-  currentCorporation,
   roster,
 } from "@/lib/placeholder-data";
 
 /**
  * Council & Roles — free the moment a corporation exists (doc03 Stage 5).
- * The completion matrix shows only done/not-done per track, never
- * granular progress (doc01 §3a) — that's a deliberate design choice, not
- * a placeholder simplification. Role assignment itself is editable here
- * (`RosterTable`) — admin needs to be able to determine each connected
- * member's role, the same reassignable-by-admin pattern doc01 §4b
- * describes for the `admin` role itself.
  *
- * Requests to join, invites, and the roster table (`CouncilRoster`) sit
- * above one another in that order — the two connection paths (self-serve
- * request vs. admin-sent invite) right next to the roster they're about
- * to change, not buried in a settings page. Council turnover ("the new
- * treasurer needs to be added") is a routine admin action, not a rare
- * one, so it gets the same visibility as the roster itself.
+ * The billing link now uses the real `corpId` from the route instead of
+ * the hardcoded `currentCorporation.id` mock — that mismatch (a fake ID
+ * that never matched any real `strata_corporations`/`subscriptions` row)
+ * is what was making "Go to billing" go nowhere.
+ *
+ * `CouncilRoster` below is deliberately NOT rewired in this pass — it
+ * still renders placeholder council members unrelated to this
+ * corporation's real roster. That's real, separate work (roster, invites,
+ * join requests all need their own pass), not part of this identity/
+ * billing fix.
  */
-export default function CouncilAndRolesPage() {
+export default async function CouncilAndRolesPage({
+  params,
+}: {
+  params: Promise<{ corpId: string }>;
+}) {
+  const { corpId } = await params;
+
   return (
     <>
       <StrataSphereNav active="home" />
@@ -43,7 +46,7 @@ export default function CouncilAndRolesPage() {
           <p>Manage your Stratasphere&trade; plan, payment method and invoices.</p>
         </div>
         <Link
-          href={`/strata/${currentCorporation.id}/billing`}
+          href={`/strata/${corpId}/billing`}
           className="button button-secondary"
           data-testid="billing-link"
         >

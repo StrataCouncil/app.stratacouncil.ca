@@ -1,25 +1,24 @@
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { AdminCorporationSearch } from "@/components/AdminCorporationSearch";
-import { allCorporations, currentProfile } from "@/lib/placeholder-data";
+import { allCorporations } from "@/lib/placeholder-data";
+import { getCurrentProfile } from "@/lib/data/profile";
 
 /**
- * The Super Admin console — platform staff only (`currentProfile.
- * isSuperAdmin`), enforced here with `notFound()` rather than a
- * lock-panel: unlike a paywalled Stratasphere feature, there's no reason
- * for a connected council member to know this exists at all, let alone
- * see an upgrade pitch for it. `AppShell` already hides the nav link for
- * the same reason; this is the server-side backstop for anyone who
- * navigates here directly.
+ * The Super Admin console — platform staff only. Now gated on the real
+ * `profiles.is_super_admin` flag instead of the `currentProfile` mock,
+ * which could show/hide this page for the wrong reason regardless of who
+ * was actually signed in — a real gap given this is an authorization
+ * check, not just cosmetic nav chrome. `AppShell`'s own nav link uses the
+ * same real check now (components/AppShell.tsx); this is the server-side
+ * backstop for anyone who navigates here directly.
  *
- * Lists every corporation on the platform (`allCorporations`), not just
- * ones this profile belongs to — a Super Admin doesn't need a
- * `corporation_role_assignments` row anywhere to look a corp up (doc01
- * §1). Search is by SP# or building name, the two things support usually
- * starts from.
+ * `AdminCorporationSearch`/`allCorporations` below is still placeholder
+ * data — not part of this identity/billing pass.
  */
-export default function AdminConsolePage() {
-  if (!currentProfile.isSuperAdmin) notFound();
+export default async function AdminConsolePage() {
+  const profile = await getCurrentProfile();
+  if (!profile?.isSuperAdmin) notFound();
 
   return (
     <AppShell active="admin">

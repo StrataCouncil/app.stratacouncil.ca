@@ -1,32 +1,34 @@
 import Link from "next/link";
 import { AccountMenu } from "@/components/AccountMenu";
 import { Logo } from "@/components/Logo";
-import { currentCorporation, currentProfile } from "@/lib/placeholder-data";
+import { getCurrentProfile } from "@/lib/data/profile";
+import { getConnectedCorporations } from "@/lib/data/corporations";
 
 /**
  * Top-level app shell (doc03 "Screen layout — two levels, not one flat
  * menu"): Home (the signed-in landing screen) and Council Training are
- * both unswitched, belonging to the user, not any corporation. No corp
- * switcher lives up here any more — Home and Council Training aren't
- * scoped to a strata at all, so a switcher in this global header was
- * chrome for a decision that only matters once you're actually inside
- * Stratasphere&trade;. That control now lives there instead
- * (`StrataSwitcher`, rendered from the `/strata/[corpId]` layout).
+ * both unswitched, belonging to the user, not any corporation.
  *
- * "Admin" only ever renders for `currentProfile.isSuperAdmin` — this is
- * StrataCouncil's own platform-staff console (`/admin`), not a
- * corporation-scoped tab, so it has no reason to be visible, or even
- * discoverable, to a connected council member. See `/admin`'s own
- * `notFound()` guard for the same check enforced server-side, not just
- * hidden client-side chrome.
+ * Now reads the real signed-in user instead of the `currentProfile` /
+ * `currentCorporation` mocks — this fixes the Stratasphere nav link
+ * pointing at a hardcoded corp ID regardless of who's actually signed in,
+ * and the Admin link showing/hiding based on a fake `isSuperAdmin` flag.
+ * The Stratasphere link goes to the user's first real connected
+ * corporation if they have one, or `/strata` (the connect/zero state)
+ * if they don't.
  */
-export function AppShell({
+export async function AppShell({
   active,
   children,
 }: {
   active?: "home" | "training" | "strata" | "admin";
   children: React.ReactNode;
 }) {
+  const profile = await getCurrentProfile();
+  const corporations = await getConnectedCorporations();
+  const primaryCorpHref =
+    corporations.length > 0 ? `/strata/${corporations[0].id}` : "/strata";
+
   return (
     <>
       <header className="app-header">
@@ -42,19 +44,16 @@ export function AppShell({
             <Link href="/training" data-active={active === "training"}>
               Council Training
             </Link>
-            <Link
-              href={`/strata/${currentCorporation.id}`}
-              data-active={active === "strata"}
-            >
+            <Link href={primaryCorpHref} data-active={active === "strata"}>
               Stratasphere&trade;
             </Link>
-            {currentProfile.isSuperAdmin && (
+            {profile?.isSuperAdmin && (
               <Link href="/admin" data-active={active === "admin"}>
                 Admin
               </Link>
             )}
           </nav>
-          <AccountMenu />
+          <AccountMenu profile={profile} />
         </div>
       </header>
       <main>{children}</main>

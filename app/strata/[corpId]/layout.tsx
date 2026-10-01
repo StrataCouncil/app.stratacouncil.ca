@@ -1,7 +1,8 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { StrataSwitcher } from "@/components/StrataSwitcher";
-import { currentCorporation } from "@/lib/placeholder-data";
+import { getConnectedCorporations } from "@/lib/data/corporations";
 
 /**
  * Stratasphere™ is desktop-only — the governance tools (roster tables,
@@ -9,12 +10,31 @@ import { currentCorporation } from "@/lib/placeholder-data";
  * has to work on a phone (people study on their devices); this section
  * doesn't try to. Below ~900px, `.screen-gate-notice` (CSS in
  * globals.css) shows instead of `.screen-gate-content`.
+ *
+ * Now checks the real `corporation_memberships` table for this corpId
+ * instead of always rendering the hardcoded `currentCorporation` mock —
+ * this is what was letting every signed-in user land on the same fake
+ * "BCS-4821" corporation regardless of whether they'd actually connected
+ * to it, and what was breaking the real billing page below it (which
+ * expects a `corpId` that actually exists in `strata_corporations`/
+ * `subscriptions`). If the signed-in user isn't an active member of this
+ * corpId, they're sent to `/strata` rather than shown stale/wrong data.
  */
-export default function StrataSphereLayout({
+export default async function StrataSphereLayout({
   children,
+  params,
 }: {
   children: React.ReactNode;
+  params: Promise<{ corpId: string }>;
 }) {
+  const { corpId } = await params;
+  const corporations = await getConnectedCorporations();
+  const currentCorporation = corporations.find((c) => c.id === corpId);
+
+  if (!currentCorporation) {
+    redirect("/strata");
+  }
+
   const subscribed = currentCorporation.subscriptionStatus === "active";
 
   return (
@@ -37,13 +57,13 @@ export default function StrataSphereLayout({
         <div className="screen-gate-content">
           <div className="page-header page-header--with-switcher">
             <div>
-              <span className="pill">{currentCorporation.strataPlanNumber}</span>
+              <span className="pill">{currentCorporation.id}</span>
               <h1 style={{ marginTop: "0.6rem" }}>
-                {currentCorporation.buildingName}
+                {currentCorporation.buildingName ?? currentCorporation.legalName}
               </h1>
               <p>{currentCorporation.address}</p>
             </div>
-            <StrataSwitcher />
+            <StrataSwitcher corporations={corporations} currentId={currentCorporation.id} />
           </div>
 
           {!subscribed && (

@@ -2,20 +2,25 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { connectedCorporations, currentCorporation } from "@/lib/placeholder-data";
+import type { ConnectedCorporation } from "@/lib/data/corporations";
 
 /**
- * The strata switcher used to live in the global header (visible on Home
- * and Council Training too, neither of which is scoped to a corporation
- * at all). It only matters once you're actually inside Stratasphere™, so
- * it lives here now instead — rendered once, from the `/strata/[corpId]`
- * layout, not the app shell. Still a placeholder: one mock corporation,
- * so picking it just closes the menu, but the real behavior (a working
- * dropdown once a user has more than one connection) is mocked up rather
- * than left as a static label.
+ * Now takes the real list of the signed-in user's connected corporations
+ * as a prop from the `/strata/[corpId]` layout (a Server Component),
+ * instead of importing `connectedCorporations`/`currentCorporation` from
+ * the mock. Options are real `Link`s to `/strata/[id]` now rather than a
+ * button that just closed the menu — the mock only ever had one option,
+ * so it never actually needed to navigate anywhere.
  */
-export function StrataSwitcher() {
+export function StrataSwitcher({
+  corporations,
+  currentId,
+}: {
+  corporations: ConnectedCorporation[];
+  currentId: string;
+}) {
   const [open, setOpen] = useState(false);
+  const current = corporations.find((c) => c.id === currentId);
 
   return (
     <div className="strata-switcher">
@@ -26,7 +31,9 @@ export function StrataSwitcher() {
         aria-expanded={open}
       >
         <span className="strata-switcher__label">Strata</span>
-        <span className="strata-switcher__name">{currentCorporation.buildingName}</span>
+        <span className="strata-switcher__name">
+          {current?.buildingName ?? current?.legalName ?? currentId}
+        </span>
         <svg viewBox="0 0 16 16" className="strata-switcher__chevron" aria-hidden="true">
           <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
@@ -34,24 +41,25 @@ export function StrataSwitcher() {
 
       {open && (
         <div className="strata-switcher__menu" data-testid="strata-switcher-menu">
-          {connectedCorporations.map(({ corporation }) => (
-            <button
+          {corporations.map((corporation) => (
+            <Link
               key={corporation.id}
+              href={`/strata/${corporation.id}`}
               className="strata-switcher__option"
-              data-selected={corporation.id === currentCorporation.id}
+              data-selected={corporation.id === currentId}
               onClick={() => setOpen(false)}
               data-testid={`strata-switcher-option-${corporation.id}`}
             >
               <span>
-                <strong>{corporation.buildingName}</strong>
+                <strong>{corporation.buildingName ?? corporation.legalName}</strong>
                 <span className="strata-switcher__option-meta">{corporation.address}</span>
               </span>
-              {corporation.id === currentCorporation.id && (
+              {corporation.id === currentId && (
                 <span className="strata-switcher__check" aria-hidden="true">
                   &#10003;
                 </span>
               )}
-            </button>
+            </Link>
           ))}
           <Link
             href="/strata"
