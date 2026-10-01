@@ -2,20 +2,23 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { getConnectedCorporations } from "@/lib/data/corporations";
+import { createClient } from "@/lib/supabase/server";
 
 /**
  * Zero-corporation state (doc03 "Zero, one, and many connections") — the
  * "Set up your strata" CTA.
  *
- * Now actually checks the signed-in user's real `corporation_memberships`
- * and redirects straight to `/strata/[corpId]` if they have one, instead
- * of always showing this screen regardless of real connection state.
- *
- * The SP# lookup below is still a UI shell, not wired to a real
- * lookup/upload/review backend yet — that's the corp-creation pipeline
- * (doc01 §1), real work for a later pass, not this one.
+ * TEMPORARY: renders raw debug info (signed-in user id/email, the real
+ * query result) directly on the page instead of only logging server-side
+ * — Vercel's log UI was too much friction to debug through live. Remove
+ * this block once the redirect bug is confirmed fixed.
  */
 export default async function StrataSetupPage() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
   const corporations = await getConnectedCorporations();
   if (corporations.length > 0) {
     redirect(`/strata/${corporations[0].id}`);
@@ -24,6 +27,24 @@ export default async function StrataSetupPage() {
   return (
     <AppShell>
       <div className="wrap page">
+        <div
+          style={{
+            background: "#fff3cd",
+            border: "1px solid #d4a017",
+            borderRadius: 8,
+            padding: "1rem",
+            margin: "1rem 0",
+            fontFamily: "monospace",
+            fontSize: "0.85rem",
+            whiteSpace: "pre-wrap",
+          }}
+        >
+          {"DEBUG (temporary)\n"}
+          {`signed in as: ${user ? `${user.id} / ${user.email}` : "NO USER"}\n`}
+          {`connected corporations found: ${corporations.length}\n`}
+          {JSON.stringify(corporations, null, 2)}
+        </div>
+
         <div className="screen-gate-notice">
           <span className="pill pill--locked">Desktop required</span>
           <h2>Stratasphere&trade; is best experienced on a larger screen</h2>
