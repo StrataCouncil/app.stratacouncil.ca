@@ -256,7 +256,21 @@ export function parseRosterCsv(text: string): RosterParseResult {
       errors: extra > 0 ? [...errors.slice(0, MAX_ERRORS), `…and ${extra} more.`] : errors,
     };
   }
-  if (parsed.length === 0) return { ok: false, errors: ["The file has no strata lot rows."] };
+  if (parsed.length === 0) {
+    const unknown = rows[0]
+      .map((h, i) => (header[i] === null && h.trim() ? `"${h.trim()}"` : null))
+      .filter(Boolean)
+      .slice(0, 8);
+    const recognized = header.filter((f) => f && f !== "lot_number").length;
+    return {
+      ok: false,
+      errors: [
+        recognized === 0
+          ? `None of the columns were recognized${unknown.length ? ` (found ${unknown.join(", ")})` : ""}. Use the template's column headers: ${rosterColumns.map((c) => c.header).join(", ")}.`
+          : "Every strata lot row in this file is blank, so there's nothing to update. If this is the blank template or a download from before any owners were added, fill in the owner details first, then upload it.",
+      ],
+    };
+  }
   return { ok: true, rows: parsed };
 }
 
