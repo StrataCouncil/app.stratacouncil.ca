@@ -29,7 +29,7 @@ export async function searchKnowledge(
   supabase: SupabaseClient,
   corpId: string,
   strippedQuery: string,
-  { matchCount = 12, legislationCount = 8, threshold = 0.35 } = {}
+  { matchCount = 14, legislationCount = 8, threshold = 0.25 } = {}
 ): Promise<KnowledgeHit[]> {
   const [vector] = await embed([strippedQuery.slice(0, 8000)], "query");
   const literal = toVectorLiteral(vector);

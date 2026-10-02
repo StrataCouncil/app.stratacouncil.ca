@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getStrataAccess } from "@/lib/data/strata";
-import { streamStratasphere, type AssistantTurn } from "@/lib/ai/stratasphere";
+import { streamStratasphere, type AssistantTurn, type StratasphereSource } from "@/lib/ai/stratasphere";
 import { titleFromQuestion } from "@/lib/ai/conversation-title";
 
 /**
@@ -17,6 +17,11 @@ import { titleFromQuestion } from "@/lib/ai/conversation-title";
  * Conversations are private to their owner (RLS, 0019).
  */
 export const maxDuration = 120;
+
+function sourceName(s: StratasphereSource) {
+  if (s.kind === "document" || s.kind === "legislation") return s.title;
+  return s.kind === "decisions" ? "Decision ledger" : "Cross-platform precedent";
+}
 
 const enc = new TextEncoder();
 const line = (o: unknown) => enc.encode(`${JSON.stringify(o)}\n`);
@@ -58,11 +63,15 @@ export async function POST(request: NextRequest) {
     title = convo.title;
     const { data: past } = await supabase
       .from("conversation_messages")
-      .select("role, content")
+      .select("role, content, citations")
       .eq("conversation_id", conversationId)
       .order("created_at", { ascending: false })
       .limit(10);
-    history = (past ?? []).reverse().map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
+    history = (past ?? []).reverse().map((m) => ({
+      role: m.role as "user" | "assistant",
+      content: m.content,
+      sources: Array.isArray(m.citations) ? (m.citations as StratasphereSource[]).map(sourceName) : undefined,
+    }));
   } else {
     title = titleFromQuestion(question);
     const { data: created, error } = await supabase

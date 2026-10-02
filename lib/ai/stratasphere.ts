@@ -39,6 +39,8 @@ COUNTING AND ENUMERATION RULE: When any question requires counting, filtering, o
 
 CONFLICT DISCLOSURE RULE: If sources disagree — a corporation's bylaws say one thing while BC legislation, global precedent, or another local document says another — do not silently pick one or reconcile them yourself. State plainly what each source says and that they conflict. For example: "Your bylaws state [X]. The Strata Property Act states [Y]. These appear to conflict." Do not resolve which one governs, do not soften the discrepancy, and do not guess at an explanation. Report only what each source explicitly states.
 
+EARLIER ANSWERS RULE: Each question gets its own search, so the excerpts behind your earlier answers in this conversation may not appear in the context for this one. That does not make those answers wrong. Never retract, correct or apologize for an earlier answer because its sources aren't in the current context; revise it only if something in the current context contradicts it, and then say exactly what. Answer the question that was asked.
+
 DISPUTED-FACT RULE: If a user says a cited fact is wrong, do not concede the point or change the answer — you have no way to independently verify a claim made in conversation. State exactly which document, section, and upload date the fact came from, and note that an updated version of that document can be uploaded if it's outdated or incorrect. Never revise a factual claim based on a user's assertion alone; only a new document in context can change what you cite.`;
 
 const PERMITTED = `PERMITTED KNOWLEDGE: Only what is in the context blocks below: this corporation's documents and minutes, its decision ledger, the legislation excerpts, and anonymized precedent from other strata corporations on the platform. Precedent is always framed explicitly as cross-platform precedent, never presented as if it were this corporation's own data. General knowledge may be used only to read and understand those sources (plain meaning of words, arithmetic), never as a source of facts.
@@ -51,7 +53,7 @@ const MAX_CONTEXT_CHARS = 400_000;
 const MAX_ATTACHMENT_CHARS = 150_000;
 const SEARCH_TIMEOUT_MS = 10_000;
 
-export type AssistantTurn = { role: "user" | "assistant"; content: string };
+export type AssistantTurn = { role: "user" | "assistant"; content: string; sources?: string[] };
 
 export interface MeetingScope {
   item: AgendaItem;
@@ -69,7 +71,16 @@ export type StratasphereSource =
 export type AskResult = { ok: true; text: string; sources: StratasphereSource[] } | { ok: false; error: string; limit?: boolean };
 
 type Prepared =
-  | { ok: true; system: string; messages: Anthropic.Beta.BetaMessageParam[]; effort: "low" | "medium"; maxTokens: number; sources: StratasphereSource[] }
+  | {
+      ok: true;
+      system: string;
+      messages: Anthropic.Beta.BetaMessageParam[];
+      effort: "low" | "medium";
+      maxTokens: number;
+      sources: StratasphereSource[];
+      /** The full bylaws given as context: listed as sources only when the answer draws on them. */
+      bylawSources: StratasphereSource[];
+    }
   | { ok: false; error: string; limit?: boolean };
 
 function sourcesFrom(hits: KnowledgeHit[], hasLedger: boolean): StratasphereSource[] {
@@ -143,6 +154,39 @@ async function attachmentsBlock(supabase: SupabaseClient, corpId: string, item: 
     }
   }
   return { text: parts.join("\n\n"), disclosures };
+}
+
+const MAX_BYLAWS_CHARS = 150_000;
+
+/**
+ * The strata's current bylaws, in full, on every question. Bylaw questions
+ * are the most common and often worded nothing like the bylaw that answers
+ * them ("can managers leave flyers?" vs "hallways are for ingress and
+ * egress only"), so they're read, not just searched. Most recent first.
+ */
+async function bylawsBlock(supabase: SupabaseClient, corpId: string, ctx: StripContext) {
+  const { data } = await supabase
+    .from("documents")
+    .select("id, title, uploaded_at, document_text")
+    .eq("corporation_id", corpId)
+    .eq("indexing_status", "indexed")
+    .eq("is_current", true)
+    .or("doc_type.eq.bylaws,title.ilike.%bylaw%")
+    .order("uploaded_at", { ascending: false })
+    .limit(4);
+  let budget = MAX_BYLAWS_CHARS;
+  const parts: string[] = [];
+  const sources: StratasphereSource[] = [];
+  for (const d of data ?? []) {
+    if (!d.document_text || budget <= 0) continue;
+    const title = stripForCorporation(d.title ?? "Bylaws", ctx);
+    let text = stripForCorporation(d.document_text, ctx);
+    if (text.length > budget) text = `${text.slice(0, budget)}\n[...truncated]`;
+    budget -= text.length;
+    parts.push(`[BYLAWS: ${title}, uploaded ${String(d.uploaded_at).slice(0, 10)}]\n${text}\n[END BYLAWS]`);
+    sources.push({ kind: "document", title, documentId: d.id });
+  }
+  return { text: parts.join("\n\n"), sources };
 }
 
 async function ledgerBlock(supabase: SupabaseClient, corpId: string, ctx: StripContext) {
@@ -233,9 +277,10 @@ async function prepareStratasphere({
   const strippedQuestion = stripForCorporation(q, ctx);
   const disclosures: string[] = [];
 
-  const [attachments, ledger, hits] = await Promise.all([
+  const [attachments, ledger, bylaws, hits] = await Promise.all([
     meeting ? attachmentsBlock(supabase, corpId, meeting.item, ctx) : Promise.resolve({ text: "", disclosures: [] }),
     ledgerBlock(supabase, corpId, ctx),
+    bylawsBlock(supabase, corpId, ctx),
     withTimeout(searchKnowledge(supabase, corpId, strippedQuestion), SEARCH_TIMEOUT_MS).catch((err) => {
       console.error("[askStratasphere] search", err instanceof Error ? err.message : err);
       disclosures.push(
@@ -248,7 +293,8 @@ async function prepareStratasphere({
   ]);
   disclosures.push(...attachments.disclosures);
 
-  const local = hits.filter((h) => h.scope === "corporation");
+  const bylawIds = new Set(bylaws.sources.map((b) => (b.kind === "document" ? b.documentId : "")));
+  const local = hits.filter((h) => h.scope === "corporation" && !(h.documentId && bylawIds.has(h.documentId)));
   const global = hits.filter((h) => h.scope === "global_precedent");
   const legislation = hits.filter((h) => h.scope === "legislation");
 
@@ -258,6 +304,7 @@ async function prepareStratasphere({
 
   let context = [
     meeting ? block("CURRENT AGENDA ITEM ATTACHMENTS (HIGHEST PRIORITY, verbatim)", attachments.text) : "",
+    block(`${corpName.toUpperCase()} BYLAWS (full text of the current bylaws, most recent first)`, bylaws.text),
     block("DECISION LEDGER (carried motions, newest first)", ledger),
     meeting ? block("DECISIONS MADE SO FAR IN THIS MEETING (not yet in the ledger)", liveDecisionsBlock(meeting.agenda, ctx)) : "",
     block(`${corpName.toUpperCase()} DOCUMENT EXCERPTS (most relevant to this question)`, hitsBlock(local)),
@@ -284,7 +331,13 @@ async function prepareStratasphere({
 
   // At most 10 turns of history (5 + 5), stripped like everything else.
   const messages: Anthropic.Beta.BetaMessageParam[] = [
-    ...history.slice(-10).map((t) => ({ role: t.role, content: stripForCorporation(t.content.slice(0, 8000), ctx) })),
+    ...history.slice(-10).map((t) => ({
+      role: t.role,
+      content: stripForCorporation(
+        `${t.content.slice(0, 8000)}${t.role === "assistant" && t.sources?.length ? `\n[Sources for this answer: ${t.sources.join("; ")}]` : ""}`,
+        ctx
+      ),
+    })),
     { role: "user" as const, content: strippedQuestion },
   ];
   // The API needs the conversation to start with the user.
@@ -297,10 +350,18 @@ async function prepareStratasphere({
     effort: meeting ? "low" : "medium",
     maxTokens: meeting ? 4000 : 8000,
     sources: sourcesFrom(hits, Boolean(ledger.trim())),
+    bylawSources: bylaws.sources,
   };
 }
 
 type AskInput = Parameters<typeof prepareStratasphere>[0];
+
+/** Search hits, plus the full bylaws when the answer refers to bylaws. */
+function finalSources(prepared: Extract<Prepared, { ok: true }>, text: string) {
+  if (!/\bbylaws?\b/i.test(text)) return prepared.sources;
+  const have = new Set(prepared.sources.map((s) => (s.kind === "document" ? s.documentId : "")));
+  return [...prepared.bylawSources.filter((b) => b.kind === "document" && !have.has(b.documentId)), ...prepared.sources].slice(0, 12);
+}
 
 /** Answer one question in full (Meeting Mode). */
 export async function askStratasphere(input: AskInput): Promise<AskResult> {
@@ -314,7 +375,7 @@ export async function askStratasphere(input: AskInput): Promise<AskResult> {
       maxTokens: prepared.maxTokens,
     });
     if (!text) return { ok: false, error: "Stratasphere didn't return an answer. Please try again." };
-    return { ok: true, text: truncated ? `${text}\n[Answer cut short.]` : text, sources: prepared.sources };
+    return { ok: true, text: truncated ? `${text}\n[Answer cut short.]` : text, sources: finalSources(prepared, text) };
   } catch (err) {
     if (err instanceof ClaudeRefusalError) return { ok: false, error: "Stratasphere can't help with that question." };
     console.error("[askStratasphere]", err instanceof Error ? err.message : err);
@@ -336,7 +397,7 @@ export async function streamStratasphere(input: AskInput, onText: (delta: string
     );
     if (!text) return { ok: false, error: "Stratasphere didn't return an answer. Please try again." };
     if (truncated) onText("\n[Answer cut short.]");
-    return { ok: true, text: truncated ? `${text}\n[Answer cut short.]` : text, sources: prepared.sources };
+    return { ok: true, text: truncated ? `${text}\n[Answer cut short.]` : text, sources: finalSources(prepared, text) };
   } catch (err) {
     if (err instanceof ClaudeRefusalError) return { ok: false, error: "Stratasphere can't help with that question." };
     console.error("[streamStratasphere]", err instanceof Error ? err.message : err);
