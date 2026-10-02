@@ -5,8 +5,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getStripe } from "@/lib/stripe/client";
 import { calculateBilling } from "@/lib/stripe/prices";
 import { StatementsPeriodSelect } from "@/components/StatementsPeriodSelect";
+import { BillingSteps, type BillingStep } from "@/components/BillingSteps";
 import {
-  startCheckout,
   changePlan,
   cancelSubscription,
   openBillingPortal,
@@ -86,10 +86,14 @@ export default async function BillingPage({
   searchParams,
 }: {
   params: Promise<{ corpId: string }>;
-  searchParams: Promise<{ period?: string }>;
+  searchParams: Promise<{ period?: string; plan?: string; step?: string; note?: string; subscribed?: string }>;
 }) {
   const { corpId } = await params;
-  const { period: rawPeriod } = await searchParams;
+  const { period: rawPeriod, plan: rawPlan, step: rawStep, note, subscribed: justSubscribed } = await searchParams;
+  const chosenPlan = rawPlan === "monthly" ? "monthly" : "annual";
+  const step: BillingStep = (["plan", "payment", "contact", "review"] as const).includes(rawStep as BillingStep)
+    ? (rawStep as BillingStep)
+    : "plan";
   const period = rawPeriod && periodBounds(rawPeriod) ? rawPeriod : null;
 
   const supabase = await createClient();
@@ -132,11 +136,17 @@ export default async function BillingPage({
   let paymentMethod: { label: string; detail: string } | null = null;
   if (sub?.stripe_customer_id) {
     try {
-      const pms = await getStripe().paymentMethods.list({
-        customer: sub.stripe_customer_id,
-        limit: 1,
+      // The customer's default method (set in billing step 2), else the first on file.
+      const stripe = getStripe();
+      const customer = await stripe.customers.retrieve(sub.stripe_customer_id, {
+        expand: ["invoice_settings.default_payment_method"],
       });
-      const pm = pms.data[0];
+      const fallback = await stripe.paymentMethods.list({ customer: sub.stripe_customer_id, limit: 1 });
+      const def =
+        !customer.deleted && typeof customer.invoice_settings?.default_payment_method === "object"
+          ? customer.invoice_settings.default_payment_method
+          : null;
+      const pm = def ?? fallback.data[0];
       if (pm?.card) {
         paymentMethod = {
           label: `${pm.card.brand.replace(/^\w/, (c) => c.toUpperCase())} ending ${pm.card.last4}`,
@@ -198,6 +208,24 @@ export default async function BillingPage({
         </p>
       </div>
 
+      {justSubscribed && !subscribed && (
+        <p className="sync-note" role="status" style={{ marginBottom: "1.25rem" }}>
+          Thanks. Your payment is processing; a pre-authorized debit takes a few business days. Stratasphere&trade; switches
+          on as soon as Stripe confirms it, and you&rsquo;ll get a receipt by email.
+        </p>
+      )}
+
+      {!subscribed ? (
+        <BillingSteps
+          corpId={corpId}
+          unitCount={unitCount}
+          interval={chosenPlan}
+          step={step}
+          paymentMethod={paymentMethod}
+          billingEmail={billingEmail}
+          verifying={note === "verifying"}
+        />
+      ) : (
       <div className="billing-grid">
         <div className="card" data-testid="billing-payment-method-card">
           <div className="billing-card__head">
@@ -240,18 +268,19 @@ export default async function BillingPage({
               style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}
             >
               <div className="field">
-                <label htmlFor="billing-contact-email">Billing email</label>
+                <label htmlFor="billing-contact-email">Billing contact emails</label>
                 <input
                   id="billing-contact-email"
                   name="billingEmail"
-                  type="email"
+                  type="text"
+                  inputMode="email"
                   required
                   defaultValue={billingEmail}
                   placeholder="Receipts and billing notices are sent here"
                   data-testid="billing-contact-email-input"
                 />
                 <span className="field__hint">
-                  Usually the Treasurer or your strata management company.
+                  Separate several addresses with commas. Usually the Treasurer and your strata management company.
                 </span>
               </div>
               <button
@@ -259,7 +288,7 @@ export default async function BillingPage({
                 style={{ alignSelf: "flex-start" }}
                 data-testid="update-billing-email-cta"
               >
-                Save billing email
+                Save billing contacts
               </button>
             </form>
           )}
@@ -335,58 +364,10 @@ export default async function BillingPage({
             </div>
           )}
 
-          {!subscribed && (
-            <form style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-              <div className="billing-interval-options">
-                <div className="billing-interval-option">
-                  <strong>Monthly</strong>
-                  <span className="card__meta">
-                    {fmt(calculateBilling(unitCount, "monthly").total)}/mo incl. GST, cancel any month
-                  </span>
-                </div>
-                <div className="billing-interval-option">
-                  <strong>Annual</strong>
-                  <span className="card__meta">
-                    {fmt(calculateBilling(unitCount, "annual").total)}/mo incl. GST, 12-month commitment,
-                    billed monthly
-                  </span>
-                </div>
-              </div>
-              <div className="field">
-                <label htmlFor="billingEmail">Billing email</label>
-                <input
-                  id="billingEmail"
-                  name="billingEmail"
-                  type="email"
-                  required
-                  defaultValue={billingEmail}
-                  placeholder="Receipts and billing notices are sent here"
-                  data-testid="billing-email-input"
-                />
-                <span className="field__hint">
-                  Usually the Treasurer or your strata management company, not necessarily you.
-                </span>
-              </div>
-              <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
-                <button
-                  formAction={startCheckout.bind(null, corpId, "monthly")}
-                  className="button button-primary"
-                  data-testid="billing-subscribe-cta"
-                >
-                  Subscribe &mdash; monthly
-                </button>
-                <button
-                  formAction={startCheckout.bind(null, corpId, "annual")}
-                  className="button button-secondary"
-                  data-testid="billing-subscribe-annual-cta"
-                >
-                  Subscribe &mdash; annual
-                </button>
-              </div>
-            </form>
-          )}
         </div>
       </div>
+
+      )}
 
       <div className="card billing-section" data-testid="billing-statements-card">
         <div className="billing-card__head">

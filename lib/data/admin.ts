@@ -108,6 +108,14 @@ export interface CreationRequestDetail {
   legalName: string;
   address: string;
   unitCount: number | null;
+  /** "plan": read from the uploaded plan; "manual": typed (scanned plan). */
+  unitCountSource: "plan" | "manual";
+  /** Whether the AI's lot count matched the highest lot the plan's text names. */
+  lotsCheck: "consistent" | "differs" | "unchecked" | null;
+  unitEntitlementTotal: number | null;
+  filedYear: number | null;
+  buildingName: string;
+  addressVerified: boolean;
   jurisdiction: string;
   requesterName: string;
   requesterEmail: string;
@@ -166,6 +174,12 @@ export async function getCreationRequest(id: string): Promise<CreationRequestDet
     legalName: r.parsed_legal_name ?? "",
     address: r.parsed_address ?? "",
     unitCount: r.parsed_unit_count,
+    unitCountSource: r.unit_count_source === "plan" ? "plan" : "manual",
+    lotsCheck: r.lots_check ?? null,
+    unitEntitlementTotal: r.parsed_unit_entitlement_total ?? null,
+    filedYear: r.parsed_filed_year ?? null,
+    buildingName: r.building_name ?? "",
+    addressVerified: Boolean(r.address_verified),
     jurisdiction: r.parsed_jurisdiction ?? "",
     requesterName: requester?.full_name || requester?.email || "Unknown",
     requesterEmail: requester?.email ?? "",

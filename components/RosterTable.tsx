@@ -9,6 +9,7 @@ import {
 } from "@/app/strata/[corpId]/roster-actions";
 import type { RosterMember } from "@/lib/data/roster";
 import { tracks } from "@/lib/placeholder-data";
+import { Modal } from "@/components/Modal";
 import {
   corporationRoleLabels,
   corporationRoles,
@@ -18,6 +19,16 @@ import {
 } from "@/lib/strata";
 
 const REMOVE_CONFIRM_PHRASE = "remove council member";
+
+/** Short column headers for the training credentials, so the table fits. */
+const trackAbbr: Record<string, string> = {
+  mal: "GC",
+  president: "P",
+  "vice-president": "VP",
+  treasurer: "T",
+  secretary: "S",
+};
+const trackName = (title: string) => title.replace(/ \(.*\)$/, "");
 
 /**
  * Council & Roles roster, read from `corporation_memberships` +
@@ -162,10 +173,10 @@ export function RosterTable({
             <th>Member</th>
             <th>Strata lot</th>
             <th>Roles</th>
-            <th data-center="true">Can run meetings</th>
+            <th data-center="true">Runs meetings</th>
             {tracks.map((t) => (
-              <th key={t.slug} data-center="true" className="roster-table__training-head" title={`${t.title} training`}>
-                {t.title.replace(/ \(.*\)$/, "")}
+              <th key={t.slug} data-center="true" className="roster-table__training-head">
+                <abbr title={`${trackName(t.title)} training`}>{trackAbbr[t.slug] ?? t.title.slice(0, 2)}</abbr>
               </th>
             ))}
           </tr>
@@ -226,16 +237,18 @@ export function RosterTable({
                   )}
 
                   {isAdmin && active && (
-                    <>
+                    <div className="roster-table__row-actions">
                       <button
-                        className="roster-table__edit-roles"
+                        type="button"
+                        className="button button-secondary button-small"
                         data-testid={`edit-roles-${member.userId}`}
                         onClick={() => startEditing(member)}
                       >
-                        Edit
+                        Edit roles
                       </button>
                       {!isAdminHolder && (
                         <button
+                          type="button"
                           className="roster-table__edit-roles roster-table__remove-trigger"
                           data-testid={`remove-member-${member.userId}`}
                           onClick={() => startRemoving(member.userId)}
@@ -243,7 +256,7 @@ export function RosterTable({
                           Remove
                         </button>
                       )}
-                    </>
+                    </div>
                   )}
 
                   {errors[member.userId] && (
@@ -253,9 +266,12 @@ export function RosterTable({
                   )}
 
                   {removingId === member.userId && (
-                    <div className="role-editor confirm-panel" data-testid={`remove-confirm-${member.userId}`}>
-                      <div className="role-editor__title">Remove {member.fullName} from this strata?</div>
-                      <p className="card__meta" style={{ margin: "0 0 0.75rem" }}>
+                    <Modal
+                      title={`Remove ${member.fullName} from this strata?`}
+                      onClose={() => setRemovingId(null)}
+                      testId={`remove-confirm-${member.userId}`}
+                    >
+                      <p>
                         They&rsquo;ll lose access to this corporation&rsquo;s
                         Stratasphere&trade; and any roles they hold &mdash;
                         their training progress stays on their own account.
@@ -293,12 +309,16 @@ export function RosterTable({
                           Remove member
                         </button>
                       </div>
-                    </div>
+                    </Modal>
                   )}
 
                   {editingId === member.userId && (
-                    <div className="role-editor" data-testid={`role-editor-${member.userId}`}>
-                      <div className="role-editor__title">Roles for {member.fullName}</div>
+                    <Modal
+                      title={`Roles for ${member.fullName}`}
+                      onClose={() => setEditingId(null)}
+                      testId={`role-editor-${member.userId}`}
+                    >
+                      <div className="role-editor role-editor--modal">
                       {corporationRoles.map((role) => {
                         const checked = draftRoles.includes(role);
                         const reason = conflictReason(member, role);
@@ -349,10 +369,11 @@ export function RosterTable({
                           disabled={pending}
                           data-testid={`save-roles-${member.userId}`}
                         >
-                          {pending ? "Saving…" : "Save"}
+                          {pending ? "Saving…" : "Save roles"}
                         </button>
                       </div>
-                    </div>
+                      </div>
+                    </Modal>
                   )}
                 </td>
                 {(() => {
@@ -381,12 +402,13 @@ export function RosterTable({
                 })()}
                 {tracks.map((t) => (
                   <td key={t.slug} data-center="true">
-                    {/* Training credentials aren't wired up yet: an empty circle per module. */}
-                    <span className="training-dots" aria-label={`${t.title}: not started`}>
-                      {Array.from({ length: t.moduleCount }, (_, i) => (
-                        <span key={i} className="training-dot" />
-                      ))}
-                    </span>
+                    {/* Credentials aren't wired up yet: one circle per track, filled once earned. */}
+                    <span
+                      className="training-dot"
+                      role="img"
+                      aria-label={`${trackName(t.title)} credential: not earned`}
+                      title={`${trackName(t.title)}: not earned yet`}
+                    />
                   </td>
                 ))}
               </tr>
@@ -394,6 +416,16 @@ export function RosterTable({
           })}
         </tbody>
       </table>
+      <p className="roster-table__legend">
+        Training credentials:{" "}
+        {tracks.map((t, i) => (
+          <span key={t.slug}>
+            {i > 0 && " · "}
+            <strong>{trackAbbr[t.slug]}</strong> {trackName(t.title)}
+          </span>
+        ))}
+        . A filled circle means the credential is earned.
+      </p>
     </div>
   );
 }

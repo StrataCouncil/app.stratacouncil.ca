@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getStripe } from "@/lib/stripe/client";
 import { getPriceIds, type BillingInterval } from "@/lib/stripe/prices";
+import { parseEmails } from "@/lib/roster-csv";
 
 /**
  * Server Actions behind billing/page.tsx's buttons. These are the
@@ -45,22 +46,27 @@ async function siteUrl() {
   return `${proto}://${host}`;
 }
 
-// Deliberately simple — just enough to catch a mistyped or empty field
-// before it reaches Stripe. The DB-level check (0009 migration) is the
-// backstop for anything that skips this (e.g. a future admin API).
-function isValidEmail(value: string): boolean {
-  return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(value);
+/**
+ * Billing contacts: one or more emails, comma-separated (0018 allows a
+ * list). Stripe's Customer takes the first; the webhook copies each paid
+ * invoice to the rest.
+ */
+function readBillingEmails(formData: FormData): { ok: true; joined: string; first: string } | { ok: false; error: string } {
+  const raw = String(formData.get("billingEmail") ?? "").trim();
+  if (!raw) return { ok: false, error: "Enter at least one billing contact email." };
+  const parsed = parseEmails(raw);
+  if (!parsed.ok) return { ok: false, error: `"${parsed.invalid}" isn't a valid email.` };
+  const list = parsed.value.split(", ").slice(0, 10);
+  return { ok: true, joined: list.join(", "), first: list[0] };
 }
 
 function requireBillingEmail(formData: FormData): string {
-  const email = String(formData.get("billingEmail") ?? "").trim();
-  if (!email || !isValidEmail(email)) {
-    throw new Error(
-      "Enter a valid billing contact email — this is who receives invoices and receipts."
-    );
-  }
-  return email;
+  const result = readBillingEmails(formData);
+  if (!result.ok) throw new Error(result.error);
+  return result.joined;
 }
+
+const firstEmail = (joined: string) => joined.split(",")[0].trim();
 
 /**
  * The billing contact (doc01 §4b) — who Stripe actually emails invoices
@@ -72,7 +78,7 @@ function requireBillingEmail(formData: FormData): string {
  * `updateBillingEmail` below, rather than being derived from the signed-in
  * user's own account email.
  */
-async function getOrCreateStripeCustomer(corporationId: string, billingEmail: string) {
+async function getOrCreateStripeCustomer(corporationId: string, billingEmail: string | null) {
   const admin = createAdminClient();
   const stripe = getStripe();
   const { data: existing } = await admin
@@ -88,13 +94,15 @@ async function getOrCreateStripeCustomer(corporationId: string, billingEmail: st
     // `name` as the strata plan number — self-heals any Customer created
     // before `name` was pinned to corporationId below.
     await stripe.customers.update(existing.stripe_customer_id, {
-      email: billingEmail,
+      ...(billingEmail ? { email: firstEmail(billingEmail) } : {}),
       name: corporationId,
     });
-    await admin
-      .from("subscriptions")
-      .update({ billing_email: billingEmail })
-      .eq("corporation_id", corporationId);
+    if (billingEmail) {
+      await admin
+        .from("subscriptions")
+        .update({ billing_email: billingEmail })
+        .eq("corporation_id", corporationId);
+    }
     return existing.stripe_customer_id;
   }
 
@@ -115,7 +123,7 @@ async function getOrCreateStripeCustomer(corporationId: string, billingEmail: st
     // anyone scanning the Stripe dashboard, but `name` is what's durable.
     name: corporationId,
     description: corp?.building_name ?? corp?.legal_name ?? undefined,
-    email: billingEmail,
+    email: billingEmail ? firstEmail(billingEmail) : undefined,
     metadata: { corporation_id: corporationId },
   });
 
@@ -126,56 +134,11 @@ async function getOrCreateStripeCustomer(corporationId: string, billingEmail: st
   await admin
     .from("subscriptions")
     .upsert(
-      { corporation_id: corporationId, stripe_customer_id: customer.id, billing_email: billingEmail },
+      { corporation_id: corporationId, stripe_customer_id: customer.id, ...(billingEmail ? { billing_email: billingEmail } : {}) },
       { onConflict: "corporation_id" }
     );
 
   return customer.id;
-}
-
-/** "Subscribe" CTA — sends the admin to Stripe Checkout for a new
- * subscription. Checkout (not a hand-built card form) so PAD/Interac and
- * 3DS are handled by Stripe. Takes the billing contact email from the
- * form (required — see requireBillingEmail) rather than assuming the
- * signed-in admin's own account email. */
-export async function startCheckout(
-  corporationId: string,
-  interval: BillingInterval,
-  formData: FormData
-) {
-  await requireAdmin(corporationId);
-  const billingEmail = requireBillingEmail(formData);
-
-  const admin = createAdminClient();
-  const { data: corp } = await admin
-    .from("strata_corporations")
-    .select("unit_count")
-    .eq("strata_plan_number", corporationId)
-    .single();
-  if (!corp) throw new Error("Corporation not found.");
-
-  const customerId = await getOrCreateStripeCustomer(corporationId, billingEmail);
-  const { base, perUnit } = getPriceIds(interval);
-  const origin = await siteUrl();
-
-  const stripe = getStripe();
-  const session = await stripe.checkout.sessions.create({
-    mode: "subscription",
-    customer: customerId,
-    line_items: [
-      { price: base, quantity: 1 },
-      { price: perUnit, quantity: corp.unit_count },
-    ],
-    automatic_tax: { enabled: true },
-    subscription_data: {
-      metadata: { corporation_id: corporationId, billing_interval: interval },
-    },
-    success_url: `${origin}/strata/${corporationId}/billing?checkout=success`,
-    cancel_url: `${origin}/strata/${corporationId}/billing?checkout=cancelled`,
-  });
-
-  if (!session.url) throw new Error("Stripe did not return a Checkout URL.");
-  redirect(session.url);
 }
 
 /** Payment-method update / "Invoices" — both live in the Stripe-hosted
@@ -222,7 +185,7 @@ export async function updateBillingEmail(corporationId: string, formData: FormDa
     .maybeSingle();
 
   if (sub?.stripe_customer_id) {
-    await getStripe().customers.update(sub.stripe_customer_id, { email: billingEmail });
+    await getStripe().customers.update(sub.stripe_customer_id, { email: firstEmail(billingEmail) });
   }
 
   await admin
@@ -338,4 +301,131 @@ export async function cancelSubscription(corporationId: string) {
         : null,
     })
     .eq("corporation_id", corporationId);
+}
+
+
+// ── Subscribe, step by step: plan → payment method → contacts → pay ──────
+
+const isInterval = (v: string): v is BillingInterval => v === "monthly" || v === "annual";
+
+/**
+ * Step 2: save a payment method on Stripe's own secure page (Checkout in
+ * setup mode), so card and bank details never touch our servers. Stripe
+ * collects the pre-authorized debit mandate there too. It returns to
+ * ./setup-complete, which makes the method the default, then step 3.
+ */
+export async function startPaymentSetup(corporationId: string, interval: BillingInterval) {
+  await requireAdmin(corporationId);
+  if (!isInterval(interval)) throw new Error("Choose a plan first.");
+  const customerId = await getOrCreateStripeCustomer(corporationId, null);
+  const origin = await siteUrl();
+
+  const session = await getStripe().checkout.sessions.create({
+    mode: "setup",
+    customer: customerId,
+    currency: "cad",
+    payment_method_types: ["acss_debit", "card"],
+    payment_method_options: {
+      acss_debit: {
+        currency: "cad",
+        verification_method: "automatic",
+        mandate_options: {
+          payment_schedule: "interval",
+          interval_description: "Monthly, for the Stratasphere subscription",
+          transaction_type: "business",
+        },
+      },
+    },
+    metadata: { corporation_id: corporationId, billing_interval: interval },
+    success_url: `${origin}/strata/${corporationId}/billing/setup-complete?session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${origin}/strata/${corporationId}/billing?plan=${interval}&step=payment`,
+  });
+  if (!session.url) throw new Error("Stripe did not return a setup page.");
+  redirect(session.url);
+}
+
+/** Step 3: the billing contacts. Saved now, used when paying. */
+export async function saveBillingContacts(
+  corporationId: string,
+  interval: BillingInterval,
+  _prev: { error: string } | undefined,
+  formData: FormData
+): Promise<{ error: string } | undefined> {
+  await requireAdmin(corporationId);
+  const emails = readBillingEmails(formData);
+  if (!emails.ok) return { error: emails.error };
+
+  const admin = createAdminClient();
+  const { data: sub } = await admin
+    .from("subscriptions")
+    .select("stripe_customer_id")
+    .eq("corporation_id", corporationId)
+    .maybeSingle();
+  if (sub?.stripe_customer_id) {
+    await getStripe().customers.update(sub.stripe_customer_id, { email: emails.first });
+  }
+  await admin
+    .from("subscriptions")
+    .upsert({ corporation_id: corporationId, billing_email: emails.joined }, { onConflict: "corporation_id" });
+  redirect(`/strata/${corporationId}/billing?plan=${isInterval(interval) ? interval : "annual"}&step=review`);
+}
+
+/**
+ * Step 4: create the subscription on the saved payment method. A card
+ * charge settles now; a pre-authorized debit takes a few business days,
+ * and the webhook switches the subscription on when Stripe confirms it.
+ */
+export async function paySubscription(
+  corporationId: string,
+  interval: BillingInterval,
+  _prev: { error: string } | undefined,
+  _formData: FormData
+): Promise<{ error: string } | undefined> {
+  await requireAdmin(corporationId);
+  if (!isInterval(interval)) return { error: "Choose a plan first." };
+
+  const admin = createAdminClient();
+  const [{ data: sub }, { data: corp }] = await Promise.all([
+    admin
+      .from("subscriptions")
+      .select("stripe_customer_id, billing_email, status, stripe_subscription_id")
+      .eq("corporation_id", corporationId)
+      .maybeSingle(),
+    admin.from("strata_corporations").select("unit_count").eq("strata_plan_number", corporationId).single(),
+  ]);
+  if (!corp) return { error: "Corporation not found." };
+  if (sub?.status === "active") redirect(`/strata/${corporationId}/billing`);
+  if (!sub?.stripe_customer_id) return { error: "Add a payment method first." };
+  if (!sub.billing_email) return { error: "Add a billing contact email first." };
+
+  const stripe = getStripe();
+  const customer = await stripe.customers.retrieve(sub.stripe_customer_id);
+  const defaultPm =
+    !customer.deleted && customer.invoice_settings?.default_payment_method
+      ? String(
+          typeof customer.invoice_settings.default_payment_method === "string"
+            ? customer.invoice_settings.default_payment_method
+            : customer.invoice_settings.default_payment_method.id
+        )
+      : null;
+  if (!defaultPm) return { error: "Add a payment method first." };
+
+  const { base, perUnit } = getPriceIds(interval);
+  try {
+    await stripe.subscriptions.create({
+      customer: sub.stripe_customer_id,
+      items: [
+        { price: base, quantity: 1 },
+        { price: perUnit, quantity: corp.unit_count },
+      ],
+      default_payment_method: defaultPm,
+      automatic_tax: { enabled: true },
+      payment_behavior: "allow_incomplete",
+      metadata: { corporation_id: corporationId, billing_interval: interval },
+    });
+  } catch (error) {
+    console.error("[paySubscription]", error instanceof Error ? error.message : error);
+    return { error: "Stripe couldn't take the payment. Check the payment method, or add a different one." };
+  }
+  redirect(`/strata/${corporationId}/billing?subscribed=1`);
 }

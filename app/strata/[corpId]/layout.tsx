@@ -3,15 +3,14 @@ import { redirect } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { StrataContextProvider } from "@/components/StrataContext";
 import { StrataSwitcher } from "@/components/StrataSwitcher";
+import { ScreenGate } from "@/components/ScreenGate";
 import { getConnectedCorporations } from "@/lib/data/corporations";
 import { getStrataAccess } from "@/lib/data/strata";
 
 /**
  * Stratasphere™ is desktop-only — the governance tools (roster tables,
- * documents, meeting mode) assume real screen space. Council Training
- * has to work on a phone (people study on their devices); this section
- * doesn't try to. Below ~900px, `.screen-gate-notice` (CSS in
- * globals.css) shows instead of `.screen-gate-content`.
+ * documents, meeting mode) assume real screen space — except the
+ * Knowledge Library, which works on phones (see `ScreenGate`).
  *
  * Now checks the real `corporation_memberships` table for this corpId
  * instead of always rendering the hardcoded `currentCorporation` mock —
@@ -43,21 +42,7 @@ export default async function StrataSphereLayout({
   return (
     <AppShell active="strata">
       <div className="wrap page">
-        <div className="screen-gate-notice">
-          <span className="pill pill--locked">Desktop required</span>
-          <h2>Stratasphere&trade; is best experienced on a larger screen</h2>
-          <p>
-            Roster, documents, meeting mode and the rest of your strata&rsquo;s
-            governance tools need more room than a phone screen gives.
-            Please switch to a desktop or laptop to continue &mdash; Council
-            Training stays fully available on any device.
-          </p>
-          <Link href="/training" className="button button-secondary">
-            Go to Council Training
-          </Link>
-        </div>
-
-        <div className="screen-gate-content">
+        <ScreenGate corpId={currentCorporation.id}>
           <div className="page-header page-header--with-switcher">
             <div>
               <span className="pill">{currentCorporation.id}</span>
@@ -95,7 +80,7 @@ export default async function StrataSphereLayout({
           >
             {children}
           </StrataContextProvider>
-        </div>
+        </ScreenGate>
       </div>
     </AppShell>
   );

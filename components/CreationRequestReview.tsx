@@ -52,8 +52,17 @@ export function CreationRequestReview({ request }: { request: CreationRequestDet
         <input id="rv-legal" name="legalName" defaultValue={request.legalName} required />
       </div>
       <div className="field">
+        <label htmlFor="rv-building">Building name (optional)</label>
+        <input id="rv-building" name="buildingName" defaultValue={request.buildingName} maxLength={200} />
+      </div>
+      <div className="field">
         <label htmlFor="rv-address">Civic address</label>
         <input id="rv-address" name="address" defaultValue={request.address} required />
+        <span className={request.addressVerified ? "field__hint" : "roster-table__warn"}>
+          {request.addressVerified
+            ? "Picked from the address lookup."
+            : "Typed by the requester, not picked from the address lookup. Check it."}
+        </span>
       </div>
       <div className="setup-form__row">
         <div className="field">
@@ -66,6 +75,22 @@ export function CreationRequestReview({ request }: { request: CreationRequestDet
             defaultValue={request.unitCount ?? ""}
             required
           />
+          <span
+            className={
+              request.unitCountSource === "plan" && request.lotsCheck === "consistent" ? "field__hint" : "roster-table__warn"
+            }
+            data-testid="review-lots-source"
+          >
+            {request.unitCountSource === "manual"
+              ? "Typed by the requester (the plan couldn't be read). Check it against the plan."
+              : request.lotsCheck === "consistent"
+                ? "Read from the plan, and matches the highest lot number in it."
+                : request.lotsCheck === "differs"
+                  ? "Read from the plan, but differs from the highest lot number in its text. Check it."
+                  : "Read from the plan. Check it."}
+            {request.unitEntitlementTotal ? ` Total unit entitlement: ${request.unitEntitlementTotal}.` : ""}
+            {request.filedYear ? ` Filed ${request.filedYear}.` : ""}
+          </span>
         </div>
         <div className="field">
           <label htmlFor="rv-jurisdiction">Jurisdiction</label>
