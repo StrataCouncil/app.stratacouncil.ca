@@ -7,6 +7,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getStripe } from "@/lib/stripe/client";
 import { getPriceIds, type BillingInterval } from "@/lib/stripe/prices";
 import { parseEmails } from "@/lib/roster-csv";
+import { isStrataAdmin } from "@/lib/auth/strata-admin";
 
 /**
  * Server Actions behind billing/page.tsx's buttons. These are the
@@ -25,15 +26,7 @@ async function requireAdmin(corporationId: string) {
   } = await supabase.auth.getUser();
   if (!user) throw new Error("Not signed in.");
 
-  const { data, error } = await supabase
-    .from("corporation_role_assignments")
-    .select("role")
-    .eq("corporation_id", corporationId)
-    .eq("user_id", user.id)
-    .eq("role", "admin")
-    .maybeSingle();
-
-  if (error || !data) {
+  if (!(await isStrataAdmin(supabase, corporationId))) {
     throw new Error("Only a corporation admin can manage billing.");
   }
   return user;

@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import type { OwnerType } from "@/lib/roster-csv";
+import { isStrataAdmin } from "@/lib/auth/strata-admin";
 
 /**
  * The owner/lot roster (`owners_and_council`, doc02 §2), read through the
@@ -41,19 +42,13 @@ export async function getOwnerRoster(corporationId: string): Promise<OwnerRoster
   } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const [{ data: rows, error }, { data: admin }, { data: corp }] = await Promise.all([
+  const [{ data: rows, error }, admin, { data: corp }] = await Promise.all([
     supabase
       .from("owners_and_council")
       .select("*")
       .eq("corporation_id", corporationId)
       .order("lot_number"),
-    supabase
-      .from("corporation_role_assignments")
-      .select("role")
-      .eq("corporation_id", corporationId)
-      .eq("user_id", user.id)
-      .eq("role", "admin")
-      .maybeSingle(),
+    isStrataAdmin(supabase, corporationId),
     supabase
       .from("strata_corporations")
       .select("unit_count")
@@ -63,7 +58,7 @@ export async function getOwnerRoster(corporationId: string): Promise<OwnerRoster
   if (error) console.error("[getOwnerRoster]", corporationId, error.message);
 
   return {
-    isAdmin: Boolean(admin),
+    isAdmin: admin,
     unitCount: corp?.unit_count ?? null,
     lots: (rows ?? []).map((r) => ({
       id: r.id,

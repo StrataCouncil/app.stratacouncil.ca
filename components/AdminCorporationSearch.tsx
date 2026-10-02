@@ -57,6 +57,7 @@ export function AdminCorporationSearch({ corporations }: { corporations: AdminCo
                 <th>Jurisdiction</th>
                 <th data-center="true">Units</th>
                 <th>Status</th>
+                <th aria-label="Open" />
               </tr>
             </thead>
             <tbody>
@@ -77,6 +78,11 @@ export function AdminCorporationSearch({ corporations }: { corporations: AdminCo
                     <span className={`pill ${c.subscriptionStatus === "active" ? "" : "pill--locked"}`}>
                       {subscriptionLabels[c.subscriptionStatus]}
                     </span>
+                  </td>
+                  <td>
+                    <Link href={`/strata/${c.id}`} className="link-button" data-testid={`admin-open-strata-${c.id}`}>
+                      Open strata
+                    </Link>
                   </td>
                 </tr>
               ))}

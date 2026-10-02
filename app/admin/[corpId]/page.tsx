@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
+import { MemberAvatar } from "@/components/MemberAvatar";
+import { signAvatarPaths } from "@/lib/data/avatars";
 import { getAllCorporations } from "@/lib/data/admin";
 import { getCurrentProfile } from "@/lib/data/profile";
 import { createClient } from "@/lib/supabase/server";
@@ -14,13 +16,10 @@ const subscriptionLabels: Record<string, string> = {
 };
 
 /**
- * Read-only corp detail view inside the Super Admin console — privileged
- * data access, not impersonation. This profile never appears in the
- * corp's own roster or membership list just by viewing this page, and
- * nothing here is editable; a Super Admin who needs to actually change
- * something (unit count, a StrataSphere reactivation) does that through
- * the specific reviewed action it is, not a general edit mode bolted
- * onto this page (doc01 §1).
+ * Corp detail view inside the Super Admin console. "Open this strata as
+ * its admin" goes to the strata itself, where a Super Admin has full admin
+ * control (0021) without becoming a member: this profile never appears in
+ * the corp's own roster or membership list.
  *
  * The roster comes from `corporation_member_directory()` and
  * `corporation_role_assignments`, both of which allow a Super Admin to
@@ -67,12 +66,16 @@ export default async function AdminCorporationDetailPage({
     source: string;
   }[];
 
-  const roster = ((members ?? []) as {
+  const directory = (members ?? []) as {
     user_id: string;
     full_name: string | null;
     email: string | null;
     status: string;
-  }[]).map((m) => ({
+    avatar_path: string | null;
+  }[];
+  const avatars = await signAvatarPaths(directory.map((m) => m.avatar_path));
+  const roster = directory.map((m) => ({
+    avatarUrl: m.avatar_path ? avatars.get(m.avatar_path) ?? null : null,
     id: m.user_id,
     name: m.full_name || m.email || "Unnamed member",
     email: m.email ?? "",
@@ -95,6 +98,15 @@ export default async function AdminCorporationDetailPage({
           <span className="pill pill--locked">{corporation.strataPlanNumber}</span>
           <h1 style={{ marginTop: "0.6rem" }}>{corporation.buildingName ?? corporation.legalName}</h1>
           <p>{corporation.address}</p>
+          <p style={{ marginTop: "1rem" }}>
+            <Link
+              href={`/strata/${corporation.strataPlanNumber}`}
+              className="button button-primary"
+              data-testid="admin-open-strata"
+            >
+              Open this strata as its admin
+            </Link>
+          </p>
         </div>
 
         <div className="grid-cards" style={{ marginBottom: "2.5rem" }}>
@@ -134,9 +146,14 @@ export default async function AdminCorporationDetailPage({
                 {roster.map((member) => (
                   <tr key={member.id}>
                     <td>
-                      {member.name}
-                      <div className="roster-table__meta">{member.email}</div>
-                      {member.status !== "active" && <span className="pill pill--locked">Invited</span>}
+                      <div className="roster-member">
+                        <MemberAvatar name={member.name} url={member.avatarUrl} />
+                        <div>
+                          {member.name}
+                          <div className="roster-table__meta">{member.email}</div>
+                          {member.status !== "active" && <span className="pill pill--locked">Invited</span>}
+                        </div>
+                      </div>
                     </td>
                     <td>
                       {member.roles.length === 0 ? (

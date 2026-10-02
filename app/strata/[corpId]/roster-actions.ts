@@ -8,6 +8,7 @@ import { corporationInviteEmail, joinRequestApprovedEmail } from "@/lib/email/te
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { EMAIL_RE, isCorporationRole } from "@/lib/strata";
+import { isStrataAdmin } from "@/lib/auth/strata-admin";
 
 /**
  * Server Actions behind Council & Roles (doc01 §1, §3). Authorization is
@@ -44,15 +45,7 @@ async function requireAdmin(corporationId: string) {
   } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const { data } = await supabase
-    .from("corporation_role_assignments")
-    .select("role")
-    .eq("corporation_id", corporationId)
-    .eq("user_id", user.id)
-    .eq("role", "admin")
-    .maybeSingle();
-
-  return data ? { supabase, user } : null;
+  return (await isStrataAdmin(supabase, corporationId)) ? { supabase, user } : null;
 }
 
 function refresh(corporationId: string) {

@@ -3,6 +3,7 @@ import { type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getStripe } from "@/lib/stripe/client";
+import { isStrataAdmin } from "@/lib/auth/strata-admin";
 
 /**
  * Where Stripe's secure payment-method page returns (billing step 2). Makes
@@ -21,14 +22,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
-  const { data: role } = await supabase
-    .from("corporation_role_assignments")
-    .select("role")
-    .eq("corporation_id", corpId)
-    .eq("user_id", user.id)
-    .eq("role", "admin")
-    .maybeSingle();
-  if (!role) redirect(`/strata/${corpId}`);
+  if (!(await isStrataAdmin(supabase, corpId))) redirect(`/strata/${corpId}`);
 
   const { data: sub } = await createAdminClient()
     .from("subscriptions")

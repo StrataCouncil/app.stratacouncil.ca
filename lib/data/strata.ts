@@ -8,7 +8,12 @@ import { createClient } from "@/lib/supabase/server";
  * many server components under `/strata/[corpId]` ask for it — the layout
  * and the page both do.
  *
- * Returns null if the user isn't an active member (RLS hides the corp).
+ * Returns null if the user can't see the corporation (RLS hides it).
+ *
+ * Super Admins have full admin control of every strata (0021): the
+ * database's role checks answer yes for them, so they get `isAdmin` and
+ * `canRunMeetings` here too. `superAdminOnly` marks a Super Admin who
+ * isn't actually a member, for the banner that says so.
  */
 export interface StrataAccess {
   corpId: string;
@@ -19,6 +24,8 @@ export interface StrataAccess {
   /** Secretary, admin, or the "Can run meetings" switch (0014). */
   canRunMeetings: boolean;
   userId: string;
+  /** A Super Admin managing a strata they aren't a member of. */
+  superAdminOnly: boolean;
 }
 
 export const getStrataAccess = cache(async (corpId: string): Promise<StrataAccess | null> => {
@@ -28,7 +35,8 @@ export const getStrataAccess = cache(async (corpId: string): Promise<StrataAcces
   } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const [{ data: corp }, { data: sub }, { data: roleRows }, { data: canRun }] = await Promise.all([
+  const [{ data: corp }, { data: sub }, { data: roleRows }, { data: canRun }, { data: membership }, { data: superAdmin }] =
+    await Promise.all([
     supabase
       .from("strata_corporations")
       .select("strata_plan_number, free_meeting_used")
@@ -41,6 +49,14 @@ export const getStrataAccess = cache(async (corpId: string): Promise<StrataAcces
       .eq("corporation_id", corpId)
       .eq("user_id", user.id),
     supabase.rpc("can_run_meetings", { target_corporation_id: corpId }),
+    supabase
+      .from("corporation_memberships")
+      .select("status")
+      .eq("corporation_id", corpId)
+      .eq("user_id", user.id)
+      .eq("status", "active")
+      .maybeSingle(),
+    supabase.rpc("is_super_admin"),
   ]);
   if (!corp) return null;
 
@@ -50,8 +66,9 @@ export const getStrataAccess = cache(async (corpId: string): Promise<StrataAcces
     subscribed: sub?.status === "active",
     freeMeetingUsed: corp.free_meeting_used,
     roles,
-    isAdmin: roles.includes("admin"),
+    isAdmin: superAdmin === true || roles.includes("admin"),
     canRunMeetings: canRun === true,
     userId: user.id,
+    superAdminOnly: superAdmin === true && !membership,
   };
 });

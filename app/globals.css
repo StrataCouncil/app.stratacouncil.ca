@@ -4184,3 +4184,33 @@ abbr.role-tag--short {
   background: var(--danger-bg);
   color: var(--danger);
 }
+
+/* Super Admin managing a strata they aren't a member of */
+.nudge-banner--super {
+  border-color: var(--accent);
+}
+
+/* Profile picture beside a member's name in roster tables */
+.roster-member {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.member-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex: none;
+}
+
+.member-avatar--initials {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--locked-bg);
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
