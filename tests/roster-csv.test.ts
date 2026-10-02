@@ -14,7 +14,9 @@ test("CSV mechanics: BOM, CRLF, quotes", () => {
 });
 
 test("a blank template has no rows", () => {
-  assert.deepEqual(parseRosterCsv(toRosterCsv([{ lot_number: "SL001" }, { lot_number: "SL002" }])), { ok: false, errors: ["The file has no strata lot rows."] });
+  const r = parseRosterCsv(toRosterCsv([{ lot_number: "SL001" }, { lot_number: "SL002" }]));
+  assert.equal(r.ok, false);
+  if (!r.ok) assert.match(r.errors[0], /Every strata lot row in this file is blank/);
 });
 
 test("full row, reordered columns, owner type", () => {
@@ -61,4 +63,16 @@ test("a real 102-lot roster in the downloaded template's shape parses", () => {
   assert.equal(r.rows.length, 102);
   assert.equal(r.rows[1].email, "owner2@example.com, co2@example.ca");
   assert.deepEqual(new Set(r.rows.map((x) => x.owner_type)), new Set(["owner_occupant", "owner_absentee", "developer"]));
+});
+
+test("an all-blank file says so instead of a bare error", () => {
+  const r = parseRosterCsv("Strata Lot,Owner Name,Email\nSL001,,\nSL002,,\n");
+  assert.equal(r.ok, false);
+  if (!r.ok) assert.match(r.errors[0], /Every strata lot row in this file is blank/);
+});
+
+test("unrecognized columns are named", () => {
+  const r = parseRosterCsv("Strata Lot,Owner Full Name,E-mail Address\nSL001,Pat,pat@example.com\n");
+  assert.equal(r.ok, false);
+  if (!r.ok) assert.match(r.errors[0], /None of the columns were recognized \(found "Owner Full Name", "E-mail Address"\)/);
 });

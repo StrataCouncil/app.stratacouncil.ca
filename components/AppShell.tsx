@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { AccountMenu } from "@/components/AccountMenu";
+import { SiteFooter } from "@/components/SiteFooter";
 import { Logo } from "@/components/Logo";
 import { getCurrentProfile } from "@/lib/data/profile";
 import { getConnectedCorporations } from "@/lib/data/corporations";
@@ -57,6 +58,7 @@ export async function AppShell({
         </div>
       </header>
       <main>{children}</main>
+      <SiteFooter />
     </>
   );
 }

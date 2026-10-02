@@ -3832,3 +3832,33 @@ li[data-done="true"] .checklist__mark {
 .billing-pay {
   min-width: 260px;
 }
+
+/* Footer: the company behind StrataCouncil.ca */
+.site-footer {
+  border-top: 1px solid var(--line);
+  margin-top: 4rem;
+  padding: 1.25rem 0 1.75rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.site-footer__inner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.site-footer__powered {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.site-footer__wordmark {
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--ink);
+}
+.trickfilm-logo {
+  display: block;
+  color: var(--ink);
+}

@@ -6,6 +6,7 @@ import { getStripe } from "@/lib/stripe/client";
 import { calculateBilling } from "@/lib/stripe/prices";
 import { StatementsPeriodSelect } from "@/components/StatementsPeriodSelect";
 import { BillingSteps, type BillingStep } from "@/components/BillingSteps";
+import { COMPANY_LEGAL_NAME, STATEMENT_DESCRIPTOR } from "@/lib/company";
 import {
   changePlan,
   cancelSubscription,
@@ -234,6 +235,10 @@ export default async function BillingPage({
               {paymentMethod ? "Active" : "Not set up"}
             </span>
           </div>
+          <p className="card__meta">
+            Charges appear on your statement as {STATEMENT_DESCRIPTOR.toUpperCase()}: StrataCouncil.ca is a product of{" "}
+            {COMPANY_LEGAL_NAME}.
+          </p>
           {paymentMethod ? (
             <>
               <div>
