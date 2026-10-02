@@ -9,7 +9,7 @@ import { createClient } from "@/lib/supabase/server";
  * has checked `profiles.is_super_admin` for the signed-in user. Every
  * export here calls it first; none of them trust the page to have.
  */
-async function requireSuperAdmin() {
+export async function requireSuperAdmin() {
   const supabase = await createClient();
   const {
     data: { user },

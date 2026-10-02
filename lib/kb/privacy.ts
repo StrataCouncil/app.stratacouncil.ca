@@ -72,6 +72,19 @@ export function stripForGlobal(text: string, ctx: StripContext) {
   }
   // Plan numbers survive stripPII on purpose (public records); here, any
   // plan number at all could identify the source.
-  out = out.replace(/\b(?:BCS|EPS|LMS|VAS|VIS|KAS|NES|NWS|EPP|BCP|LMP|VIP|KAP)\s?-?\d{2,6}\b/g, "[strata plan]");
+  out = out.replace(PLAN_NUMBER, "[strata plan]");
   return stripPII(out, ctx.people);
+}
+
+const PLAN_NUMBER = /\b(?:BCS|EPS|LMS|VAS|VIS|KAS|NES|NWS|EPP|BCP|LMP|VIP|KAP)\s?-?\d{2,6}\b/g;
+
+/**
+ * For guidance in the legislation library (bulletins, guides, tribunal
+ * decisions): the strict pass, with no roster to lean on and plan numbers
+ * removed, since a decision names the strata it's about. Acts and
+ * regulations aren't stripped: they're public law with no personal
+ * information, and the name pass would mangle their Title Case terms.
+ */
+export function stripForLibrary(text: string) {
+  return stripPII(text.replace(PLAN_NUMBER, "[strata plan]"));
 }
