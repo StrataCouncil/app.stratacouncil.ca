@@ -15,6 +15,8 @@ import {
   corporationRoles,
   councilRoles,
   isSingleHolderRole,
+  executiveRoles,
+  withoutConflictingRoles,
   type CorporationRole,
 } from "@/lib/strata";
 import { MemberAvatar } from "@/components/MemberAvatar";
@@ -108,14 +110,16 @@ export function RosterTable({
   }
 
   function toggleDraftRole(role: CorporationRole) {
-    setDraftRoles((prev) =>
-      prev.includes(role) ? prev.filter((r) => r !== role) : [...prev, role]
-    );
+    // Taking an executive office ends Member at Large.
+    setDraftRoles((prev) => withoutConflictingRoles(prev.includes(role) ? prev.filter((r) => r !== role) : [...prev, role]));
   }
 
   function conflictReason(member: RosterMember, role: CorporationRole): string | null {
     if (role === "admin" && member.roles.includes("admin")) {
       return "There's always one admin. Hand it over by assigning Admin to another member.";
+    }
+    if (role === "member_at_large" && draftRoles.some((r) => executiveRoles.includes(r))) {
+      return "An executive isn't a Member at Large. Remove the executive role first.";
     }
     if (jurisdiction === "BC") {
       if (role === "president" && draftRoles.includes("vice_president")) {

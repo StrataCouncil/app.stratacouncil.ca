@@ -39,7 +39,7 @@ COUNTING AND ENUMERATION RULE: When any question requires counting, filtering, o
 
 CONFLICT DISCLOSURE RULE: If sources disagree — a corporation's bylaws say one thing while BC legislation, global precedent, or another local document says another — do not silently pick one or reconcile them yourself. State plainly what each source says and that they conflict. For example: "Your bylaws state [X]. The Strata Property Act states [Y]. These appear to conflict." Do not resolve which one governs, do not soften the discrepancy, and do not guess at an explanation. Report only what each source explicitly states.
 
-EARLIER ANSWERS RULE: Each question gets its own search, so the excerpts behind your earlier answers in this conversation may not appear in the context for this one. That does not make those answers wrong. Never retract, correct or apologize for an earlier answer because its sources aren't in the current context; revise it only if something in the current context contradicts it, and then say exactly what. Answer the question that was asked.
+EARLIER ANSWERS RULE: The records found for each earlier question in this conversation travel with that question, and they remain valid sources for this answer. Never retract, correct or apologize for an earlier answer unless something in the context actually contradicts it, and then say exactly what. If a question refers to something from earlier in the conversation that is no longer available to you, say so and offer to look it up again. Answer the question that was asked.
 
 DISPUTED-FACT RULE: If a user says a cited fact is wrong, do not concede the point or change the answer — you have no way to independently verify a claim made in conversation. State exactly which document, section, and upload date the fact came from, and note that an updated version of that document can be uploaded if it's outdated or incorrect. Never revise a factual claim based on a user's assertion alone; only a new document in context can change what you cite.`;
 
@@ -53,7 +53,12 @@ const MAX_CONTEXT_CHARS = 400_000;
 const MAX_ATTACHMENT_CHARS = 150_000;
 const SEARCH_TIMEOUT_MS = 10_000;
 
-export type AssistantTurn = { role: "user" | "assistant"; content: string; sources?: string[] };
+/**
+ * One turn of history. `context` is what a user turn was answered from (the
+ * excerpts, already stripped), replayed so the conversation keeps its
+ * sources; `sources` names what an assistant turn cited.
+ */
+export type AssistantTurn = { role: "user" | "assistant"; content: string; sources?: string[]; context?: string | null };
 
 export interface MeetingScope {
   item: AgendaItem;
@@ -68,13 +73,16 @@ export type StratasphereSource =
   | { kind: "precedent" }
   | { kind: "legislation"; title: string };
 
-export type AskResult = { ok: true; text: string; sources: StratasphereSource[] } | { ok: false; error: string; limit?: boolean };
+export type AskResult =
+  | { ok: true; text: string; sources: StratasphereSource[]; /** What this question was answered from, to store with it. */ context: string }
+  | { ok: false; error: string; limit?: boolean };
 
 type Prepared =
   | {
       ok: true;
-      system: string;
+      system: Anthropic.Beta.BetaTextBlockParam[];
       messages: Anthropic.Beta.BetaMessageParam[];
+      turnContext: string;
       effort: "low" | "medium";
       maxTokens: number;
       sources: StratasphereSource[];
@@ -243,12 +251,15 @@ async function prepareStratasphere({
   question,
   history,
   meeting,
+  trimmed,
 }: {
   supabase: SupabaseClient;
   corpId: string;
   question: string;
   history: AssistantTurn[];
   meeting?: MeetingScope;
+  /** Older turns were dropped from this conversation's history. */
+  trimmed?: boolean;
 }): Promise<Prepared> {
   const q = question.trim().slice(0, 4000);
   if (!q) return { ok: false, error: "Ask a question." };
@@ -298,14 +309,39 @@ async function prepareStratasphere({
   const global = hits.filter((h) => h.scope === "global_precedent");
   const legislation = hits.filter((h) => h.scope === "legislation");
 
+  // The request is laid out for the prompt cache: what's the same for every
+  // question (rules, bylaws, ledger) first, then the conversation, where
+  // each question carries the records found for it. Only the newest turn is
+  // new to the cache, so remembering earlier records costs little.
   const preamble = meeting
-    ? `You are Stratasphere, the AI governance assistant for Strata Plan ${corpId} (${corpName}), operating inside a live ${meeting.meetingLabel}. Current agenda item: "${stripForCorporation(meeting.item.text, ctx)}" (${stripForCorporation(meeting.item.cat, ctx)}). Answer in 2–4 sentences.`
+    ? `You are Stratasphere, the AI governance assistant for Strata Plan ${corpId} (${corpName}), operating inside a live ${meeting.meetingLabel}. Answer in 2–4 sentences.`
     : `You are Stratasphere, the AI governance assistant for Strata Plan ${corpId} (${corpName}). Answer in up to a short paragraph.`;
 
-  let context = [
-    meeting ? block("CURRENT AGENDA ITEM ATTACHMENTS (HIGHEST PRIORITY, verbatim)", attachments.text) : "",
+  const standing = [
     block(`${corpName.toUpperCase()} BYLAWS (full text of the current bylaws, most recent first)`, bylaws.text),
     block("DECISION LEDGER (carried motions, newest first)", ledger),
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const system: Anthropic.Beta.BetaTextBlockParam[] = [
+    { type: "text", text: [preamble, CARDINAL_RULES.replaceAll("{CORP}", corpName), PERMITTED].join("\n\n") },
+    {
+      type: "text",
+      text: `${standing || "=== STANDING RECORDS ===\nNo bylaws or decisions are on file."}\n\nEach question below comes with the records found for it. Answer only what is supported by these records and those excerpts.`,
+      cache_control: { type: "ephemeral" },
+    },
+  ];
+
+  let turnContext = [
+    meeting
+      ? block(
+          "CURRENT AGENDA ITEM",
+          `"${stripForCorporation(meeting.item.text, ctx)}" (${stripForCorporation(meeting.item.cat, ctx)})`
+        )
+      : "",
+    disclosures.length ? block("DISCLOSURES REQUIRED FOR THIS ANSWER", disclosures.join("\n")) : "",
+    meeting ? block("CURRENT AGENDA ITEM ATTACHMENTS (HIGHEST PRIORITY, verbatim)", attachments.text) : "",
     meeting ? block("DECISIONS MADE SO FAR IN THIS MEETING (not yet in the ledger)", liveDecisionsBlock(meeting.agenda, ctx)) : "",
     block(`${corpName.toUpperCase()} DOCUMENT EXCERPTS (most relevant to this question)`, hitsBlock(local)),
     block("CROSS-PLATFORM PRECEDENT (anonymized, from other strata corporations — never this corporation's own data)", hitsBlock(global)),
@@ -316,42 +352,44 @@ async function prepareStratasphere({
   ]
     .filter(Boolean)
     .join("\n");
-  if (context.length > MAX_CONTEXT_CHARS) context = `${context.slice(0, MAX_CONTEXT_CHARS)}\n[...context truncated]`;
+  if (!turnContext) turnContext = "No further records matched this question.";
+  if (turnContext.length > MAX_CONTEXT_CHARS) turnContext = `${turnContext.slice(0, MAX_CONTEXT_CHARS)}\n[...context truncated]`;
 
-  const system = [
-    preamble,
-    CARDINAL_RULES.replaceAll("{CORP}", corpName),
-    PERMITTED,
-    disclosures.length ? `DISCLOSURES REQUIRED FOR THIS ANSWER:\n${disclosures.join("\n")}` : "",
-    context || "=== CONTEXT ===\nNo records matched this question.",
-    "Answer only what is supported by the context above.",
-  ]
-    .filter(Boolean)
-    .join("\n\n");
-
-  // At most 10 turns of history (5 + 5), stripped like everything else.
-  const messages: Anthropic.Beta.BetaMessageParam[] = [
-    ...history.slice(-10).map((t) => ({
-      role: t.role,
-      content: stripForCorporation(
-        `${t.content.slice(0, 8000)}${t.role === "assistant" && t.sources?.length ? `\n[Sources for this answer: ${t.sources.join("; ")}]` : ""}`,
-        ctx
-      ),
-    })),
-    { role: "user" as const, content: strippedQuestion },
-  ];
+  const messages: Anthropic.Beta.BetaMessageParam[] = history.map((t) => ({
+    role: t.role,
+    content:
+      t.role === "user"
+        ? composeUserTurn(t.context ?? null, stripForCorporation(t.content.slice(0, 8000), ctx))
+        : stripForCorporation(
+            `${t.content.slice(0, 8000)}${t.sources?.length ? `\n[Sources for this answer: ${t.sources.join("; ")}]` : ""}`,
+            ctx
+          ),
+  }));
   // The API needs the conversation to start with the user.
   while (messages.length && messages[0].role !== "user") messages.shift();
+  if (trimmed && messages.length) {
+    messages[0] = {
+      role: "user",
+      content: `[Earlier parts of this conversation are no longer available to you.]\n\n${messages[0].content as string}`,
+    };
+  }
+  messages.push({ role: "user", content: composeUserTurn(turnContext, strippedQuestion) });
 
   return {
     ok: true,
     system,
     messages,
+    turnContext,
     effort: meeting ? "low" : "medium",
     maxTokens: meeting ? 4000 : 8000,
     sources: sourcesFrom(hits, Boolean(ledger.trim())),
     bylawSources: bylaws.sources,
   };
+}
+
+/** A question as the model sees it: the records found for it, then the question. Must stay byte-stable (cache). */
+function composeUserTurn(context: string | null, question: string) {
+  return context ? `=== RECORDS FOUND FOR THIS QUESTION ===\n${context}\n\n=== QUESTION ===\n${question}` : question;
 }
 
 type AskInput = Parameters<typeof prepareStratasphere>[0];
@@ -373,9 +411,10 @@ export async function askStratasphere(input: AskInput): Promise<AskResult> {
       messages: prepared.messages,
       effort: prepared.effort,
       maxTokens: prepared.maxTokens,
+      cache: true,
     });
     if (!text) return { ok: false, error: "Stratasphere didn't return an answer. Please try again." };
-    return { ok: true, text: truncated ? `${text}\n[Answer cut short.]` : text, sources: finalSources(prepared, text) };
+    return { ok: true, text: truncated ? `${text}\n[Answer cut short.]` : text, sources: finalSources(prepared, text), context: prepared.turnContext };
   } catch (err) {
     if (err instanceof ClaudeRefusalError) return { ok: false, error: "Stratasphere can't help with that question." };
     console.error("[askStratasphere]", err instanceof Error ? err.message : err);
@@ -392,12 +431,12 @@ export async function streamStratasphere(input: AskInput, onText: (delta: string
   if (!prepared.ok) return prepared;
   try {
     const { text, truncated } = await streamClaudeText(
-      { system: prepared.system, messages: prepared.messages, effort: prepared.effort, maxTokens: prepared.maxTokens },
+      { system: prepared.system, messages: prepared.messages, effort: prepared.effort, maxTokens: prepared.maxTokens, cache: true },
       onText
     );
     if (!text) return { ok: false, error: "Stratasphere didn't return an answer. Please try again." };
     if (truncated) onText("\n[Answer cut short.]");
-    return { ok: true, text: truncated ? `${text}\n[Answer cut short.]` : text, sources: finalSources(prepared, text) };
+    return { ok: true, text: truncated ? `${text}\n[Answer cut short.]` : text, sources: finalSources(prepared, text), context: prepared.turnContext };
   } catch (err) {
     if (err instanceof ClaudeRefusalError) return { ok: false, error: "Stratasphere can't help with that question." };
     console.error("[streamStratasphere]", err instanceof Error ? err.message : err);

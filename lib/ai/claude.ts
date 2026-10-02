@@ -21,7 +21,9 @@ export class ClaudeRefusalError extends Error {}
 type Effort = "low" | "medium" | "high" | "xhigh" | "max";
 
 interface AskOptions {
-  system?: string;
+  system?: string | Anthropic.Beta.BetaTextBlockParam[];
+  /** Cache the conversation as it grows (top-level automatic caching). */
+  cache?: boolean;
   messages: Anthropic.Beta.BetaMessageParam[];
   maxTokens?: number;
   effort?: Effort;
@@ -37,6 +39,7 @@ async function create(opts: AskOptions) {
     fallbacks: "default",
     system: opts.system,
     messages: opts.messages,
+    ...(opts.cache ? { cache_control: { type: "ephemeral" } } : {}),
     output_config: {
       effort: opts.effort ?? "medium",
       ...(opts.schema ? { format: { type: "json_schema", schema: opts.schema } } : {}),
@@ -44,8 +47,17 @@ async function create(opts: AskOptions) {
   } as Anthropic.Beta.Messages.MessageCreateParamsNonStreaming;
   // Long inputs (whole documents) stream so they can't hit request timeouts.
   const message = await anthropic().beta.messages.stream(params).finalMessage();
+  if (opts.cache) logCache(message);
   if (message.stop_reason === "refusal") throw new ClaudeRefusalError("Claude declined this request.");
   return message;
+}
+
+/** One line per cached call, so cache hits (and cost) can be checked in the server logs. */
+function logCache(message: Anthropic.Beta.BetaMessage) {
+  const u = message.usage;
+  console.info(
+    `[claude cache] read=${u.cache_read_input_tokens ?? 0} written=${u.cache_creation_input_tokens ?? 0} uncached=${u.input_tokens} output=${u.output_tokens}`
+  );
 }
 
 function textOf(message: Anthropic.Beta.BetaMessage) {
@@ -79,11 +91,13 @@ export async function streamClaudeText(opts: Omit<AskOptions, "schema">, onText:
     fallbacks: "default",
     system: opts.system,
     messages: opts.messages,
+    ...(opts.cache ? { cache_control: { type: "ephemeral" } } : {}),
     output_config: { effort: opts.effort ?? "medium" },
   } as Anthropic.Beta.Messages.MessageCreateParamsStreaming;
   const stream = anthropic().beta.messages.stream(params);
   stream.on("text", (delta) => onText(delta));
   const message = await stream.finalMessage();
+  if (opts.cache) logCache(message);
   if (message.stop_reason === "refusal") throw new ClaudeRefusalError("Claude declined this request.");
   return { text: textOf(message), truncated: message.stop_reason === "max_tokens" };
 }

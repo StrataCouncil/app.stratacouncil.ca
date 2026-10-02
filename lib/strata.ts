@@ -71,6 +71,18 @@ export const corporationRoleLabels: Record<CorporationRole, string> = {
 /** Roles that make someone a council member (and their lot a council lot). */
 export const councilRoles: readonly CorporationRole[] = ["president", "vice_president", "treasurer", "secretary", "member_at_large"];
 
+/**
+ * The executive offices. Holding any of them means someone isn't a Member at
+ * Large (that is, by definition, a council member with no office); Admin is
+ * a platform role and doesn't count. Enforced by set_corporation_member_roles (0022).
+ */
+export const executiveRoles: readonly CorporationRole[] = ["president", "vice_president", "treasurer", "secretary"];
+
+/** Applying the rule: an executive office removes Member at Large. */
+export function withoutConflictingRoles(roles: CorporationRole[]): CorporationRole[] {
+  return roles.some((r) => executiveRoles.includes(r)) ? roles.filter((r) => r !== "member_at_large") : roles;
+}
+
 export function isCorporationRole(value: string): value is CorporationRole {
   return (corporationRoles as readonly string[]).includes(value);
 }
