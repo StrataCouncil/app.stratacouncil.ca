@@ -4214,3 +4214,76 @@ abbr.role-tag--short {
   font-size: 0.72rem;
   font-weight: 700;
 }
+
+/* The strata whose billing page this is, in the list of all stratas */
+.billing-row--current td {
+  background: var(--paper);
+}
+.billing-row--current td:first-child {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+/* Stratasphere is working: pulsing dots while it searches and while it writes */
+.chat-thinking {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.chat-dots {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.chat-dots span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: chat-dot 1.2s infinite ease-in-out;
+}
+
+.chat-dots span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.chat-dots span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+.chat-dots--inline {
+  margin-left: 0.4rem;
+  vertical-align: middle;
+}
+
+@keyframes chat-dot {
+  0%, 80%, 100% {
+    opacity: 0.25;
+    transform: scale(0.8);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-dots span {
+    animation: none;
+    opacity: 0.6;
+  }
+}
+
+/* Address lookup with its postal code box */
+.address-lookup__row {
+  display: grid;
+  grid-template-columns: 1fr 9rem;
+  gap: 0.5rem;
+}
+
+@media (max-width: 520px) {
+  .address-lookup__row {
+    grid-template-columns: 1fr;
+  }
+}

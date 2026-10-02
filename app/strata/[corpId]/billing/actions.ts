@@ -2,6 +2,7 @@
 
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getStripe } from "@/lib/stripe/client";
@@ -181,12 +182,18 @@ export async function updateBillingEmail(corporationId: string, formData: FormDa
     await getStripe().customers.update(sub.stripe_customer_id, { email: firstEmail(billingEmail) });
   }
 
-  await admin
+  const { error } = await admin
     .from("subscriptions")
     .upsert(
       { corporation_id: corporationId, billing_email: billingEmail },
       { onConflict: "corporation_id" }
     );
+  if (error) {
+    console.error("[updateBillingEmail]", error.message);
+    throw new Error("Couldn't save the billing contacts. Please try again.");
+  }
+  revalidatePath(`/strata/${corporationId}/billing`);
+  redirect(`/strata/${corporationId}/billing?note=contacts-saved`);
 }
 
 /** "Change billing interval" — swaps the existing subscription's two

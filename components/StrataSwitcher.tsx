@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { useDismiss } from "@/lib/hooks/use-dismiss";
 import type { ConnectedCorporation } from "@/lib/data/corporations";
 
 /**
@@ -20,10 +21,12 @@ export function StrataSwitcher({
   currentId: string;
 }) {
   const [open, setOpen] = useState(false);
+  const wrap = useRef<HTMLDivElement>(null);
+  useDismiss(wrap, open, () => setOpen(false));
   const current = corporations.find((c) => c.id === currentId);
 
   return (
-    <div className="strata-switcher">
+    <div className="strata-switcher" ref={wrap}>
       <button
         className="strata-switcher__trigger"
         onClick={() => setOpen((v) => !v)}

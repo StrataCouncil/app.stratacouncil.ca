@@ -208,11 +208,17 @@ export default async function BillingPage({
       </Link>
 
       <div className="page-header" style={{ marginBottom: "1.75rem" }}>
-        <h2 style={{ margin: 0 }}>Billing</h2>
+        <h2 style={{ margin: 0 }}>Billing for {corp.building_name ?? corp.legal_name}</h2>
         <p className="card__meta" style={{ marginTop: "0.35rem" }}>
-          Pre-authorized debit or credit card &middot; Billed monthly &middot; Admin only
+          {corpId} &middot; Each strata has its own payment method, billing contacts and subscription &middot; Admin only
         </p>
       </div>
+
+      {note === "contacts-saved" && (
+        <p className="sync-note" role="status" style={{ marginBottom: "1.25rem" }} data-testid="billing-contacts-saved">
+          Billing contacts saved for {corp.building_name ?? corp.legal_name}.
+        </p>
+      )}
 
       {justSubscribed && !subscribed && (
         <p className="sync-note" role="status" style={{ marginBottom: "1.25rem" }}>
@@ -427,7 +433,10 @@ export default async function BillingPage({
       </div>
 
       <div className="card billing-section" data-testid="billing-corporations-card">
-        <h3>Strata corporations</h3>
+        <h3>All stratas you administer</h3>
+        <p className="card__meta" style={{ margin: "0 0 0.75rem" }}>
+          Open a strata to manage its own billing. The one you&rsquo;re viewing is highlighted.
+        </p>
         <div className="roster-table-wrap">
           <table className="roster-table">
             <thead>
@@ -442,7 +451,7 @@ export default async function BillingPage({
             </thead>
             <tbody>
               {corpRows.map((r) => (
-                <tr key={r.id}>
+                <tr key={r.id} data-current={r.id === corpId ? "true" : undefined} className={r.id === corpId ? "billing-row--current" : undefined}>
                   <td>
                     <Link href={`/strata/${r.id}/billing`} style={{ fontWeight: 600 }}>
                       {r.id}

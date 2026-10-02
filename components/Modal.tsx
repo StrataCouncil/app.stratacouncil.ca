@@ -15,17 +15,23 @@ export function Modal({
   testId?: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  // Callers usually pass a fresh onClose on every render; keep the latest
+  // one here so the effect below runs once. (Re-running it refocused the
+  // dialog on every keystroke, pulling the cursor out of its inputs.)
+  const close = useRef(onClose);
+  close.current = onClose;
   useEffect(() => {
-    ref.current?.focus();
+    // Focus the dialog when it opens, unless something inside already has focus (autoFocus).
+    if (!ref.current?.contains(document.activeElement)) ref.current?.focus();
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") close.current();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, []);
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
+    <div className="modal-backdrop" onClick={() => close.current()}>
       <div
         ref={ref}
         tabIndex={-1}
