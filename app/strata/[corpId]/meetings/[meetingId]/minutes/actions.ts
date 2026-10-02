@@ -11,6 +11,7 @@ import type { MinutesContent } from "@/lib/meetings/minutes";
 import { minutesPdf } from "@/lib/exports/minutes-pdf";
 import { exportFileName } from "@/lib/exports/agenda-docx";
 import { queueDocumentIndexing } from "@/lib/kb/queue";
+import { loadLetterhead } from "@/lib/data/management";
 
 type Fail = { ok: false; error: string };
 
@@ -77,7 +78,7 @@ export async function finalizeMeetingMinutes(corpId: string, meetingId: string):
     } = await supabase.auth.getUser();
     if (meeting?.minutesContent && user) {
       const content = meeting.minutesContent as MinutesContent;
-      const pdf = await minutesPdf(content, { finalizedAt: new Date().toISOString() });
+      const pdf = await minutesPdf(content, { finalizedAt: new Date().toISOString(), letterhead: await loadLetterhead(corpId) });
       const fileName = exportFileName(corpId, meeting.type, meeting.meetingDate, "MINUTES", "pdf");
       const path = `${corpId}/${randomUUID()}/${fileName}`;
       const admin = createAdminClient();

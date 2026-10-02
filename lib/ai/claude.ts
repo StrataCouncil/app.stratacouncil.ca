@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import type { TokenUsage } from "@/lib/ai/pricing";
 
 /**
  * The one way this app calls Claude. Every caller passes text that has
@@ -52,6 +53,16 @@ async function create(opts: AskOptions) {
   return message;
 }
 
+function usageOf(message: Anthropic.Beta.BetaMessage): TokenUsage {
+  const u = message.usage;
+  return {
+    input: u.input_tokens ?? 0,
+    output: u.output_tokens ?? 0,
+    cacheRead: u.cache_read_input_tokens ?? 0,
+    cacheWrite: u.cache_creation_input_tokens ?? 0,
+  };
+}
+
 /** One line per cached call, so cache hits (and cost) can be checked in the server logs. */
 function logCache(message: Anthropic.Beta.BetaMessage) {
   const u = message.usage;
@@ -70,7 +81,7 @@ function textOf(message: Anthropic.Beta.BetaMessage) {
 
 export async function askClaudeText(opts: Omit<AskOptions, "schema">) {
   const message = await create(opts);
-  return { text: textOf(message), truncated: message.stop_reason === "max_tokens" };
+  return { text: textOf(message), truncated: message.stop_reason === "max_tokens", usage: usageOf(message) };
 }
 
 export async function askClaudeJson<T>(opts: AskOptions & { schema: Record<string, unknown> }): Promise<T> {
@@ -99,5 +110,5 @@ export async function streamClaudeText(opts: Omit<AskOptions, "schema">, onText:
   const message = await stream.finalMessage();
   if (opts.cache) logCache(message);
   if (message.stop_reason === "refusal") throw new ClaudeRefusalError("Claude declined this request.");
-  return { text: textOf(message), truncated: message.stop_reason === "max_tokens" };
+  return { text: textOf(message), truncated: message.stop_reason === "max_tokens", usage: usageOf(message) };
 }

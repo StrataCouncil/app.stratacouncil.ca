@@ -1,6 +1,8 @@
 import { AlignmentType, BorderStyle, Document, Packer, Paragraph, TextRun } from "docx";
 import { attendanceLines, clockTime, voteLine, type MinutesContent } from "@/lib/meetings/minutes";
 import { formatMeetingWhen } from "@/lib/meetings/format";
+import { letterheadParagraphs } from "@/lib/exports/letterhead-docx";
+import type { Letterhead } from "@/lib/data/management";
 
 const INK = "1B2A41";
 const MUTED = "555555";
@@ -18,9 +20,9 @@ const heading = (text: string) => p(text.toUpperCase(), { bold: true, color: INK
 const rule = () => new Paragraph({ border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: "CCCCCC", space: 1 } }, spacing: { after: 120 } });
 
 /** Draft minutes as an editable Word document. */
-export async function minutesDocx(m: MinutesContent, opts: { draft: boolean }): Promise<Buffer> {
+export async function minutesDocx(m: MinutesContent, opts: { draft: boolean; letterhead?: Letterhead | null }): Promise<Buffer> {
   const tz = m.meeting.timezone;
-  const children: Paragraph[] = [];
+  const children: Paragraph[] = [...letterheadParagraphs(opts.letterhead)];
   if (opts.draft) children.push(p("DRAFT — NOT YET APPROVED", { bold: true, color: "A6342A", center: true, after: 120 }));
   children.push(
     p(m.corporation.name, { bold: true, size: 28, center: true, after: 40 }),

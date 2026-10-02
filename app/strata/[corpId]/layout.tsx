@@ -112,7 +112,12 @@ export default async function StrataSphereLayout({
           )}
 
           <StrataContextProvider
-            value={{ corpId: currentCorporation.id, subscribed, isAdmin: access?.isAdmin ?? false }}
+            value={{
+              corpId: currentCorporation.id,
+              subscribed,
+              isAdmin: access?.isAdmin ?? false,
+              canManage: Boolean(access?.isAdmin || access?.roles.includes("manager")),
+            }}
           >
             {children}
           </StrataContextProvider>

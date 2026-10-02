@@ -17,7 +17,7 @@ import { RequestSubscriptionButton } from "@/components/RequestSubscriptionButto
  * context and has no browse surface (doc01 §4a). No "Calendar" either —
  * not built in V1 (doc01 §7 item 21).
  */
-const items: Array<{ slug: string; label: string; gated: boolean }> = [
+const allItems: Array<{ slug: string; label: string; gated: boolean; managersOnly?: boolean }> = [
   { slug: "guides", label: "Knowledge Library", gated: false },
   { slug: "", label: "Council & Roles", gated: false },
   { slug: "lots", label: "Strata Lots", gated: false },
@@ -25,6 +25,8 @@ const items: Array<{ slug: string; label: string; gated: boolean }> = [
   { slug: "minutes", label: "Minutes", gated: false },
   { slug: "meetings", label: "Meetings", gated: false },
   { slug: "assistant", label: "Stratasphere™", gated: true },
+  // Only the Admin and the Manager role see this one at all.
+  { slug: "management", label: "Management", gated: false, managersOnly: true },
 ];
 
 function LockIcon() {
@@ -48,7 +50,8 @@ function LockIcon() {
 }
 
 export function StrataSphereNav({ active }: { active: string }) {
-  const { corpId, subscribed, isAdmin } = useStrata();
+  const { corpId, subscribed, isAdmin, canManage } = useStrata();
+  const items = allItems.filter((i) => !i.managersOnly || canManage);
   const [prompt, setPrompt] = useState<string | null>(null);
 
   return (
