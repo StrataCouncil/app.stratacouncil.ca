@@ -4,7 +4,8 @@ import { AppShell } from "@/components/AppShell";
 import { StrataContextProvider } from "@/components/StrataContext";
 import { StrataSwitcher } from "@/components/StrataSwitcher";
 import { ScreenGate } from "@/components/ScreenGate";
-import { getConnectedCorporations } from "@/lib/data/corporations";
+import { getConnectedCorporations, type ConnectedCorporation } from "@/lib/data/corporations";
+import { createClient } from "@/lib/supabase/server";
 import { getStrataAccess } from "@/lib/data/strata";
 
 /**
@@ -29,15 +30,35 @@ export default async function StrataSphereLayout({
   params: Promise<{ corpId: string }>;
 }) {
   const { corpId } = await params;
-  const corporations = await getConnectedCorporations();
-  const currentCorporation = corporations.find((c) => c.id === corpId);
+  const [corporations, access] = await Promise.all([getConnectedCorporations(), getStrataAccess(corpId)]);
+  let currentCorporation: ConnectedCorporation | undefined = corporations.find((c) => c.id === corpId);
+
+  // Super Admins manage every strata, member or not (0021).
+  if (!currentCorporation && access?.superAdminOnly) {
+    const { data: corp } = await (await createClient())
+      .from("strata_corporations")
+      .select("strata_plan_number, building_name, legal_name, address")
+      .eq("strata_plan_number", access.corpId)
+      .maybeSingle();
+    if (corp) {
+      currentCorporation = {
+        id: corp.strata_plan_number,
+        buildingName: corp.building_name,
+        legalName: corp.legal_name,
+        address: corp.address,
+        subscriptionStatus: access.subscribed ? "active" : "deactivated",
+      };
+    }
+  }
 
   if (!currentCorporation) {
     redirect("/strata");
   }
 
   const subscribed = currentCorporation.subscriptionStatus === "active";
-  const access = await getStrataAccess(corpId);
+  const switcherCorporations = corporations.some((c) => c.id === currentCorporation.id)
+    ? corporations
+    : [currentCorporation, ...corporations];
 
   return (
     <AppShell active="strata">
@@ -51,8 +72,23 @@ export default async function StrataSphereLayout({
               </h1>
               <p>{currentCorporation.address}</p>
             </div>
-            <StrataSwitcher corporations={corporations} currentId={currentCorporation.id} />
+            <StrataSwitcher corporations={switcherCorporations} currentId={currentCorporation.id} />
           </div>
+
+          {access?.superAdminOnly && (
+            <div className="nudge-banner nudge-banner--super" data-testid="super-admin-banner">
+              <div>
+                <strong>Super Admin</strong>
+                <p>
+                  You aren&rsquo;t a member of this strata. You have full admin control here, and changes you make are
+                  real. Members&rsquo; Stratasphere conversations stay private to them.
+                </p>
+              </div>
+              <Link href="/admin" className="button button-secondary">
+                Back to the console
+              </Link>
+            </div>
+          )}
 
           {!subscribed && access?.isAdmin && (
             <div className="nudge-banner">

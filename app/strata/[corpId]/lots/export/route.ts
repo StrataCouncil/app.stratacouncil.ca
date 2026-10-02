@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { rosterFields, toRosterCsv, type RosterCsvRow } from "@/lib/roster-csv";
+import { isStrataAdmin } from "@/lib/auth/strata-admin";
 
 /**
  * The owner roster as a CSV (doc02 §2a): `?template=1` for the blank
@@ -26,14 +27,7 @@ export async function GET(
   } = await supabase.auth.getUser();
   if (!user) return new NextResponse("Not signed in.", { status: 401 });
 
-  const { data: admin } = await supabase
-    .from("corporation_role_assignments")
-    .select("role")
-    .eq("corporation_id", corpId)
-    .eq("user_id", user.id)
-    .eq("role", "admin")
-    .maybeSingle();
-  if (!admin) return new NextResponse("Only this strata's admin can download the roster.", { status: 403 });
+  if (!(await isStrataAdmin(supabase, corpId))) return new NextResponse("Only this strata's admin can download the roster.", { status: 403 });
 
   const { data: rows, error } = await supabase
     .from("owners_and_council")

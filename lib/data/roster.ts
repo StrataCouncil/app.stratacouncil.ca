@@ -1,5 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { isCorporationRole, type CorporationRole } from "@/lib/strata";
+import { isStrataAdmin } from "@/lib/auth/strata-admin";
+import { signAvatarPaths } from "@/lib/data/avatars";
 
 /**
  * Real replacement for lib/placeholder-data.ts's `roster` /
@@ -25,6 +27,8 @@ export interface RosterMember {
   /** The strata lot this member is tied to (council members need one). */
   lotNumber: string | null;
   roles: CorporationRole[];
+  /** Signed link to their profile picture, if they've added one. */
+  avatarUrl: string | null;
 }
 
 export interface PendingInvite {
@@ -93,6 +97,9 @@ export async function getCorporationRoster(
     rolesByUser.set(row.user_id, [...(rolesByUser.get(row.user_id) ?? []), row.role]);
   }
 
+  const avatars = await signAvatarPaths(
+    ((directory.data ?? []) as { avatar_path: string | null }[]).map((m) => m.avatar_path)
+  );
   const members: RosterMember[] = (directory.data ?? []).map(
     (m: {
       user_id: string;
@@ -102,6 +109,7 @@ export async function getCorporationRoster(
       joined_at: string | null;
       can_run_meetings: boolean;
       lot_number: string | null;
+      avatar_path: string | null;
     }) => ({
       userId: m.user_id,
       fullName: m.full_name || m.email || "Unnamed member",
@@ -111,10 +119,11 @@ export async function getCorporationRoster(
       canRunMeetings: m.can_run_meetings,
       lotNumber: m.lot_number ?? null,
       roles: rolesByUser.get(m.user_id) ?? [],
+      avatarUrl: m.avatar_path ? avatars.get(m.avatar_path) ?? null : null,
     })
   );
 
-  const isAdmin = rolesByUser.get(user.id)?.includes("admin") ?? false;
+  const isAdmin = await isStrataAdmin(supabase, corporationId);
 
   let invites: PendingInvite[] = [];
   let joinRequests: PendingJoinRequest[] = [];

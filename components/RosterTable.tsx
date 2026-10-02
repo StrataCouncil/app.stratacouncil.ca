@@ -17,6 +17,7 @@ import {
   isSingleHolderRole,
   type CorporationRole,
 } from "@/lib/strata";
+import { MemberAvatar } from "@/components/MemberAvatar";
 
 const REMOVE_CONFIRM_PHRASE = "remove council member";
 
@@ -194,12 +195,17 @@ export function RosterTable({
             return (
               <tr key={member.userId} data-testid={`roster-row-${member.userId}`}>
                 <td>
-                  {member.fullName}
-                  {member.userId === currentUserId && (
-                    <span className="roster-table__meta"> (you)</span>
-                  )}
-                  <div className="roster-table__meta">{member.email}</div>
-                  {!active && <span className="pill pill--locked">Invited</span>}
+                  <div className="roster-member">
+                    <MemberAvatar name={member.fullName} url={member.avatarUrl} />
+                    <div>
+                      {member.fullName}
+                      {member.userId === currentUserId && (
+                        <span className="roster-table__meta"> (you)</span>
+                      )}
+                      <div className="roster-table__meta">{member.email}</div>
+                      {!active && <span className="pill pill--locked">Invited</span>}
+                    </div>
+                  </div>
                 </td>
                 <td>
                   {isAdmin && active ? (

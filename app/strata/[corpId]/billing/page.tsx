@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { isStrataAdmin } from "@/lib/auth/strata-admin";
 import { getStripe } from "@/lib/stripe/client";
 import { calculateBilling } from "@/lib/stripe/prices";
 import { StatementsPeriodSelect } from "@/components/StatementsPeriodSelect";
@@ -110,7 +111,11 @@ export default async function BillingPage({
     .eq("role", "admin");
   const adminCorpIds = (adminRows ?? []).map((r) => r.corporation_id as string);
   // No billing information at all for anyone who isn't this strata's admin.
-  if (!adminCorpIds.includes(corpId)) redirect(`/strata/${corpId}`);
+  // A Super Admin is admin of every strata (0021).
+  if (!adminCorpIds.includes(corpId)) {
+    if (!(await isStrataAdmin(supabase, corpId))) redirect(`/strata/${corpId}`);
+    adminCorpIds.push(corpId);
+  }
 
   const admin = createAdminClient();
   const [{ data: corps }, { data: subs }] = await Promise.all([
