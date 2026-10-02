@@ -37,6 +37,12 @@ export default async function AdminConsolePage() {
           </p>
         </div>
 
+        <p style={{ marginBottom: "2rem" }}>
+          <Link href="/admin/legislation" className="button button-secondary" data-testid="admin-legislation-link">
+            Legislation library
+          </Link>
+        </p>
+
         <h2 style={{ marginBottom: "1rem" }}>New corporation requests</h2>
         {requests.length === 0 ? (
           <p className="roster-notice" data-testid="admin-no-requests">

@@ -4103,3 +4103,84 @@ abbr.role-tag--short {
 .roster-table__row-actions {
   gap: 1rem;
 }
+
+/* Legislation library (Super Admin) */
+
+.legis-upload {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  padding: 1.25rem;
+}
+
+.legis-upload__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.legis-upload__head h2 {
+  margin: 0 0 0.25rem;
+}
+
+.legis-upload__head p {
+  margin: 0;
+  max-width: 640px;
+}
+
+.legis-upload .roster-table-wrap {
+  margin-top: 1rem;
+}
+
+.legis-staged input,
+.legis-staged select,
+.legis-edit input,
+.legis-edit select {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.4em 0.6em;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--paper);
+  color: var(--ink);
+  width: 100%;
+}
+
+.legis-upload__actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.legis-edit {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr auto auto;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.legis-actions {
+  white-space: nowrap;
+}
+
+.legis-actions .link-button + .link-button {
+  margin-left: 0.75rem;
+}
+
+.legis-error,
+.legis-row-error {
+  color: var(--danger);
+}
+
+.legis-error {
+  margin: 0.75rem 0 0;
+  font-size: 0.85rem;
+}
+
+.doc-status--not_indexable {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
