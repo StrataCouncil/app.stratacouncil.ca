@@ -78,11 +78,16 @@ export function ItemEditor({
     setDraft((d) => (d.motion ? { ...d, motion: { ...d.motion, text: res.motionText } } : d));
   }
 
-  // Focus once on open; Escape closes unless an upload is in flight.
+  // Closing (Escape, a click outside, Cancel) asks first if there are unsaved
+  // changes; never while an upload is in flight.
+  const dirty = JSON.stringify(draft) !== JSON.stringify(item) || noteDraft !== note;
+  function requestClose() {
+    if (busy) return;
+    if (dirty && !window.confirm("Discard your changes to this item? They haven't been saved.")) return;
+    onClose();
+  }
   const escape = useRef(() => {});
-  escape.current = () => {
-    if (!busy) onClose();
-  };
+  escape.current = requestClose;
   useEffect(() => {
     titleRef.current?.focus();
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && escape.current();
@@ -150,7 +155,7 @@ export function ItemEditor({
   }
 
   return (
-    <div className="modal-backdrop" onClick={() => !busy && onClose()}>
+    <div className="modal-backdrop" onClick={requestClose}>
       <form
         className="modal modal--wide"
         role="dialog"
@@ -316,7 +321,7 @@ export function ItemEditor({
           </p>
         )}
         <div className="role-editor__actions">
-          <button type="button" className="button button-secondary" onClick={onClose} disabled={Boolean(busy)}>
+          <button type="button" className="button button-secondary" onClick={requestClose} disabled={Boolean(busy)}>
             Cancel
           </button>
           <button type="submit" className="button button-primary" disabled={Boolean(busy)} data-testid="item-save">

@@ -11,6 +11,7 @@ import { extractDocumentText } from "@/lib/kb/extract";
 import { stripPII } from "@/lib/pii";
 import { askClaudeJson } from "@/lib/ai/claude";
 import { reconcilePlan } from "@/lib/strata-plan";
+import { hasPostalCode } from "@/lib/postal";
 
 /**
  * Server Actions behind /strata — connecting to a strata (doc01 §4,
@@ -353,6 +354,8 @@ export async function submitCreationRequest(input: CreationRequestInput): Promis
   if (!strataPlanNumber) return { ok: false, error: "Enter a valid Strata Plan number, e.g. BCS-1234." };
   if (!legalName) return { ok: false, error: "Enter the corporation's legal name." };
   if (!address) return { ok: false, error: "Enter the corporation's civic address." };
+  if (!hasPostalCode(address)) return { ok: false, error: "Add the postal code to the corporation's civic address." };
+  if (!hasPostalCode(input.attestationAddress)) return { ok: false, error: "Add the postal code to your mailing address." };
   if (!isJurisdictionCode(input.jurisdiction)) return { ok: false, error: "Choose a jurisdiction." };
   if (!attestation.fullName || !attestation.address || !attestation.phone) {
     return { ok: false, error: "Complete every attestation field." };

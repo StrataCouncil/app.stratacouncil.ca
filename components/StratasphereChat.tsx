@@ -12,6 +12,7 @@ import {
   setConversationPinned,
 } from "@/app/strata/[corpId]/assistant/actions";
 import { getDocumentDownloadUrl } from "@/app/strata/[corpId]/documents/actions";
+import { openInNewTab } from "@/lib/open-in-tab";
 import type { StratasphereSource } from "@/lib/ai/stratasphere";
 import type { ConversationMessage, ConversationProject, ConversationSummary } from "@/lib/data/conversations";
 
@@ -58,9 +59,8 @@ function Sources({ corpId, sources }: { corpId: string; sources: StratasphereSou
 
   async function open(documentId: string) {
     setError("");
-    const res = await getDocumentDownloadUrl(corpId, documentId);
-    if (res.ok) window.open(res.url, "_blank", "noopener");
-    else setError(res.error);
+    const res = await openInNewTab(() => getDocumentDownloadUrl(corpId, documentId, { view: true }));
+    if (!res.ok) setError(res.error);
   }
 
   return (
@@ -610,7 +610,25 @@ export function StratasphereChat({
             {messages.map((m) => (
               <div className="chat-message" data-role={m.role} key={m.id}>
                 <div className="chat-message__bubble" data-pending={m.pending && !m.content ? "true" : undefined}>
-                  {m.pending && !m.content ? "Searching your records…" : m.content}
+                  {m.pending && !m.content ? (
+                    <span className="chat-thinking" role="status">
+                      Searching your records
+                      <span className="chat-dots" aria-hidden="true">
+                        <span />
+                        <span />
+                        <span />
+                      </span>
+                    </span>
+                  ) : (
+                    m.content
+                  )}
+                  {m.pending && m.content ? (
+                    <span className="chat-dots chat-dots--inline" aria-label="Still writing">
+                      <span />
+                      <span />
+                      <span />
+                    </span>
+                  ) : null}
                 </div>
                 {m.role === "assistant" && !m.pending && <Sources corpId={corpId} sources={m.sources} />}
               </div>

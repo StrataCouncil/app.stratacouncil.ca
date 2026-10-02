@@ -151,11 +151,15 @@ export function DeleteMeetingButton({ corpId, meetingId }: { corpId: string; mee
   return (
     <>
       <button type="button" className="link-button agenda-danger" onClick={() => setOpen(true)} data-testid="delete-meeting">
-        Delete draft
+        Delete meeting
       </button>
       {open && (
-        <Dialog title="Delete this draft meeting?" onClose={() => setOpen(false)}>
-          <p>The meeting and its agenda are deleted. Files attached to it stay in Documents.</p>
+        <Dialog title="Delete this meeting?" onClose={() => setOpen(false)}>
+          <p>
+            This deletes the whole meeting: its date and details and its agenda. It can&rsquo;t be undone. Files attached to
+            agenda items stay in Documents.
+          </p>
+          <p className="card__meta">To start the agenda over instead, edit or delete its items; the meeting stays.</p>
           {error && <p className="form-error" role="alert">{error}</p>}
           <div className="role-editor__actions">
             <button type="button" className="button button-secondary" onClick={() => setOpen(false)} disabled={pending}>
@@ -174,7 +178,7 @@ export function DeleteMeetingButton({ corpId, meetingId }: { corpId: string; mee
               }
               data-testid="delete-meeting-confirm"
             >
-              Delete
+              Delete meeting
             </button>
           </div>
         </Dialog>

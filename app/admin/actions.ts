@@ -8,6 +8,7 @@ import { creationRequestApprovedEmail, creationRequestDeniedEmail } from "@/lib/
 import { createClient } from "@/lib/supabase/server";
 import { queueDocumentIndexing } from "@/lib/kb/queue";
 import { isJurisdictionCode, normalizeStrataPlanNumber } from "@/lib/strata";
+import { joinPostal, normalizePostalCode } from "@/lib/postal";
 
 /**
  * Super Admin review of `corporation_creation_requests` (doc01 §4).
@@ -33,13 +34,16 @@ export async function approveCreationRequest(
 ): Promise<ReviewResult> {
   const strataPlanNumber = normalizeStrataPlanNumber(String(formData.get("strataPlanNumber") ?? ""));
   const legalName = String(formData.get("legalName") ?? "").trim();
-  const address = String(formData.get("address") ?? "").trim();
+  const street = String(formData.get("address") ?? "").trim();
+  const postalCode = normalizePostalCode(String(formData.get("postalCode") ?? ""));
+  const address = street && postalCode ? joinPostal(street, postalCode) : street;
   const unitCount = Math.trunc(Number(formData.get("unitCount")));
   const jurisdiction = String(formData.get("jurisdiction") ?? "");
   const buildingName = String(formData.get("buildingName") ?? "").trim().slice(0, 200);
 
   if (!strataPlanNumber) return { ok: false, error: "Enter a valid Strata Plan number, e.g. BCS-1234." };
-  if (!legalName || !address) return { ok: false, error: "Legal name and address are required." };
+  if (!legalName || !street) return { ok: false, error: "Legal name and address are required." };
+  if (!postalCode) return { ok: false, error: "Enter a valid postal code, e.g. V0E 2S3." };
   if (!Number.isFinite(unitCount) || unitCount < 1) return { ok: false, error: "Unit count must be at least 1." };
   if (!isJurisdictionCode(jurisdiction)) return { ok: false, error: "Choose a jurisdiction." };
 

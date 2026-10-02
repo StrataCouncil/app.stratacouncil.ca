@@ -8,6 +8,7 @@ import {
 } from "@/app/admin/actions";
 import type { CreationRequestDetail } from "@/lib/data/admin";
 import { jurisdictions } from "@/lib/strata";
+import { splitPostal } from "@/lib/postal";
 
 /**
  * The reviewer's half of corporation creation: the requester's typed
@@ -57,7 +58,18 @@ export function CreationRequestReview({ request }: { request: CreationRequestDet
       </div>
       <div className="field">
         <label htmlFor="rv-address">Civic address</label>
-        <input id="rv-address" name="address" defaultValue={request.address} required />
+        <div className="address-lookup__row">
+          <input id="rv-address" name="address" defaultValue={splitPostal(request.address).street} required />
+          <input
+            name="postalCode"
+            defaultValue={splitPostal(request.address).postal}
+            placeholder="Postal code"
+            aria-label="Postal code"
+            maxLength={7}
+            required
+            data-testid="review-postal-code"
+          />
+        </div>
         <span className={request.addressVerified ? "field__hint" : "roster-table__warn"}>
           {request.addressVerified
             ? "Picked from the address lookup."

@@ -38,19 +38,22 @@ export function MeetingDetailsForm({
       timezone: "America/Vancouver",
       format: "in_person",
       location: "",
-      chairName: chairOptions[0]?.name ?? "",
+      chairName: chairOptions[0]?.label ?? "",
     }
   );
   // Chair: one of the usual office holders, elected at the meeting, or
   // someone else typed in.
+  // A new meeting defaults to the President.
   const [chairChoice, setChairChoice] = useState(() => {
-    const name = initial ? initial.chairName : (chairOptions[0]?.name ?? "");
-    if (!name) return ELECT;
-    return chairOptions.some((c) => c.name === name) ? name : OTHER;
+    if (!initial) return chairOptions[0]?.key ?? ELECT;
+    const chair = initial.chairName;
+    if (!chair) return ELECT;
+    return chairOptions.find((c) => c.label === chair || c.name === chair)?.key ?? OTHER;
   });
   function chooseChair(value: string) {
     setChairChoice(value);
-    setForm((f) => ({ ...f, chairName: value === ELECT ? "" : value === OTHER ? "" : value }));
+    const option = chairOptions.find((c) => c.key === value);
+    setForm((f) => ({ ...f, chairName: option ? option.label : "" }));
   }
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -135,8 +138,8 @@ export function MeetingDetailsForm({
           <span>Chair</span>
           <select value={chairChoice} onChange={(e) => chooseChair(e.target.value)} data-testid="meeting-chair">
             {chairOptions.map((c) => (
-              <option key={`${c.office}-${c.name}`} value={c.name}>
-                {c.name} ({c.office})
+              <option key={c.key} value={c.key}>
+                {c.name ? `${c.office}: ${c.name}` : c.office}
               </option>
             ))}
             <option value={ELECT}>Elected at the meeting</option>

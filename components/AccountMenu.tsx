@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { useDismiss } from "@/lib/hooks/use-dismiss";
 import { signOut } from "@/lib/auth/actions";
 import type { CurrentProfile } from "@/lib/data/profile";
 
@@ -22,13 +23,15 @@ function initials(fullName: string) {
  */
 export function AccountMenu({ profile }: { profile: CurrentProfile | null }) {
   const [open, setOpen] = useState(false);
+  const wrap = useRef<HTMLDivElement>(null);
+  useDismiss(wrap, open, () => setOpen(false));
   if (!profile) return null;
 
   const displayName = profile.fullName.trim() || profile.email;
   const firstName = displayName.split(" ")[0];
 
   return (
-    <div className="account-menu">
+    <div className="account-menu" ref={wrap}>
       <button
         className="account-menu__trigger"
         onClick={() => setOpen((v) => !v)}

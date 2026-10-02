@@ -34,6 +34,7 @@ import { callToOrderScript, itemScript, zonedInstant } from "@/lib/meetings/scri
 import { adjournMeeting, askMeetingAssistant, callToOrder, saveMeetingState } from "@/app/strata/[corpId]/meetings/[meetingId]/run/actions";
 import { saveItemNote } from "@/app/strata/[corpId]/meetings/actions";
 import { getDocumentDownloadUrl } from "@/app/strata/[corpId]/documents/actions";
+import { openInNewTab } from "@/lib/open-in-tab";
 import { ItemEditor } from "@/components/meetings/ItemEditor";
 
 /**
@@ -187,6 +188,9 @@ export function MeetingMode(props: {
     if (m.mover === m.sec) return setSaveError("The mover and seconder must be different lots.");
     const v = evaluateVote(m);
     if (v.total === 0) return setSaveError("Record the votes first.");
+    if (v.total > voters) {
+      return setSaveError(`${v.total} votes recorded, but only ${voters} ${voters === 1 ? "voter is" : "voters are"} present. Check the count.`);
+    }
     const outcome = v.passing ? "CARRIED" : "DEFEATED";
     setSaveError(null);
     setConfirm({
@@ -555,6 +559,7 @@ export function MeetingMode(props: {
               general={general}
               called={called}
               present={present}
+              voters={voters}
               names={names}
               note={notes[item.id] ?? ""}
               onNote={(body) => {
@@ -714,6 +719,8 @@ function ItemPanel(props: {
   general: boolean;
   called: boolean;
   present: string[];
+  /** Everyone who can vote: those present, plus proxies at a general meeting. */
+  voters: number;
   names: Record<string, string>;
   note: string;
   onNote: (body: string) => void;
@@ -739,8 +746,8 @@ function ItemPanel(props: {
   async function openAttachment(documentId: string | null, url?: string) {
     if (!documentId && url) return window.open(url, "_blank", "noopener,noreferrer");
     if (!documentId) return;
-    const result = await getDocumentDownloadUrl(props.corpId, documentId);
-    if (result.ok) window.open(result.url, "_blank", "noopener,noreferrer");
+    // Opens in its own tab (not a download) so it can be screen-shared on a call.
+    await openInNewTab(() => getDocumentDownloadUrl(props.corpId, documentId, { view: true }));
   }
 
   return (
@@ -868,7 +875,11 @@ function ItemPanel(props: {
             </label>
           </div>
           <div className="mm-tally">
-            {(["for", "against", "abstain"] as const).map((k) => (
+            {(["for", "against", "abstain"] as const).map((k) => {
+              // Nobody votes twice: the three counts together can't exceed the voters present.
+              const others = m.for + m.against + m.abstain - m[k];
+              const max = Math.max(0, props.voters - others);
+              return (
               <div className="mm-tally__box" key={k}>
                 <span className="mm-tally__label">{k === "for" ? "In favour" : k === "against" ? "Opposed" : "Abstain"}</span>
                 <div className="mm-tally__controls">
@@ -880,18 +891,34 @@ function ItemPanel(props: {
                     min={0}
                     inputMode="numeric"
                     value={m[k]}
-                    onChange={(e) => setMotion({ [k]: Math.max(0, Math.floor(Number(e.target.value) || 0)) })}
+                    max={max}
+                    onChange={(e) => setMotion({ [k]: Math.min(max, Math.max(0, Math.floor(Number(e.target.value) || 0))) })}
                     disabled={locked}
                     aria-label={k === "for" ? "Votes in favour" : k === "against" ? "Votes opposed" : "Abstentions"}
                     data-testid={`mm-votes-${k}`}
                   />
-                  <button type="button" className="icon-button" aria-label={`One more ${k}`} onClick={() => setMotion({ [k]: m[k] + 1 })} disabled={locked}>
+                  <button
+                    type="button"
+                    className="icon-button"
+                    aria-label={`One more ${k}`}
+                    onClick={() => setMotion({ [k]: Math.min(max, m[k] + 1) })}
+                    disabled={locked || m[k] >= max}
+                  >
                     +
                   </button>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
+          {!it.done && (
+            <p className="card__meta mm-tally__count" data-testid="mm-votes-counted">
+              {m.for + m.against + m.abstain} of {props.voters} {props.voters === 1 ? "voter" : "voters"} counted
+              {props.voters - (m.for + m.against + m.abstain) > 0
+                ? ` · ${props.voters - (m.for + m.against + m.abstain)} not yet counted`
+                : ""}
+            </p>
+          )}
           <p className="mm-threshold" data-state={it.done ? m.outcome?.toLowerCase() : vote && vote.cast > 0 ? (vote.passing ? "passing" : "failing") : "pending"}>
             {it.done
               ? m.outcome

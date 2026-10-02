@@ -15,6 +15,7 @@ import { createClient } from "@/lib/supabase/client";
 import { jurisdictions } from "@/lib/strata";
 import { legalNameFor } from "@/lib/strata-plan";
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
+import { hasPostalCode } from "@/lib/postal";
 
 /**
  * The connect-a-strata flow on /strata (doc01 §4): Strata Plan number
@@ -251,6 +252,14 @@ function CreationRequestForm({
       setError("Upload the Strata Plan first.");
       return;
     }
+    if (!hasPostalCode(address)) {
+      setError("Add the postal code to the corporation's civic address.");
+      return;
+    }
+    if (!hasPostalCode(attestAddress)) {
+      setError("Add the postal code to your mailing address.");
+      return;
+    }
     setSubmitting(true);
     setError(null);
     const result = await submitCreationRequest({
@@ -414,7 +423,13 @@ function CreationRequestForm({
         </div>
         <div className="field">
           <label htmlFor="at-address">Your mailing address</label>
-          <input id="at-address" type="text" value={attestAddress} onChange={(e) => setAttestAddress(e.target.value)} required />
+          <AddressAutocomplete
+            id="at-address"
+            value={attestAddress}
+            jurisdiction={jurisdiction}
+            placeholder="Start typing your mailing address"
+            onChange={(a) => setAttestAddress(a)}
+          />
         </div>
         <div className="setup-form__row">
           <div className="field">

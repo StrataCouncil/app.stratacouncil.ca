@@ -164,9 +164,15 @@ export async function registerDocuments(
 }
 
 /** A short-lived signed download URL, after an RLS-checked read of the row. */
+/**
+ * A short-lived link to a document. By default the browser saves the file;
+ * with `view`, it opens in the browser (PDFs and images show in the tab),
+ * for attachments shown during a meeting or cited by Stratasphere.
+ */
 export async function getDocumentDownloadUrl(
   corpId: string,
-  documentId: string
+  documentId: string,
+  { view = false }: { view?: boolean } = {}
 ): Promise<{ ok: true; url: string } | Fail> {
   const supabase = await createClient();
   const { data: doc } = await supabase
@@ -184,7 +190,7 @@ export async function getDocumentDownloadUrl(
   const path = doc.storage_path.slice(slash + 1);
   const { data, error } = await createAdminClient()
     .storage.from(bucket)
-    .createSignedUrl(path, 60 * 5, { download: doc.file_name || doc.title || true });
+    .createSignedUrl(path, 60 * 5, view ? undefined : { download: doc.file_name || doc.title || true });
   if (error || !data) {
     console.error("[getDocumentDownloadUrl]", error?.message);
     return { ok: false, error: "Couldn't prepare the download. Please try again." };
