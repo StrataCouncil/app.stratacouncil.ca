@@ -6,6 +6,8 @@ import { listMeetings, type MeetingRecord } from "@/lib/data/meetings";
 import { createClient } from "@/lib/supabase/server";
 import { meetingTypeLabels } from "@/lib/meetings/agenda";
 import { formatMeetingWhen } from "@/lib/meetings/format";
+import { meetingStatus } from "@/lib/meetings/status";
+import { RequestSubscriptionButton } from "@/components/RequestSubscriptionButton";
 
 /**
  * Meetings. Before the free meeting is used, the first-meeting checklist
@@ -93,7 +95,7 @@ export default async function MeetingsPage({ params }: { params: Promise<{ corpI
               See plans
             </Link>
           ) : (
-            <p className="card__meta">Only your strata&rsquo;s admin can subscribe.</p>
+            <RequestSubscriptionButton corpId={corpId} />
           )}
         </div>
       )}
@@ -129,6 +131,9 @@ function MeetingSection({
               <div>
                 <div className="module-row__title">
                   <Link href={`/strata/${corpId}/meetings/${m.id}`}>{meetingTypeLabels[m.type]}</Link>
+                  <span className="meeting-status" data-tone={meetingStatus(m).tone} data-testid={`meeting-status-${m.id}`}>
+                    {meetingStatus(m).label}
+                  </span>
                 </div>
                 <div className="module-row__meta">
                   {formatMeetingWhen(m)} &middot; {statusLabel(m)}
@@ -159,7 +164,10 @@ function MeetingSection({
 }
 
 function statusLabel(m: MeetingRecord) {
-  if (m.status === "ADJOURNED") return m.minutesState === "FINAL" ? "Minutes final" : "Adjourned, minutes in draft";
+  if (m.status === "ADJOURNED") {
+    if (!m.actualStartAt) return "Adjourned without quorum";
+    return m.minutesState === "FINAL" ? "Minutes final" : "Minutes in draft";
+  }
   if (m.status === "LIVE") return `In progress${m.launchedByName ? ` (${m.launchedByName})` : ""}`;
   if (m.launchedAt) return `Launched${m.launchedByName ? ` by ${m.launchedByName}` : ""}`;
   return m.agenda.length ? "Draft" : "Draft, no agenda yet";

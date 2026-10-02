@@ -72,7 +72,7 @@ export function RosterInvites({
   }
 
   return (
-    <div className="card roster-invites" data-testid="roster-invites">
+    <div className="card roster-invites" id="invite" data-testid="roster-invites">
       <h3>Invite a member</h3>
       <p className="card__meta" style={{ marginTop: "-0.4rem" }}>
         They&rsquo;ll get an email with a link that signs them in &mdash;

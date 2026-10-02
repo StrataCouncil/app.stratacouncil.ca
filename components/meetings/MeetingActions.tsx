@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { deleteMeeting, launchMeeting, type MeetingDetailsInput } from "@/app/strata/[corpId]/meetings/actions";
 import { MeetingDetailsForm } from "@/components/meetings/MeetingDetailsForm";
 import type { ChairCandidate } from "@/lib/data/meetings";
+import { RequestSubscriptionButton } from "@/components/RequestSubscriptionButton";
 
 function Dialog({ title, onClose, children, wide }: { title: string; onClose: () => void; children: React.ReactNode; wide?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -103,7 +104,7 @@ export function LaunchMeetingButton({
                   See plans
                 </Link>
               ) : (
-                <span className="card__meta">Only your strata&rsquo;s admin can subscribe.</span>
+                <RequestSubscriptionButton corpId={corpId} />
               )
             ) : (
               <button type="button" className="button button-primary" onClick={launch} disabled={pending} data-testid="launch-confirm">
