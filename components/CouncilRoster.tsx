@@ -29,6 +29,7 @@ export function CouncilRoster({
           <RosterInvites corporationId={corporationId} invites={roster.invites} />
         </>
       )}
+      <div id="roster" />
       <RosterTable
         corporationId={corporationId}
         members={roster.members}

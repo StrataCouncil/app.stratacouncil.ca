@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useStrata } from "@/components/StrataContext";
+import { RequestSubscriptionButton } from "@/components/RequestSubscriptionButton";
 
 /**
  * StrataSphere sub-nav (doc03 "second level"): free sections show fully
@@ -140,15 +141,14 @@ function SubscribePrompt({
         </p>
         {!isAdmin && (
           <p className="card__meta">
-            Only your strata&rsquo;s admin can subscribe &mdash; ask them to set
-            it up from Billing.
+            Only your strata&rsquo;s admin can subscribe. Request it and we&rsquo;ll email them for you.
           </p>
         )}
         <div className="role-editor__actions">
           <button ref={closeRef} type="button" className="button button-secondary" onClick={onClose}>
             Not now
           </button>
-          {isAdmin && (
+          {isAdmin ? (
             <Link
               href={`/strata/${corpId}/billing`}
               className="button button-primary"
@@ -156,6 +156,8 @@ function SubscribePrompt({
             >
               See plans
             </Link>
+          ) : (
+            <RequestSubscriptionButton corpId={corpId} />
           )}
         </div>
       </div>

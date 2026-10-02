@@ -202,3 +202,25 @@ export function invoiceCopyEmail(params: {
   const text = `A Stratasphere payment of ${params.amount} for ${params.corporationName} went through.${params.invoiceNumber ? ` Invoice ${params.invoiceNumber}.` : ""}\n\nYou're receiving this copy because you're listed as a billing contact. View the invoice and receipt:\n\n${params.invoiceUrl}`;
   return { subject: `Stratasphere payment received: ${params.corporationName}`, html, text };
 }
+
+/**
+ * A member asks the strata's admin(s) to subscribe to Stratasphere (sent on
+ * their behalf from the subscription prompt).
+ */
+export function subscriptionRequestEmail(params: {
+  corporationName: string;
+  requesterName: string;
+  requesterEmail: string;
+  billingUrl: string;
+}) {
+  const name = escapeHtml(params.corporationName);
+  const who = escapeHtml(params.requesterName ? `${params.requesterName} (${params.requesterEmail})` : params.requesterEmail);
+  const html = wrap(`
+    <p style="margin:0 0 16px;font-size:16px;color:${INK};">${who} would like <strong>${name}</strong> to subscribe to Stratasphere&trade;.</p>
+    <p style="margin:0 0 8px;font-size:14px;color:${INK};">A subscription unlocks the Stratasphere&trade; AI assistant, which answers questions from your strata&rsquo;s own records and BC strata law, plus Meeting Mode for every meeting after your free one. As this strata&rsquo;s admin, you can see the plans and subscribe from Billing.</p>
+    ${button(params.billingUrl, "See plans")}
+  `);
+  const whoText = params.requesterName ? `${params.requesterName} (${params.requesterEmail})` : params.requesterEmail;
+  const text = `${whoText} would like ${params.corporationName} to subscribe to Stratasphere.\n\nA subscription unlocks the Stratasphere AI assistant, which answers questions from your strata's own records and BC strata law, plus Meeting Mode for every meeting after your free one. As this strata's admin, you can see the plans and subscribe from Billing:\n\n${params.billingUrl}`;
+  return { subject: `${whoText} asked about a Stratasphere subscription for ${params.corporationName}`, html, text };
+}

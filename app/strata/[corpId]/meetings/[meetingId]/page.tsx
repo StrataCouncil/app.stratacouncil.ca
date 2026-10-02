@@ -8,6 +8,7 @@ import { getStrataAccess } from "@/lib/data/strata";
 import { chairCandidates, getMeeting, getMeetingNotes } from "@/lib/data/meetings";
 import { meetingFormatLabels, meetingTypeLabels } from "@/lib/meetings/agenda";
 import { formatMeetingWhen } from "@/lib/meetings/format";
+import { meetingStatus } from "@/lib/meetings/status";
 
 /**
  * One meeting before it runs: details, the agenda builder (for whoever
@@ -38,7 +39,12 @@ export default async function MeetingPage({ params }: { params: Promise<{ corpId
 
       <div className="doc-header">
         <div>
-          <h2>{meetingTypeLabels[meeting.type]}</h2>
+          <h2>
+            {meetingTypeLabels[meeting.type]}{" "}
+            <span className="meeting-status" data-tone={meetingStatus(meeting).tone}>
+              {meetingStatus(meeting).label}
+            </span>
+          </h2>
           <p className="card__meta">
             {formatMeetingWhen(meeting)} &middot; {meetingFormatLabels[meeting.format]}
             {meeting.location ? <> &middot; {meeting.location}</> : null}
@@ -100,7 +106,7 @@ export default async function MeetingPage({ params }: { params: Promise<{ corpId
           launch={{ subscribed: access.subscribed, trialAvailable, isAdmin: access.isAdmin }}
         />
       ) : (
-        <AgendaView agenda={meeting.agenda} />
+        <AgendaView corpId={corpId} agenda={meeting.agenda} />
       )}
     </>
   );
