@@ -2,6 +2,7 @@ import Link from "next/link";
 import { calculateBilling, DISPLAY_RATES, type BillingInterval } from "@/lib/stripe/prices";
 import { startPaymentSetup } from "@/app/strata/[corpId]/billing/actions";
 import { BillingContactForm, BillingPayForm } from "@/components/BillingStepForms";
+import { COMPANY_LEGAL_NAME, COMPANY_NAME, STATEMENT_DESCRIPTOR } from "@/lib/company";
 
 export type BillingStep = "plan" | "payment" | "contact" | "review";
 
@@ -135,6 +136,10 @@ export function BillingSteps({
                 too. You&rsquo;ll enter the details on Stripe&rsquo;s secure page and come straight back here. Nothing
                 is charged until you confirm on the last step.
               </p>
+              <p className="card__meta">
+                Payments are processed by Stripe for {COMPANY_LEGAL_NAME}, the company behind StrataCouncil.ca, so
+                you&rsquo;ll see {COMPANY_NAME} on the secure payment page.
+              </p>
               <form action={startPaymentSetup.bind(null, corpId, interval)}>
                 <button className="button button-primary" data-testid="add-payment-method">
                   Add payment method
@@ -177,6 +182,7 @@ export function BillingSteps({
               <dt>Monthly charge</dt>
               <dd>
                 {fmt(chosen.subtotal)} + {fmt(chosen.gst)} GST = <strong>{fmt(chosen.total)}</strong>
+                <div className="card__meta">Appears on your statement as {STATEMENT_DESCRIPTOR.toUpperCase()}.</div>
               </dd>
             </div>
             <div>

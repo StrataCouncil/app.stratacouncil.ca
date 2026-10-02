@@ -31,7 +31,8 @@ function wrap(bodyHtml: string) {
             </tr>
             <tr>
               <td style="padding-top:20px;font-size:12px;color:${MUTED};">
-                StrataCouncil.ca &middot; British Columbia, Canada
+                StrataCouncil.ca &middot; British Columbia, Canada<br />
+                A product of Trickfilm Entertainment Inc.
               </td>
             </tr>
           </table>
