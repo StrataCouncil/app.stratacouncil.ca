@@ -1,234 +1,492 @@
 "use client";
 
-import { useState } from "react";
-import { documents, type Conversation, type Project } from "@/lib/placeholder-data";
+import { useEffect, useRef, useState } from "react";
+import {
+  createProject,
+  deleteConversation,
+  deleteProject,
+  getConversationMessages,
+  moveConversationToProject,
+  renameConversation,
+  renameProject,
+  setConversationPinned,
+} from "@/app/strata/[corpId]/assistant/actions";
+import { getDocumentDownloadUrl } from "@/app/strata/[corpId]/documents/actions";
+import type { StratasphereSource } from "@/lib/ai/stratasphere";
+import type { ConversationMessage, ConversationProject, ConversationSummary } from "@/lib/data/conversations";
 
 /**
- * The standalone Stratasphere™ assistant — deliberately shaped like a
- * familiar chat product (sidebar of past threads, one active transcript,
- * a message composer) because that's the interaction model people
- * already know, not a novel one worth inventing here. Two things that
- * model has to actually deliver on for this to be honest, both real
- * design commitments from doc02, not just UI chrome:
+ * The standalone Stratasphere assistant (doc02 §4b). Shaped like the chat
+ * products people already know: past conversations in a sidebar (Pinned,
+ * Projects, Recents by date), one transcript, a composer. Answers stream in
+ * as they're written, and each one lists what it drew on underneath.
  *
- * 1. Cognition of the full KB, every time — legislation, cross-platform
- *    precedent, and this corporation's own indexed documents + decision
- *    ledger (doc02 §0a/§3), not just whatever's in the current thread.
- *    The banner under the header and the citations under each reply are
- *    both here to make that concrete rather than asserted.
- * 2. Persistent conversation history across sessions, the same way
- *    ChatGPT's sidebar works — doc02 §6 open question 5 names "one log
- *    per session" as the working assumption for the standalone reset
- *    boundary, which is exactly what this thread list is.
- *
- * No backend yet, so switching threads and starting a new one is real
- * (client-side) but sending a message is not — the composer is honest
- * about that rather than pretending to respond.
- *
- * Sidebar is grouped the way ChatGPT's is, not a flat list: Pinned first,
- * then Projects (each a named container a conversation can belong to),
- * then Recents grouped by the same relative-date labels a conversation's
- * `updatedAt` already carries (Today / Yesterday / Previous 7 Days). A
- * pinned conversation shows under Pinned only, even if it also belongs to
- * a project, so it isn't listed twice.
- *
- * Pin/unpin is a real (client-side) toggle, not just a filter the seed
- * data happens to satisfy — the data always had a `pinned` flag, but
- * nothing in the UI could change it, which is its own kind of dishonest
- * mock (a control that looks like state but is actually just fixture
- * data). The toggle itself sits inside each row rather than as a
- * separate menu: "Pin"/"Unpin" shows on hover for an unpinned thread,
- * and stays visible for a pinned one so it's discoverable without
- * hovering into the Pinned section specifically.
- *
- * Projects are the same story — creating one and moving a conversation
- * in or out of one are both real (client-side) actions now, not just
- * seed data with no control surface. "+ New" sits in the Projects
- * section header (always rendered, even with zero projects, so there's
- * somewhere to create the first one). Moving a conversation is a small
- * popover ("Move") rather than a dropdown `<select>`, matching the
- * lightweight-popover pattern already used for `RosterTable`'s role
- * editor — "No project" is always the first option, so removing a
- * conversation from a project is the same action as assigning one.
- * A project with no conversations in it yet still renders (with a
- * one-line "No conversations yet"), rather than disappearing the moment
- * it's created.
+ * Conversations are the account holder's alone (0019): not the council's,
+ * not the admin's.
  */
-function ThreadButton({
-  c,
-  active,
-  onSelect,
-  onTogglePin,
-  onMove,
-  projects,
-}: {
-  c: Conversation;
-  active: boolean;
-  onSelect: () => void;
-  onTogglePin: () => void;
-  onMove: (projectId: string | null) => void;
-  projects: Project[];
-}) {
-  const [moveOpen, setMoveOpen] = useState(false);
+
+type Msg = Omit<ConversationMessage, "createdAt"> & { pending?: boolean };
+
+const SUGGESTIONS = [
+  "What do our bylaws say about pets?",
+  "What has council decided about the roof in the last two years?",
+  "When is the AGM notice due under the Strata Property Act?",
+  "Summarize the most recent financial statements.",
+];
+
+function dateGroup(iso: string, now: Date): string {
+  const d = new Date(iso);
+  const day = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diff = Math.round((day(now) - day(d)) / 86_400_000);
+  if (diff <= 0) return "Today";
+  if (diff === 1) return "Yesterday";
+  if (diff < 7) return "Previous 7 days";
+  if (diff < 30) return "Previous 30 days";
+  return d.toLocaleDateString("en-CA", { month: "long", year: "numeric" });
+}
+
+function sourceLabel(s: StratasphereSource): string {
+  if (s.kind === "document") return s.title;
+  if (s.kind === "legislation") return s.title;
+  if (s.kind === "decisions") return "Decision ledger";
+  return "Cross-platform precedent";
+}
+
+function Sources({ corpId, sources }: { corpId: string; sources: StratasphereSource[] }) {
+  const [error, setError] = useState("");
+  if (!sources.length) return null;
+
+  async function open(documentId: string) {
+    setError("");
+    const res = await getDocumentDownloadUrl(corpId, documentId);
+    if (res.ok) window.open(res.url, "_blank", "noopener");
+    else setError(res.error);
+  }
 
   return (
-    <div
-      className="chat-sidebar__item"
-      data-active={active}
-      data-testid={`conversation-${c.id}`}
-    >
-      <button className="chat-sidebar__item-main" onClick={onSelect}>
-        <span className="chat-sidebar__item-title">{c.title}</span>
-        <span className="chat-sidebar__item-meta">{c.updatedAt}</span>
-      </button>
-
-      <div className="chat-sidebar__item-actions">
-        <div className="chat-sidebar__move-wrap">
+    <div className="chat-message__sources" data-testid="chat-sources">
+      <span className="chat-message__sources-label">Sources</span>
+      {sources.map((s, i) =>
+        s.kind === "document" ? (
           <button
             type="button"
-            className="chat-sidebar__pin"
-            onClick={(e) => {
-              e.stopPropagation();
-              setMoveOpen((v) => !v);
-            }}
-            title="Move to project"
-            data-testid={`move-trigger-${c.id}`}
+            key={i}
+            className="chat-source"
+            data-kind={s.kind}
+            onClick={() => open(s.documentId)}
+            title="Open this document"
           >
-            Move
+            {s.title}
           </button>
-          {moveOpen && (
-            <div className="chat-sidebar__move-menu" data-testid={`move-menu-${c.id}`}>
-              <button
-                type="button"
-                className="chat-sidebar__move-option"
-                data-selected={!c.projectId}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onMove(null);
-                  setMoveOpen(false);
-                }}
-              >
-                No project
-              </button>
-              {projects.map((p) => (
-                <button
-                  type="button"
-                  key={p.id}
-                  className="chat-sidebar__move-option"
-                  data-selected={c.projectId === p.id}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onMove(p.id);
-                    setMoveOpen(false);
-                  }}
-                >
-                  {p.name}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        ) : (
+          <span key={i} className="chat-source" data-kind={s.kind}>
+            {sourceLabel(s)}
+          </span>
+        )
+      )}
+      {error && <span className="chat-message__sources-error">{error}</span>}
+    </div>
+  );
+}
 
+function ConversationRow({
+  c,
+  active,
+  projects,
+  onSelect,
+  onPin,
+  onRename,
+  onMove,
+  onDelete,
+}: {
+  c: ConversationSummary;
+  active: boolean;
+  projects: ConversationProject[];
+  onSelect: () => void;
+  onPin: () => void;
+  onRename: (title: string) => void;
+  onMove: (projectId: string | null) => void;
+  onDelete: () => void;
+}) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const [name, setName] = useState(c.title);
+  const wrap = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const close = (e: MouseEvent) => {
+      if (!wrap.current?.contains(e.target as Node)) setMenuOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [menuOpen]);
+
+  if (renaming) {
+    return (
+      <form
+        className="chat-sidebar__rename"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (name.trim() && name.trim() !== c.title) onRename(name.trim());
+          setRenaming(false);
+        }}
+      >
+        <input
+          value={name}
+          maxLength={200}
+          autoFocus
+          onChange={(e) => setName(e.target.value)}
+          onBlur={() => {
+            if (name.trim() && name.trim() !== c.title) onRename(name.trim());
+            setRenaming(false);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              setName(c.title);
+              setRenaming(false);
+            }
+          }}
+          aria-label="Conversation name"
+        />
+      </form>
+    );
+  }
+
+  return (
+    <div className="chat-sidebar__item" data-active={active} data-testid={`conversation-${c.id}`}>
+      <button className="chat-sidebar__item-main" onClick={onSelect} title={c.title}>
+        <span className="chat-sidebar__item-title">{c.title}</span>
+      </button>
+      <div className="chat-sidebar__move-wrap" ref={wrap}>
         <button
           type="button"
           className="chat-sidebar__pin"
-          data-pinned={!!c.pinned}
-          onClick={(e) => {
-            e.stopPropagation();
-            onTogglePin();
-          }}
-          title={c.pinned ? "Unpin conversation" : "Pin conversation"}
-          data-testid={`pin-toggle-${c.id}`}
+          data-open={menuOpen}
+          onClick={() => setMenuOpen((v) => !v)}
+          aria-label="Conversation options"
+          data-testid={`conversation-menu-${c.id}`}
         >
-          {c.pinned ? "Unpin" : "Pin"}
+          Options
         </button>
+        {menuOpen && (
+          <div className="chat-sidebar__move-menu" role="menu">
+            <button
+              type="button"
+              className="chat-sidebar__move-option"
+              onClick={() => {
+                setMenuOpen(false);
+                onPin();
+              }}
+            >
+              {c.pinned ? "Unpin" : "Pin"}
+            </button>
+            <button
+              type="button"
+              className="chat-sidebar__move-option"
+              onClick={() => {
+                setMenuOpen(false);
+                setName(c.title);
+                setRenaming(true);
+              }}
+            >
+              Rename
+            </button>
+            <div className="chat-sidebar__menu-label">Move to</div>
+            <button
+              type="button"
+              className="chat-sidebar__move-option"
+              data-selected={!c.projectId}
+              onClick={() => {
+                setMenuOpen(false);
+                onMove(null);
+              }}
+            >
+              No project
+            </button>
+            {projects.map((p) => (
+              <button
+                type="button"
+                key={p.id}
+                className="chat-sidebar__move-option"
+                data-selected={c.projectId === p.id}
+                onClick={() => {
+                  setMenuOpen(false);
+                  onMove(p.id);
+                }}
+              >
+                {p.name}
+              </button>
+            ))}
+            <div className="chat-sidebar__menu-rule" />
+            <button
+              type="button"
+              className="chat-sidebar__move-option"
+              data-danger="true"
+              onClick={() => {
+                setMenuOpen(false);
+                onDelete();
+              }}
+            >
+              Delete
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
 export function StratasphereChat({
-  conversations: initialConversations,
-  projects: initialProjects,
+  corpId,
+  corpName,
+  indexedDocuments,
+  initialConversations,
+  initialProjects,
 }: {
-  conversations: Conversation[];
-  projects: Project[];
+  corpId: string;
+  corpName: string;
+  indexedDocuments: number;
+  initialConversations: ConversationSummary[];
+  initialProjects: ConversationProject[];
 }) {
   const [conversations, setConversations] = useState(initialConversations);
   const [projects, setProjects] = useState(initialProjects);
-  const [activeId, setActiveId] = useState<string | undefined>(conversations[0]?.id);
-  const active = conversations.find((c) => c.id === activeId) ?? conversations[0];
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<Msg[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [streaming, setStreaming] = useState(false);
   const [draft, setDraft] = useState("");
+  const [error, setError] = useState("");
   const [newProjectOpen, setNewProjectOpen] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
+  const [editingProject, setEditingProject] = useState<string | null>(null);
+  const [projectName, setProjectName] = useState("");
+  const transcript = useRef<HTMLDivElement>(null);
+  const input = useRef<HTMLTextAreaElement>(null);
+  const selectSeq = useRef(0);
 
-  const docCount = documents.length;
+  // Follow the answer as it streams, unless the reader has scrolled up.
+  useEffect(() => {
+    const el = transcript.current;
+    if (!el) return;
+    if (el.scrollHeight - el.scrollTop - el.clientHeight < 160) el.scrollTop = el.scrollHeight;
+  }, [messages]);
 
-  function togglePin(id: string) {
-    setConversations((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, pinned: !c.pinned } : c))
-    );
+  useEffect(() => {
+    const el = input.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
+  }, [draft]);
+
+  async function select(id: string) {
+    if (streaming || id === activeId) return;
+    const seq = ++selectSeq.current;
+    setActiveId(id);
+    setMessages([]);
+    setError("");
+    setLoading(true);
+    const res = await getConversationMessages(corpId, id);
+    if (seq !== selectSeq.current) return;
+    setLoading(false);
+    if (res.ok) {
+      setMessages(res.messages);
+      requestAnimationFrame(() => {
+        if (transcript.current) transcript.current.scrollTop = transcript.current.scrollHeight;
+      });
+    } else {
+      setError(res.error);
+    }
   }
 
-  function moveConversation(id: string, projectId: string | null) {
-    setConversations((prev) =>
-      prev.map((c) =>
-        c.id === id ? { ...c, projectId: projectId ?? undefined } : c
-      )
-    );
+  function newChat() {
+    if (streaming) return;
+    selectSeq.current++;
+    setActiveId(null);
+    setMessages([]);
+    setError("");
+    setLoading(false);
+    input.current?.focus();
   }
 
-  function createProject(e: React.FormEvent) {
+  function patchConversation(id: string, patch: Partial<ConversationSummary>) {
+    setConversations((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
+  }
+
+  async function optimistic(id: string, patch: Partial<ConversationSummary>, run: () => Promise<{ ok: boolean; error?: string }>) {
+    const before = conversations.find((c) => c.id === id);
+    patchConversation(id, patch);
+    const res = await run();
+    if (!res.ok && before) {
+      patchConversation(id, before);
+      setError(res.error ?? "Couldn't save that change.");
+    }
+  }
+
+  async function remove(c: ConversationSummary) {
+    if (!window.confirm(`Delete "${c.title}"? This can't be undone.`)) return;
+    const res = await deleteConversation(corpId, c.id);
+    if (!res.ok) return setError(res.error);
+    setConversations((prev) => prev.filter((x) => x.id !== c.id));
+    if (activeId === c.id) newChat();
+  }
+
+  async function addProject(e: React.FormEvent) {
     e.preventDefault();
-    const trimmed = newProjectName.trim();
-    if (!trimmed) return;
-    setProjects((prev) => [...prev, { id: `proj-${Date.now()}`, name: trimmed }]);
+    const res = await createProject(corpId, newProjectName);
+    if (!res.ok) return setError(res.error);
+    setProjects((prev) => [...prev, res.project]);
     setNewProjectName("");
     setNewProjectOpen(false);
   }
 
+  async function saveProjectName(p: ConversationProject) {
+    setEditingProject(null);
+    const n = projectName.trim();
+    if (!n || n === p.name) return;
+    setProjects((prev) => prev.map((x) => (x.id === p.id ? { ...x, name: n } : x)));
+    const res = await renameProject(corpId, p.id, n);
+    if (!res.ok) {
+      setProjects((prev) => prev.map((x) => (x.id === p.id ? p : x)));
+      setError(res.error);
+    }
+  }
+
+  async function removeProject(p: ConversationProject) {
+    if (!window.confirm(`Delete the project "${p.name}"? Its conversations move back to Recents.`)) return;
+    const res = await deleteProject(corpId, p.id);
+    if (!res.ok) return setError(res.error);
+    setProjects((prev) => prev.filter((x) => x.id !== p.id));
+    setConversations((prev) => prev.map((c) => (c.projectId === p.id ? { ...c, projectId: null } : c)));
+  }
+
+  async function send(text?: string) {
+    const question = (text ?? draft).trim();
+    if (!question || streaming) return;
+    setError("");
+    setDraft("");
+    setStreaming(true);
+    const conversationId = activeId;
+    setMessages((prev) => [
+      ...prev,
+      { id: `q-${Date.now()}`, role: "user", content: question, sources: [] },
+      { id: "pending", role: "assistant", content: "", sources: [], pending: true },
+    ]);
+    const settle = (patch: Partial<Msg> | null) =>
+      setMessages((prev) =>
+        patch === null
+          ? prev.filter((m) => m.id !== "pending")
+          : prev.map((m) => (m.id === "pending" ? { ...m, ...patch, pending: false } : m))
+      );
+
+    try {
+      const res = await fetch("/api/stratasphere/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ corpId, conversationId, question }),
+      });
+      if (!res.ok || !res.body) {
+        const body = (await res.json().catch(() => null)) as { error?: string } | null;
+        settle(null);
+        setError(body?.error ?? "Stratasphere couldn't answer right now. Please try again.");
+        return;
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let answer = "";
+      let finished = false;
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let nl: number;
+        while ((nl = buffer.indexOf("\n")) >= 0) {
+          const raw = buffer.slice(0, nl).trim();
+          buffer = buffer.slice(nl + 1);
+          if (!raw) continue;
+          const ev = JSON.parse(raw) as
+            | { type: "start"; conversationId: string; title: string }
+            | { type: "delta"; text: string }
+            | { type: "done"; messageId: string | null; sources: StratasphereSource[] }
+            | { type: "error"; error: string };
+          if (ev.type === "start") {
+            const now = new Date().toISOString();
+            setActiveId(ev.conversationId);
+            setConversations((prev) => {
+              const existing = prev.find((c) => c.id === ev.conversationId);
+              const row: ConversationSummary = existing
+                ? { ...existing, updatedAt: now }
+                : { id: ev.conversationId, title: ev.title, pinned: false, projectId: null, updatedAt: now };
+              return [row, ...prev.filter((c) => c.id !== ev.conversationId)];
+            });
+          } else if (ev.type === "delta") {
+            answer += ev.text;
+            setMessages((prev) => prev.map((m) => (m.id === "pending" ? { ...m, content: answer } : m)));
+          } else if (ev.type === "done") {
+            finished = true;
+            settle({ id: ev.messageId ?? `a-${Date.now()}`, content: answer, sources: ev.sources });
+          } else if (ev.type === "error") {
+            finished = true;
+            settle(null);
+            setError(ev.error);
+          }
+        }
+      }
+      if (!finished) {
+        settle(null);
+        setError("The answer was interrupted. Please try again.");
+      }
+    } catch {
+      settle(null);
+      setError("Stratasphere couldn't answer right now. Please check your connection and try again.");
+    } finally {
+      setStreaming(false);
+      input.current?.focus();
+    }
+  }
+
+  const now = new Date();
   const pinned = conversations.filter((c) => c.pinned);
   const unpinned = conversations.filter((c) => !c.pinned);
-  // Every project renders, even with zero conversations — otherwise a
-  // freshly created project has nowhere to appear until something's
-  // moved into it.
-  const byProject = projects.map((p) => ({
-    project: p,
-    items: unpinned.filter((c) => c.projectId === p.id),
-  }));
-  const recents = unpinned.filter((c) => !c.projectId);
-  const recentGroups: { label: string; items: Conversation[] }[] = [];
+  const recents = unpinned.filter((c) => !c.projectId || !projects.some((p) => p.id === c.projectId));
+  const recentGroups: { label: string; items: ConversationSummary[] }[] = [];
   for (const c of recents) {
-    const group = recentGroups.find((g) => g.label === c.updatedAt);
+    const label = dateGroup(c.updatedAt, now);
+    const group = recentGroups.find((g) => g.label === label);
     if (group) group.items.push(c);
-    else recentGroups.push({ label: c.updatedAt, items: [c] });
+    else recentGroups.push({ label, items: [c] });
   }
+
+  const row = (c: ConversationSummary) => (
+    <ConversationRow
+      key={c.id}
+      c={c}
+      active={c.id === activeId}
+      projects={projects}
+      onSelect={() => select(c.id)}
+      onPin={() => optimistic(c.id, { pinned: !c.pinned }, () => setConversationPinned(corpId, c.id, !c.pinned))}
+      onRename={(title) => optimistic(c.id, { title }, () => renameConversation(corpId, c.id, title))}
+      onMove={(projectId) => optimistic(c.id, { projectId }, () => moveConversationToProject(corpId, c.id, projectId))}
+      onDelete={() => remove(c)}
+    />
+  );
+
+  const activeTitle = conversations.find((c) => c.id === activeId)?.title;
 
   return (
     <div className="chat-shell" data-testid="stratasphere-chat">
       <aside className="chat-sidebar">
-        <button
-          className="button button-secondary chat-sidebar__new"
-          data-testid="new-chat"
-          onClick={() => setActiveId(undefined)}
-        >
-          + New chat
+        <button className="button button-secondary chat-sidebar__new" data-testid="new-chat" onClick={newChat} disabled={streaming}>
+          New conversation
         </button>
         <div className="chat-sidebar__list">
           {pinned.length > 0 && (
             <div className="chat-sidebar__section">
               <div className="chat-sidebar__section-title">Pinned</div>
-              {pinned.map((c) => (
-                <ThreadButton
-                  key={c.id}
-                  c={c}
-                  active={c.id === active?.id}
-                  onSelect={() => setActiveId(c.id)}
-                  onTogglePin={() => togglePin(c.id)}
-                  onMove={(pid) => moveConversation(c.id, pid)}
-                  projects={projects}
-                />
-              ))}
+              {pinned.map(row)}
             </div>
           )}
 
@@ -241,20 +499,16 @@ export function StratasphereChat({
                 onClick={() => setNewProjectOpen((v) => !v)}
                 data-testid="new-project-trigger"
               >
-                + New
+                New
               </button>
             </div>
-
             {newProjectOpen && (
-              <form
-                className="chat-sidebar__new-project-form"
-                onSubmit={createProject}
-                data-testid="new-project-form"
-              >
+              <form className="chat-sidebar__new-project-form" onSubmit={addProject} data-testid="new-project-form">
                 <input
                   type="text"
                   placeholder="Project name"
                   value={newProjectName}
+                  maxLength={120}
                   onChange={(e) => setNewProjectName(e.target.value)}
                   data-testid="new-project-input"
                   autoFocus
@@ -270,38 +524,60 @@ export function StratasphereChat({
                   >
                     Cancel
                   </button>
-                  <button
-                    type="submit"
-                    className="button button-primary button-small"
-                    disabled={!newProjectName.trim()}
-                    data-testid="new-project-submit"
-                  >
+                  <button type="submit" className="button button-primary button-small" disabled={!newProjectName.trim()}>
                     Create
                   </button>
                 </div>
               </form>
             )}
-
-            {byProject.map(({ project, items }) => (
-              <div className="chat-sidebar__project" key={project.id} data-testid={`project-${project.id}`}>
-                <div className="chat-sidebar__project-name">{project.name}</div>
-                {items.length === 0 ? (
-                  <div className="chat-sidebar__project-empty">No conversations yet</div>
-                ) : (
-                  items.map((c) => (
-                    <ThreadButton
-                      key={c.id}
-                      c={c}
-                      active={c.id === active?.id}
-                      onSelect={() => setActiveId(c.id)}
-                      onTogglePin={() => togglePin(c.id)}
-                      onMove={(pid) => moveConversation(c.id, pid)}
-                      projects={projects}
-                    />
-                  ))
-                )}
-              </div>
-            ))}
+            {projects.length === 0 && !newProjectOpen && (
+              <div className="chat-sidebar__project-empty">Group related conversations, like a renewal or a dispute.</div>
+            )}
+            {projects.map((p) => {
+              const items = unpinned.filter((c) => c.projectId === p.id);
+              return (
+                <div className="chat-sidebar__project" key={p.id} data-testid={`project-${p.id}`}>
+                  {editingProject === p.id ? (
+                    <form
+                      className="chat-sidebar__rename"
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        saveProjectName(p);
+                      }}
+                    >
+                      <input
+                        value={projectName}
+                        maxLength={120}
+                        autoFocus
+                        onChange={(e) => setProjectName(e.target.value)}
+                        onBlur={() => saveProjectName(p)}
+                        onKeyDown={(e) => e.key === "Escape" && setEditingProject(null)}
+                        aria-label="Project name"
+                      />
+                    </form>
+                  ) : (
+                    <div className="chat-sidebar__project-row">
+                      <div className="chat-sidebar__project-name">{p.name}</div>
+                      <div className="chat-sidebar__project-actions">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setProjectName(p.name);
+                            setEditingProject(p.id);
+                          }}
+                        >
+                          Rename
+                        </button>
+                        <button type="button" onClick={() => removeProject(p)}>
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {items.length === 0 ? <div className="chat-sidebar__project-empty">No conversations yet</div> : items.map(row)}
+                </div>
+              );
+            })}
           </div>
 
           {recentGroups.length > 0 && (
@@ -310,17 +586,7 @@ export function StratasphereChat({
               {recentGroups.map((g) => (
                 <div key={g.label}>
                   <div className="chat-sidebar__date-label">{g.label}</div>
-                  {g.items.map((c) => (
-                    <ThreadButton
-                      key={c.id}
-                      c={c}
-                      active={c.id === active?.id}
-                      onSelect={() => setActiveId(c.id)}
-                      onTogglePin={() => togglePin(c.id)}
-                      onMove={(pid) => moveConversation(c.id, pid)}
-                      projects={projects}
-                    />
-                  ))}
+                  {g.items.map(row)}
                 </div>
               ))}
             </div>
@@ -330,57 +596,85 @@ export function StratasphereChat({
 
       <div className="chat-main">
         <div className="chat-kb-banner" data-testid="kb-banner">
-          Knows your full knowledge base: {docCount} indexed documents, the
-          decision ledger, BC strata legislation, and cross-platform
-          precedent &mdash; plus every past conversation in the sidebar.
+          {activeTitle ? <strong className="chat-kb-banner__title">{activeTitle}</strong> : null}
+          <span>
+            Draws on {corpName}&rsquo;s document repository ({indexedDocuments} indexed{" "}
+            {indexedDocuments === 1 ? "document" : "documents"}, minutes included), the decision ledger, BC strata
+            legislation and anonymized precedent from other strata corporations.
+          </span>
         </div>
 
-        {active ? (
-          <div className="chat-transcript">
-            {active.messages.map((m, i) => (
-              <div className="chat-message" data-role={m.role} key={i}>
-                <div className="chat-message__bubble">{m.content}</div>
-                {m.citations && (
-                  <div className="chat-message__citations">
-                    Sources: {m.citations.join(" · ")}
-                  </div>
-                )}
+        {messages.length > 0 || loading ? (
+          <div className="chat-transcript" ref={transcript} data-testid="chat-transcript">
+            {loading && <p className="chat-loading">Loading conversation&hellip;</p>}
+            {messages.map((m) => (
+              <div className="chat-message" data-role={m.role} key={m.id}>
+                <div className="chat-message__bubble" data-pending={m.pending && !m.content ? "true" : undefined}>
+                  {m.pending && !m.content ? "Searching your records…" : m.content}
+                </div>
+                {m.role === "assistant" && !m.pending && <Sources corpId={corpId} sources={m.sources} />}
               </div>
             ))}
           </div>
         ) : (
           <div className="chat-empty">
-            <h3>New conversation</h3>
+            <h3>Ask Stratasphere</h3>
             <p>
-              Ask about bylaws, financials, past decisions, or anything else
-              in {docCount} indexed documents &mdash; local precedent and BC
-              legislation are always included.
+              Questions about your bylaws, minutes, past decisions, finances and BC strata legislation. Every answer names
+              its sources.
             </p>
+            <div className="chat-suggestions">
+              {SUGGESTIONS.map((s) => (
+                <button type="button" key={s} className="chat-suggestion" onClick={() => send(s)} disabled={streaming}>
+                  {s}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {error && (
+          <div className="chat-error" role="alert" data-testid="chat-error">
+            {error}
           </div>
         )}
 
         <form
           className="chat-composer"
-          onSubmit={(e) => e.preventDefault()}
+          onSubmit={(e) => {
+            e.preventDefault();
+            send();
+          }}
           data-testid="chat-composer"
         >
-          <input
-            type="text"
-            placeholder={"Message Stratasphere™..."}
+          <textarea
+            ref={input}
+            rows={1}
+            placeholder="Ask about your strata's records or BC strata law"
             value={draft}
+            maxLength={4000}
             onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                e.preventDefault();
+                send();
+              }
+            }}
             data-testid="chat-input"
           />
           <button
             type="submit"
             className="button button-primary button-small"
-            disabled
-            title="Not wired up yet — UI preview only"
+            disabled={streaming || !draft.trim()}
             data-testid="chat-send"
           >
-            Send
+            {streaming ? "Answering" : "Send"}
           </button>
         </form>
+        <p className="chat-disclaimer">
+          Stratasphere explains your records and the law in general terms. It isn&rsquo;t legal advice, and it can be
+          wrong: check the sources it names.
+        </p>
       </div>
     </div>
   );

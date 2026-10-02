@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type Anthropic from "@anthropic-ai/sdk";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { askClaudeText, ClaudeRefusalError } from "@/lib/ai/claude";
+import { askClaudeText, ClaudeRefusalError, streamClaudeText } from "@/lib/ai/claude";
 import { loadStripContext, stripForCorporation, type StripContext } from "@/lib/kb/privacy";
 import { searchKnowledge, type KnowledgeHit } from "@/lib/kb/search";
 import type { AgendaItem } from "@/lib/meetings/agenda";
@@ -19,11 +19,13 @@ import type { AgendaItem } from "@/lib/meetings/agenda";
 
 const CARDINAL_RULES = `FABRICATION IS PROHIBITED: Never invent, estimate, extrapolate, or assume any corporation-specific fact — names, lot numbers, dollar amounts, dates, vote counts, bylaw sections, motion text, or any other data. If it is not in the context provided, it does not exist for the purpose of this answer.
 
-WHEN DATA IS MISSING: If the answer isn't present in any context block, say so clearly in one sentence — do not apologize at length — then give one concrete direction: which document to look in, which person to ask, or which legislation section may be relevant.
+WHEN DATA IS MISSING: If the answer isn't present in any context block, say so clearly in one sentence — do not apologize at length, do not fill the gap with general knowledge — then give one concrete direction for where the answer may be found: the specific document type to look in (for example the registered bylaws, the most recent AGM minutes, the depreciation report), the person to ask (the strata manager, council's secretary or treasurer), or, for questions of law, the Act and section to read or a lawyer, the Civil Resolution Tribunal, or the Condominium Home Owners Association of BC.
 
 NO INTERNET: No access to external websites, databases, news sources, or search engines. Never reference, cite, or imply an external source, and never suggest the user "check online."
 
-LEGISLATION IS PERMITTED, ADVICE IS NOT: May explain what legislation says; may not advise the corporation on what it should do legally. Always label legislative information as general context, not corporation-specific guidance.
+LEGISLATION IS PERMITTED, ADVICE IS NOT: May explain what legislation says, but only from the LEGISLATION EXCERPTS in the context, citing the Act and section. Never state what an Act says from memory: if no excerpt covers it, say the legislation library doesn't include it and name the Act to read. May not advise the corporation on what it should do legally. Always label legislative information as general context, not corporation-specific guidance.
+
+NO OPINIONS: Report what the sources say. Never offer opinions, judgments, predictions, or recommendations on what anyone should do, and never speculate about why something happened.
 
 CITE YOUR SOURCE: Every factual claim names its source — document title, decision date and meeting type, agenda item title, or legislation section. If a source can't be named, the claim can't be made.
 
@@ -37,7 +39,7 @@ CONFLICT DISCLOSURE RULE: If sources disagree — a corporation's bylaws say one
 
 DISPUTED-FACT RULE: If a user says a cited fact is wrong, do not concede the point or change the answer — you have no way to independently verify a claim made in conversation. State exactly which document, section, and upload date the fact came from, and note that an updated version of that document can be uploaded if it's outdated or incorrect. Never revise a factual claim based on a user's assertion alone; only a new document in context can change what you cite.`;
 
-const PERMITTED = `PERMITTED KNOWLEDGE: You may draw on your knowledge of BC legislation — SPA, RESA, PIPA, REDMA, BCFSA rules, SPABC guidance, CHOA resources, CRT procedures — but only to explain the law, not to invent specific facts about this corporation. You may also draw on anonymized precedent from other strata corporations on the platform when relevant — always framed explicitly as cross-platform precedent, never presented as if it were this corporation's own data.
+const PERMITTED = `PERMITTED KNOWLEDGE: Only what is in the context blocks below: this corporation's documents and minutes, its decision ledger, the legislation excerpts, and anonymized precedent from other strata corporations on the platform. Precedent is always framed explicitly as cross-platform precedent, never presented as if it were this corporation's own data. General knowledge may be used only to read and understand those sources (plain meaning of words, arithmetic), never as a source of facts.
 
 PIPA: Refer to owners by strata lot number only (e.g. SL061), never by name. Text in the context has already had names and personal details replaced with lot numbers or placeholders such as [name redacted]; never try to guess what a placeholder stands for.
 
@@ -55,7 +57,34 @@ export interface MeetingScope {
   meetingLabel: string;
 }
 
-export type AskResult = { ok: true; text: string } | { ok: false; error: string; limit?: boolean };
+/** What an answer drew on, shown under it. Titles are as stored (stripped). */
+export type StratasphereSource =
+  | { kind: "document"; title: string; documentId: string }
+  | { kind: "decisions" }
+  | { kind: "precedent" }
+  | { kind: "legislation"; title: string };
+
+export type AskResult = { ok: true; text: string; sources: StratasphereSource[] } | { ok: false; error: string; limit?: boolean };
+
+type Prepared =
+  | { ok: true; system: string; messages: Anthropic.Beta.BetaMessageParam[]; effort: "low" | "medium"; maxTokens: number; sources: StratasphereSource[] }
+  | { ok: false; error: string; limit?: boolean };
+
+function sourcesFrom(hits: KnowledgeHit[], hasLedger: boolean): StratasphereSource[] {
+  const out: StratasphereSource[] = [];
+  const seenDocs = new Set<string>();
+  for (const h of hits) {
+    if (h.scope === "corporation" && h.documentId && !seenDocs.has(h.documentId)) {
+      seenDocs.add(h.documentId);
+      out.push({ kind: "document", title: h.title || "Untitled document", documentId: h.documentId });
+    }
+  }
+  const acts = [...new Set(hits.filter((h) => h.scope === "legislation").map((h) => h.sourceAct || h.title || "BC legislation"))];
+  for (const a of acts) out.push({ kind: "legislation", title: a });
+  if (hits.some((h) => h.scope === "global_precedent")) out.push({ kind: "precedent" });
+  if (hasLedger) out.push({ kind: "decisions" });
+  return out.slice(0, 12);
+}
 
 function block(title: string, body: string) {
   return body.trim() ? `=== ${title} ===\n${body.trim()}\n` : "";
@@ -136,11 +165,12 @@ function hitsBlock(hits: KnowledgeHit[]) {
 }
 
 /**
- * Answer one question. `supabase` is the signed-in user's client — every
- * read goes through RLS, and the per-call allowance (subscription, or the
- * free meeting's ten calls) is checked and counted first.
+ * Everything up to the model call: the allowance check, PII stripping, and
+ * context assembly. `supabase` is the signed-in user's client — every read
+ * goes through RLS, and the per-call allowance (subscription, or the free
+ * meeting's ten calls) is checked and counted first.
  */
-export async function askStratasphere({
+async function prepareStratasphere({
   supabase,
   corpId,
   question,
@@ -152,7 +182,7 @@ export async function askStratasphere({
   question: string;
   history: AssistantTurn[];
   meeting?: MeetingScope;
-}): Promise<AskResult> {
+}): Promise<Prepared> {
   const q = question.trim().slice(0, 4000);
   if (!q) return { ok: false, error: "Ask a question." };
 
@@ -234,18 +264,56 @@ export async function askStratasphere({
   // The API needs the conversation to start with the user.
   while (messages.length && messages[0].role !== "user") messages.shift();
 
+  return {
+    ok: true,
+    system,
+    messages,
+    effort: meeting ? "low" : "medium",
+    maxTokens: meeting ? 4000 : 8000,
+    sources: sourcesFrom(hits, Boolean(ledger.trim())),
+  };
+}
+
+type AskInput = Parameters<typeof prepareStratasphere>[0];
+
+/** Answer one question in full (Meeting Mode). */
+export async function askStratasphere(input: AskInput): Promise<AskResult> {
+  const prepared = await prepareStratasphere(input);
+  if (!prepared.ok) return prepared;
   try {
     const { text, truncated } = await askClaudeText({
-      system,
-      messages,
-      effort: meeting ? "low" : "medium",
-      maxTokens: meeting ? 4000 : 8000,
+      system: prepared.system,
+      messages: prepared.messages,
+      effort: prepared.effort,
+      maxTokens: prepared.maxTokens,
     });
     if (!text) return { ok: false, error: "Stratasphere didn't return an answer. Please try again." };
-    return { ok: true, text: truncated ? `${text}\n[Answer cut short.]` : text };
+    return { ok: true, text: truncated ? `${text}\n[Answer cut short.]` : text, sources: prepared.sources };
   } catch (err) {
     if (err instanceof ClaudeRefusalError) return { ok: false, error: "Stratasphere can't help with that question." };
     console.error("[askStratasphere]", err instanceof Error ? err.message : err);
+    return { ok: false, error: "Stratasphere couldn't answer right now. Please try again." };
+  }
+}
+
+/**
+ * Answer one question, streaming the text to `onText` as it's written (the
+ * standalone assistant). Resolves with the full answer and its sources.
+ */
+export async function streamStratasphere(input: AskInput, onText: (delta: string) => void): Promise<AskResult> {
+  const prepared = await prepareStratasphere(input);
+  if (!prepared.ok) return prepared;
+  try {
+    const { text, truncated } = await streamClaudeText(
+      { system: prepared.system, messages: prepared.messages, effort: prepared.effort, maxTokens: prepared.maxTokens },
+      onText
+    );
+    if (!text) return { ok: false, error: "Stratasphere didn't return an answer. Please try again." };
+    if (truncated) onText("\n[Answer cut short.]");
+    return { ok: true, text: truncated ? `${text}\n[Answer cut short.]` : text, sources: prepared.sources };
+  } catch (err) {
+    if (err instanceof ClaudeRefusalError) return { ok: false, error: "Stratasphere can't help with that question." };
+    console.error("[streamStratasphere]", err instanceof Error ? err.message : err);
     return { ok: false, error: "Stratasphere couldn't answer right now. Please try again." };
   }
 }

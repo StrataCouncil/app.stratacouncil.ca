@@ -66,3 +66,24 @@ export async function askClaudeJson<T>(opts: AskOptions & { schema: Record<strin
   if (message.stop_reason === "max_tokens") throw new Error("Claude's reply was cut off.");
   return JSON.parse(textOf(message)) as T;
 }
+
+/**
+ * Like askClaudeText, but hands each piece of text to `onText` as it's
+ * written, for answers that should appear while they're being composed.
+ */
+export async function streamClaudeText(opts: Omit<AskOptions, "schema">, onText: (delta: string) => void) {
+  const params = {
+    model: CLAUDE_MODEL,
+    max_tokens: opts.maxTokens ?? 16000,
+    betas: ["server-side-fallback-2026-07-01"],
+    fallbacks: "default",
+    system: opts.system,
+    messages: opts.messages,
+    output_config: { effort: opts.effort ?? "medium" },
+  } as Anthropic.Beta.Messages.MessageCreateParamsStreaming;
+  const stream = anthropic().beta.messages.stream(params);
+  stream.on("text", (delta) => onText(delta));
+  const message = await stream.finalMessage();
+  if (message.stop_reason === "refusal") throw new ClaudeRefusalError("Claude declined this request.");
+  return { text: textOf(message), truncated: message.stop_reason === "max_tokens" };
+}
