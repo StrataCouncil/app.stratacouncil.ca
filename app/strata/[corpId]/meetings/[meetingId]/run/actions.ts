@@ -103,13 +103,19 @@ export async function askMeetingAssistant(
   const liveAgenda = normalizeAgenda(agenda);
   const item = liveAgenda.find((i) => i.id === itemId);
   if (!item) return { ok: false as const, error: "Pick an agenda item first." };
-  return askStratasphere({
+  const result = await askStratasphere({
     supabase,
     corpId,
     question,
-    history: (history ?? []).filter((t) => t && (t.role === "user" || t.role === "assistant") && typeof t.content === "string"),
+    // Only the text of each turn: records come from our own database, never from the browser.
+    history: (history ?? [])
+      .filter((t) => t && (t.role === "user" || t.role === "assistant") && typeof t.content === "string")
+      .slice(-10)
+      .map((t) => ({ role: t.role, content: t.content })),
     meeting: { item, agenda: liveAgenda, meetingLabel: meetingTypeLabels[meeting.type] },
   });
+  // The records an answer drew on stay on the server.
+  return result.ok ? { ok: true as const, text: result.text, sources: result.sources } : result;
 }
 
 /**

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { MemberAvatar } from "@/components/MemberAvatar";
+import { AdminDecisionLedger } from "@/components/AdminDecisionLedger";
 import { signAvatarPaths } from "@/lib/data/avatars";
 import { getAllCorporations } from "@/lib/data/admin";
 import { getCurrentProfile } from "@/lib/data/profile";
@@ -49,7 +50,7 @@ export default async function AdminCorporationDetailPage({
       .select("id, title, motion_text, mover, seconder, votes_for, votes_against, votes_abstain, decided_at, meeting_type, source")
       .eq("corporation_id", corpId)
       .order("decided_at", { ascending: false })
-      .limit(500),
+      .limit(5000),
   ]);
   if (decisionsError) console.error("[admin decisions]", decisionsError.message);
   const decisions = (decisionRows ?? []) as {
@@ -174,42 +175,18 @@ export default async function AdminCorporationDetailPage({
         )}
 
         <h2 style={{ margin: "2.5rem 0 1rem" }}>Decision ledger</h2>
-        {decisions.length === 0 ? (
-          <p className="roster-notice">No decisions recorded yet.</p>
-        ) : (
-          <div className="roster-table-wrap">
-            <table className="roster-table" data-testid="admin-decisions-table">
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Decision</th>
-                  <th>Moved / seconded</th>
-                  <th data-center="true">For / against / abstain</th>
-                  <th>Source</th>
-                </tr>
-              </thead>
-              <tbody>
-                {decisions.map((d) => (
-                  <tr key={d.id}>
-                    <td style={{ whiteSpace: "nowrap" }}>{d.decided_at.slice(0, 10)}</td>
-                    <td>
-                      <strong>{d.title || "Untitled motion"}</strong>
-                      {d.motion_text && <div className="roster-table__meta">{d.motion_text}</div>}
-                    </td>
-                    <td>
-                      {d.mover || "—"}
-                      <div className="roster-table__meta">{d.seconder || "—"}</div>
-                    </td>
-                    <td data-center="true">
-                      {d.votes_for ?? "—"} / {d.votes_against ?? "—"} / {d.votes_abstain ?? "—"}
-                    </td>
-                    <td>{d.source === "historic_minutes" ? "Historic minutes" : (meetingTypeLabels[d.meeting_type as MeetingType] ?? "Meeting")}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <AdminDecisionLedger
+          decisions={decisions.map((d) => ({
+            id: d.id,
+            date: d.decided_at.slice(0, 10),
+            title: d.title || "Untitled motion",
+            motionText: d.motion_text,
+            mover: d.mover,
+            seconder: d.seconder,
+            votes: `${d.votes_for ?? "—"} / ${d.votes_against ?? "—"} / ${d.votes_abstain ?? "—"}`,
+            source: d.source === "historic_minutes" ? "Historic minutes" : (meetingTypeLabels[d.meeting_type as MeetingType] ?? "Meeting"),
+          }))}
+        />
       </div>
     </AppShell>
   );

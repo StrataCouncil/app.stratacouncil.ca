@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getStrataAccess } from "@/lib/data/strata";
 import { streamStratasphere, type AssistantTurn, type StratasphereSource } from "@/lib/ai/stratasphere";
 import { titleFromQuestion } from "@/lib/ai/conversation-title";
+import { trimHistory } from "@/lib/ai/conversation-history";
 
 /**
  * The standalone Stratasphere assistant (doc02 §4b). Subscription only —
@@ -22,6 +23,9 @@ function sourceName(s: StratasphereSource) {
   if (s.kind === "document" || s.kind === "legislation") return s.title;
   return s.kind === "decisions" ? "Decision ledger" : "Cross-platform precedent";
 }
+
+/** About 120k tokens of conversation (questions, answers and their records) before the oldest turns drop. */
+const HISTORY_BUDGET_CHARS = 480_000;
 
 const enc = new TextEncoder();
 const line = (o: unknown) => enc.encode(`${JSON.stringify(o)}\n`);
@@ -51,25 +55,41 @@ export async function POST(request: NextRequest) {
   let conversationId = body?.conversationId ?? null;
   let title: string;
   let history: AssistantTurn[] = [];
+  let trimmed = false;
   if (conversationId) {
     const { data: convo } = await supabase
       .from("conversations")
-      .select("id, title, corporation_id")
+      .select("id, title, corporation_id, context_start_at")
       .eq("id", conversationId)
       .maybeSingle();
     if (!convo || convo.corporation_id !== access.corpId) {
       return NextResponse.json({ error: "That conversation isn't available." }, { status: 404 });
     }
     title = convo.title;
-    const { data: past } = await supabase
+    let query = supabase
       .from("conversation_messages")
-      .select("role, content, citations")
+      .select("role, content, citations, context, created_at")
       .eq("conversation_id", conversationId)
-      .order("created_at", { ascending: false })
-      .limit(10);
-    history = (past ?? []).reverse().map((m) => ({
+      .order("created_at", { ascending: true })
+      .limit(400);
+    if (convo.context_start_at) query = query.gte("created_at", convo.context_start_at);
+    const { data: past } = await query;
+    let turns = past ?? [];
+    trimmed = Boolean(convo.context_start_at);
+
+    // Past the budget, the oldest turns drop in one step (conversation-history.ts).
+    const kept = trimHistory(turns, HISTORY_BUDGET_CHARS);
+    if (kept.trimmed) {
+      turns = kept.turns;
+      trimmed = true;
+      if (turns.length) {
+        await supabase.from("conversations").update({ context_start_at: turns[0].created_at }).eq("id", conversationId);
+      }
+    }
+    history = turns.map((m) => ({
       role: m.role as "user" | "assistant",
       content: m.content,
+      context: m.context,
       sources: Array.isArray(m.citations) ? (m.citations as StratasphereSource[]).map(sourceName) : undefined,
     }));
   } else {
@@ -86,11 +106,13 @@ export async function POST(request: NextRequest) {
     conversationId = created.id as string;
   }
 
-  const { error: qError } = await supabase
+  const { data: asked, error: qError } = await supabase
     .from("conversation_messages")
-    .insert({ conversation_id: conversationId, role: "user", content: question });
-  if (qError) {
-    console.error("[stratasphere chat] save question", qError.message);
+    .insert({ conversation_id: conversationId, role: "user", content: question })
+    .select("id")
+    .single();
+  if (qError || !asked) {
+    console.error("[stratasphere chat] save question", qError?.message);
     return NextResponse.json({ error: "Couldn't save your question." }, { status: 500 });
   }
 
@@ -99,7 +121,7 @@ export async function POST(request: NextRequest) {
     async start(controller) {
       controller.enqueue(line({ type: "start", conversationId: id, title }));
       const result = await streamStratasphere(
-        { supabase, corpId: access.corpId, question, history },
+        { supabase, corpId: access.corpId, question, history, trimmed },
         (text) => controller.enqueue(line({ type: "delta", text }))
       );
       if (!result.ok) {
@@ -107,6 +129,8 @@ export async function POST(request: NextRequest) {
         controller.close();
         return;
       }
+      // The records this question was answered from, replayed with it from now on.
+      await supabase.from("conversation_messages").update({ context: result.context }).eq("id", asked.id);
       const { data: saved } = await supabase
         .from("conversation_messages")
         .insert({ conversation_id: id, role: "assistant", content: result.text, citations: result.sources })
