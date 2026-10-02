@@ -11,6 +11,15 @@ import {
 import type { OwnerLot } from "@/lib/data/owners";
 import { ownerTypeLabels, ownerTypes } from "@/lib/roster-csv";
 
+/** Short labels for the Council column, so it stays narrow; the full role is the tooltip. */
+const roleShort: Record<string, string> = {
+  president: "P",
+  vice_president: "VP",
+  treasurer: "T",
+  secretary: "S",
+  member_at_large: "M@L",
+};
+
 const roleLabels: Record<string, string> = {
   president: "President",
   vice_president: "Vice President",
@@ -81,6 +90,11 @@ export function OwnerRoster({
             ))}
           </tbody>
         </table>
+        <p className="roster-table__legend">
+          Council: <strong>P</strong> President &middot; <strong>VP</strong> Vice President &middot;{" "}
+          <strong>T</strong> Treasurer &middot; <strong>S</strong> Secretary &middot; <strong>M@L</strong> Member at
+          Large. Set on Council &amp; Roles.
+        </p>
       </div>
     </>
   );
@@ -118,13 +132,15 @@ function LotRow({
         <td data-center="true">{lot.strataFees === null ? NA : fmt(lot.strataFees)}</td>
         <td>
           {lot.isCouncilMember ? (
-            <span className="role-tag">{lot.role ? roleLabels[lot.role] : "Council"}</span>
+            <abbr className="role-tag role-tag--short" title={lot.role ? roleLabels[lot.role] : "Council"}>
+              {lot.role ? roleShort[lot.role] : "C"}
+            </abbr>
           ) : (
             NA
           )}
           {lot.councilMemberName && (
             <div className="roster-table__meta">
-              Delegate: {lot.councilMemberName}
+              {lot.councilMemberName}
               {lot.councilEmail && <> &middot; {lot.councilEmail}</>}
             </div>
           )}

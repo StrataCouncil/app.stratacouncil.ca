@@ -240,7 +240,7 @@ export function RosterTable({
                     <div className="roster-table__row-actions">
                       <button
                         type="button"
-                        className="button button-secondary button-small"
+                        className="roster-table__edit-roles"
                         data-testid={`edit-roles-${member.userId}`}
                         onClick={() => startEditing(member)}
                       >

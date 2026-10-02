@@ -105,11 +105,11 @@ export function DocumentList({ corpId, documents }: { corpId: string; documents:
                   <div className="module-row__meta">{doc.indexingError}</div>
                 )}
               </div>
-              <div className="meeting-row__actions">
+              <div className="text-actions">
                 {canIndex && (
                   <button
                     type="button"
-                    className="button button-secondary button-small"
+                    className="text-action"
                     onClick={() => reindex(doc)}
                     disabled={pending}
                     data-testid={`reindex-document-${doc.id}`}
@@ -119,7 +119,7 @@ export function DocumentList({ corpId, documents }: { corpId: string; documents:
                 )}
                 <button
                   type="button"
-                  className="button button-secondary button-small"
+                  className="text-action"
                   onClick={() => download(doc)}
                   disabled={pending || (!doc.hasFile && doc.sourceType !== "link")}
                   data-testid={`open-document-${doc.id}`}
@@ -128,7 +128,7 @@ export function DocumentList({ corpId, documents }: { corpId: string; documents:
                 </button>
                 <button
                   type="button"
-                  className="button button-secondary button-small"
+                  className="text-action"
                   onClick={() => setMoving(doc)}
                   disabled={pending}
                   data-testid={`move-document-${doc.id}`}
