@@ -1,3 +1,4 @@
+import { getCredentialsFor } from "@/lib/data/training";
 import { createClient } from "@/lib/supabase/server";
 import { isCorporationRole, type CorporationRole } from "@/lib/strata";
 
@@ -25,6 +26,8 @@ export interface RosterMember {
   /** The strata lot this member is tied to (council members need one). */
   lotNumber: string | null;
   roles: CorporationRole[];
+  /** Council Training credentials held (track codes). */
+  credentials: string[];
 }
 
 export interface PendingInvite {
@@ -111,8 +114,11 @@ export async function getCorporationRoster(
       canRunMeetings: m.can_run_meetings,
       lotNumber: m.lot_number ?? null,
       roles: rolesByUser.get(m.user_id) ?? [],
+      credentials: [],
     })
   );
+  const credentials = await getCredentialsFor(members.map((m) => m.userId));
+  for (const m of members) m.credentials = [...(credentials.get(m.userId) ?? [])];
 
   const isAdmin = rolesByUser.get(user.id)?.includes("admin") ?? false;
 

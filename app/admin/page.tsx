@@ -37,6 +37,16 @@ export default async function AdminConsolePage() {
           </p>
         </div>
 
+        <div className="admin-entry" style={{ marginBottom: "2rem" }}>
+          <div>
+            <h3 style={{ margin: "0 0 0.25rem" }}>Council Training</h3>
+            <p>Build, preview and publish training modules, and assign authors.</p>
+          </div>
+          <Link href="/admin/training" className="button button-secondary" data-testid="admin-training-link">
+            Open the Module Builder
+          </Link>
+        </div>
+
         <h2 style={{ marginBottom: "1rem" }}>New corporation requests</h2>
         {requests.length === 0 ? (
           <p className="roster-notice" data-testid="admin-no-requests">

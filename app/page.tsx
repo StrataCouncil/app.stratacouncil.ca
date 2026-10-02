@@ -2,7 +2,7 @@ import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
 import { getConnectedCorporations } from "@/lib/data/corporations";
 import { getCurrentProfile } from "@/lib/data/profile";
-import { tracks } from "@/lib/placeholder-data";
+import { getTrainingTracks } from "@/lib/data/training";
 import { corporationRoleLabels, isCorporationRole } from "@/lib/strata";
 import { createClient } from "@/lib/supabase/server";
 
@@ -13,11 +13,21 @@ import { createClient } from "@/lib/supabase/server";
  * track list lives at `/training`; this page summarizes it rather than
  * repeating it.
  *
- * Profile and connected stratas are real; training progress is still
- * placeholder data until Education is on real tables.
+ * Profile, connected stratas and training progress are all real.
  */
 export default async function HomePage() {
-  const [profile, corporations] = await Promise.all([getCurrentProfile(), getConnectedCorporations()]);
+  const [profile, corporations, trainingTracks] = await Promise.all([
+    getCurrentProfile(),
+    getConnectedCorporations(),
+    getTrainingTracks(),
+  ]);
+  const tracks = trainingTracks.map((t) => ({
+    slug: t.slug,
+    title: t.title,
+    moduleCount: t.modules.length,
+    completedModules: t.modules.filter((m) => m.completed).length,
+    certificateIssued: Boolean(t.credential),
+  }));
 
   const supabase = await createClient();
   const { data: roleRows } = profile

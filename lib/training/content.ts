@@ -1,0 +1,352 @@
+/**
+ * Council Training content: a module is lessons, a lesson is a stack of
+ * typed blocks (the Articulate Rise model). This file is the one definition
+ * of that shape. The builder edits it, the learner view renders it, and
+ * `normalizeModuleContent` is applied to anything coming from the browser
+ * or the database, so only known blocks with sane values are ever stored
+ * or rendered. Pure: no React, no Supabase.
+ */
+
+// ── Rich text (TipTap/ProseMirror JSON, a safe subset) ─────────────────
+
+export type RichMark = { type: "bold" | "italic" | "underline" | "link"; attrs?: { href: string } };
+export type RichNode = {
+  type:
+    | "doc"
+    | "paragraph"
+    | "heading"
+    | "bulletList"
+    | "orderedList"
+    | "listItem"
+    | "blockquote"
+    | "hardBreak"
+    | "text";
+  attrs?: { level?: 2 | 3 };
+  content?: RichNode[];
+  text?: string;
+  marks?: RichMark[];
+};
+export type RichDoc = RichNode & { type: "doc" };
+
+export const emptyDoc = (): RichDoc => ({ type: "doc", content: [{ type: "paragraph" }] });
+
+const NODE_TYPES = new Set(["paragraph", "heading", "bulletList", "orderedList", "listItem", "blockquote", "hardBreak", "text"]);
+
+export function safeHref(href: unknown): string | null {
+  if (typeof href !== "string") return null;
+  const h = href.trim();
+  if (/^mailto:[^\s]+$/i.test(h)) return h;
+  try {
+    const u = new URL(h);
+    return u.protocol === "https:" || u.protocol === "http:" ? u.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
+function cleanNode(raw: unknown, depth: number): RichNode | null {
+  if (!raw || typeof raw !== "object" || depth > 12) return null;
+  const n = raw as Record<string, unknown>;
+  const type = String(n.type);
+  if (!NODE_TYPES.has(type)) return null;
+  if (type === "text") {
+    const text = typeof n.text === "string" ? n.text.slice(0, 20000) : "";
+    if (!text) return null;
+    const marks: RichMark[] = [];
+    for (const m of Array.isArray(n.marks) ? n.marks : []) {
+      const mt = (m as { type?: string })?.type;
+      if (mt === "bold" || mt === "italic" || mt === "underline") marks.push({ type: mt });
+      if (mt === "link") {
+        const href = safeHref((m as { attrs?: { href?: unknown } }).attrs?.href);
+        if (href) marks.push({ type: "link", attrs: { href } });
+      }
+    }
+    return marks.length ? { type: "text", text, marks } : { type: "text", text };
+  }
+  const node: RichNode = { type: type as RichNode["type"] };
+  if (type === "heading") node.attrs = { level: (n.attrs as { level?: number })?.level === 3 ? 3 : 2 };
+  if (Array.isArray(n.content)) {
+    const children = n.content.map((c) => cleanNode(c, depth + 1)).filter((c): c is RichNode => c !== null);
+    if (children.length) node.content = children.slice(0, 500);
+  }
+  return node;
+}
+
+export function normalizeDoc(raw: unknown): RichDoc {
+  const content = Array.isArray((raw as { content?: unknown })?.content)
+    ? ((raw as { content: unknown[] }).content.map((c) => cleanNode(c, 1)).filter(Boolean) as RichNode[])
+    : [];
+  return content.length ? { type: "doc", content } : emptyDoc();
+}
+
+/** Plain text of a rich doc (search, previews, Stratasphere later). */
+export function docText(doc: RichNode | undefined): string {
+  if (!doc) return "";
+  if (doc.type === "text") return doc.text ?? "";
+  const sep = doc.type === "paragraph" || doc.type === "heading" || doc.type === "listItem" ? "\n" : "";
+  return (doc.content ?? []).map(docText).join("") + sep;
+}
+
+// ── Blocks ─────────────────────────────────────────────────────────────
+
+export type CalloutVariant = "key" | "tip" | "mistake" | "legislation";
+export type ScenarioRating = "best" | "okay" | "poor";
+
+export type Block =
+  | { id: string; type: "text"; doc: RichDoc }
+  | { id: string; type: "callout"; variant: CalloutVariant; title: string; doc: RichDoc; reference: string }
+  | { id: string; type: "image"; src: string; alt: string; caption: string }
+  | { id: string; type: "slides"; slides: { id: string; src: string; alt: string; caption: string }[] }
+  | { id: string; type: "video"; url: string; caption: string; transcript: string }
+  | {
+      id: string;
+      type: "knowledge_check";
+      question: string;
+      options: { id: string; text: string; feedback: string }[];
+      correctId: string;
+      explanation: string;
+    }
+  | {
+      id: string;
+      type: "scenario";
+      situation: RichDoc;
+      prompt: string;
+      choices: { id: string; text: string; outcome: string; rating: ScenarioRating }[];
+    }
+  | { id: string; type: "checklist"; title: string; items: { id: string; text: string }[] }
+  | { id: string; type: "divider" };
+
+export type BlockType = Block["type"];
+export type Lesson = { id: string; title: string; blocks: Block[] };
+export type ModuleContent = { lessons: Lesson[] };
+
+/** The block menu, in the order the builder offers them. */
+export const blockCatalog: { type: BlockType; label: string; description: string }[] = [
+  { type: "text", label: "Text", description: "Paragraphs, headings and lists." },
+  { type: "callout", label: "Callout", description: "Key point, tip, common mistake or legislation note." },
+  { type: "image", label: "Image", description: "A picture or diagram with a caption." },
+  { type: "slides", label: "Slides", description: "Click-through images, e.g. slides exported from Keynote or PowerPoint." },
+  { type: "video", label: "Video", description: "YouTube, Vimeo or an uploaded file, with a transcript." },
+  { type: "knowledge_check", label: "Knowledge check", description: "A practice question with feedback. Not graded." },
+  { type: "scenario", label: "Scenario", description: "A real situation: pick a response, see what happens." },
+  { type: "checklist", label: "Checklist", description: "Steps or takeaways the learner can tick off." },
+  { type: "divider", label: "Divider", description: "A visual break between sections." },
+];
+
+export const calloutLabels: Record<CalloutVariant, string> = {
+  key: "Key point",
+  tip: "Tip",
+  mistake: "Common mistake",
+  legislation: "Legislation",
+};
+export const ratingLabels: Record<ScenarioRating, string> = { best: "Best response", okay: "Acceptable", poor: "Not recommended" };
+
+export function newId(prefix = "b") {
+  const r =
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID().replace(/-/g, "").slice(0, 10)
+      : Math.random().toString(36).slice(2, 12);
+  return `${prefix}_${r}`;
+}
+
+export function newBlock(type: BlockType): Block {
+  const id = newId();
+  switch (type) {
+    case "text":
+      return { id, type, doc: emptyDoc() };
+    case "callout":
+      return { id, type, variant: "key", title: "", doc: emptyDoc(), reference: "" };
+    case "image":
+      return { id, type, src: "", alt: "", caption: "" };
+    case "slides":
+      return { id, type, slides: [] };
+    case "video":
+      return { id, type, url: "", caption: "", transcript: "" };
+    case "knowledge_check": {
+      const a = newId("o"), b = newId("o");
+      return { id, type, question: "", options: [{ id: a, text: "", feedback: "" }, { id: b, text: "", feedback: "" }], correctId: a, explanation: "" };
+    }
+    case "scenario":
+      return {
+        id,
+        type,
+        situation: emptyDoc(),
+        prompt: "What do you do?",
+        choices: [
+          { id: newId("c"), text: "", outcome: "", rating: "best" },
+          { id: newId("c"), text: "", outcome: "", rating: "poor" },
+        ],
+      };
+    case "checklist":
+      return { id, type, title: "", items: [{ id: newId("i"), text: "" }] };
+    case "divider":
+      return { id, type };
+  }
+}
+
+/** A copy with fresh ids (duplicate). */
+export function cloneBlock(block: Block): Block {
+  const copy = JSON.parse(JSON.stringify(block)) as Block;
+  copy.id = newId();
+  if (copy.type === "slides") copy.slides = copy.slides.map((s) => ({ ...s, id: newId("s") }));
+  if (copy.type === "checklist") copy.items = copy.items.map((i) => ({ ...i, id: newId("i") }));
+  if (copy.type === "scenario") copy.choices = copy.choices.map((c) => ({ ...c, id: newId("c") }));
+  if (copy.type === "knowledge_check") {
+    const map = new Map(copy.options.map((o) => [o.id, newId("o")]));
+    copy.options = copy.options.map((o) => ({ ...o, id: map.get(o.id)! }));
+    copy.correctId = map.get(copy.correctId) ?? copy.options[0]?.id ?? "";
+  }
+  return copy;
+}
+
+// ── Media and video ────────────────────────────────────────────────────
+
+/** Images and video files must come from https (in practice, our training-media bucket). */
+export function safeMediaUrl(src: unknown): string {
+  const href = safeHref(src);
+  return href && href.startsWith("https://") ? href : "";
+}
+
+/** A privacy-friendly embed URL for YouTube/Vimeo, or a direct video file. */
+export function videoSource(url: string): { kind: "embed"; src: string } | { kind: "file"; src: string } | null {
+  const href = safeHref(url);
+  if (!href) return null;
+  const u = new URL(href);
+  const host = u.hostname.replace(/^www\./, "").replace(/^m\./, "");
+  if (host === "youtu.be") {
+    const id = u.pathname.slice(1).split("/")[0];
+    if (/^[\w-]{6,20}$/.test(id)) return { kind: "embed", src: `https://www.youtube-nocookie.com/embed/${id}` };
+  }
+  if (host === "youtube.com" || host === "youtube-nocookie.com") {
+    const id = u.searchParams.get("v") ?? u.pathname.match(/^\/(?:embed|shorts|live)\/([\w-]+)/)?.[1];
+    if (id && /^[\w-]{6,20}$/.test(id)) return { kind: "embed", src: `https://www.youtube-nocookie.com/embed/${id}` };
+  }
+  if (host === "vimeo.com" || host === "player.vimeo.com") {
+    const m = u.pathname.match(/(?:\/video)?\/(\d+)(?:\/([0-9a-f]+))?/);
+    if (m) return { kind: "embed", src: `https://player.vimeo.com/video/${m[1]}${m[2] ? `?h=${m[2]}` : ""}` };
+  }
+  if (u.protocol === "https:" && /\.(mp4|webm|m4v|mov)$/i.test(u.pathname)) return { kind: "file", src: u.toString() };
+  return null;
+}
+
+// ── Normalization ──────────────────────────────────────────────────────
+
+const str = (v: unknown, max = 2000) => (typeof v === "string" ? v.slice(0, max) : "");
+const idOf = (v: unknown, prefix: string) =>
+  typeof v === "string" && /^[\w-]{1,40}$/.test(v) ? v : newId(prefix);
+const list = (v: unknown, max: number): unknown[] => (Array.isArray(v) ? v.slice(0, max) : []);
+
+function normalizeBlock(raw: unknown): Block | null {
+  if (!raw || typeof raw !== "object") return null;
+  const b = raw as Record<string, unknown>;
+  const id = idOf(b.id, "b");
+  switch (b.type) {
+    case "text":
+      return { id, type: "text", doc: normalizeDoc(b.doc) };
+    case "callout":
+      return {
+        id,
+        type: "callout",
+        variant: (["key", "tip", "mistake", "legislation"] as const).includes(b.variant as CalloutVariant)
+          ? (b.variant as CalloutVariant)
+          : "key",
+        title: str(b.title, 200),
+        doc: normalizeDoc(b.doc),
+        reference: str(b.reference, 200),
+      };
+    case "image":
+      return { id, type: "image", src: safeMediaUrl(b.src), alt: str(b.alt, 500), caption: str(b.caption, 500) };
+    case "slides":
+      return {
+        id,
+        type: "slides",
+        slides: list(b.slides, 100).map((s) => {
+          const o = (s ?? {}) as Record<string, unknown>;
+          return { id: idOf(o.id, "s"), src: safeMediaUrl(o.src), alt: str(o.alt, 500), caption: str(o.caption, 1000) };
+        }),
+      };
+    case "video":
+      return { id, type: "video", url: safeHref(b.url) ?? "", caption: str(b.caption, 500), transcript: str(b.transcript, 50000) };
+    case "knowledge_check": {
+      const options = list(b.options, 8).map((o) => {
+        const x = (o ?? {}) as Record<string, unknown>;
+        return { id: idOf(x.id, "o"), text: str(x.text, 500), feedback: str(x.feedback, 1000) };
+      });
+      const correctId = options.some((o) => o.id === b.correctId) ? String(b.correctId) : (options[0]?.id ?? "");
+      return { id, type: "knowledge_check", question: str(b.question, 1000), options, correctId, explanation: str(b.explanation, 2000) };
+    }
+    case "scenario":
+      return {
+        id,
+        type: "scenario",
+        situation: normalizeDoc(b.situation),
+        prompt: str(b.prompt, 300),
+        choices: list(b.choices, 6).map((c) => {
+          const x = (c ?? {}) as Record<string, unknown>;
+          return {
+            id: idOf(x.id, "c"),
+            text: str(x.text, 500),
+            outcome: str(x.outcome, 2000),
+            rating: (["best", "okay", "poor"] as const).includes(x.rating as ScenarioRating) ? (x.rating as ScenarioRating) : "okay",
+          };
+        }),
+      };
+    case "checklist":
+      return {
+        id,
+        type: "checklist",
+        title: str(b.title, 200),
+        items: list(b.items, 50).map((i) => {
+          const x = (i ?? {}) as Record<string, unknown>;
+          return { id: idOf(x.id, "i"), text: str(x.text, 500) };
+        }),
+      };
+    case "divider":
+      return { id, type: "divider" };
+    default:
+      return null;
+  }
+}
+
+export function normalizeModuleContent(raw: unknown): ModuleContent {
+  const seen = new Set<string>();
+  const lessons = list((raw as { lessons?: unknown })?.lessons, 50).map((l) => {
+    const x = (l ?? {}) as Record<string, unknown>;
+    let id = idOf(x.id, "l");
+    if (seen.has(id)) id = newId("l");
+    seen.add(id);
+    return {
+      id,
+      title: str(x.title, 200) || "Untitled lesson",
+      blocks: list(x.blocks, 200).map(normalizeBlock).filter((b): b is Block => b !== null),
+    };
+  });
+  return { lessons };
+}
+
+// ── Learner rules ──────────────────────────────────────────────────────
+
+/** Blocks the learner must answer before a lesson can be completed. */
+export const isInteractive = (b: Block) => b.type === "knowledge_check" || b.type === "scenario";
+
+/** Problems to fix before publishing, in plain words. Empty means ready. */
+export function publishProblems(content: ModuleContent): string[] {
+  const problems: string[] = [];
+  if (content.lessons.length === 0) problems.push("Add at least one lesson.");
+  content.lessons.forEach((l, li) => {
+    const where = `Lesson ${li + 1} ("${l.title}")`;
+    if (l.blocks.length === 0) problems.push(`${where} has no content.`);
+    l.blocks.forEach((b, bi) => {
+      const at = `${where}, block ${bi + 1}`;
+      if (b.type === "image" && (!b.src || !b.alt.trim())) problems.push(`${at}: the image needs a file and a description (alt text).`);
+      if (b.type === "slides" && (b.slides.length === 0 || b.slides.some((s) => !s.src || !s.alt.trim())))
+        problems.push(`${at}: every slide needs an image and a description.`);
+      if (b.type === "video" && !videoSource(b.url)) problems.push(`${at}: the video link isn't a YouTube, Vimeo or video file link.`);
+      if (b.type === "knowledge_check" && (!b.question.trim() || b.options.filter((o) => o.text.trim()).length < 2))
+        problems.push(`${at}: the knowledge check needs a question and at least two answers.`);
+      if (b.type === "scenario" && (b.choices.filter((c) => c.text.trim() && c.outcome.trim()).length < 2))
+        problems.push(`${at}: the scenario needs at least two choices, each with an outcome.`);
+    });
+  });
+  return problems;
+}

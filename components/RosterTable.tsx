@@ -8,7 +8,7 @@ import {
   setMemberLot,
 } from "@/app/strata/[corpId]/roster-actions";
 import type { RosterMember } from "@/lib/data/roster";
-import { tracks } from "@/lib/placeholder-data";
+import { trainingTrackColumns as tracks } from "@/lib/training/tracks";
 import { Modal } from "@/components/Modal";
 import {
   corporationRoleLabels,
@@ -20,15 +20,6 @@ import {
 
 const REMOVE_CONFIRM_PHRASE = "remove council member";
 
-/** Short column headers for the training credentials, so the table fits. */
-const trackAbbr: Record<string, string> = {
-  mal: "GC",
-  president: "P",
-  "vice-president": "VP",
-  treasurer: "T",
-  secretary: "S",
-};
-const trackName = (title: string) => title.replace(/ \(.*\)$/, "");
 
 /**
  * Council & Roles roster, read from `corporation_memberships` +
@@ -175,8 +166,8 @@ export function RosterTable({
             <th>Roles</th>
             <th data-center="true">Runs meetings</th>
             {tracks.map((t) => (
-              <th key={t.slug} data-center="true" className="roster-table__training-head">
-                <abbr title={`${trackName(t.title)} training`}>{trackAbbr[t.slug] ?? t.title.slice(0, 2)}</abbr>
+              <th key={t.code} data-center="true" className="roster-table__training-head">
+                <abbr title={`${t.title} training`}>{t.abbr}</abbr>
               </th>
             ))}
           </tr>
@@ -400,17 +391,20 @@ export function RosterTable({
                     </td>
                   );
                 })()}
-                {tracks.map((t) => (
-                  <td key={t.slug} data-center="true">
-                    {/* Credentials aren't wired up yet: one circle per track, filled once earned. */}
-                    <span
-                      className="training-dot"
-                      role="img"
-                      aria-label={`${trackName(t.title)} credential: not earned`}
-                      title={`${trackName(t.title)}: not earned yet`}
-                    />
-                  </td>
-                ))}
+                {tracks.map((t) => {
+                  const earned = member.credentials.includes(t.code);
+                  return (
+                    <td key={t.code} data-center="true">
+                      <span
+                        className="training-dot"
+                        data-earned={earned}
+                        role="img"
+                        aria-label={`${t.title} credential: ${earned ? "earned" : "not earned"}`}
+                        title={`${t.title}: ${earned ? "earned" : "not earned yet"}`}
+                      />
+                    </td>
+                  );
+                })}
               </tr>
             );
           })}
@@ -419,9 +413,9 @@ export function RosterTable({
       <p className="roster-table__legend">
         Training credentials:{" "}
         {tracks.map((t, i) => (
-          <span key={t.slug}>
+          <span key={t.code}>
             {i > 0 && " · "}
-            <strong>{trackAbbr[t.slug]}</strong> {trackName(t.title)}
+            <strong>{t.abbr}</strong> {t.title}
           </span>
         ))}
         . A filled circle means the credential is earned.
