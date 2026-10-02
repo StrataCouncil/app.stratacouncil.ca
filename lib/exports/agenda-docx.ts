@@ -1,6 +1,8 @@
 import { AlignmentType, BorderStyle, Document, Packer, Paragraph, TextRun } from "docx";
 import { groupByCategory, meetingFormatLabels, meetingTypeLabels, type AgendaItem, type MeetingFormat, type MeetingType } from "@/lib/meetings/agenda";
 import { formatMeetingWhen } from "@/lib/meetings/format";
+import { letterheadParagraphs } from "@/lib/exports/letterhead-docx";
+import type { Letterhead } from "@/lib/data/management";
 
 const INK = "1B2A41";
 const MUTED = "555555";
@@ -17,6 +19,8 @@ export interface AgendaExportInput {
     chairName: string | null;
   };
   agenda: AgendaItem[];
+  /** The strata management letterhead, if the strata has one. */
+  letterhead?: Letterhead | null;
 }
 
 const rule = () =>
@@ -30,8 +34,9 @@ const line = (text: string, opts: { bold?: boolean; size?: number; color?: strin
   });
 
 /** The agenda as an editable Word document, for circulating before the meeting. */
-export async function agendaDocx({ corporation, meeting, agenda }: AgendaExportInput): Promise<Buffer> {
+export async function agendaDocx({ corporation, meeting, agenda, letterhead }: AgendaExportInput): Promise<Buffer> {
   const children: Paragraph[] = [
+    ...letterheadParagraphs(letterhead),
     line(corporation.name, { bold: true, size: 28, center: true, after: 40 }),
     line(`Strata Plan ${corporation.planNumber}`, { size: 20, center: true, color: MUTED, after: 40 }),
     rule(),

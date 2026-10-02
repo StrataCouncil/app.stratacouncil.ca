@@ -1,6 +1,8 @@
 import { PDFDocument, rgb, StandardFonts, type PDFFont, type PDFPage } from "pdf-lib";
 import { attendanceLines, clockTime, voteLine, type MinutesContent } from "@/lib/meetings/minutes";
 import { formatMeetingWhen } from "@/lib/meetings/format";
+import { fitWithin, letterheadLines } from "@/lib/management";
+import type { Letterhead } from "@/lib/data/management";
 
 /**
  * Final minutes as a PDF (Letter, 1" margins), with a real text layer so
@@ -87,7 +89,7 @@ class Writer {
   }
 }
 
-export async function minutesPdf(m: MinutesContent, opts: { finalizedAt: string | null }): Promise<Uint8Array> {
+export async function minutesPdf(m: MinutesContent, opts: { finalizedAt: string | null; letterhead?: Letterhead | null }): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
   doc.setTitle(`${m.meeting.typeLabel} minutes, ${m.meeting.date}`);
   doc.setCreator("StrataCouncil.ca");
@@ -97,6 +99,24 @@ export async function minutesPdf(m: MinutesContent, opts: { finalizedAt: string 
   const tz = m.meeting.timezone;
   const w = new Writer(doc, font, bold, `Strata Plan ${m.corporation.planNumber} · ${m.meeting.typeLabel} minutes · ${m.meeting.date}`);
 
+  // The strata management letterhead: logo, then the company and manager lines.
+  if (opts.letterhead) {
+    const lh = opts.letterhead;
+    // A logo that can't be drawn is left off rather than failing the minutes.
+    const image = lh.logo
+      ? await (lh.logo.type === "png" ? doc.embedPng(lh.logo.bytes) : doc.embedJpg(lh.logo.bytes)).catch(() => null)
+      : null;
+    if (image) {
+      const size = fitWithin(image.width, image.height, 150, 52);
+      w.ensure(size.height + 6);
+      w.page.drawImage(image, { x: (PAGE.w - size.width) / 2, y: w.y - size.height, width: size.width, height: size.height });
+      w.space(size.height + 6);
+    }
+    for (const l of letterheadLines(lh.details)) w.text(l.text, { size: l.bold ? 10 : 8.5, bold: l.bold, color: l.bold ? INK : MUTED, center: true });
+    w.space(4);
+    w.rule();
+    w.space(4);
+  }
   w.text(m.corporation.name, { size: 15, bold: true, center: true });
   w.text(`Strata Plan ${m.corporation.planNumber}`, { size: 9.5, color: MUTED, center: true });
   w.space(4);

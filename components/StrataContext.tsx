@@ -12,6 +12,8 @@ export interface StrataContextValue {
   corpId: string;
   subscribed: boolean;
   isAdmin: boolean;
+  /** Admin or Manager: sees the Management tab. */
+  canManage: boolean;
 }
 
 const StrataContext = createContext<StrataContextValue | null>(null);

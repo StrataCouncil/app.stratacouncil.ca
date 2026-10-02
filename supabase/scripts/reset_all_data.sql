@@ -17,7 +17,8 @@
 --
 -- Files in Storage are NOT removed by this (Supabase only allows that
 -- through the Storage API). Afterwards, empty these buckets in the
--- dashboard: `strata-plans`, `corporation-documents`, `avatars`.
+-- dashboard: `strata-plans`, `corporation-documents`, `avatars`,
+-- `management-logos`.
 -- Leave the `legislation` bucket alone. A kept Super Admin's photo will be
 -- missing after `avatars` is emptied; upload it again.
 
@@ -51,6 +52,8 @@ delete from public.corporation_memberships;
 delete from public.corporation_join_requests;
 delete from public.corporation_invites;
 delete from public.subscriptions;
+delete from public.stratasphere_usage;
+delete from public.strata_management;
 
 -- The stratas themselves.
 delete from public.strata_corporations;

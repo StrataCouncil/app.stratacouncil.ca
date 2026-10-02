@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type Anthropic from "@anthropic-ai/sdk";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { askClaudeText, ClaudeRefusalError, streamClaudeText } from "@/lib/ai/claude";
+import { estimateCostUsd, type TokenUsage } from "@/lib/ai/pricing";
 import { loadStripContext, stripForCorporation, type StripContext } from "@/lib/kb/privacy";
 import { searchKnowledge, type KnowledgeHit } from "@/lib/kb/search";
 import type { AgendaItem } from "@/lib/meetings/agenda";
@@ -394,6 +395,34 @@ function composeUserTurn(context: string | null, question: string) {
 
 type AskInput = Parameters<typeof prepareStratasphere>[0];
 
+/**
+ * One row per answer in stratasphere_usage (0024), for the Super Admin
+ * dashboard. Written with the service role (no client can write usage);
+ * a failure is logged, never shown to the person asking.
+ */
+async function logUsage(input: AskInput, usage: TokenUsage) {
+  try {
+    const {
+      data: { user },
+    } = await input.supabase.auth.getUser();
+    const { error } = await createAdminClient()
+      .from("stratasphere_usage")
+      .insert({
+        corporation_id: input.corpId,
+        user_id: user?.id ?? null,
+        surface: input.meeting ? "meeting" : "assistant",
+        input_tokens: usage.input,
+        cache_read_tokens: usage.cacheRead,
+        cache_write_tokens: usage.cacheWrite,
+        output_tokens: usage.output,
+        cost_usd: Number(estimateCostUsd(usage).toFixed(5)),
+      });
+    if (error) console.error("[stratasphere usage]", error.message);
+  } catch (err) {
+    console.error("[stratasphere usage]", err instanceof Error ? err.message : err);
+  }
+}
+
 /** Search hits, plus the full bylaws when the answer refers to bylaws. */
 function finalSources(prepared: Extract<Prepared, { ok: true }>, text: string) {
   if (!/\bbylaws?\b/i.test(text)) return prepared.sources;
@@ -406,13 +435,14 @@ export async function askStratasphere(input: AskInput): Promise<AskResult> {
   const prepared = await prepareStratasphere(input);
   if (!prepared.ok) return prepared;
   try {
-    const { text, truncated } = await askClaudeText({
+    const { text, truncated, usage } = await askClaudeText({
       system: prepared.system,
       messages: prepared.messages,
       effort: prepared.effort,
       maxTokens: prepared.maxTokens,
       cache: true,
     });
+    await logUsage(input, usage);
     if (!text) return { ok: false, error: "Stratasphere didn't return an answer. Please try again." };
     return { ok: true, text: truncated ? `${text}\n[Answer cut short.]` : text, sources: finalSources(prepared, text), context: prepared.turnContext };
   } catch (err) {
@@ -430,10 +460,11 @@ export async function streamStratasphere(input: AskInput, onText: (delta: string
   const prepared = await prepareStratasphere(input);
   if (!prepared.ok) return prepared;
   try {
-    const { text, truncated } = await streamClaudeText(
+    const { text, truncated, usage } = await streamClaudeText(
       { system: prepared.system, messages: prepared.messages, effort: prepared.effort, maxTokens: prepared.maxTokens, cache: true },
       onText
     );
+    await logUsage(input, usage);
     if (!text) return { ok: false, error: "Stratasphere didn't return an answer. Please try again." };
     if (truncated) onText("\n[Answer cut short.]");
     return { ok: true, text: truncated ? `${text}\n[Answer cut short.]` : text, sources: finalSources(prepared, text), context: prepared.turnContext };

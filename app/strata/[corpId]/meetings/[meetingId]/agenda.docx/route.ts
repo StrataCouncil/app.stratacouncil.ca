@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getMeeting } from "@/lib/data/meetings";
 import { agendaDocx, exportFileName } from "@/lib/exports/agenda-docx";
+import { loadLetterhead } from "@/lib/data/management";
 
 /** Agenda export (.docx). Any member can download the agenda (RLS: members read meetings). */
 export async function GET(_req: Request, { params }: { params: Promise<{ corpId: string; meetingId: string }> }) {
@@ -20,6 +21,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ corpId:
     corporation: { planNumber: corp.strata_plan_number, name: corp.building_name || corp.legal_name },
     meeting,
     agenda: meeting.agenda,
+    letterhead: await loadLetterhead(corpId),
   });
   return new NextResponse(new Uint8Array(buffer), {
     headers: {
