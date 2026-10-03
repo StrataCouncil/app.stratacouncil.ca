@@ -57,11 +57,38 @@ export function calculateBilling(unitCount: number, interval: BillingInterval) {
   return { subtotal, gst, total: subtotal + gst };
 }
 
-/** The annual plan's 12-month commitment end, computed once at activation
- * and stored (subscriptions.committed_until) — never recalculated, so a
- * unit-count change mid-term doesn't move the anniversary. */
+/** The end of the first 12-month annual term, from when that term began.
+ * Stored as subscriptions.committed_until. Not moved by a unit-count change;
+ * later terms are found with currentTermEnd(). */
 export function computeCommittedUntil(activatedAt: Date): Date {
   const d = new Date(activatedAt);
   d.setFullYear(d.getFullYear() + 1);
   return d;
+}
+
+/**
+ * The annual plan renews into a new 12-month term on each anniversary
+ * (doc01 §4b). Given the first term's end, the end of the term running
+ * now: the first anniversary that is still in the future.
+ */
+export function currentTermEnd(firstTermEnd: Date, now: Date = new Date()): Date {
+  const end = new Date(firstTermEnd);
+  for (let years = 1; end.getTime() <= now.getTime(); years++) {
+    end.setTime(firstTermEnd.getTime());
+    end.setFullYear(firstTermEnd.getFullYear() + years);
+  }
+  return end;
+}
+
+/**
+ * When the running annual term ends, for a subscriptions row. Falls back
+ * to the activation date when committed_until was never stored.
+ */
+export function annualTermEnd(row: { committed_until: string | null; activated_at: string | null }, now: Date = new Date()): Date | null {
+  const first = row.committed_until
+    ? new Date(row.committed_until)
+    : row.activated_at
+      ? computeCommittedUntil(new Date(row.activated_at))
+      : null;
+  return first ? currentTermEnd(first, now) : null;
 }

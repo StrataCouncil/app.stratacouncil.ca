@@ -37,7 +37,7 @@ async function syncSubscription(sub: Stripe.Subscription) {
 
   const { data: existing } = await admin
     .from("subscriptions")
-    .select("committed_until, activated_at, billing_interval")
+    .select("committed_until, activated_at, billing_interval, stripe_subscription_id, pending_interval")
     .eq("corporation_id", corporationId)
     .maybeSingle();
 
@@ -50,15 +50,6 @@ async function syncSubscription(sub: Stripe.Subscription) {
   const activatedAt =
     existing?.activated_at ?? (status === "active" ? new Date().toISOString() : null);
 
-  // Computed once, at first activation, and never recalculated (doc01
-  // §4b) — a later unit-count or webhook replay doesn't move the
-  // committed-until anniversary.
-  const committedUntil =
-    billingInterval === "annual"
-      ? existing?.committed_until ??
-        (activatedAt ? computeCommittedUntil(new Date(activatedAt)).toISOString() : null)
-      : null;
-
   // Stripe moved `current_period_end` from the Subscription object onto
   // each Subscription Item in its 2025 API versions; read both shapes so
   // this keeps working regardless of which API version the account is
@@ -67,7 +58,33 @@ async function syncSubscription(sub: Stripe.Subscription) {
   const subAny = sub as any;
   const periodEndUnix: number | null =
     subAny.current_period_end ?? subAny.items?.data?.[0]?.current_period_end ?? null;
+  const periodStartUnix: number | null =
+    subAny.current_period_start ?? subAny.items?.data?.[0]?.current_period_start ?? null;
   const currentPeriodEnd = periodEndUnix ? new Date(periodEndUnix * 1000).toISOString() : null;
+
+  // The first annual term's end, stored once per term start (doc01 §4b):
+  // a new annual subscription, or a scheduled switch onto annual landing
+  // now. Later renewals roll forward from it (currentTermEnd), and a
+  // unit-count change or webhook replay doesn't move it.
+  const startsAnnualTerm =
+    billingInterval === "annual" &&
+    (!existing?.committed_until ||
+      existing.billing_interval !== "annual" ||
+      existing.stripe_subscription_id !== sub.id);
+  const termStart = periodStartUnix ? new Date(periodStartUnix * 1000) : activatedAt ? new Date(activatedAt) : new Date();
+  const committedUntil =
+    billingInterval !== "annual"
+      ? null
+      : startsAnnualTerm
+        ? status === "active"
+          ? computeCommittedUntil(termStart).toISOString()
+          : null
+        : existing!.committed_until;
+
+  // A scheduled switch is done once the new interval is in force, and
+  // gone if the schedule was released (kept the current plan).
+  const switchSettled =
+    Boolean(existing?.pending_interval) && (existing!.pending_interval === billingInterval || !sub.schedule);
 
   await admin
     .from("subscriptions")
@@ -83,6 +100,7 @@ async function syncSubscription(sub: Stripe.Subscription) {
         committed_until: committedUntil,
         current_period_end: currentPeriodEnd,
         cancel_at: sub.cancel_at ? new Date(sub.cancel_at * 1000).toISOString() : null,
+        ...(switchSettled ? { pending_interval: null, pending_interval_at: null, stripe_schedule_id: null } : {}),
       },
       { onConflict: "corporation_id" }
     );
@@ -104,7 +122,7 @@ async function deactivate(sub: Stripe.Subscription) {
   const admin = createAdminClient();
   await admin
     .from("subscriptions")
-    .update({ status: "deactivated", cancel_at: null })
+    .update({ status: "deactivated", cancel_at: null, pending_interval: null, pending_interval_at: null, stripe_schedule_id: null })
     .eq("corporation_id", corporationId);
 }
 

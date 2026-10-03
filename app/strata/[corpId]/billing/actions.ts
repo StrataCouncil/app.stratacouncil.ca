@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getStripe } from "@/lib/stripe/client";
-import { getPriceIds, type BillingInterval } from "@/lib/stripe/prices";
+import { annualTermEnd, getPriceIds, type BillingInterval } from "@/lib/stripe/prices";
 import { parseEmails } from "@/lib/roster-csv";
 import { isStrataAdmin } from "@/lib/auth/strata-admin";
 
@@ -196,25 +196,31 @@ export async function updateBillingEmail(corporationId: string, formData: FormDa
   redirect(`/strata/${corporationId}/billing?note=contacts-saved`);
 }
 
-/** "Change billing interval" — swaps the existing subscription's two
- * line items (base + per-unit) onto the other plan's Prices in place,
- * rather than starting a second subscription. Switching onto the annual
- * plan restarts the 12-month commitment window from today (the webhook
- * recomputes `committed_until` once it sees the new activation-shaped
- * state — see stripe-webhook-route.ts's `syncSubscription`). */
+/**
+ * "Switch to monthly / annual". The switch takes effect on the next
+ * anniversary, never immediately (Jeremy, 2026-10-04): annual to monthly
+ * at the end of the 12-month term already committed to, monthly to
+ * annual at the next monthly billing date. Nothing moves off the annual
+ * rate early.
+ *
+ * Stripe holds the change as a subscription schedule: the current plan
+ * runs until the switch date, then the new plan's Prices and
+ * `billing_interval` metadata apply. The webhook sees that and starts the
+ * new term (and clears the pending columns).
+ */
 export async function changePlan(corporationId: string, newInterval: BillingInterval) {
   await requireAdmin(corporationId);
+  if (!isInterval(newInterval)) throw new Error("Choose a plan.");
 
   const admin = createAdminClient();
   const { data: sub } = await admin
     .from("subscriptions")
-    .select("stripe_subscription_id, billing_interval")
+    .select("status, stripe_subscription_id, billing_interval, committed_until, activated_at, cancel_at, pending_interval")
     .eq("corporation_id", corporationId)
     .maybeSingle();
-  if (!sub?.stripe_subscription_id) {
-    throw new Error("No active subscription to change.");
-  }
-  if (sub.billing_interval === newInterval) return;
+  if (!sub?.stripe_subscription_id || sub.status !== "active") throw new Error("No active subscription to change.");
+  if (sub.billing_interval === newInterval || sub.pending_interval === newInterval) return;
+  if (sub.cancel_at) throw new Error("This subscription is set to cancel, so the plan can't be switched.");
 
   const { data: corp } = await admin
     .from("strata_corporations")
@@ -225,44 +231,96 @@ export async function changePlan(corporationId: string, newInterval: BillingInte
 
   const stripe = getStripe();
   const current = await stripe.subscriptions.retrieve(sub.stripe_subscription_id);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const currentAny = current as any;
+  const periodEnd: number | null = currentAny.current_period_end ?? currentAny.items?.data?.[0]?.current_period_end ?? null;
+
+  const switchAt =
+    sub.billing_interval === "annual"
+      ? annualTermEnd(sub)
+      : periodEnd
+        ? new Date(periodEnd * 1000)
+        : null;
+  if (!switchAt) throw new Error("Couldn't work out the next anniversary date. Please contact us.");
+  const switchAtUnix = Math.floor(switchAt.getTime() / 1000);
+
   const { base, perUnit } = getPriceIds(newInterval);
+  const scheduleId = current.schedule
+    ? typeof current.schedule === "string"
+      ? current.schedule
+      : current.schedule.id
+    : (await stripe.subscriptionSchedules.create({ from_subscription: current.id })).id;
+  const schedule = await stripe.subscriptionSchedules.retrieve(scheduleId);
+  const running = schedule.current_phase?.start_date ?? schedule.phases[0]?.start_date;
+  if (!running) throw new Error("Couldn't schedule the switch. Please try again.");
 
-  // Two existing items (base qty 1, per-unit qty N) swapped for the new
-  // plan's two Prices in place — `deleted: true` removes each old item
-  // as the corresponding new one is added, same subscription throughout.
-  const items = current.items.data.map((item, i) => ({
-    id: item.id,
-    price: i === 0 ? base : perUnit,
-    quantity: i === 0 ? 1 : corp.unit_count,
-  }));
-
-  await stripe.subscriptions.update(sub.stripe_subscription_id, {
-    items,
-    proration_behavior: "create_prorations",
-    metadata: { corporation_id: corporationId, billing_interval: newInterval },
-    // A plan change is a fresh commitment, not a cancellation — clear any
-    // pending cancel_at so switching plans also un-schedules a cancel.
-    cancel_at_period_end: false,
-    cancel_at: null,
+  await stripe.subscriptionSchedules.update(scheduleId, {
+    end_behavior: "release",
+    proration_behavior: "none",
+    phases: [
+      {
+        // The plan as it is now, unchanged, until the anniversary.
+        start_date: running,
+        end_date: switchAtUnix,
+        items: current.items.data.map((item) => ({ price: item.price.id, quantity: item.quantity ?? 1 })),
+        automatic_tax: { enabled: true },
+      },
+      {
+        items: [
+          { price: base, quantity: 1 },
+          { price: perUnit, quantity: corp.unit_count },
+        ],
+        iterations: 1,
+        automatic_tax: { enabled: true },
+        proration_behavior: "none",
+        metadata: { corporation_id: corporationId, billing_interval: newInterval },
+      },
+    ],
   });
 
-  // Reset so the webhook treats this as a fresh activation and
-  // recomputes committed_until for the new interval (see note above).
   await admin
     .from("subscriptions")
-    .update({ billing_interval: newInterval, activated_at: new Date().toISOString(), committed_until: null, cancel_at: null })
+    .update({ pending_interval: newInterval, pending_interval_at: switchAt.toISOString(), stripe_schedule_id: scheduleId })
+    .eq("corporation_id", corporationId);
+  revalidatePath(`/strata/${corporationId}/billing`);
+}
+
+/** Undo a scheduled switch: keep the current plan as it is. */
+export async function keepCurrentPlan(corporationId: string) {
+  await requireAdmin(corporationId);
+  await releasePendingSwitch(corporationId);
+  revalidatePath(`/strata/${corporationId}/billing`);
+}
+
+async function releasePendingSwitch(corporationId: string) {
+  const admin = createAdminClient();
+  const { data: sub } = await admin
+    .from("subscriptions")
+    .select("stripe_schedule_id")
+    .eq("corporation_id", corporationId)
+    .maybeSingle();
+  if (sub?.stripe_schedule_id) {
+    const stripe = getStripe();
+    const schedule = await stripe.subscriptionSchedules.retrieve(sub.stripe_schedule_id);
+    // Releasing leaves the subscription exactly as it is now.
+    if (schedule.status === "active" || schedule.status === "not_started") {
+      await stripe.subscriptionSchedules.release(sub.stripe_schedule_id);
+    }
+  }
+  await admin
+    .from("subscriptions")
+    .update({ pending_interval: null, pending_interval_at: null, stripe_schedule_id: null })
     .eq("corporation_id", corporationId);
 }
 
 /**
- * Cancel — doc01 §4b's Stripe-native design, no early-termination fee.
- * Monthly: `cancel_at_period_end`, so it runs out the current monthly
- * anniversary. Annual: `cancel_at` set to the stored 12-month
- * `committed_until` (the term the corporation already committed to,
- * computed once at activation) — access and billing continue exactly as
- * before until that date, then the subscription simply doesn't renew.
- * Either way this only *schedules* the stop; the webhook is what flips
- * `status` to 'deactivated' once Stripe actually ends it.
+ * Cancel — doc01 §4b, no early-termination fee, nothing ends early.
+ * Monthly: `cancel_at_period_end`, so the current month runs out.
+ * Annual: `cancel_at` the end of the 12-month term running now (each
+ * anniversary starts a new term), so billing and access continue until
+ * then, and it doesn't renew. A scheduled plan switch is dropped first.
+ * This only schedules the stop; the webhook flips `status` when Stripe
+ * actually ends it.
  */
 export async function cancelSubscription(corporationId: string) {
   await requireAdmin(corporationId);
@@ -270,26 +328,20 @@ export async function cancelSubscription(corporationId: string) {
   const admin = createAdminClient();
   const { data: sub } = await admin
     .from("subscriptions")
-    .select("stripe_subscription_id, billing_interval, committed_until")
+    .select("stripe_subscription_id, billing_interval, committed_until, activated_at, stripe_schedule_id")
     .eq("corporation_id", corporationId)
     .maybeSingle();
 
   if (!sub?.stripe_subscription_id) {
     throw new Error("No active subscription to cancel.");
   }
+  if (sub.stripe_schedule_id) await releasePendingSwitch(corporationId);
 
   const stripe = getStripe();
-  let updated;
-  if (sub.billing_interval === "annual" && sub.committed_until) {
-    const cancelAtUnix = Math.floor(new Date(sub.committed_until).getTime() / 1000);
-    updated = await stripe.subscriptions.update(sub.stripe_subscription_id, {
-      cancel_at: cancelAtUnix,
-    });
-  } else {
-    updated = await stripe.subscriptions.update(sub.stripe_subscription_id, {
-      cancel_at_period_end: true,
-    });
-  }
+  const termEnd = sub.billing_interval === "annual" ? annualTermEnd(sub) : null;
+  const updated = termEnd
+    ? await stripe.subscriptions.update(sub.stripe_subscription_id, { cancel_at: Math.floor(termEnd.getTime() / 1000) })
+    : await stripe.subscriptions.update(sub.stripe_subscription_id, { cancel_at_period_end: true });
 
   // Optimistic local mirror — the webhook will reconfirm this, but the
   // admin shouldn't have to reload to see "cancels on <date>".

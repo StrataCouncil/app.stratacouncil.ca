@@ -2574,6 +2574,23 @@ button.chat-source:hover {
   gap: 1rem;
 }
 
+.billing-pending {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin: 0 0 0.9rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--paper);
+}
+.billing-pending p {
+  margin: 0;
+  flex: 1 1 18rem;
+}
+
 .setup-requests {
   max-width: 640px;
   margin-bottom: 1.5rem;
