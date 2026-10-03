@@ -4,13 +4,14 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isStrataAdmin } from "@/lib/auth/strata-admin";
 import { getStripe } from "@/lib/stripe/client";
-import { calculateBilling } from "@/lib/stripe/prices";
+import { annualTermEnd, calculateBilling } from "@/lib/stripe/prices";
 import { StatementsPeriodSelect } from "@/components/StatementsPeriodSelect";
 import { BillingSteps, type BillingStep } from "@/components/BillingSteps";
 import { COMPANY_LEGAL_NAME, STATEMENT_DESCRIPTOR } from "@/lib/company";
 import {
   changePlan,
   cancelSubscription,
+  keepCurrentPlan,
   openBillingPortal,
   updateBillingEmail,
 } from "./actions";
@@ -171,6 +172,14 @@ export default async function BillingPage({
 
   const statements =
     period && sub?.stripe_customer_id ? await loadStatements(sub.stripe_customer_id, period) : null;
+
+  // Switches and cancellations take effect on the next anniversary: the
+  // end of the running 12-month term on annual, the next billing date on
+  // monthly.
+  const termEnd = interval === "annual" && sub ? annualTermEnd(sub)?.toISOString() ?? null : null;
+  const nextAnniversary = interval === "annual" ? termEnd : sub?.current_period_end ?? null;
+  const pendingInterval = (sub?.pending_interval as "monthly" | "annual" | null | undefined) ?? null;
+  const otherInterval = interval === "annual" ? "monthly" : "annual";
 
   const fmt = (n: number) => n.toLocaleString("en-CA", { style: "currency", currency: "CAD" });
   const fmtDate = (iso: string | null) =>
@@ -349,6 +358,7 @@ export default async function BillingPage({
                   ? `Next billing date: ${fmtDate(sub.current_period_end)}.`
                   : null}{" "}
               {sub?.activated_at ? `Active since ${fmtDate(sub.activated_at)}.` : null}
+              {termEnd && !sub?.cancel_at ? ` Current 12-month term ends ${fmtDate(termEnd)}.` : null}
             </p>
           ) : deactivated ? (
             <p className="card__meta">
@@ -363,21 +373,47 @@ export default async function BillingPage({
             </p>
           )}
 
-          {subscribed && (
-            <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
-              <form action={changePlan.bind(null, corpId, interval === "annual" ? "monthly" : "annual")}>
-                <button className="button button-secondary" data-testid="change-plan-cta">
-                  Switch to {interval === "annual" ? "monthly" : "annual"}
+          {subscribed && pendingInterval && (
+            <div className="billing-pending" data-testid="pending-plan-switch">
+              <p>
+                <strong>Switching to {pendingInterval} on {fmtDate(sub?.pending_interval_at ?? null)}.</strong>{" "}
+                {interval === "annual"
+                  ? "Until then, the annual rate and 12-month commitment continue."
+                  : "Until then, the monthly rate continues. The 12-month term starts on that date."}
+              </p>
+              <form action={keepCurrentPlan.bind(null, corpId)}>
+                <button className="button button-secondary button-small" data-testid="keep-plan-cta">
+                  Keep {interval}
                 </button>
               </form>
-              {!sub?.cancel_at && (
+            </div>
+          )}
+
+          {subscribed && !sub?.cancel_at && (
+            <>
+              <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
+                {!pendingInterval && (
+                  <form action={changePlan.bind(null, corpId, otherInterval)}>
+                    <button className="button button-secondary" data-testid="change-plan-cta">
+                      Switch to {otherInterval}
+                    </button>
+                  </form>
+                )}
                 <form action={cancelSubscription.bind(null, corpId)}>
                   <button className="button button-secondary" data-testid="cancel-subscription-cta">
                     Cancel subscription
                   </button>
                 </form>
+              </div>
+              {nextAnniversary && (
+                <p className="card__meta" style={{ marginTop: "0.6rem" }}>
+                  {interval === "annual"
+                    ? `A switch or cancellation takes effect on ${fmtDate(nextAnniversary)}, the end of your 12-month term. Until then, billing and access continue on the annual plan.`
+                    : `A switch to annual takes effect on ${fmtDate(nextAnniversary)}, your next billing date, and starts a 12-month term. A cancellation ends the subscription on that date.`}
+                  {pendingInterval ? " Cancelling also drops the scheduled switch." : ""}
+                </p>
               )}
-            </div>
+            </>
           )}
 
         </div>
