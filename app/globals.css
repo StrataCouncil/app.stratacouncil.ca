@@ -2578,6 +2578,22 @@ button.chat-source:hover {
   max-width: 640px;
   margin-bottom: 1.5rem;
 }
+.setup-requests__status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+.setup-requests__dismiss {
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+}
+.setup-requests__dismiss:hover,
+.setup-requests__dismiss:focus-visible {
+  border-color: var(--line);
+  color: var(--ink);
+}
 
 /* Council & Roles — per-member meeting permission toggles */
 
