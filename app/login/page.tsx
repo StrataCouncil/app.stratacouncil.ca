@@ -8,11 +8,9 @@ import { sendOtp } from "@/lib/auth/actions";
 import { initialSendOtpState } from "@/lib/auth/otp-state";
 
 /**
- * Passwordless sign-in (doc00 changelog 2026-09-29): same signInWithOtp()
- * call as /signup, just without a full_name field — omitting it means an
- * existing user's profile row is never touched by signing in. Supabase
- * doesn't distinguish "sign up" from "sign in" at the API level; a
- * returning email just gets a fresh link instead of a new account.
+ * Passwordless sign-in (doc00 changelog 2026-09-29). Never creates an
+ * account (lib/auth/actions.ts sendOtp): an email with no account gets
+ * "no account" and a button to sign up with the email filled in.
  *
  * `error` in the URL comes from the /auth/confirm route handler when a
  * link has expired or was already used. Wrapped in Suspense because
@@ -63,14 +61,38 @@ function LoginForm() {
         <h1>Welcome back</h1>
         <p>Sign in to continue your training or your strata&rsquo;s Stratasphere&trade;.</p>
         <form action={formAction}>
+          <input type="hidden" name="intent" value="signin" />
           <div className="field">
             <label htmlFor="email">Email</label>
-            <input id="email" name="email" type="email" autoComplete="email" required data-testid="login-email" />
+            <input
+              id="email"
+              name="email"
+              type="email"
+              autoComplete="email"
+              required
+              defaultValue={state.email ?? ""}
+              data-testid="login-email"
+            />
             <span className="field__hint">
               We&rsquo;ll email you a one-time link &mdash; no password needed.
             </span>
           </div>
-          {(state.status === "error" || linkError) && (
+          {state.status === "no_account" && (
+            <div className="auth-notice" role="status" data-testid="login-no-account">
+              <p>
+                There&rsquo;s no account for <strong>{state.email}</strong>. Check the spelling, or create
+                an account.
+              </p>
+              <Link
+                href={`/signup?email=${encodeURIComponent(state.email ?? "")}`}
+                className="button button-secondary button-small"
+                data-testid="login-create-account"
+              >
+                Create an account
+              </Link>
+            </div>
+          )}
+          {(state.status === "error" || (linkError && state.status === "idle")) && (
             <p className="field__hint" style={{ color: "var(--danger, #c0392b)" }} data-testid="login-error">
               {state.message ?? linkError}
             </p>
