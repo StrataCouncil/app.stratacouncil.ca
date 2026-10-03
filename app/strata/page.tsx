@@ -5,7 +5,7 @@ import { StrataSetupFlow } from "@/components/StrataSetupFlow";
 import { getConnectedCorporations } from "@/lib/data/corporations";
 import { getCurrentProfile } from "@/lib/data/profile";
 import { createClient } from "@/lib/supabase/server";
-import { acceptInvite } from "./actions";
+import { acceptInvite, dismissRequest } from "./actions";
 
 /**
  * Connect a strata (doc03 "Zero, one, and many connections"). With no
@@ -16,8 +16,13 @@ import { acceptInvite } from "./actions";
  * Shows, in order: invites waiting for this account (accept here if the
  * email link expired), the user's own open requests, then the SP# lookup
  * (components/StrataSetupFlow.tsx).
-
+ *
+ * Only the signed-in user's own requests are listed (RLS would also show
+ * an admin's or Super Admin's incoming ones). A turned-down request shows
+ * for 7 days after the decision, or until dismissed.
  */
+
+const DENIED_SHOWN_MS = 7 * 24 * 60 * 60 * 1000;
 
 const requestStatusLabels: Record<string, string> = {
   pending: "Waiting for review",
@@ -38,17 +43,28 @@ export default async function StrataSetupPage({
     redirect(`/strata/${corporations[0].id}`);
   }
 
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
   const [profile, invites, creationRequests, joinRequests] = await Promise.all([
     getCurrentProfile(),
     supabase.rpc("my_pending_invites"),
     supabase
       .from("corporation_creation_requests")
-      .select("id, parsed_strata_plan_number, parsed_legal_name, status, requested_at")
+      .select("id, parsed_strata_plan_number, parsed_legal_name, status, requested_at, resolved_at")
+      .eq("requested_by", user.id)
+      .neq("status", "approved")
+      .is("dismissed_at", null)
       .order("requested_at", { ascending: false })
       .limit(10),
     supabase
       .from("corporation_join_requests")
-      .select("id, corporation_id, status, requested_at")
+      .select("id, corporation_id, status, requested_at, resolved_at")
+      .eq("requested_by", user.id)
+      .neq("status", "approved")
+      .is("dismissed_at", null)
       .order("requested_at", { ascending: false })
       .limit(10),
   ]);
@@ -62,24 +78,25 @@ export default async function StrataSetupPage({
   }[];
 
   // Approved requests already show up as a connected strata; only list
-  // what's still open or was turned down.
+  // what's still open, or was turned down in the last 7 days.
+  const cutoff = Date.now() - DENIED_SHOWN_MS;
+  const recent = (r: { status: string; requested_at: string; resolved_at: string | null }) =>
+    r.status !== "denied" || new Date(r.resolved_at ?? r.requested_at).getTime() > cutoff;
   const openRequests = [
-    ...(creationRequests.data ?? [])
-      .filter((r) => r.status !== "approved")
-      .map((r) => ({
-        id: r.id,
-        label: `Add ${r.parsed_strata_plan_number}${r.parsed_legal_name ? ` — ${r.parsed_legal_name}` : ""}`,
-        status: r.status,
-        requestedAt: r.requested_at,
-      })),
-    ...(joinRequests.data ?? [])
-      .filter((r) => r.status !== "approved")
-      .map((r) => ({
-        id: r.id,
-        label: `Join ${r.corporation_id}`,
-        status: r.status,
-        requestedAt: r.requested_at,
-      })),
+    ...(creationRequests.data ?? []).filter(recent).map((r) => ({
+      id: r.id,
+      kind: "creation" as const,
+      label: `Add ${r.parsed_strata_plan_number}${r.parsed_legal_name ? ` — ${r.parsed_legal_name}` : ""}`,
+      status: r.status,
+      requestedAt: r.requested_at,
+    })),
+    ...(joinRequests.data ?? []).filter(recent).map((r) => ({
+      id: r.id,
+      kind: "join" as const,
+      label: `Join ${r.corporation_id}`,
+      status: r.status,
+      requestedAt: r.requested_at,
+    })),
   ].sort((a, b) => b.requestedAt.localeCompare(a.requestedAt));
 
   return (
@@ -164,9 +181,26 @@ export default async function StrataSetupPage({
                         Requested {new Date(request.requestedAt).toLocaleDateString("en-CA")}
                       </span>
                     </div>
-                    <span className={`pill ${request.status === "pending" ? "" : "pill--locked"}`}>
-                      {requestStatusLabels[request.status] ?? request.status}
-                    </span>
+                    <div className="setup-requests__status">
+                      <span className={`pill ${request.status === "pending" ? "" : "pill--locked"}`}>
+                        {requestStatusLabels[request.status] ?? request.status}
+                      </span>
+                      {request.status === "denied" && (
+                        <form action={dismissRequest.bind(null, request.kind, request.id)}>
+                          <button
+                            type="submit"
+                            className="icon-button setup-requests__dismiss"
+                            aria-label={`Dismiss ${request.label}`}
+                            title="Dismiss"
+                            data-testid="dismiss-request"
+                          >
+                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                              <path d="M6 6l12 12M18 6L6 18" />
+                            </svg>
+                          </button>
+                        </form>
+                      )}
+                    </div>
                   </li>
                 ))}
               </ul>

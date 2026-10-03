@@ -171,6 +171,15 @@ export async function acceptInvite(inviteId: string) {
   redirect(destination);
 }
 
+/** Hide one of your own turned-down requests from the list (0025). */
+export async function dismissRequest(kind: "join" | "creation", requestId: string) {
+  const ctx = await requireUser();
+  if (!ctx) redirect("/login");
+  const { error } = await ctx.supabase.rpc("dismiss_my_request", { p_kind: kind, p_request_id: requestId });
+  if (error) console.error("[dismissRequest]", error.message);
+  revalidatePath("/strata");
+}
+
 export type UploadTicket =
   | { ok: true; path: string; token: string }
   | { ok: false; error: string };
