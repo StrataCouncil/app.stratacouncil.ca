@@ -71,7 +71,6 @@ export default async function CouncilAndRolesPage({
 
       {steps && <GettingStarted corpId={corpId} steps={steps} />}
 
-      <h2 style={{ marginBottom: "1rem" }}>Council & roles</h2>
       {roster ? (
         <CouncilRoster corporationId={corpId} roster={roster} />
       ) : (

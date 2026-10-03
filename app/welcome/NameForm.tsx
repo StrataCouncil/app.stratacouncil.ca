@@ -12,8 +12,9 @@ export function NameForm({ next, email }: { next: string; email: string }) {
   return (
     <div className="auth-shell">
       <form className="auth-card" action={formAction} data-testid="welcome-name-form">
-        <div style={{ display: "flex", justifyContent: "center", marginBottom: "1.5rem" }}>
+        <div className="auth-card__brand">
           <Logo className="auth-card__mark" />
+            <span className="auth-card__wordmark">StrataCouncil.ca</span>
         </div>
         <h1>What&rsquo;s your name?</h1>
         <p>

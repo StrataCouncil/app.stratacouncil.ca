@@ -125,7 +125,7 @@ export default async function StrataSetupPage({
             <h1>
               {corporations.length > 0
                 ? "Connect another strata"
-                : "Set up your strata on Stratasphere™"}
+                : "Connect to a strata"}
             </h1>
             <p>
               Connecting is free and doesn&rsquo;t require any training to be

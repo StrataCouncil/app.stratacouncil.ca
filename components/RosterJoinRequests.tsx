@@ -59,11 +59,12 @@ export function RosterJoinRequests({
   }
 
   return (
-    <div className="card roster-join-requests" data-testid="roster-join-requests">
-      <h3>Requests to join</h3>
-      <p className="card__meta" style={{ marginTop: "-0.4rem" }}>
-        Submitted by someone who looked up this strata&rsquo;s plan number
-        and asked to connect &mdash; visible only to the admin.
+    <section className="roster-section" data-testid="roster-join-requests">
+    <h2>Requests to join</h2>
+    <div className="card roster-join-requests">
+      <p className="card__meta">
+        From people who looked up this strata&rsquo;s plan number and asked
+        to connect. Only admins see these.
       </p>
       {error && <p className="roster-invites__error">{error}</p>}
 
@@ -171,5 +172,6 @@ export function RosterJoinRequests({
         ))}
       </ul>
     </div>
+    </section>
   );
 }

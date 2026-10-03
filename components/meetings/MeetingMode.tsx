@@ -86,6 +86,8 @@ export function MeetingMode(props: {
   const [notes, setNotes] = useState(props.initialNotes);
   const [saveState, setSaveState] = useState<"saved" | "saving" | "error">("saved");
   const [saveError, setSaveError] = useState<string | null>(null);
+  // Why Confirm decision or Unanimous didn't go ahead, shown beside those buttons.
+  const [actionError, setActionError] = useState<{ itemId: string; message: string } | null>(null);
   const [confirm, setConfirm] = useState<Confirm>(null);
   const [editing, setEditing] = useState<AgendaItem | null>(null);
   const [panel, setPanel] = useState<"none" | "agenda" | "assistant">("none");
@@ -181,18 +183,22 @@ export function MeetingMode(props: {
   }
 
   // ── Decisions ───────────────────────────────────────────────────────
+  function blockAction(it: AgendaItem, message: string) {
+    setActionError({ itemId: it.id, message });
+  }
+
   function confirmDecision(it: AgendaItem) {
     const m = it.motion!;
-    if (isElectChair(it) && !it.nominee?.trim()) return setSaveError("Enter the nominee first.");
-    if (!m.mover || !m.sec) return setSaveError("Choose a mover and a seconder first.");
-    if (m.mover === m.sec) return setSaveError("The mover and seconder must be different lots.");
+    if (isElectChair(it) && !it.nominee?.trim()) return blockAction(it, "Enter the nominee first.");
+    if (!m.mover || !m.sec) return blockAction(it, "Choose a mover and a seconder first.");
+    if (m.mover === m.sec) return blockAction(it, "The mover and seconder must be different lots.");
     const v = evaluateVote(m);
-    if (v.total === 0) return setSaveError("Record the votes first.");
+    if (v.total === 0) return blockAction(it, "Record the votes first.");
     if (v.total > voters) {
-      return setSaveError(`${v.total} votes recorded, but only ${voters} ${voters === 1 ? "voter is" : "voters are"} present. Check the count.`);
+      return blockAction(it, `${v.total} votes recorded, but only ${voters} ${voters === 1 ? "voter is" : "voters are"} present. Check the count.`);
     }
     const outcome = v.passing ? "CARRIED" : "DEFEATED";
-    setSaveError(null);
+    setActionError(null);
     setConfirm({
       title: outcome === "CARRIED" ? "Motion carried" : "Motion defeated",
       confirmLabel: `Record as ${outcome}`,
@@ -232,10 +238,10 @@ export function MeetingMode(props: {
 
   function unanimous(it: AgendaItem) {
     const m = it.motion!;
-    if (!m.mover || !m.sec) return setSaveError("Choose a mover and a seconder first.");
-    if (m.mover === m.sec) return setSaveError("The mover and seconder must be different lots.");
-    if (isElectChair(it) && !it.nominee?.trim()) return setSaveError("Enter the nominee first.");
-    setSaveError(null);
+    if (!m.mover || !m.sec) return blockAction(it, "Choose a mover and a seconder first.");
+    if (m.mover === m.sec) return blockAction(it, "The mover and seconder must be different lots.");
+    if (isElectChair(it) && !it.nominee?.trim()) return blockAction(it, "Enter the nominee first.");
+    setActionError(null);
     setConfirm({
       title: "Unanimous vote",
       confirmLabel: "Record as unanimous",
@@ -566,7 +572,11 @@ export function MeetingMode(props: {
                 setNotes((n) => ({ ...n, [item.id]: body }));
                 void saveItemNote(corpId, meetingId, item.id, body);
               }}
-              onPatch={(patch) => patchItem(item.id, patch)}
+              onPatch={(patch) => {
+                patchItem(item.id, patch);
+                if (actionError?.itemId === item.id) setActionError(null);
+              }}
+              actionError={actionError?.itemId === item.id ? actionError.message : null}
               onConfirm={() => confirmDecision(item)}
               onUnanimous={() => unanimous(item)}
               onDefer={() => defer(item)}
@@ -725,6 +735,8 @@ function ItemPanel(props: {
   note: string;
   onNote: (body: string) => void;
   onPatch: (patch: Partial<AgendaItem>) => void;
+  /** Why the last Confirm decision or Unanimous didn't go ahead. */
+  actionError: string | null;
   onConfirm: () => void;
   onUnanimous: () => void;
   onDefer: () => void;
@@ -929,6 +941,11 @@ function ItemPanel(props: {
         </div>
       )}
 
+      {!it.done && props.called && props.actionError && (
+        <p className="mm-action-error" role="alert" data-testid="mm-action-error">
+          {props.actionError}
+        </p>
+      )}
       {!it.done && props.called && (
         <div className="mm-actions">
           {it.deferred && (
