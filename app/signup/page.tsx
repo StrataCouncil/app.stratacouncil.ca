@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState } from "react";
+import { Suspense, useActionState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Logo } from "@/components/Logo";
 import { sendOtp } from "@/lib/auth/actions";
 import { initialSendOtpState } from "@/lib/auth/otp-state";
@@ -14,7 +15,17 @@ import { initialSendOtpState } from "@/lib/auth/otp-state";
  * (migration 0001's trigger creates the profiles row from full_name).
  */
 export default function SignupPage() {
+  return (
+    <Suspense fallback={null}>
+      <SignupForm />
+    </Suspense>
+  );
+}
+
+function SignupForm() {
   const [state, formAction, pending] = useActionState(sendOtp, initialSendOtpState);
+  // From the login page's "Create an account", when the email had no account.
+  const prefilledEmail = useSearchParams().get("email") ?? "";
 
   if (state.status === "sent") {
     return (
@@ -48,6 +59,7 @@ export default function SignupPage() {
         <h1>Start free training</h1>
         <p>No strata plan number needed &mdash; just your name and email.</p>
         <form action={formAction}>
+          <input type="hidden" name="intent" value="signup" />
           <div className="field">
             <label htmlFor="full_name">Full name</label>
             <input id="full_name" name="full_name" type="text" autoComplete="name" required data-testid="signup-name" />
@@ -57,7 +69,15 @@ export default function SignupPage() {
           </div>
           <div className="field">
             <label htmlFor="email">Email</label>
-            <input id="email" name="email" type="email" autoComplete="email" required data-testid="signup-email" />
+            <input
+              id="email"
+              name="email"
+              type="email"
+              autoComplete="email"
+              required
+              defaultValue={state.email ?? prefilledEmail}
+              data-testid="signup-email"
+            />
           </div>
           <div className="field field--checkbox">
             <label htmlFor="accept_terms">

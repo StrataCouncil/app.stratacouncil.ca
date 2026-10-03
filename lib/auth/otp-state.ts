@@ -11,7 +11,8 @@
  * need alongside the actual Server Actions in actions.ts.
  */
 export type SendOtpState = {
-  status: "idle" | "sent" | "error";
+  /** "no_account": a sign-in for an email with no account (none is created). */
+  status: "idle" | "sent" | "error" | "no_account";
   email?: string;
   message?: string;
 };

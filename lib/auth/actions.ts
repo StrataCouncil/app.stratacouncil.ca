@@ -14,38 +14,42 @@ import type { SendOtpState } from "@/lib/auth/otp-state";
 // initialSendOtpState directly from lib/auth/otp-state.ts instead.
 
 /**
- * Passwordless auth (doc03 Stage 2, doc00 changelog 2026-09-29): one
- * signInWithOtp() call covers both signup and sign-in. If no auth.users
- * row exists for this email yet, Supabase creates one on first
- * verification — migration 0001's on_auth_user_created trigger then
- * creates the matching profiles row, reading full_name out of
- * raw_user_meta_data. A returning email just gets a fresh sign-in link;
- * full_name is omitted from that call (see the login page) so it never
- * overwrites an existing profile's name.
+ * Passwordless auth (doc03 Stage 2, doc00 changelog 2026-09-29): both
+ * /signup and /login send a one-time link with signInWithOtp(), told
+ * apart by the form's `intent` field.
  *
- * Shared by both /signup and /login — they differ only in the form
- * fields they collect and the copy shown after sending, not in how the
- * OTP itself is requested.
+ * - Sign-up may create the account. Migration 0001's on_auth_user_created
+ *   trigger then creates the profiles row from raw_user_meta_data
+ *   (full_name, and marketing_opt_in for CASL, doc01 §2 / 0006). Name and
+ *   Terms acceptance are required here, on the server too. An email that
+ *   already has an account just gets a sign-in link; Supabase only applies
+ *   the metadata when it creates the user, so nothing is overwritten.
+ * - Sign-in never creates an account (shouldCreateUser: false). An email
+ *   with no account comes back as "no_account", and the login page offers
+ *   sign-up with the email filled in. That does confirm whether an email
+ *   has an account, which is accepted here for a clear message.
  *
- * marketing_opt_in (doc01 §2, migration 0006) rides the same
- * raw_user_meta_data channel as full_name — an unchecked-by-default,
- * optional checkbox, distinct from the required Terms/Privacy checkbox
- * (which isn't persisted anywhere yet, per that same migration's note;
- * this is the one consent that needs a timestamped record, for CASL).
- * Only meaningful on the signup path (fullName present) — omitted on
- * login the same way full_name is, so a returning user's existing
- * preference is never touched by signing back in.
+ * Invited people don't come through here: their account is created when
+ * the invite is sent (auth.admin.generateLink, roster-actions.ts), so a
+ * later sign-in finds it.
  */
 export async function sendOtp(
   _prevState: SendOtpState,
   formData: FormData
 ): Promise<SendOtpState> {
+  const signingUp = formData.get("intent") === "signup";
   const email = String(formData.get("email") ?? "").trim();
   const fullName = String(formData.get("full_name") ?? "").trim();
   const marketingOptIn = formData.get("marketing_opt_in") === "on";
 
   if (!email) {
     return { status: "error", message: "Enter your email address." };
+  }
+  if (signingUp && !fullName) {
+    return { status: "error", email, message: "Enter your full name." };
+  }
+  if (signingUp && formData.get("accept_terms") !== "on") {
+    return { status: "error", email, message: "Agree to the Terms & Conditions and Privacy Policy to continue." };
   }
 
   const origin = (await headers()).get("origin");
@@ -54,16 +58,18 @@ export async function sendOtp(
   const { error } = await supabase.auth.signInWithOtp({
     email,
     options: {
-      shouldCreateUser: true,
+      shouldCreateUser: signingUp,
       emailRedirectTo: `${origin}/auth/confirm`,
-      ...(fullName
-        ? { data: { full_name: fullName, marketing_opt_in: marketingOptIn } }
-        : {}),
+      ...(signingUp ? { data: { full_name: fullName, marketing_opt_in: marketingOptIn } } : {}),
     },
   });
 
   if (error) {
-    return { status: "error", message: error.message };
+    // Supabase's answer to a sign-in for an email it doesn't know.
+    if (!signingUp && (error.code === "otp_disabled" || /signups? not allowed/i.test(error.message))) {
+      return { status: "no_account", email };
+    }
+    return { status: "error", email, message: error.message };
   }
 
   return { status: "sent", email };
