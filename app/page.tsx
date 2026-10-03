@@ -91,7 +91,7 @@ export default async function HomePage() {
               className="button button-secondary button-small"
               style={{ alignSelf: "flex-start" }}
             >
-              {corporations.length === 0 ? "Set up your strata" : "Connect another"}
+              {corporations.length === 0 ? "Connect to a strata" : "Connect another"}
             </Link>
           </div>
         </div>

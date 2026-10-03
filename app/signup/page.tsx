@@ -33,9 +33,10 @@ function SignupForm() {
         <div className="auth-card">
           <Link
             href="/"
-            style={{ display: "flex", justifyContent: "center", marginBottom: "1.5rem" }}
+            className="auth-card__brand"
           >
             <Logo className="auth-card__mark" />
+            <span className="auth-card__wordmark">StrataCouncil.ca</span>
           </Link>
           <h1>Check your email</h1>
           <p>
@@ -52,9 +53,10 @@ function SignupForm() {
       <div className="auth-card">
         <Link
           href="/"
-          style={{ display: "flex", justifyContent: "center", marginBottom: "1.5rem" }}
+          className="auth-card__brand"
         >
           <Logo className="auth-card__mark" />
+            <span className="auth-card__wordmark">StrataCouncil.ca</span>
         </Link>
         <h1>Start free training</h1>
         <p>No strata plan number needed &mdash; just your name and email.</p>

@@ -15,6 +15,7 @@ import {
   corporationRoles,
   councilRoles,
   isSingleHolderRole,
+  MAX_ADMINS,
   executiveRoles,
   withoutConflictingRoles,
   type CorporationRole,
@@ -115,8 +116,14 @@ export function RosterTable({
   }
 
   function conflictReason(member: RosterMember, role: CorporationRole): string | null {
-    if (role === "admin" && member.roles.includes("admin")) {
-      return "There's always one admin. Hand it over by assigning Admin to another member.";
+    if (role === "admin") {
+      const admins = members.filter((m) => m.roles.includes("admin"));
+      if (member.roles.includes("admin") && admins.length === 1) {
+        return "A strata always needs an admin. Make another member Admin first.";
+      }
+      if (!member.roles.includes("admin") && admins.length >= MAX_ADMINS) {
+        return `This strata already has ${MAX_ADMINS} admins. Take Admin off one of them first.`;
+      }
     }
     if (role === "member_at_large" && draftRoles.some((r) => executiveRoles.includes(r))) {
       return "An executive isn't a Member at Large. Remove the executive role first.";
@@ -190,11 +197,6 @@ export function RosterTable({
           {members.map((member) => {
             const active = member.status === "active";
             const isAdminHolder = member.roles.includes("admin");
-            const draftTakesAdminFromMe =
-              editingId === member.userId &&
-              member.userId !== currentUserId &&
-              draftRoles.includes("admin") &&
-              !member.roles.includes("admin");
 
             return (
               <tr key={member.userId} data-testid={`roster-row-${member.userId}`}>
@@ -350,6 +352,11 @@ export function RosterTable({
                               onChange={() => toggleDraftRole(role)}
                             />
                             {corporationRoleLabels[role]}
+                            {role === "admin" && reason && (
+                              <span className="role-editor__holder">
+                                {member.roles.includes("admin") ? "the only admin" : `already ${MAX_ADMINS} admins`}
+                              </span>
+                            )}
                             {holder && holder.userId !== member.userId && (
                               <span className="role-editor__holder">
                                 {movesFrom ? `moves from ${holder.fullName}` : `held by ${holder.fullName}`}
@@ -358,13 +365,6 @@ export function RosterTable({
                           </label>
                         );
                       })}
-                      {draftTakesAdminFromMe && (
-                        <p className="roster-join-requests__warning" style={{ margin: "0.5rem 0" }}>
-                          <strong>You&rsquo;ll no longer be admin.</strong> Admin
-                          moves to {member.fullName}, and only they can change
-                          roles, invites and billing afterward.
-                        </p>
-                      )}
                       <div className="role-editor__actions">
                         <button
                           className="button button-secondary button-small"

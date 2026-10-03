@@ -87,8 +87,12 @@ export function isCorporationRole(value: string): value is CorporationRole {
   return (corporationRoles as readonly string[]).includes(value);
 }
 
+/** Offices with one holder at a time. Admin is not one: a strata can have up to MAX_ADMINS. */
 export function isSingleHolderRole(role: CorporationRole): boolean {
-  return role !== "manager" && role !== "member_at_large";
+  return role !== "admin" && role !== "manager" && role !== "member_at_large";
 }
+
+/** Two admins for good governance; raise if customers need more (0027). */
+export const MAX_ADMINS = 2;
 
 export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;

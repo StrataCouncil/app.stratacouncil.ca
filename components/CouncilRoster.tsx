@@ -1,4 +1,4 @@
-import { RosterInvites } from "@/components/RosterInvites";
+import { InviteMemberButton, RosterInvites } from "@/components/RosterInvites";
 import { RosterJoinRequests } from "@/components/RosterJoinRequests";
 import { RosterTable } from "@/components/RosterTable";
 import type { CorporationRoster } from "@/lib/data/roster";
@@ -11,8 +11,10 @@ import type { CorporationRoster } from "@/lib/data/roster";
  * shows up in the table because the server re-rendered it, not because
  * one component handed a row to another.
  *
- * Join requests and invites are admin-only — RLS returns nothing for
- * anyone else, and they aren't rendered for them either.
+ * Order (note 10, 2026-10-04): Requests to join and Invitations, each
+ * only when there are any, then Council & roles, always. Join requests
+ * and invites are admin-only; RLS returns nothing for anyone else, and
+ * they aren't rendered for them either.
  */
 export function CouncilRoster({
   corporationId,
@@ -29,7 +31,10 @@ export function CouncilRoster({
           <RosterInvites corporationId={corporationId} invites={roster.invites} />
         </>
       )}
-      <div id="roster" />
+      <div className="roster-section__head" id="roster">
+        <h2>Council &amp; roles</h2>
+        {roster.isAdmin && <InviteMemberButton corporationId={corporationId} />}
+      </div>
       <RosterTable
         corporationId={corporationId}
         members={roster.members}

@@ -1061,6 +1061,26 @@ button {
 /* Invite a member — sits above the roster table as its own card, not a
    modal, so sending an invite and seeing the pending list stay on
    screen together (doc01 §1's admin-initiated `corporation_invites`). */
+/* Council & Roles sections: Requests to join, Invitations, Council & roles. */
+.roster-section {
+  margin-bottom: 2rem;
+}
+.roster-section h2,
+.roster-section__head h2 {
+  margin: 0 0 1rem;
+}
+.roster-section__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+.roster-section__head h2 {
+  margin: 0;
+}
+
 .roster-invites__form {
   display: flex;
   gap: 0.5rem;
@@ -1932,10 +1952,29 @@ button.chat-source:hover {
   padding: 2.5rem;
 }
 
+/* Logo and wordmark, at the header's proportions (32px mark : 1.15rem text). */
+.auth-card__brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6em;
+  margin-bottom: 1.5rem;
+  color: var(--ink);
+  text-decoration: none;
+  font-family: var(--font-fraunces), Georgia, serif;
+  font-weight: 600;
+  font-size: 1.44rem;
+}
+
 .auth-card__mark {
   width: 40px;
   height: 40px;
+  flex: none;
   color: var(--ink);
+}
+
+.auth-card__wordmark {
+  line-height: 1;
 }
 
 .auth-card h1 {
@@ -3393,6 +3432,18 @@ li[data-done="true"] .checklist__mark {
 .mm-roll__lot[data-status="proxy"] em {
   color: var(--accent-dark);
 }
+.mm-action-error {
+  margin: 0 0 0.6rem;
+  padding: 0.55rem 0.8rem;
+  border-left: 3px solid var(--danger);
+  border-radius: var(--radius-sm);
+  background: var(--danger-bg);
+  color: var(--danger);
+  font-weight: 600;
+  font-size: 0.92rem;
+  text-align: right;
+}
+
 .mm-actions {
   display: flex;
   gap: 0.6rem;

@@ -35,9 +35,10 @@ function LoginForm() {
         <div className="auth-card">
           <Link
             href="/"
-            style={{ display: "flex", justifyContent: "center", marginBottom: "1.5rem" }}
+            className="auth-card__brand"
           >
             <Logo className="auth-card__mark" />
+            <span className="auth-card__wordmark">StrataCouncil.ca</span>
           </Link>
           <h1>Check your email</h1>
           <p>
@@ -54,9 +55,10 @@ function LoginForm() {
       <div className="auth-card">
         <Link
           href="/"
-          style={{ display: "flex", justifyContent: "center", marginBottom: "1.5rem" }}
+          className="auth-card__brand"
         >
           <Logo className="auth-card__mark" />
+            <span className="auth-card__wordmark">StrataCouncil.ca</span>
         </Link>
         <h1>Welcome back</h1>
         <p>Sign in to continue your training or your strata&rsquo;s Stratasphere&trade;.</p>
