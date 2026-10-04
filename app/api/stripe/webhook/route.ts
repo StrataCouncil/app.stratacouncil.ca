@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import type Stripe from "stripe";
-import { getStripe } from "@/lib/stripe/client";
+import { getStripe, stripeModeFor, webhookSecrets, type StripeMode } from "@/lib/stripe/client";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { computeCommittedUntil } from "@/lib/stripe/prices";
 import { sendTransactionalEmail } from "@/lib/email/mailtrap";
@@ -27,13 +27,27 @@ function mapStatus(stripeStatus: Stripe.Subscription.Status): "active" | "deacti
   return stripeStatus === "active" || stripeStatus === "trialing" ? "active" : "deactivated";
 }
 
-async function syncSubscription(sub: Stripe.Subscription) {
+/**
+ * A strata's Stripe IDs belong to one mode (0029). An event from the other
+ * mode, such as a sandbox event for a live strata, is ignored.
+ */
+async function sameMode(corporationId: string, mode: StripeMode) {
+  const corpMode = await stripeModeFor(corporationId);
+  if (corpMode !== mode) {
+    console.warn(`stripe-webhook: ignoring a ${mode} event for ${corporationId}, which bills through ${corpMode}.`);
+    return false;
+  }
+  return true;
+}
+
+async function syncSubscription(sub: Stripe.Subscription, mode: StripeMode) {
   const admin = createAdminClient();
   const corporationId = sub.metadata?.corporation_id;
   if (!corporationId) {
     console.error(`stripe-webhook: subscription ${sub.id} has no corporation_id metadata.`);
     return;
   }
+  if (!(await sameMode(corporationId, mode))) return;
 
   const { data: existing } = await admin
     .from("subscriptions")
@@ -116,9 +130,10 @@ async function syncSubscription(sub: Stripe.Subscription) {
   }
 }
 
-async function deactivate(sub: Stripe.Subscription) {
+async function deactivate(sub: Stripe.Subscription, mode: StripeMode) {
   const corporationId = sub.metadata?.corporation_id;
   if (!corporationId) return;
+  if (!(await sameMode(corporationId, mode))) return;
   const admin = createAdminClient();
   await admin
     .from("subscriptions")
@@ -131,7 +146,7 @@ async function deactivate(sub: Stripe.Subscription) {
  * emails its receipt to the Customer's email (the first); everyone else
  * gets a copy with the hosted invoice link. Best effort.
  */
-async function copyInvoiceToContacts(invoice: Stripe.Invoice) {
+async function copyInvoiceToContacts(invoice: Stripe.Invoice, mode: StripeMode) {
   const customerId = typeof invoice.customer === "string" ? invoice.customer : invoice.customer?.id;
   if (!customerId || !invoice.hosted_invoice_url) return;
   const admin = createAdminClient();
@@ -146,6 +161,7 @@ async function copyInvoiceToContacts(invoice: Stripe.Invoice) {
     .filter(Boolean)
     .slice(1);
   if (!sub || others.length === 0) return;
+  if (!(await sameMode(sub.corporation_id, mode))) return;
   const { data: corp } = await admin
     .from("strata_corporations")
     .select("building_name, legal_name")
@@ -167,9 +183,8 @@ async function copyInvoiceToContacts(invoice: Stripe.Invoice) {
 export async function POST(request: NextRequest) {
   const rawBody = await request.text();
   const signature = request.headers.get("stripe-signature");
-  const secret = process.env.STRIPE_WEBHOOK_SECRET;
-
-  if (!secret) {
+  const secrets = webhookSecrets();
+  if (secrets.length === 0) {
     console.error("stripe-webhook: STRIPE_WEBHOOK_SECRET is not set.");
     return NextResponse.json({ error: "Server misconfiguration." }, { status: 500 });
   }
@@ -177,11 +192,21 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Missing stripe-signature header." }, { status: 400 });
   }
 
-  let event: Stripe.Event;
-  try {
-    event = getStripe().webhooks.constructEvent(rawBody, signature, secret);
-  } catch (error) {
-    console.error("stripe-webhook: signature verification failed:", error);
+  // Live and sandbox (Stripe test mode) both post here, each signed with
+  // its own secret; whichever verifies says which mode the event is from.
+  let event: Stripe.Event | null = null;
+  let mode: StripeMode = "live";
+  for (const candidate of secrets) {
+    try {
+      event = getStripe(candidate.mode).webhooks.constructEvent(rawBody, signature, candidate.secret);
+      mode = candidate.mode;
+      break;
+    } catch {
+      // Try the next secret.
+    }
+  }
+  if (!event) {
+    console.error("stripe-webhook: signature verification failed for every configured secret.");
     return NextResponse.json({ error: "Invalid signature." }, { status: 401 });
   }
 
@@ -189,10 +214,10 @@ export async function POST(request: NextRequest) {
     switch (event.type) {
       case "customer.subscription.created":
       case "customer.subscription.updated":
-        await syncSubscription(event.data.object as Stripe.Subscription);
+        await syncSubscription(event.data.object as Stripe.Subscription, mode);
         break;
       case "customer.subscription.deleted":
-        await deactivate(event.data.object as Stripe.Subscription);
+        await deactivate(event.data.object as Stripe.Subscription, mode);
         break;
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
@@ -201,13 +226,13 @@ export async function POST(request: NextRequest) {
             typeof session.subscription === "string"
               ? session.subscription
               : session.subscription.id;
-          const sub = await getStripe().subscriptions.retrieve(subId);
-          await syncSubscription(sub);
+          const sub = await getStripe(mode).subscriptions.retrieve(subId);
+          await syncSubscription(sub, mode);
         }
         break;
       }
       case "invoice.paid":
-        await copyInvoiceToContacts(event.data.object as Stripe.Invoice);
+        await copyInvoiceToContacts(event.data.object as Stripe.Invoice, mode);
         break;
       default:
         // Unhandled event types are expected and fine to ignore — we

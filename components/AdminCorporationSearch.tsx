@@ -78,6 +78,7 @@ export function AdminCorporationSearch({ corporations }: { corporations: AdminCo
                     <span className={`pill ${c.subscriptionStatus === "active" ? "" : "pill--locked"}`}>
                       {subscriptionLabels[c.subscriptionStatus]}
                     </span>
+                    {c.stripeSandbox && <span className="pill stripe-mode__pill" style={{ marginLeft: "0.35rem" }}>Sandbox</span>}
                   </td>
                   <td>
                     <Link href={`/strata/${c.id}`} className="link-button" data-testid={`admin-open-strata-${c.id}`}>

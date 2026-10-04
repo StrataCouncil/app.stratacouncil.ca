@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getStripe } from "@/lib/stripe/client";
+import { stripeFor } from "@/lib/stripe/client";
 import { isStrataAdmin } from "@/lib/auth/strata-admin";
 
 /**
@@ -31,7 +31,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     .maybeSingle();
   if (!sessionId.startsWith("cs_") || !sub?.stripe_customer_id) back("payment");
 
-  const stripe = getStripe();
+  const stripe = await stripeFor(corpId);
   let plan = "annual";
   try {
     const session = await stripe.checkout.sessions.retrieve(sessionId, { expand: ["setup_intent"] });

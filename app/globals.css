@@ -1062,6 +1062,50 @@ button {
    modal, so sending an invite and seeing the pending list stay on
    screen together (doc01 §1's admin-initiated `corporation_invites`). */
 /* Council & Roles sections: Requests to join, Invitations, Council & roles. */
+/* A strata billing through Stripe test mode (0029). Loud on purpose. */
+.sandbox-banner {
+  background: #b42318;
+  color: #fff;
+  border-bottom: 4px solid #7a1710;
+}
+.sandbox-banner .wrap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 1rem;
+  padding-top: 0.85rem;
+  padding-bottom: 0.85rem;
+}
+.sandbox-banner strong {
+  font-size: 1.05rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.sandbox-banner span {
+  opacity: 0.95;
+}
+
+.stripe-mode {
+  margin-bottom: 1.5rem;
+}
+.stripe-mode--sandbox {
+  border-color: #b42318;
+  border-width: 2px;
+}
+.stripe-mode__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+.stripe-mode__head h3 {
+  margin: 0 0 0.3rem;
+}
+.stripe-mode__pill {
+  background: #b42318;
+  color: #fff;
+}
+
 /* Home: news, training welcome, Stratasphere (note 3, 2026-10-05). */
 .home-news {
   display: grid;
