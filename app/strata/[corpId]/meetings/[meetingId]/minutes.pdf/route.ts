@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getMeeting } from "@/lib/data/meetings";
 import { minutesPdf } from "@/lib/exports/minutes-pdf";
-import { exportFileName } from "@/lib/exports/agenda-docx";
+import { exportFileName, meetingDocumentName } from "@/lib/exports/filename";
 import type { MinutesContent } from "@/lib/meetings/minutes";
 import { createClient } from "@/lib/supabase/server";
 import { loadLetterhead } from "@/lib/data/management";
@@ -20,7 +20,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ corpId:
   return new NextResponse(new Uint8Array(pdf), {
     headers: {
       "Content-Type": "application/pdf",
-      "Content-Disposition": `attachment; filename="${exportFileName(corpId, meeting.type, meeting.meetingDate, "MINUTES", "pdf")}"`,
+      "Content-Disposition": `attachment; filename="${exportFileName(corpId, meeting.meetingDate, meetingDocumentName(meeting.type, "Minutes"), "pdf")}"`,
       "Cache-Control": "private, no-store",
     },
   });

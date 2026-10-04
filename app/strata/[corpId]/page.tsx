@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AutoRefresh } from "@/components/AutoRefresh";
 import { StrataSphereNav } from "@/components/StrataSphereNav";
 import { CouncilRoster } from "@/components/CouncilRoster";
 import { getCorporationRoster } from "@/lib/data/roster";
@@ -68,6 +69,7 @@ export default async function CouncilAndRolesPage({
   return (
     <>
       <StrataSphereNav active="home" />
+        <AutoRefresh />
 
       {steps && <GettingStarted corpId={corpId} steps={steps} />}
 

@@ -1062,6 +1062,169 @@ button {
    modal, so sending an invite and seeing the pending list stay on
    screen together (doc01 §1's admin-initiated `corporation_invites`). */
 /* Council & Roles sections: Requests to join, Invitations, Council & roles. */
+/* Home: news, training welcome, Stratasphere (note 3, 2026-10-05). */
+.home-news {
+  display: grid;
+  gap: 0.75rem;
+  margin-bottom: 2rem;
+}
+.home-news__item {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--accent);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+.home-news__item h3 {
+  margin: 0.15rem 0 0.3rem;
+}
+.home-news__item p {
+  margin: 0;
+  color: var(--muted);
+}
+.home-news__kicker {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.home-news__link {
+  display: inline-block;
+  margin-top: 0.5rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+.home-news__hide {
+  flex: none;
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+}
+.home-news__hide:hover,
+.home-news__hide:focus-visible {
+  border-color: var(--line);
+  color: var(--ink);
+}
+
+.home-welcome {
+  margin-bottom: 2.5rem;
+}
+.home-welcome__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+}
+.home-welcome__head h2 {
+  margin: 0;
+}
+.home-welcome__head .link-button {
+  white-space: nowrap;
+}
+.home-welcome__steps {
+  margin: 0.25rem 0 0.5rem;
+  padding-left: 1.25rem;
+  display: grid;
+  gap: 0.45rem;
+  color: var(--muted);
+}
+.home-welcome__steps strong {
+  color: var(--ink);
+}
+
+.home-stratasphere {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 2.5rem;
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #fff;
+}
+.home-stratasphere > div:first-child {
+  flex: 1 1 26rem;
+}
+.home-stratasphere h2 {
+  margin: 0.2rem 0 0.4rem;
+  color: #fff;
+}
+.home-stratasphere p {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.78);
+}
+.home-stratasphere .home-news__kicker {
+  color: #e7a57d;
+}
+.home-stratasphere__action {
+  flex: none;
+}
+
+.announcement-form {
+  margin-bottom: 1rem;
+}
+.announcement-admin-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+.announcement-admin-list li[data-ended="true"] {
+  opacity: 0.65;
+}
+.announcement-admin-list__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+.announcement-admin-list__head h3 {
+  margin: 0;
+}
+
+/* Historic minutes: several files, read one after another. */
+.historic-queue {
+  list-style: none;
+  margin: 0.25rem 0 0.75rem;
+  padding: 0;
+  border-top: 1px solid var(--line);
+}
+.historic-queue li {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.9rem;
+}
+.historic-queue__name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.historic-queue__state {
+  color: var(--muted);
+}
+.historic-queue li[data-current="true"] .historic-queue__state {
+  color: var(--accent);
+  font-weight: 600;
+}
+.historic-queue li[data-state="failed"] .historic-queue__state {
+  color: var(--danger);
+}
+.historic-queue li[data-state="saved"] .historic-queue__state {
+  color: var(--free);
+}
+
 .roster-section {
   margin-bottom: 2rem;
 }

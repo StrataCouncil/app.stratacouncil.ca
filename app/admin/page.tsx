@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AutoRefresh } from "@/components/AutoRefresh";
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { AdminCorporationSearch } from "@/components/AdminCorporationSearch";
@@ -26,6 +27,7 @@ export default async function AdminConsolePage() {
 
   return (
     <AppShell active="admin">
+      <AutoRefresh />
       <div className="wrap page">
         <div className="page-header">
           <h1>Super Admin console</h1>
@@ -40,6 +42,9 @@ export default async function AdminConsolePage() {
         <p style={{ marginBottom: "2rem" }}>
           <Link href="/admin/legislation" className="button button-secondary" data-testid="admin-legislation-link">
             Legislation library
+          </Link>{" "}
+          <Link href="/admin/announcements" className="button button-secondary" data-testid="admin-announcements-link">
+            Announcements
           </Link>
         </p>
 

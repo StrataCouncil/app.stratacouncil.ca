@@ -67,6 +67,3 @@ export async function agendaDocx({ corporation, meeting, agenda, letterhead }: A
   return Packer.toBuffer(doc);
 }
 
-export function exportFileName(planNumber: string, type: MeetingType, date: string, suffix: string, ext: string) {
-  return `${planNumber.replace(/[^A-Za-z0-9-]/g, "")}_${meetingTypeLabels[type].replace(/\s+/g, "_")}_${date}_${suffix}.${ext}`;
-}

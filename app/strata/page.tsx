@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AutoRefresh } from "@/components/AutoRefresh";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { StrataSetupFlow } from "@/components/StrataSetupFlow";
@@ -101,6 +102,7 @@ export default async function StrataSetupPage({
 
   return (
     <AppShell>
+      <AutoRefresh />
       <div className="wrap page">
         <div className="screen-gate-notice">
           <span className="pill pill--locked">Desktop required</span>
