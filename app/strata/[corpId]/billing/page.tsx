@@ -8,7 +8,7 @@ import { annualTermEnd, calculateBilling } from "@/lib/stripe/prices";
 import { StatementsPeriodSelect } from "@/components/StatementsPeriodSelect";
 import { BillingDialog } from "@/components/BillingDialog";
 import { AutoRefresh } from "@/components/AutoRefresh";
-import { StratasphereValue, STRATASPHERE_HEADLINE } from "@/components/StratasphereValue";
+import { STRATASPHERE_PITCH, STRATASPHERE_TITLE } from "@/components/StratasphereValue";
 import type { BillingAddress } from "@/lib/billing-address";
 import { BillingSteps, type BillingStep } from "@/components/BillingSteps";
 import { COMPANY_LEGAL_NAME, STATEMENT_DESCRIPTOR } from "@/lib/company";
@@ -266,14 +266,14 @@ export default async function BillingPage({
 
       {!subscribed && !pending && !justSubscribed && (
         <div className="card billing-subscribe" data-testid="billing-subscribe">
-          <h3>{STRATASPHERE_HEADLINE}</h3>
-          <StratasphereValue />
+          <h3>{STRATASPHERE_TITLE}</h3>
+          <p>{STRATASPHERE_PITCH}</p>
           <p className="card__meta">
             From {fmt(calculateBilling(unitCount, "annual").total)} a month incl. GST for {unitCount} lots.{" "}
             {deactivated ? "Your strata's records are all still here." : "Every strata's first meeting is free."}
           </p>
           <Link href={`/strata/${corpId}/billing?step=plan`} className="button button-primary" data-testid="open-subscribe">
-            Subscribe to Stratasphere&trade;
+            Subscribe
           </Link>
         </div>
       )}

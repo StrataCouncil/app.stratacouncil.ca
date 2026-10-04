@@ -4359,18 +4359,25 @@ li[data-done="true"] .checklist__mark {
 .billing-subscribe .button {
   align-self: flex-start;
 }
-.stratasphere-value {
-  margin: 0.5rem 0;
-  padding-left: 1.1rem;
-  display: grid;
-  gap: 0.4rem;
+.nudge-banner--compact {
+  position: relative;
+  padding-right: 3.25rem;
+}
+.nudge-banner--compact > div {
+  flex: 1 1 22rem;
+}
+.nudge-banner__close {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  border-color: transparent;
+  background: transparent;
   color: var(--muted);
 }
-.stratasphere-value strong {
+.nudge-banner__close:hover,
+.nudge-banner__close:focus-visible {
+  border-color: var(--line);
   color: var(--ink);
-}
-.nudge-banner--value > div {
-  flex: 1 1 28rem;
 }
 
 .billing-step__actions {
