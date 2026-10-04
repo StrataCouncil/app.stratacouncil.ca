@@ -8,11 +8,17 @@ export function Modal({
   onClose,
   children,
   testId,
+  wide = false,
+  closeOnBackdrop = true,
 }: {
   title: string;
   onClose: () => void;
   children: React.ReactNode;
   testId?: string;
+  /** Room for side-by-side content (the billing plans). */
+  wide?: boolean;
+  /** False for a multi-step dialog a stray click shouldn't close. */
+  closeOnBackdrop?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   // Callers usually pass a fresh onClose on every render; keep the latest
@@ -31,11 +37,11 @@ export function Modal({
   }, []);
 
   return (
-    <div className="modal-backdrop" onClick={() => close.current()}>
+    <div className="modal-backdrop" onClick={() => closeOnBackdrop && close.current()}>
       <div
         ref={ref}
         tabIndex={-1}
-        className="modal"
+        className={wide ? "modal modal--wide" : "modal"}
         role="dialog"
         aria-modal="true"
         aria-label={title}

@@ -7,6 +7,8 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { stripeFor, stripeModeFor } from "@/lib/stripe/client";
 import { annualTermEnd, getPriceIds, type BillingInterval } from "@/lib/stripe/prices";
+import { parseCivicAddress, readBillingAddress, toStripeAddress, type BillingAddress } from "@/lib/billing-address";
+import { syncSubscription } from "@/lib/stripe/sync";
 import { parseEmails } from "@/lib/roster-csv";
 import { isStrataAdmin } from "@/lib/auth/strata-admin";
 
@@ -407,18 +409,52 @@ export async function saveBillingContacts(
   const emails = readBillingEmails(formData);
   if (!emails.ok) return { error: emails.error };
 
+  // The billing address (0030): the building's civic address, or one typed
+  // in, usually a management company's office. Stripe calculates GST from it.
   const admin = createAdminClient();
+  const same = formData.get("addressSame") === "on";
+  let address: BillingAddress;
+  if (same) {
+    const { data: corp } = await admin.from("strata_corporations").select("address").eq("strata_plan_number", corporationId).single();
+    const civic = parseCivicAddress(corp?.address);
+    if (!civic || !civic.postalCode) {
+      return { error: "We couldn't read a full civic address with postal code for the building. Enter the billing address instead." };
+    }
+    address = civic;
+  } else {
+    const typed = readBillingAddress({
+      line1: formData.get("line1"),
+      line2: formData.get("line2"),
+      city: formData.get("city"),
+      province: formData.get("province"),
+      postalCode: formData.get("postalCode"),
+    });
+    if (!typed.ok) return { error: typed.error };
+    address = typed.address;
+  }
+
   const { data: sub } = await admin
     .from("subscriptions")
     .select("stripe_customer_id")
     .eq("corporation_id", corporationId)
     .maybeSingle();
   if (sub?.stripe_customer_id) {
-    await (await stripeFor(corporationId)).customers.update(sub.stripe_customer_id, { email: emails.first });
+    try {
+      await (await stripeFor(corporationId)).customers.update(sub.stripe_customer_id, {
+        email: emails.first,
+        address: toStripeAddress(address),
+      });
+    } catch (error) {
+      console.error("[saveBillingContacts]", error instanceof Error ? error.message : error);
+      return { error: "Couldn't save these details with Stripe. Please try again." };
+    }
   }
   await admin
     .from("subscriptions")
-    .upsert({ corporation_id: corporationId, billing_email: emails.joined }, { onConflict: "corporation_id" });
+    .upsert(
+      { corporation_id: corporationId, billing_email: emails.joined, billing_address: address, billing_address_same: same },
+      { onConflict: "corporation_id" }
+    );
   redirect(`/strata/${corporationId}/billing?plan=${isInterval(interval) ? interval : "annual"}&step=review`);
 }
 
@@ -440,7 +476,7 @@ export async function paySubscription(
   const [{ data: sub }, { data: corp }] = await Promise.all([
     admin
       .from("subscriptions")
-      .select("stripe_customer_id, billing_email, status, stripe_subscription_id")
+      .select("stripe_customer_id, billing_email, billing_address, status, stripe_subscription_id, stripe_status")
       .eq("corporation_id", corporationId)
       .maybeSingle(),
     admin.from("strata_corporations").select("unit_count").eq("strata_plan_number", corporationId).single(),
@@ -449,6 +485,9 @@ export async function paySubscription(
   if (sub?.status === "active") redirect(`/strata/${corporationId}/billing`);
   if (!sub?.stripe_customer_id) return { error: "Add a payment method first." };
   if (!sub.billing_email) return { error: "Add a billing contact email first." };
+  if (!sub.billing_address) return { error: "Add a billing address first." };
+  // A first payment already processing: don't start a second subscription.
+  if (sub.stripe_subscription_id && sub.stripe_status === "incomplete") redirect(`/strata/${corporationId}/billing`);
 
   // Everything that talks to Stripe is caught: a failure shows as a
   // message on the form, never as an error page. On a sandbox strata the
@@ -469,7 +508,9 @@ export async function paySubscription(
     if (!defaultPm) return { error: "Add a payment method first." };
 
     const { base, perUnit } = getPriceIds(interval, mode);
-    await stripe.subscriptions.create({
+    // Stripe calculates GST from the customer's address.
+    await stripe.customers.update(sub.stripe_customer_id, { address: toStripeAddress(sub.billing_address as BillingAddress) });
+    const created = await stripe.subscriptions.create({
       customer: sub.stripe_customer_id,
       items: [
         { price: base, quantity: 1 },
@@ -479,7 +520,19 @@ export async function paySubscription(
       automatic_tax: { enabled: true },
       payment_behavior: "allow_incomplete",
       metadata: { corporation_id: corporationId, billing_interval: interval },
+      expand: ["latest_invoice.payment_intent"],
     });
+    // A declined first payment leaves the subscription "incomplete", which
+    // would read as Pending. Cancel it and say so instead.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const firstPayment = (created.latest_invoice as any)?.payment_intent;
+    if (created.status === "incomplete" && firstPayment?.status === "requires_payment_method") {
+      await stripe.subscriptions.cancel(created.id);
+      return { error: "The payment was declined. Go back and use a different payment method." };
+    }
+    // Recorded now rather than when the webhook arrives: a card payment
+    // shows Active straight away, a debit still processing shows Pending.
+    await syncSubscription(created, mode);
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     console.error(`[paySubscription] ${corporationId} (${mode}):`, detail);

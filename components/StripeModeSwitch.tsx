@@ -41,7 +41,7 @@ export function StripeModeSwitch({
           <h3>Stripe billing</h3>
           <p className="card__meta">
             {sandbox
-              ? "Sandbox: this strata bills through Stripe test mode. No real charges. Every page of this strata shows a red banner."
+              ? "Sandbox: this strata bills through Stripe test mode. No real charges. The strata shows a Sandbox pill beside its plan number."
               : "Live: this strata bills through live Stripe, like every real customer."}
           </p>
         </div>

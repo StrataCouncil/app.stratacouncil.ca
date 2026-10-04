@@ -26,7 +26,7 @@ export function HomeStratasphereCard({ action }: { action: Action }) {
             Connect to a strata
           </Link>
         ) : action.kind === "plans" ? (
-          <Link href={`/strata/${action.corpId}/billing`} className="button button-primary">
+          <Link href={`/strata/${action.corpId}/billing?step=plan`} className="button button-primary">
             See plans
           </Link>
         ) : (

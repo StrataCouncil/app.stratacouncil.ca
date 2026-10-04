@@ -5,6 +5,8 @@ import { StrataContextProvider } from "@/components/StrataContext";
 import { StrataSwitcher } from "@/components/StrataSwitcher";
 import { ScreenGate } from "@/components/ScreenGate";
 import { stripeModeFor } from "@/lib/stripe/client";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { SubscribeNudge } from "@/components/SubscribeNudge";
 import { getConnectedCorporations, type ConnectedCorporation } from "@/lib/data/corporations";
 import { createClient } from "@/lib/supabase/server";
 import { getStrataAccess } from "@/lib/data/strata";
@@ -57,29 +59,37 @@ export default async function StrataSphereLayout({
   }
 
   const subscribed = currentCorporation.subscriptionStatus === "active";
-  // Billing through Stripe test mode (0029): flagged on every page.
+  // Billing through Stripe test mode (0029): a Sandbox pill beside the
+  // plan number, the same one the Super Admin console shows.
   const sandbox = (await stripeModeFor(currentCorporation.id)) === "sandbox";
+  // A first payment Stripe is still processing (0030).
+  const { data: billing } = await createAdminClient()
+    .from("subscriptions")
+    .select("stripe_subscription_id, stripe_status")
+    .eq("corporation_id", currentCorporation.id)
+    .maybeSingle();
+  const pending = !subscribed && Boolean(billing?.stripe_subscription_id) && billing?.stripe_status === "incomplete";
   const switcherCorporations = corporations.some((c) => c.id === currentCorporation.id)
     ? corporations
     : [currentCorporation, ...corporations];
 
   return (
     <AppShell active="strata">
-      {sandbox && (
-        <div className="sandbox-banner" role="alert" data-testid="sandbox-banner">
-          <div className="wrap">
-            <strong>Sandbox strata: test billing only</strong>
-            <span>
-              Billing here goes through Stripe test mode. No real charges are made. Use this strata for testing only.
-            </span>
-          </div>
-        </div>
-      )}
       <div className="wrap page">
         <ScreenGate corpId={currentCorporation.id}>
           <div className="page-header page-header--with-switcher">
             <div>
               <span className="pill">{currentCorporation.id}</span>
+              {sandbox && (
+                <span className="pill stripe-mode__pill" style={{ marginLeft: "0.4rem" }} data-testid="sandbox-pill">
+                  Sandbox
+                </span>
+              )}
+              {pending && (
+                <span className="pill billing-tag--pending" style={{ marginLeft: "0.4rem" }} data-testid="pending-pill">
+                  Subscription pending
+                </span>
+              )}
               <h1 style={{ marginTop: "0.6rem" }}>
                 {currentCorporation.buildingName ?? currentCorporation.legalName}
               </h1>
@@ -103,26 +113,7 @@ export default async function StrataSphereLayout({
             </div>
           )}
 
-          {!subscribed && access?.isAdmin && (
-            <div className="nudge-banner">
-              <div>
-                <strong>Stratasphere&trade; isn&rsquo;t subscribed yet</strong>
-                <p>
-                  Roles, roster, guides, and documents are free. The full
-                  Stratasphere&trade; assistant unlocks with a subscription
-                  &mdash; and every strata gets one full free meeting before
-                  paying anything.
-                </p>
-              </div>
-              <Link
-                href={`/strata/${currentCorporation.id}/billing`}
-                className="button button-primary"
-                data-testid="subscribe-cta"
-              >
-                Subscribe to Stratasphere&trade;
-              </Link>
-            </div>
-          )}
+          {!subscribed && !pending && access?.isAdmin && <SubscribeNudge corpId={currentCorporation.id} />}
 
           <StrataContextProvider
             value={{
