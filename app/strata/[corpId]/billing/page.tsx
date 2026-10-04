@@ -6,6 +6,10 @@ import { isStrataAdmin } from "@/lib/auth/strata-admin";
 import { getStripe, stripeModeFor, type StripeMode } from "@/lib/stripe/client";
 import { annualTermEnd, calculateBilling } from "@/lib/stripe/prices";
 import { StatementsPeriodSelect } from "@/components/StatementsPeriodSelect";
+import { BillingDialog } from "@/components/BillingDialog";
+import { AutoRefresh } from "@/components/AutoRefresh";
+import { StratasphereValue, STRATASPHERE_HEADLINE } from "@/components/StratasphereValue";
+import type { BillingAddress } from "@/lib/billing-address";
 import { BillingSteps, type BillingStep } from "@/components/BillingSteps";
 import { COMPANY_LEGAL_NAME, STATEMENT_DESCRIPTOR } from "@/lib/company";
 import {
@@ -94,9 +98,9 @@ export default async function BillingPage({
   const { corpId } = await params;
   const { period: rawPeriod, plan: rawPlan, step: rawStep, note, subscribed: justSubscribed } = await searchParams;
   const chosenPlan = rawPlan === "monthly" ? "monthly" : "annual";
-  const step: BillingStep = (["plan", "payment", "contact", "review"] as const).includes(rawStep as BillingStep)
-    ? (rawStep as BillingStep)
-    : "plan";
+  // A step in the address opens the subscribe dialog (2026-10-05).
+  const dialogOpen = (["plan", "payment", "contact", "review"] as const).includes(rawStep as BillingStep);
+  const step: BillingStep = dialogOpen ? (rawStep as BillingStep) : "plan";
   const period = rawPeriod && periodBounds(rawPeriod) ? rawPeriod : null;
 
   const supabase = await createClient();
@@ -134,6 +138,9 @@ export default async function BillingPage({
   // Sandbox stratas bill through Stripe test mode (0029).
   const stripeMode = await stripeModeFor(corpId);
   const subscribed = sub?.status === "active";
+  // A first payment Stripe is still processing (usually a pre-authorized
+  // debit, a few business days): neither subscribed nor not (0030).
+  const pending = !subscribed && Boolean(sub?.stripe_subscription_id) && sub?.stripe_status === "incomplete";
   const deactivated = sub?.status === "deactivated" && Boolean(sub.activated_at);
   const interval = (sub?.billing_interval as "monthly" | "annual" | undefined) ?? "monthly";
   const unitCount = corp.unit_count;
@@ -195,13 +202,14 @@ export default async function BillingPage({
     .map((c) => {
       const s = subsByCorp.get(c.strata_plan_number);
       const active = s?.status === "active";
+      const cPending = !active && Boolean(s?.stripe_subscription_id) && s?.stripe_status === "incomplete";
       const cInterval = (s?.billing_interval as "monthly" | "annual" | undefined) ?? "monthly";
       return {
         id: c.strata_plan_number as string,
         name: (c.building_name ?? c.legal_name) as string,
         address: c.address as string,
         lots: c.unit_count as number,
-        status: active ? "Active" : s?.status === "deactivated" && s.activated_at ? "Deactivated" : "Not subscribed",
+        status: active ? "Active" : cPending ? "Pending" : s?.status === "deactivated" && s.activated_at ? "Deactivated" : "Not subscribed",
         activated: active && s?.activated_at ? (s.activated_at as string).slice(0, 10) : null,
         monthly: active ? calculateBilling(c.unit_count, cInterval).subtotal : null,
       };
@@ -231,24 +239,63 @@ export default async function BillingPage({
         </p>
       )}
 
-      {justSubscribed && !subscribed && (
-        <p className="sync-note" role="status" style={{ marginBottom: "1.25rem" }}>
-          Thanks. Your payment is processing; a pre-authorized debit takes a few business days. Stratasphere&trade; switches
-          on as soon as Stripe confirms it, and you&rsquo;ll get a receipt by email.
-        </p>
+      {(pending || (justSubscribed && !subscribed)) && <AutoRefresh seconds={5} />}
+
+      {justSubscribed && subscribed && (
+        <div className="billing-outcome billing-outcome--ok" role="status" data-testid="billing-subscribed">
+          <strong>You&rsquo;re subscribed.</strong>
+          <p>
+            Stratasphere&trade; is on for {corp.building_name ?? corp.legal_name}. A receipt is on its way to{" "}
+            {billingEmail.split(",")[0]}.
+          </p>
+        </div>
       )}
 
-      {!subscribed ? (
-        <BillingSteps
-          corpId={corpId}
-          unitCount={unitCount}
-          interval={chosenPlan}
-          step={step}
-          paymentMethod={paymentMethod}
-          billingEmail={billingEmail}
-          verifying={note === "verifying"}
-        />
-      ) : (
+      {!subscribed && (pending || justSubscribed) && (
+        <div className="billing-outcome billing-outcome--pending" role="status" data-testid="billing-pending">
+          <strong>Payment processing</strong>
+          <p>
+            {paymentMethod?.label.startsWith("Pre-authorized")
+              ? "Pre-authorized debits take a few business days to clear. "
+              : "Stripe is confirming the payment. "}
+            Stratasphere&trade; switches on by itself as soon as it&rsquo;s confirmed, and a receipt goes to{" "}
+            {billingEmail.split(",")[0] || "your billing contact"}. There&rsquo;s nothing more to do.
+          </p>
+        </div>
+      )}
+
+      {!subscribed && !pending && !justSubscribed && (
+        <div className="card billing-subscribe" data-testid="billing-subscribe">
+          <h3>{STRATASPHERE_HEADLINE}</h3>
+          <StratasphereValue />
+          <p className="card__meta">
+            From {fmt(calculateBilling(unitCount, "annual").total)} a month incl. GST for {unitCount} lots.{" "}
+            {deactivated ? "Your strata's records are all still here." : "Every strata's first meeting is free."}
+          </p>
+          <Link href={`/strata/${corpId}/billing?step=plan`} className="button button-primary" data-testid="open-subscribe">
+            Subscribe to Stratasphere&trade;
+          </Link>
+        </div>
+      )}
+
+      {dialogOpen && !subscribed && !pending && (
+        <BillingDialog closeHref={`/strata/${corpId}/billing`}>
+          <BillingSteps
+            corpId={corpId}
+            unitCount={unitCount}
+            interval={chosenPlan}
+            step={step}
+            paymentMethod={paymentMethod}
+            billingEmail={billingEmail}
+            billingAddress={(sub?.billing_address as BillingAddress | null) ?? null}
+            addressSame={sub?.billing_address_same ?? true}
+            civicAddress={corp.address ?? ""}
+            verifying={note === "verifying"}
+          />
+        </BillingDialog>
+      )}
+
+      {subscribed && (
       <div className="billing-grid">
         <div className="card" data-testid="billing-payment-method-card">
           <div className="billing-card__head">
@@ -471,7 +518,7 @@ export default async function BillingPage({
       </div>
 
       <div className="card billing-section" data-testid="billing-corporations-card">
-        <h3>All stratas you administer</h3>
+        <h3>Admin Stratas</h3>
         <p className="card__meta" style={{ margin: "0 0 0.75rem" }}>
           Open a strata to manage its own billing. The one you&rsquo;re viewing is highlighted.
         </p>
@@ -500,7 +547,7 @@ export default async function BillingPage({
                   <td data-center="true">{r.lots}</td>
                   <td>
                     <span
-                      className={`billing-tag ${r.status === "Active" ? "billing-tag--ok" : r.status === "Deactivated" ? "billing-tag--off" : "billing-tag--warn"}`}
+                      className={`billing-tag ${r.status === "Active" ? "billing-tag--ok" : r.status === "Deactivated" ? "billing-tag--off" : r.status === "Pending" ? "billing-tag--pending" : "billing-tag--warn"}`}
                     >
                       {r.status}
                     </span>

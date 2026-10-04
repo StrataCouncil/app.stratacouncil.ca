@@ -837,6 +837,12 @@ button {
   z-index: 50;
 }
 
+.modal--wide {
+  max-width: 820px;
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+}
+
 .modal {
   background: var(--surface);
   border: 1px solid var(--line);
@@ -1062,29 +1068,6 @@ button {
    modal, so sending an invite and seeing the pending list stay on
    screen together (doc01 §1's admin-initiated `corporation_invites`). */
 /* Council & Roles sections: Requests to join, Invitations, Council & roles. */
-/* A strata billing through Stripe test mode (0029). Loud on purpose. */
-.sandbox-banner {
-  background: #b42318;
-  color: #fff;
-  border-bottom: 4px solid #7a1710;
-}
-.sandbox-banner .wrap {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.35rem 1rem;
-  padding-top: 0.85rem;
-  padding-bottom: 0.85rem;
-}
-.sandbox-banner strong {
-  font-size: 1.05rem;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-.sandbox-banner span {
-  opacity: 0.95;
-}
-
 .stripe-mode {
   margin-bottom: 1.5rem;
 }
@@ -4204,6 +4187,8 @@ li[data-done="true"] .checklist__mark {
 
 /* Billing: subscribe step by step */
 .billing-steps {
+  display: flex;
+  flex-direction: column;
   gap: 1.5rem;
 }
 .billing-steps__bar {
@@ -4254,6 +4239,140 @@ li[data-done="true"] .checklist__mark {
 .billing-step__form .field {
   align-self: stretch;
 }
+/* Subscribe dialog (2026-10-05): Cancel on the left, Back and Next on the right. */
+.billing-step__nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  align-self: stretch;
+  margin-top: 0.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+}
+.billing-step__nav-right {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.billing-step__nav-right form {
+  margin: 0;
+}
+.billing-plan .button.billing-plan__choose {
+  margin-top: auto;
+  align-self: flex-end;
+}
+.modal--wide .billing-step__form {
+  max-width: none;
+  align-items: stretch;
+}
+.modal--wide .billing-pay {
+  min-width: 0;
+}
+.billing-plan .billing-plan__saving {
+  margin-bottom: 0.5rem;
+}
+.billing-review__note {
+  display: block;
+  margin-top: 0.2rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.billing-address {
+  align-self: stretch;
+  border: 0;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.billing-address legend {
+  font-weight: 600;
+  font-size: 0.9rem;
+  margin-bottom: 0.5rem;
+  padding: 0;
+}
+.billing-address__same {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  cursor: pointer;
+}
+.billing-address__same input {
+  margin-top: 0.25rem;
+}
+.billing-address__same .card__meta {
+  display: block;
+}
+.billing-address__fields {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.billing-address__row {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr;
+  gap: 0.75rem;
+}
+@media (max-width: 640px) {
+  .billing-address__row,
+  .billing-plans {
+    grid-template-columns: 1fr;
+  }
+}
+.billing-tag--pending {
+  background: rgba(37, 99, 235, 0.1);
+  color: #1d4ed8;
+}
+.billing-outcome {
+  margin-bottom: 1.5rem;
+  padding: 1rem 1.25rem;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--line);
+  border-left-width: 4px;
+  background: var(--surface);
+}
+.billing-outcome strong {
+  font-size: 1.05rem;
+}
+.billing-outcome p {
+  margin: 0.3rem 0 0;
+  color: var(--muted);
+}
+.billing-outcome--ok {
+  border-left-color: var(--free);
+}
+.billing-outcome--ok strong {
+  color: var(--free);
+}
+.billing-outcome--pending {
+  border-left-color: #1d4ed8;
+}
+.billing-subscribe {
+  margin-bottom: 1.5rem;
+}
+.billing-subscribe h3 {
+  margin: 0;
+}
+.billing-subscribe .button {
+  align-self: flex-start;
+}
+.stratasphere-value {
+  margin: 0.5rem 0;
+  padding-left: 1.1rem;
+  display: grid;
+  gap: 0.4rem;
+  color: var(--muted);
+}
+.stratasphere-value strong {
+  color: var(--ink);
+}
+.nudge-banner--value > div {
+  flex: 1 1 28rem;
+}
+
 .billing-step__actions {
   display: flex;
   gap: 0.75rem;
@@ -4266,6 +4385,7 @@ li[data-done="true"] .checklist__mark {
   gap: 1rem;
 }
 .billing-plan {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
@@ -4321,7 +4441,7 @@ li[data-done="true"] .checklist__mark {
   gap: 0.6rem;
   margin: 0;
 }
-.billing-review div {
+.billing-review > div {
   display: grid;
   grid-template-columns: 160px 1fr;
   gap: 1rem;

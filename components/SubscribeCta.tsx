@@ -10,7 +10,7 @@ export function SubscribeCta({ testId }: { testId?: string }) {
   const { corpId, isAdmin } = useStrata();
   if (!isAdmin) return <RequestSubscriptionButton corpId={corpId} />;
   return (
-    <Link href={`/strata/${corpId}/billing`} className="button button-primary" data-testid={testId}>
+    <Link href={`/strata/${corpId}/billing?step=plan`} className="button button-primary" data-testid={testId}>
       Subscribe to Stratasphere&trade;
     </Link>
   );

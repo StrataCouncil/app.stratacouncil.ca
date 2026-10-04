@@ -153,7 +153,7 @@ function SubscribePrompt({
           </button>
           {isAdmin ? (
             <Link
-              href={`/strata/${corpId}/billing`}
+              href={`/strata/${corpId}/billing?step=plan`}
               className="button button-primary"
               data-testid="subscribe-prompt-billing"
             >
