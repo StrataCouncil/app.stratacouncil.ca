@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireSuperAdmin } from "@/lib/data/admin";
+import { isAnnouncementCategory, type AnnouncementCategory } from "@/lib/announcement-categories";
 
 export interface Announcement {
   id: string;
@@ -8,11 +9,12 @@ export interface Announcement {
   linkUrl: string | null;
   linkLabel: string | null;
   audience: "everyone" | "admins";
+  category: AnnouncementCategory;
   publishedAt: string;
   expiresAt: string | null;
 }
 
-const columns = "id, title, body, link_url, link_label, audience, published_at, expires_at";
+const columns = "id, title, body, link_url, link_label, audience, category, published_at, expires_at";
 
 type Row = {
   id: string;
@@ -21,6 +23,7 @@ type Row = {
   link_url: string | null;
   link_label: string | null;
   audience: string;
+  category: string | null;
   published_at: string;
   expires_at: string | null;
 };
@@ -32,11 +35,15 @@ const toAnnouncement = (r: Row): Announcement => ({
   linkUrl: r.link_url,
   linkLabel: r.link_label,
   audience: r.audience === "admins" ? "admins" : "everyone",
+  category: isAnnouncementCategory(r.category) ? r.category : "general",
   publishedAt: r.published_at,
   expiresAt: r.expires_at,
 });
 
-/** The newest announcements for the signed-in person (RLS: current, and meant for them). */
+/**
+ * The newest announcements for the signed-in person (RLS: current, and
+ * meant for them). Shown on the home page and on every strata's Overview.
+ */
 export async function getCurrentAnnouncements(limit = 3): Promise<Announcement[]> {
   const supabase = await createClient();
   const now = new Date().toISOString();
