@@ -545,3 +545,30 @@ export async function paySubscription(
   }
   redirect(`/strata/${corporationId}/billing?subscribed=1`);
 }
+
+/**
+ * A first payment that can't go through (declined, or a bank account that
+ * won't verify): cancel that subscription and go back to the payment step
+ * to use a different method. Nothing was charged.
+ */
+export async function restartSubscription(corporationId: string) {
+  await requireAdmin(corporationId);
+  const admin = createAdminClient();
+  const { data: sub } = await admin
+    .from("subscriptions")
+    .select("status, stripe_subscription_id, stripe_status, billing_interval")
+    .eq("corporation_id", corporationId)
+    .maybeSingle();
+  if (sub?.stripe_subscription_id && sub.status !== "active" && sub.stripe_status === "incomplete") {
+    try {
+      await (await stripeFor(corporationId)).subscriptions.cancel(sub.stripe_subscription_id);
+    } catch (error) {
+      console.error("[restartSubscription]", error instanceof Error ? error.message : error);
+    }
+    await admin
+      .from("subscriptions")
+      .update({ stripe_subscription_id: null, stripe_status: null, status: "deactivated" })
+      .eq("corporation_id", corporationId);
+  }
+  redirect(`/strata/${corporationId}/billing?plan=${sub?.billing_interval === "monthly" ? "monthly" : "annual"}&step=payment`);
+}
