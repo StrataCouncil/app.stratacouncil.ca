@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getStripe } from "@/lib/stripe/client";
+import { stripeFor, stripeModeFor } from "@/lib/stripe/client";
 import { annualTermEnd, getPriceIds, type BillingInterval } from "@/lib/stripe/prices";
 import { parseEmails } from "@/lib/roster-csv";
 import { isStrataAdmin } from "@/lib/auth/strata-admin";
@@ -74,7 +74,7 @@ const firstEmail = (joined: string) => joined.split(",")[0].trim();
  */
 async function getOrCreateStripeCustomer(corporationId: string, billingEmail: string | null) {
   const admin = createAdminClient();
-  const stripe = getStripe();
+  const stripe = await stripeFor(corporationId);
   const { data: existing } = await admin
     .from("subscriptions")
     .select("stripe_customer_id")
@@ -151,7 +151,7 @@ export async function openBillingPortal(corporationId: string) {
   }
 
   const origin = await siteUrl();
-  const stripe = getStripe();
+  const stripe = await stripeFor(corporationId);
   const portal = await stripe.billingPortal.sessions.create({
     customer: sub.stripe_customer_id,
     return_url: `${origin}/strata/${corporationId}/billing`,
@@ -179,7 +179,7 @@ export async function updateBillingEmail(corporationId: string, formData: FormDa
     .maybeSingle();
 
   if (sub?.stripe_customer_id) {
-    await getStripe().customers.update(sub.stripe_customer_id, { email: firstEmail(billingEmail) });
+    await (await stripeFor(corporationId)).customers.update(sub.stripe_customer_id, { email: firstEmail(billingEmail) });
   }
 
   const { error } = await admin
@@ -229,7 +229,7 @@ export async function changePlan(corporationId: string, newInterval: BillingInte
     .single();
   if (!corp) throw new Error("Corporation not found.");
 
-  const stripe = getStripe();
+  const stripe = await stripeFor(corporationId);
   const current = await stripe.subscriptions.retrieve(sub.stripe_subscription_id);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const currentAny = current as any;
@@ -244,7 +244,7 @@ export async function changePlan(corporationId: string, newInterval: BillingInte
   if (!switchAt) throw new Error("Couldn't work out the next anniversary date. Please contact us.");
   const switchAtUnix = Math.floor(switchAt.getTime() / 1000);
 
-  const { base, perUnit } = getPriceIds(newInterval);
+  const { base, perUnit } = getPriceIds(newInterval, await stripeModeFor(corporationId));
   const scheduleId = current.schedule
     ? typeof current.schedule === "string"
       ? current.schedule
@@ -300,7 +300,7 @@ async function releasePendingSwitch(corporationId: string) {
     .eq("corporation_id", corporationId)
     .maybeSingle();
   if (sub?.stripe_schedule_id) {
-    const stripe = getStripe();
+    const stripe = await stripeFor(corporationId);
     const schedule = await stripe.subscriptionSchedules.retrieve(sub.stripe_schedule_id);
     // Releasing leaves the subscription exactly as it is now.
     if (schedule.status === "active" || schedule.status === "not_started") {
@@ -337,7 +337,7 @@ export async function cancelSubscription(corporationId: string) {
   }
   if (sub.stripe_schedule_id) await releasePendingSwitch(corporationId);
 
-  const stripe = getStripe();
+  const stripe = await stripeFor(corporationId);
   const termEnd = sub.billing_interval === "annual" ? annualTermEnd(sub) : null;
   const updated = termEnd
     ? await stripe.subscriptions.update(sub.stripe_subscription_id, { cancel_at: Math.floor(termEnd.getTime() / 1000) })
@@ -372,7 +372,7 @@ export async function startPaymentSetup(corporationId: string, interval: Billing
   const customerId = await getOrCreateStripeCustomer(corporationId, null);
   const origin = await siteUrl();
 
-  const session = await getStripe().checkout.sessions.create({
+  const session = await (await stripeFor(corporationId)).checkout.sessions.create({
     mode: "setup",
     customer: customerId,
     currency: "cad",
@@ -414,7 +414,7 @@ export async function saveBillingContacts(
     .eq("corporation_id", corporationId)
     .maybeSingle();
   if (sub?.stripe_customer_id) {
-    await getStripe().customers.update(sub.stripe_customer_id, { email: emails.first });
+    await (await stripeFor(corporationId)).customers.update(sub.stripe_customer_id, { email: emails.first });
   }
   await admin
     .from("subscriptions")
@@ -450,7 +450,7 @@ export async function paySubscription(
   if (!sub?.stripe_customer_id) return { error: "Add a payment method first." };
   if (!sub.billing_email) return { error: "Add a billing contact email first." };
 
-  const stripe = getStripe();
+  const stripe = await stripeFor(corporationId);
   const customer = await stripe.customers.retrieve(sub.stripe_customer_id);
   const defaultPm =
     !customer.deleted && customer.invoice_settings?.default_payment_method
@@ -462,7 +462,7 @@ export async function paySubscription(
       : null;
   if (!defaultPm) return { error: "Add a payment method first." };
 
-  const { base, perUnit } = getPriceIds(interval);
+  const { base, perUnit } = getPriceIds(interval, await stripeModeFor(corporationId));
   try {
     await stripe.subscriptions.create({
       customer: sub.stripe_customer_id,

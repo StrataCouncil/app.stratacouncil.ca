@@ -4,6 +4,7 @@ import { AppShell } from "@/components/AppShell";
 import { StrataContextProvider } from "@/components/StrataContext";
 import { StrataSwitcher } from "@/components/StrataSwitcher";
 import { ScreenGate } from "@/components/ScreenGate";
+import { stripeModeFor } from "@/lib/stripe/client";
 import { getConnectedCorporations, type ConnectedCorporation } from "@/lib/data/corporations";
 import { createClient } from "@/lib/supabase/server";
 import { getStrataAccess } from "@/lib/data/strata";
@@ -56,12 +57,24 @@ export default async function StrataSphereLayout({
   }
 
   const subscribed = currentCorporation.subscriptionStatus === "active";
+  // Billing through Stripe test mode (0029): flagged on every page.
+  const sandbox = (await stripeModeFor(currentCorporation.id)) === "sandbox";
   const switcherCorporations = corporations.some((c) => c.id === currentCorporation.id)
     ? corporations
     : [currentCorporation, ...corporations];
 
   return (
     <AppShell active="strata">
+      {sandbox && (
+        <div className="sandbox-banner" role="alert" data-testid="sandbox-banner">
+          <div className="wrap">
+            <strong>Sandbox strata: test billing only</strong>
+            <span>
+              Billing here goes through Stripe test mode. No real charges are made. Use this strata for testing only.
+            </span>
+          </div>
+        </div>
+      )}
       <div className="wrap page">
         <ScreenGate corpId={currentCorporation.id}>
           <div className="page-header page-header--with-switcher">

@@ -35,6 +35,8 @@ export interface AdminCorporation {
   subscriptionStatus: "active" | "deactivated" | "none";
   freeMeetingUsed: boolean;
   createdAt: string;
+  /** Billing through Stripe test mode (0029). */
+  stripeSandbox: boolean;
 }
 
 export async function getAllCorporations(): Promise<AdminCorporation[]> {
@@ -44,7 +46,7 @@ export async function getAllCorporations(): Promise<AdminCorporation[]> {
   const [{ data: corps, error }, { data: subs }] = await Promise.all([
     admin
       .from("strata_corporations")
-      .select("strata_plan_number, building_name, legal_name, address, jurisdiction, unit_count, free_meeting_used, created_at")
+      .select("strata_plan_number, building_name, legal_name, address, jurisdiction, unit_count, free_meeting_used, created_at, stripe_sandbox")
       .order("strata_plan_number"),
     admin.from("subscriptions").select("corporation_id, status"),
   ]);
@@ -63,6 +65,7 @@ export async function getAllCorporations(): Promise<AdminCorporation[]> {
     subscriptionStatus: (statusByCorp.get(c.strata_plan_number) as "active" | "deactivated" | undefined) ?? "none",
     freeMeetingUsed: c.free_meeting_used,
     createdAt: c.created_at,
+    stripeSandbox: Boolean(c.stripe_sandbox),
   }));
 }
 

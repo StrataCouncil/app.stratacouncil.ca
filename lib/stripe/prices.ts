@@ -13,23 +13,21 @@
  */
 export type BillingInterval = "monthly" | "annual";
 
-export function getPriceIds(interval: BillingInterval): {
+export function getPriceIds(
+  interval: BillingInterval,
+  mode: "live" | "sandbox" = "live"
+): {
   base: string;
   perUnit: string;
 } {
-  const base =
-    interval === "monthly"
-      ? process.env.STRIPE_PRICE_MONTHLY_BASE
-      : process.env.STRIPE_PRICE_ANNUAL_BASE;
-  const perUnit =
-    interval === "monthly"
-      ? process.env.STRIPE_PRICE_MONTHLY_UNIT
-      : process.env.STRIPE_PRICE_ANNUAL_UNIT;
+  // Sandbox stratas use the test-mode Prices: STRIPE_TEST_PRICE_*.
+  const prefix = mode === "sandbox" ? "STRIPE_TEST_PRICE_" : "STRIPE_PRICE_";
+  const which = interval === "monthly" ? "MONTHLY" : "ANNUAL";
+  const base = process.env[`${prefix}${which}_BASE`];
+  const perUnit = process.env[`${prefix}${which}_UNIT`];
 
   if (!base || !perUnit) {
-    throw new Error(
-      `Missing Stripe price env vars for the ${interval} plan. Expected STRIPE_PRICE_${interval.toUpperCase()}_BASE and STRIPE_PRICE_${interval.toUpperCase()}_UNIT.`
-    );
+    throw new Error(`Missing Stripe price env vars for the ${interval} plan. Expected ${prefix}${which}_BASE and ${prefix}${which}_UNIT.`);
   }
 
   return { base, perUnit };

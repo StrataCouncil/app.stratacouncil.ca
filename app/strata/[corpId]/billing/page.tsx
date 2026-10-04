@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isStrataAdmin } from "@/lib/auth/strata-admin";
-import { getStripe } from "@/lib/stripe/client";
+import { getStripe, stripeModeFor, type StripeMode } from "@/lib/stripe/client";
 import { annualTermEnd, calculateBilling } from "@/lib/stripe/prices";
 import { StatementsPeriodSelect } from "@/components/StatementsPeriodSelect";
 import { BillingSteps, type BillingStep } from "@/components/BillingSteps";
@@ -59,11 +59,11 @@ function periodBounds(period: string): { gte?: number; lt?: number } | null {
   return { gte: ts(new Date(year, month, 1)), lt: ts(new Date(year, month + 1, 1)) };
 }
 
-async function loadStatements(customerId: string, period: string): Promise<StatementRow[] | "error"> {
+async function loadStatements(mode: StripeMode, customerId: string, period: string): Promise<StatementRow[] | "error"> {
   const bounds = periodBounds(period);
   if (!bounds) return [];
   try {
-    const invoices = await getStripe().invoices.list({
+    const invoices = await getStripe(mode).invoices.list({
       customer: customerId,
       limit: 100,
       created: { ...(bounds.gte ? { gte: bounds.gte } : {}), ...(bounds.lt ? { lt: bounds.lt } : {}) },
@@ -131,6 +131,8 @@ export default async function BillingPage({
   if (!corp) redirect(`/strata/${corpId}`);
   const sub = (subs ?? []).find((s) => s.corporation_id === corpId) ?? null;
 
+  // Sandbox stratas bill through Stripe test mode (0029).
+  const stripeMode = await stripeModeFor(corpId);
   const subscribed = sub?.status === "active";
   const deactivated = sub?.status === "deactivated" && Boolean(sub.activated_at);
   const interval = (sub?.billing_interval as "monthly" | "annual" | undefined) ?? "monthly";
@@ -144,7 +146,7 @@ export default async function BillingPage({
   if (sub?.stripe_customer_id) {
     try {
       // The customer's default method (set in billing step 2), else the first on file.
-      const stripe = getStripe();
+      const stripe = getStripe(stripeMode);
       const customer = await stripe.customers.retrieve(sub.stripe_customer_id, {
         expand: ["invoice_settings.default_payment_method"],
       });
@@ -171,7 +173,7 @@ export default async function BillingPage({
   }
 
   const statements =
-    period && sub?.stripe_customer_id ? await loadStatements(sub.stripe_customer_id, period) : null;
+    period && sub?.stripe_customer_id ? await loadStatements(stripeMode, sub.stripe_customer_id, period) : null;
 
   // Switches and cancellations take effect on the next anniversary: the
   // end of the running 12-month term on annual, the next billing date on

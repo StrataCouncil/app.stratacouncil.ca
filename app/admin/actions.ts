@@ -6,6 +6,8 @@ import { APP_URL } from "@/lib/app-url";
 import { notifyUser } from "@/lib/email/notify";
 import { creationRequestApprovedEmail, creationRequestDeniedEmail } from "@/lib/email/templates";
 import { createClient } from "@/lib/supabase/server";
+import { requireSuperAdmin } from "@/lib/data/admin";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { queueDocumentIndexing } from "@/lib/kb/queue";
 import { isJurisdictionCode, normalizeStrataPlanNumber } from "@/lib/strata";
 import { joinPostal, normalizePostalCode } from "@/lib/postal";
@@ -115,4 +117,59 @@ export async function denyCreationRequest(requestId: string): Promise<ReviewResu
 
   revalidatePath("/admin");
   redirect("/admin");
+}
+
+/**
+ * Bill a strata through Stripe test mode (the sandbox), or back through
+ * live Stripe (0029). Super Admins only. A strata's Stripe IDs belong to
+ * one mode, so switching clears them and billing starts fresh in the
+ * other; it's refused while a Stripe subscription is still running, which
+ * has to be cancelled in Stripe first.
+ */
+export async function setStripeSandbox(corpId: string, sandbox: boolean): Promise<{ ok: true } | { ok: false; error: string }> {
+  const auth = await requireSuperAdmin();
+  if (!auth) return { ok: false, error: "Super Admins only." };
+  const admin = createAdminClient();
+
+  const { data: sub } = await admin
+    .from("subscriptions")
+    .select("status, stripe_subscription_id")
+    .eq("corporation_id", corpId)
+    .maybeSingle();
+  if (sub?.stripe_subscription_id && sub.status === "active") {
+    return {
+      ok: false,
+      error: "This strata has a running Stripe subscription. Cancel it in Stripe first, then switch.",
+    };
+  }
+
+  if (sub) {
+    const { error } = await admin
+      .from("subscriptions")
+      .update({
+        stripe_customer_id: null,
+        stripe_subscription_id: null,
+        stripe_schedule_id: null,
+        pending_interval: null,
+        pending_interval_at: null,
+        committed_until: null,
+        cancel_at: null,
+        current_period_end: null,
+      })
+      .eq("corporation_id", corpId);
+    if (error) {
+      console.error("[setStripeSandbox] clear", error.message);
+      return { ok: false, error: "Couldn't clear the old Stripe details." };
+    }
+  }
+
+  const { error } = await admin.from("strata_corporations").update({ stripe_sandbox: sandbox }).eq("strata_plan_number", corpId);
+  if (error) {
+    console.error("[setStripeSandbox]", error.message);
+    return { ok: false, error: "Couldn't switch billing mode." };
+  }
+  revalidatePath(`/admin/${corpId}`);
+  revalidatePath(`/strata/${corpId}`, "layout");
+  revalidatePath("/admin");
+  return { ok: true };
 }

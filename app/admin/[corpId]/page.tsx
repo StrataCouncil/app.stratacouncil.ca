@@ -6,6 +6,7 @@ import { AdminDecisionLedger } from "@/components/AdminDecisionLedger";
 import { signAvatarPaths } from "@/lib/data/avatars";
 import { getAllCorporations } from "@/lib/data/admin";
 import { getStrataDashboard } from "@/lib/data/admin-dashboard";
+import { StripeModeSwitch } from "@/components/StripeModeSwitch";
 import { documentCategoryLabels, isDocumentCategory } from "@/lib/documents";
 import { getCurrentProfile } from "@/lib/data/profile";
 import { createClient } from "@/lib/supabase/server";
@@ -97,6 +98,7 @@ export default async function AdminCorporationDetailPage({
 
         <div className="page-header">
           <span className="pill pill--locked">{corporation.strataPlanNumber}</span>
+          {dash?.stripe.sandbox && <span className="pill stripe-mode__pill" style={{ marginLeft: "0.4rem" }}>Sandbox</span>}
           <h1 style={{ marginTop: "0.6rem" }}>{corporation.buildingName ?? corporation.legalName}</h1>
           <p>{corporation.address}</p>
           <p style={{ marginTop: "1rem" }}>
@@ -121,6 +123,12 @@ export default async function AdminCorporationDetailPage({
 
         {tab === "dashboard" && dash && (
           <>
+            <StripeModeSwitch
+              corpId={corpId}
+              sandbox={dash.stripe.sandbox}
+              hasCustomer={dash.stripe.hasCustomer}
+              hasSubscription={dash.stripe.hasSubscription}
+            />
             <div className="admin-stats" data-testid="admin-dashboard">
               <Stat title="People" main={`${dash.people.active} active`}>
                 {dash.people.invited ? `${dash.people.invited} invited · ` : ""}
