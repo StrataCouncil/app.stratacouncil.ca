@@ -8,10 +8,11 @@ import { meetingTypeLabels } from "@/lib/meetings/agenda";
 import { formatMeetingWhen } from "@/lib/meetings/format";
 import { meetingStatus } from "@/lib/meetings/status";
 import { RequestSubscriptionButton } from "@/components/RequestSubscriptionButton";
+import { councilRoles } from "@/lib/strata";
 
 /**
  * Meetings. Before the free meeting is used, the first-meeting checklist
- * (doc03 Stage 5a) leads: roster, documents, create a meeting, review its
+ * (doc03 Stage 5a) leads: roster, council roles, documents, create a meeting, review its
  * agenda, launch. Draft meetings are unlimited; launching one is what uses
  * the free meeting.
  */
@@ -23,18 +24,32 @@ export default async function MeetingsPage({ params }: { params: Promise<{ corpI
   const trialAvailable = !access.freeMeetingUsed;
 
   const supabase = await createClient();
-  const [{ count: namedLots }, { count: documents }] = await Promise.all([
+  const [{ count: namedLots }, { count: documents }, { count: councilSeats }] = await Promise.all([
     supabase.from("owners_and_council").select("id", { count: "exact", head: true }).eq("corporation_id", corpId).not("full_name", "is", null),
     supabase.from("documents").select("id", { count: "exact", head: true }).eq("corporation_id", corpId),
+    supabase
+      .from("corporation_role_assignments")
+      .select("user_id", { count: "exact", head: true })
+      .eq("corporation_id", corpId)
+      .in("role", [...councilRoles]),
   ]);
 
   const steps = [
     { label: "Add your owners to the lot roster", done: (namedLots ?? 0) > 0, href: `/strata/${corpId}/lots` },
+    {
+      label: "Assign council roles",
+      done: (councilSeats ?? 0) > 0,
+      href: `/strata/${corpId}/council#roster`,
+      hint: "President, Vice President, Treasurer, Secretary, Members at Large, each tied to their strata lot.",
+    },
     { label: "Upload your governance documents", done: (documents ?? 0) > 0, href: `/strata/${corpId}/documents`, hint: "Bylaws, rules, past minutes, financials — so Stratasphere has real material to work with." },
     { label: "Create your first meeting", done: meetings.length > 0, href: access.canRunMeetings ? `/strata/${corpId}/meetings/new` : undefined },
     { label: "Review the agenda", done: meetings.some((m) => m.agenda.length > 0), href: meetings[0] ? `/strata/${corpId}/meetings/${meetings[0].id}` : undefined },
     { label: "Launch Meeting Mode", done: meetings.some((m) => m.launchedAt), hint: "This uses your one free meeting." },
   ];
+
+  // Gone once every step is done.
+  const checklistDone = steps.every((s) => s.done);
 
   const upcoming = meetings.filter((m) => m.status !== "ADJOURNED");
   const past = meetings.filter((m) => m.status === "ADJOURNED");
@@ -60,7 +75,7 @@ export default async function MeetingsPage({ params }: { params: Promise<{ corpI
         )}
       </div>
 
-      {!access.subscribed && trialAvailable && (
+      {!access.subscribed && trialAvailable && !checklistDone && (
         <section className="card checklist" data-testid="first-meeting-checklist">
           <h3>Your first meeting</h3>
           <ol className="checklist__steps">
