@@ -450,20 +450,25 @@ export async function paySubscription(
   if (!sub?.stripe_customer_id) return { error: "Add a payment method first." };
   if (!sub.billing_email) return { error: "Add a billing contact email first." };
 
-  const stripe = await stripeFor(corporationId);
-  const customer = await stripe.customers.retrieve(sub.stripe_customer_id);
-  const defaultPm =
-    !customer.deleted && customer.invoice_settings?.default_payment_method
-      ? String(
-          typeof customer.invoice_settings.default_payment_method === "string"
-            ? customer.invoice_settings.default_payment_method
-            : customer.invoice_settings.default_payment_method.id
-        )
-      : null;
-  if (!defaultPm) return { error: "Add a payment method first." };
-
-  const { base, perUnit } = getPriceIds(interval, await stripeModeFor(corporationId));
+  // Everything that talks to Stripe is caught: a failure shows as a
+  // message on the form, never as an error page. On a sandbox strata the
+  // message carries the actual cause (it's a test strata, and the cause is
+  // usually a missing STRIPE_TEST_* setting).
+  const mode = await stripeModeFor(corporationId);
   try {
+    const stripe = await stripeFor(corporationId);
+    const customer = await stripe.customers.retrieve(sub.stripe_customer_id);
+    const defaultPm =
+      !customer.deleted && customer.invoice_settings?.default_payment_method
+        ? String(
+            typeof customer.invoice_settings.default_payment_method === "string"
+              ? customer.invoice_settings.default_payment_method
+              : customer.invoice_settings.default_payment_method.id
+          )
+        : null;
+    if (!defaultPm) return { error: "Add a payment method first." };
+
+    const { base, perUnit } = getPriceIds(interval, mode);
     await stripe.subscriptions.create({
       customer: sub.stripe_customer_id,
       items: [
@@ -476,8 +481,14 @@ export async function paySubscription(
       metadata: { corporation_id: corporationId, billing_interval: interval },
     });
   } catch (error) {
-    console.error("[paySubscription]", error instanceof Error ? error.message : error);
-    return { error: "Stripe couldn't take the payment. Check the payment method, or add a different one." };
+    const detail = error instanceof Error ? error.message : String(error);
+    console.error(`[paySubscription] ${corporationId} (${mode}):`, detail);
+    return {
+      error:
+        mode === "sandbox"
+          ? `Sandbox: ${detail}`
+          : "Stripe couldn't take the payment. Check the payment method, or add a different one. If this keeps happening, contact us.",
+    };
   }
   redirect(`/strata/${corporationId}/billing?subscribed=1`);
 }
