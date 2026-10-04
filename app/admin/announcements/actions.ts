@@ -2,8 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { requireSuperAdmin } from "@/lib/data/admin";
+import { isAnnouncementCategory } from "@/lib/announcement-categories";
 
-/** Announcements on the home page (0028). Super Admins only; RLS enforces it too. */
+/** Announcements on the home page and every strata's Overview (0028, 0031). Super Admins only; RLS enforces it too. */
 export type AnnouncementResult = { ok: true } | { ok: false; error: string };
 
 const clean = (v: FormDataEntryValue | null, max: number) => String(v ?? "").replace(/\s+/g, " ").trim().slice(0, max);
@@ -18,10 +19,15 @@ export async function createAnnouncement(_prev: AnnouncementResult | null, formD
   const linkLabel = clean(formData.get("link_label"), 40);
   const audience = formData.get("audience") === "admins" ? "admins" : "everyone";
   const ends = clean(formData.get("expires_on"), 10);
+  const rawCategory = formData.get("category");
+  const category = isAnnouncementCategory(rawCategory) ? rawCategory : "general";
 
   if (!title) return { ok: false, error: "Give it a title." };
   if (!body) return { ok: false, error: "Write the announcement." };
-  if (linkUrl && !/^https:\/\/\S+$/.test(linkUrl)) return { ok: false, error: "Links must start with https://." };
+  // An outside address (https://) or a page in the app (/training).
+  if (linkUrl && !/^(https:\/\/\S+|\/(?!\/)\S*)$/.test(linkUrl)) {
+    return { ok: false, error: "Links start with https://, or with / for a page in the app (like /training)." };
+  }
   if (ends && !/^\d{4}-\d{2}-\d{2}$/.test(ends)) return { ok: false, error: "Choose a valid end date." };
   const expiresAt = ends ? endOfDayInBC(ends).toISOString() : null;
   if (expiresAt && new Date(expiresAt) <= new Date()) return { ok: false, error: "The end date has to be in the future." };
@@ -32,6 +38,7 @@ export async function createAnnouncement(_prev: AnnouncementResult | null, formD
     link_url: linkUrl || null,
     link_label: linkUrl ? linkLabel || "Read more" : null,
     audience,
+    category,
     expires_at: expiresAt,
     created_by: auth.user.id,
   });
@@ -41,6 +48,7 @@ export async function createAnnouncement(_prev: AnnouncementResult | null, formD
   }
   revalidatePath("/admin/announcements");
   revalidatePath("/");
+  revalidatePath("/strata/[corpId]", "page");
   return { ok: true };
 }
 
@@ -62,6 +70,7 @@ export async function endAnnouncement(id: string) {
   await auth.supabase.from("announcements").update({ expires_at: new Date().toISOString() }).eq("id", id);
   revalidatePath("/admin/announcements");
   revalidatePath("/");
+  revalidatePath("/strata/[corpId]", "page");
 }
 
 export async function deleteAnnouncement(id: string) {
@@ -70,4 +79,5 @@ export async function deleteAnnouncement(id: string) {
   await auth.supabase.from("announcements").delete().eq("id", id);
   revalidatePath("/admin/announcements");
   revalidatePath("/");
+  revalidatePath("/strata/[corpId]", "page");
 }

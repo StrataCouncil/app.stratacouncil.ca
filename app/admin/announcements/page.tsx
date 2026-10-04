@@ -3,9 +3,10 @@ import { notFound } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { AnnouncementForm } from "@/components/AnnouncementForm";
 import { listAllAnnouncements } from "@/lib/data/announcements";
+import { announcementCategories } from "@/lib/announcement-categories";
 import { deleteAnnouncement, endAnnouncement } from "./actions";
 
-/** Announcements on the home page (note 3, 2026-10-05). Super Admins only. */
+/** Announcements on the home page and every strata's Overview (0028, 0031). Super Admins only. */
 export default async function AnnouncementsPage() {
   const announcements = await listAllAnnouncements();
   if (!announcements) notFound();
@@ -21,8 +22,9 @@ export default async function AnnouncementsPage() {
         <div className="page-header">
           <h1>Announcements</h1>
           <p>
-            News for the home page: legislation updates, new features, maintenance. The newest three that are current
-            show for each person. Keep them short.
+            News for every StrataCouncil.ca customer, subscribed or not: new features, changes, new or updated
+            training, additions to the Library, legislation. Shows on the home page (newest three) and on every
+            strata&rsquo;s Overview (newest five). Keep them short.
           </p>
         </div>
 
@@ -43,7 +45,7 @@ export default async function AnnouncementsPage() {
                   </div>
                   <p>{a.body}</p>
                   <p className="card__meta">
-                    {a.audience === "admins" ? "Strata admins only" : "Everyone"} &middot; Posted {fmt(a.publishedAt)}
+                    {announcementCategories[a.category]} &middot; {a.audience === "admins" ? "Strata admins only" : "Everyone"} &middot; Posted {fmt(a.publishedAt)}
                     {a.expiresAt ? ` · ${ended ? "Ended" : "Until"} ${fmt(a.expiresAt)}` : ""}
                     {a.linkUrl ? ` · Links to ${a.linkUrl}` : ""}
                   </p>

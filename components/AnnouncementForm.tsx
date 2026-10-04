@@ -2,8 +2,9 @@
 
 import { useActionState, useEffect, useRef } from "react";
 import { createAnnouncement, type AnnouncementResult } from "@/app/admin/announcements/actions";
+import { announcementCategories } from "@/lib/announcement-categories";
 
-/** Post an announcement to the home page (Super Admins). */
+/** Post an announcement to the home page and every strata's Overview (Super Admins). */
 export function AnnouncementForm() {
   const [state, action, pending] = useActionState<AnnouncementResult | null, FormData>(createAnnouncement, null);
   const form = useRef<HTMLFormElement>(null);
@@ -16,6 +17,16 @@ export function AnnouncementForm() {
     <form ref={form} action={action} className="card announcement-form" data-testid="announcement-form">
       <h3>New announcement</h3>
       <label className="field">
+        <span>Category</span>
+        <select name="category" defaultValue="feature" data-testid="announcement-category">
+          {Object.entries(announcementCategories).map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="field">
         <span>Title</span>
         <input name="title" maxLength={120} required placeholder="Strata Property Act amendments now in force" />
       </label>
@@ -26,7 +37,7 @@ export function AnnouncementForm() {
       <div className="field-grid">
         <label className="field">
           <span>Link (optional)</span>
-          <input name="link_url" type="url" placeholder="https://www2.gov.bc.ca/…" />
+          <input name="link_url" placeholder="https://… or /training" />
         </label>
         <label className="field">
           <span>Link text</span>
@@ -53,7 +64,7 @@ export function AnnouncementForm() {
       )}
       {state?.ok && (
         <p className="card__meta" role="status">
-          Posted. It&rsquo;s on everyone&rsquo;s home page now.
+          Posted. It&rsquo;s on everyone&rsquo;s home page and every strata&rsquo;s Overview now.
         </p>
       )}
       <button type="submit" className="button button-primary" disabled={pending} style={{ alignSelf: "flex-start" }}>

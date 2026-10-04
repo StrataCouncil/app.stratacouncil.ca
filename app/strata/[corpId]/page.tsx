@@ -6,6 +6,8 @@ import { GettingStarted, type GettingStartedStep } from "@/components/GettingSta
 import { getCorporationRoster } from "@/lib/data/roster";
 import { getStrataAccess } from "@/lib/data/strata";
 import { listMeetings, type MeetingRecord } from "@/lib/data/meetings";
+import { getCurrentAnnouncements } from "@/lib/data/announcements";
+import { HomeAnnouncements } from "@/components/HomeAnnouncements";
 import { createClient } from "@/lib/supabase/server";
 import { corporationRoleLabels, councilRoles, jurisdictions } from "@/lib/strata";
 import { meetingTypeLabels } from "@/lib/meetings/agenda";
@@ -13,8 +15,9 @@ import { formatMeetingWhen } from "@/lib/meetings/format";
 import { meetingStatus } from "@/lib/meetings/status";
 
 /**
- * Overview: the strata's landing page, a dashboard for the council. What
- * needs attention, the next meeting, the latest minutes, who's on council,
+ * Overview: the strata's landing page, a dashboard for the council. News
+ * from StrataCouncil.ca (Super Admin announcements, to every customer,
+ * subscribed or not), what needs attention, the next meeting, the latest minutes, who's on council,
  * and the strata's own details and numbers. Everything here links through
  * to the page that owns it.
  */
@@ -24,9 +27,10 @@ export default async function OverviewPage({ params }: { params: Promise<{ corpI
   if (!access) notFound();
 
   const supabase = await createClient();
-  const [roster, meetings, { data: corp }, { count: namedLots }, { count: documents }] = await Promise.all([
+  const [roster, meetings, news, { data: corp }, { count: namedLots }, { count: documents }] = await Promise.all([
     getCorporationRoster(corpId),
     listMeetings(corpId),
+    getCurrentAnnouncements(5),
     supabase
       .from("strata_corporations")
       .select("strata_plan_number, legal_name, building_name, address, unit_count, jurisdiction")
@@ -123,6 +127,12 @@ export default async function OverviewPage({ params }: { params: Promise<{ corpI
       <AutoRefresh />
 
       {steps && <GettingStarted corpId={corpId} steps={steps} />}
+
+      {/* News from StrataCouncil.ca; admin-only posts for this strata's admins. */}
+      <HomeAnnouncements
+        heading="From StrataCouncil.ca"
+        announcements={news.filter((a) => a.audience === "everyone" || access.isAdmin)}
+      />
 
       {attention.length > 0 && (
         <section className="overview-attention" data-testid="overview-attention">
