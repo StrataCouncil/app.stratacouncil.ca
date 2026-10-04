@@ -513,7 +513,7 @@ export function MeetingMode(props: {
                   ) : (
                     <>
                       No council members are tied to a strata lot yet. Set each council member&rsquo;s lot on{" "}
-                      <Link href={`/strata/${corpId}`}>Council &amp; Roles</Link>.
+                      <Link href={`/strata/${corpId}/council`}>Council</Link>.
                     </>
                   )}
                 </p>

@@ -21,11 +21,11 @@ export function ScreenGate({ corpId, children }: { corpId: string; children: Rea
           <h2>Stratasphere&trade; is best experienced on a larger screen</h2>
           <p>
             Roster, documents, meeting mode and the rest of your strata&rsquo;s governance tools need more room than a
-            phone screen gives. Please switch to a desktop or laptop. The Knowledge Library and Council Training work
+            phone screen gives. Please switch to a desktop or laptop. The Library and Council Training work
             on any device.
           </p>
           <Link href={`/strata/${corpId}/guides`} className="button button-primary">
-            Open the Knowledge Library
+            Open the Library
           </Link>
           <Link href="/training" className="button button-secondary">
             Go to Council Training

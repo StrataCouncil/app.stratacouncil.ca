@@ -26,7 +26,7 @@ export default async function GuidesPage({
   return (
     <>
       <StrataSphereNav active="guides" />
-      <h2 style={{ marginBottom: "0.3rem" }}>Knowledge library</h2>
+      <h2 style={{ marginBottom: "0.3rem" }}>Library</h2>
       <p className="card__meta" style={{ marginBottom: "1.25rem" }}>
         A growing, free library of playbooks, operational guides,
         financial insights, legislation updates and emergency playbooks

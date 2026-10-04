@@ -5052,3 +5052,102 @@ abbr.role-tag--short {
 .management__actions p {
   margin: 0;
 }
+
+/* Overview: the strata's dashboard */
+
+.overview-attention {
+  border: 1px solid var(--accent);
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.5rem;
+}
+.overview-attention h3 {
+  font-size: 1rem;
+  margin-bottom: 0.4rem;
+}
+.overview-attention ul {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: grid;
+  gap: 0.25rem;
+}
+
+.overview-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+.overview-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 1.1rem 1.25rem;
+  color: var(--ink);
+  text-decoration: none;
+}
+.overview-stat:hover {
+  border-color: var(--accent);
+}
+.overview-stat__value {
+  font-size: 1.9rem;
+  font-weight: 600;
+  line-height: 1.1;
+}
+.overview-stat__label {
+  font-weight: 600;
+}
+.overview-stat__meta {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.overview-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.25rem;
+}
+@media (max-width: 900px) {
+  .overview-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.overview-strong {
+  color: var(--ink);
+}
+.overview-card__action {
+  align-self: flex-start;
+  margin-top: auto;
+}
+.overview-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.6rem;
+}
+.overview-list li {
+  display: flex;
+  flex-direction: column;
+}
+.overview-details {
+  margin: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+.overview-details > div {
+  display: grid;
+  grid-template-columns: 9rem 1fr;
+  gap: 0.75rem;
+  font-size: 0.92rem;
+}
+.overview-details dt {
+  color: var(--muted);
+}
+.overview-details dd {
+  margin: 0;
+}

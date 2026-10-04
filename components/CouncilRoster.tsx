@@ -32,7 +32,7 @@ export function CouncilRoster({
         </>
       )}
       <div className="roster-section__head" id="roster">
-        <h2>Council &amp; roles</h2>
+        <h2>Council</h2>
         {roster.isAdmin && <InviteMemberButton corporationId={corporationId} />}
       </div>
       <RosterTable

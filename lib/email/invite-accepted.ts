@@ -32,7 +32,7 @@ export async function notifyInviteAccepted(corporationId: string, memberId: stri
       corporationName: corp?.building_name ?? corp?.legal_name ?? corporationId,
       memberName: member.full_name?.trim() ?? "",
       memberEmail: member.email ?? "",
-      openUrl: new URL(`/strata/${corporationId}`, APP_URL).toString(),
+      openUrl: new URL(`/strata/${corporationId}/council`, APP_URL).toString(),
     });
     await Promise.all(
       (admins ?? []).filter((a) => a.user_id !== memberId).map((a) => notifyUser(a.user_id, message))

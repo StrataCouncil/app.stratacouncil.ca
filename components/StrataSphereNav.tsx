@@ -19,13 +19,15 @@ import { STRATASPHERE_PITCH, STRATASPHERE_TITLE } from "@/components/Strataspher
  * not built in V1 (doc01 §7 item 21).
  */
 const allItems: Array<{ slug: string; label: string; gated: boolean; managersOnly?: boolean; adminsOnly?: boolean }> = [
-  { slug: "guides", label: "Knowledge Library", gated: false },
-  { slug: "", label: "Council & Roles", gated: false },
-  { slug: "lots", label: "Strata Lots", gated: false },
-  { slug: "documents", label: "Documents", gated: false },
-  { slug: "minutes", label: "Minutes", gated: false },
-  { slug: "meetings", label: "Meetings", gated: false },
+  // Overview is the strata's landing page: its dashboard.
+  { slug: "", label: "Overview", gated: false },
   { slug: "assistant", label: "Stratasphere™", gated: true },
+  { slug: "guides", label: "Library", gated: false },
+  { slug: "council", label: "Council", gated: false },
+  { slug: "lots", label: "Owners", gated: false },
+  { slug: "meetings", label: "Meetings", gated: false },
+  { slug: "minutes", label: "Minutes", gated: false },
+  { slug: "documents", label: "Documents", gated: false },
   // Billing is admin-only (doc01 §7 item 7); others never see the tab.
   { slug: "billing", label: "Billing", gated: false, adminsOnly: true },
   // Only the Admin and the Manager role see this one at all.
