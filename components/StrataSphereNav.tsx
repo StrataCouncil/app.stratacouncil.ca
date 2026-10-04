@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useStrata } from "@/components/StrataContext";
 import { RequestSubscriptionButton } from "@/components/RequestSubscriptionButton";
+import { STRATASPHERE_PITCH, STRATASPHERE_TITLE } from "@/components/StratasphereValue";
 
 /**
  * StrataSphere sub-nav (doc03 "second level"): free sections show fully
@@ -95,7 +96,6 @@ export function StrataSphereNav({ active }: { active: string }) {
       </nav>
       {prompt && (
         <SubscribePrompt
-          feature={prompt}
           corpId={corpId}
           isAdmin={isAdmin}
           onClose={() => setPrompt(null)}
@@ -106,12 +106,10 @@ export function StrataSphereNav({ active }: { active: string }) {
 }
 
 function SubscribePrompt({
-  feature,
   corpId,
   isAdmin,
   onClose,
 }: {
-  feature: string;
   corpId: string;
   isAdmin: boolean;
   onClose: () => void;
@@ -137,13 +135,8 @@ function SubscribePrompt({
         onClick={(e) => e.stopPropagation()}
         data-testid="subscribe-prompt"
       >
-        <h2 id="subscribe-prompt-title">{feature} needs a subscription</h2>
-        <p>
-          The Stratasphere&trade; AI assistant, searching your documents, and
-          running meetings beyond your one free meeting all come with a
-          Stratasphere&trade; subscription. Roles, the roster, documents and
-          the Knowledge Library stay free either way.
-        </p>
+        <h2 id="subscribe-prompt-title">{STRATASPHERE_TITLE}</h2>
+        <p>{STRATASPHERE_PITCH}</p>
         {!isAdmin && (
           <p className="card__meta">
             Only your strata&rsquo;s admin can subscribe. Request it and we&rsquo;ll email them for you.
@@ -159,7 +152,7 @@ function SubscribePrompt({
               className="button button-primary"
               data-testid="subscribe-prompt-billing"
             >
-              See plans
+              Subscribe
             </Link>
           ) : (
             <RequestSubscriptionButton corpId={corpId} />
