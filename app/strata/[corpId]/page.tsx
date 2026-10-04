@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { StrataSphereNav } from "@/components/StrataSphereNav";
 import { CouncilRoster } from "@/components/CouncilRoster";
@@ -79,22 +78,6 @@ export default async function CouncilAndRolesPage({
         <p className="roster-notice">Couldn&rsquo;t load the roster. Try refreshing the page.</p>
       )}
 
-      {roster?.isAdmin && (
-        <div className="admin-entry" data-testid="billing-entry">
-          <div>
-            <span className="pill">Admin</span>
-            <h3 style={{ margin: "0.6rem 0 0.25rem" }}>Billing &amp; subscription</h3>
-            <p>Manage your Stratasphere&trade; plan, payment method and invoices.</p>
-          </div>
-          <Link
-            href={`/strata/${corpId}/billing`}
-            className="button button-secondary"
-            data-testid="billing-link"
-          >
-            Go to billing
-          </Link>
-        </div>
-      )}
     </>
   );
 }

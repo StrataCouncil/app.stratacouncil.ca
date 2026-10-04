@@ -7,14 +7,17 @@ import { getStripe, stripeModeFor, type StripeMode } from "@/lib/stripe/client";
 import { annualTermEnd, calculateBilling } from "@/lib/stripe/prices";
 import { StatementsPeriodSelect } from "@/components/StatementsPeriodSelect";
 import { BillingDialog } from "@/components/BillingDialog";
+import { StrataSphereNav } from "@/components/StrataSphereNav";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { STRATASPHERE_PITCH, STRATASPHERE_TITLE } from "@/components/StratasphereValue";
+import { firstPaymentState, type FirstPayment } from "@/lib/stripe/first-payment";
 import type { BillingAddress } from "@/lib/billing-address";
 import { BillingSteps, type BillingStep } from "@/components/BillingSteps";
 import { COMPANY_LEGAL_NAME, STATEMENT_DESCRIPTOR } from "@/lib/company";
 import {
   changePlan,
   cancelSubscription,
+  restartSubscription,
   keepCurrentPlan,
   openBillingPortal,
   updateBillingEmail,
@@ -141,6 +144,15 @@ export default async function BillingPage({
   // A first payment Stripe is still processing (usually a pre-authorized
   // debit, a few business days): neither subscribed nor not (0030).
   const pending = !subscribed && Boolean(sub?.stripe_subscription_id) && sub?.stripe_status === "incomplete";
+  // Pending can mean a debit on its way, a bank account still to verify,
+  // or a payment that failed; ask Stripe which (low traffic, admin only).
+  const firstPayment: FirstPayment | null = pending
+    ? await firstPaymentState(getStripe(stripeMode), sub!.stripe_subscription_id as string)
+    : null;
+  const contacts = String(sub?.billing_email ?? "")
+    .split(",")
+    .map((e) => e.trim())
+    .filter(Boolean);
   const deactivated = sub?.status === "deactivated" && Boolean(sub.activated_at);
   const interval = (sub?.billing_interval as "monthly" | "annual" | undefined) ?? "monthly";
   const unitCount = corp.unit_count;
@@ -218,13 +230,8 @@ export default async function BillingPage({
 
   return (
     <>
-      <Link
-        href={`/strata/${corpId}`}
-        className="button button-secondary button-small"
-        style={{ marginBottom: "1.5rem" }}
-      >
-        &larr; Back to Council &amp; Roles
-      </Link>
+
+      <StrataSphereNav active="billing" />
 
       <div className="page-header" style={{ marginBottom: "1.75rem" }}>
         <h2 style={{ margin: 0 }}>Billing for {corp.building_name ?? corp.legal_name}</h2>
@@ -239,7 +246,8 @@ export default async function BillingPage({
         </p>
       )}
 
-      {(pending || (justSubscribed && !subscribed)) && <AutoRefresh seconds={5} />}
+      {/* Quick checks right after Subscribe; a debit or verification can take days. */}
+      {(pending || (justSubscribed && !subscribed)) && <AutoRefresh seconds={justSubscribed ? 5 : 30} />}
 
       {justSubscribed && subscribed && (
         <div className="billing-outcome billing-outcome--ok" role="status" data-testid="billing-subscribed">
@@ -251,17 +259,58 @@ export default async function BillingPage({
         </div>
       )}
 
-      {!subscribed && (pending || justSubscribed) && (
+      {!subscribed && (pending || justSubscribed) && firstPayment?.state === "verify" && (
+        <div className="billing-outcome billing-outcome--attention" role="status" data-testid="billing-verify">
+          <strong>Verify the bank account to finish</strong>
+          <p>
+            The first payment can&rsquo;t start until the strata&rsquo;s bank account is verified. Stripe sends two small
+            deposits to it, which take 1 to 2 business days to arrive; confirm their amounts and the payment goes
+            through. Stratasphere&trade; switches on by itself once it clears.
+          </p>
+          <div className="billing-outcome__actions">
+            {firstPayment.verifyUrl && (
+              <a href={firstPayment.verifyUrl} className="button button-primary" target="_blank" rel="noopener noreferrer">
+                Verify the bank account
+              </a>
+            )}
+            <form action={restartSubscription.bind(null, corpId)}>
+              <button className="button button-secondary">Use a different payment method</button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {!subscribed && (pending || justSubscribed) && firstPayment?.state === "failed" && (
+        <div className="billing-outcome billing-outcome--failed" role="alert" data-testid="billing-failed">
+          <strong>The payment didn&rsquo;t go through</strong>
+          <p>
+            {firstPayment.reason ? `Stripe says: ${firstPayment.reason} ` : ""}Nothing was charged. Use a different payment
+            method to subscribe.
+          </p>
+          <div className="billing-outcome__actions">
+            <form action={restartSubscription.bind(null, corpId)}>
+              <button className="button button-primary">Use a different payment method</button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {!subscribed && (pending || justSubscribed) && firstPayment?.state !== "verify" && firstPayment?.state !== "failed" && (
         <div className="billing-outcome billing-outcome--pending" role="status" data-testid="billing-pending">
           <strong>Payment processing</strong>
           <p>
             {paymentMethod?.label.startsWith("Pre-authorized")
               ? "Pre-authorized debits take a few business days to clear. "
               : "Stripe is confirming the payment. "}
-            Stratasphere&trade; switches on by itself as soon as it&rsquo;s confirmed, and a receipt goes to{" "}
-            {billingEmail.split(",")[0] || "your billing contact"}. There&rsquo;s nothing more to do.
+            Stratasphere&trade; switches on by itself as soon as it&rsquo;s confirmed. There&rsquo;s nothing more to do.
           </p>
         </div>
+      )}
+
+      {!subscribed && (pending || justSubscribed) && contacts.length > 0 && (
+        <p className="card__meta billing-contacts-note" data-testid="billing-contacts-note">
+          Receipts and invoices go to {contacts.join(", ")}.
+        </p>
       )}
 
       {!subscribed && !pending && !justSubscribed && (
