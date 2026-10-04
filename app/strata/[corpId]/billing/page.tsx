@@ -96,10 +96,10 @@ export default async function BillingPage({
   searchParams,
 }: {
   params: Promise<{ corpId: string }>;
-  searchParams: Promise<{ period?: string; plan?: string; step?: string; note?: string; subscribed?: string }>;
+  searchParams: Promise<{ period?: string; plan?: string; step?: string; note?: string; detail?: string; subscribed?: string }>;
 }) {
   const { corpId } = await params;
-  const { period: rawPeriod, plan: rawPlan, step: rawStep, note, subscribed: justSubscribed } = await searchParams;
+  const { period: rawPeriod, plan: rawPlan, step: rawStep, note, detail, subscribed: justSubscribed } = await searchParams;
   const chosenPlan = rawPlan === "monthly" ? "monthly" : "annual";
   // A step in the address opens the subscribe dialog (2026-10-05).
   const dialogOpen = (["plan", "payment", "contact", "review"] as const).includes(rawStep as BillingStep);
@@ -340,6 +340,13 @@ export default async function BillingPage({
             addressSame={sub?.billing_address_same ?? true}
             civicAddress={corp.address ?? ""}
             verifying={note === "verifying"}
+            setupError={
+              note === "setup-failed"
+                ? stripeMode === "sandbox" && detail
+                  ? `Sandbox: ${detail.slice(0, 300)}`
+                  : "Stripe's secure payment page couldn't be opened. Please try again. If this keeps happening, contact us."
+                : null
+            }
           />
         </BillingDialog>
       )}
