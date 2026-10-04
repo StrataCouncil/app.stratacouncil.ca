@@ -74,6 +74,17 @@ const firstEmail = (joined: string) => joined.split(",")[0].trim();
  * `updateBillingEmail` below, rather than being derived from the signed-in
  * user's own account email.
  */
+/** False when Stripe has no such customer, or it was deleted. */
+async function customerStillExists(stripe: Awaited<ReturnType<typeof stripeFor>>, customerId: string) {
+  try {
+    const customer = await stripe.customers.retrieve(customerId);
+    return !customer.deleted;
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "resource_missing") return false;
+    throw error;
+  }
+}
+
 async function getOrCreateStripeCustomer(corporationId: string, billingEmail: string | null) {
   const admin = createAdminClient();
   const stripe = await stripeFor(corporationId);
@@ -83,7 +94,7 @@ async function getOrCreateStripeCustomer(corporationId: string, billingEmail: st
     .eq("corporation_id", corporationId)
     .maybeSingle();
 
-  if (existing?.stripe_customer_id) {
+  if (existing?.stripe_customer_id && (await customerStillExists(stripe, existing.stripe_customer_id))) {
     // Keep the Stripe Customer's email in sync with whatever was just
     // submitted, in case it changed since the customer record was first
     // created (e.g. resubscribing under a new Treasurer). Also re-assert
@@ -100,6 +111,17 @@ async function getOrCreateStripeCustomer(corporationId: string, billingEmail: st
         .eq("corporation_id", corporationId);
     }
     return existing.stripe_customer_id;
+  }
+  if (existing?.stripe_customer_id) {
+    // The stored customer was deleted in Stripe (or belongs to the other
+    // Stripe mode). Its subscriptions went with it, so forget them too,
+    // unless the row still says active: that's left for the webhook.
+    console.warn(`[billing] ${corporationId}: stored Stripe customer is gone; creating a new one.`);
+    await admin
+      .from("subscriptions")
+      .update({ stripe_subscription_id: null, stripe_status: null })
+      .eq("corporation_id", corporationId)
+      .neq("status", "active");
   }
 
   const { data: corp } = await admin
@@ -371,31 +393,43 @@ const isInterval = (v: string): v is BillingInterval => v === "monthly" || v ===
 export async function startPaymentSetup(corporationId: string, interval: BillingInterval) {
   await requireAdmin(corporationId);
   if (!isInterval(interval)) throw new Error("Choose a plan first.");
-  const customerId = await getOrCreateStripeCustomer(corporationId, null);
-  const origin = await siteUrl();
+  const back = `/strata/${corporationId}/billing?plan=${interval}&step=payment`;
 
-  const session = await (await stripeFor(corporationId)).checkout.sessions.create({
-    mode: "setup",
-    customer: customerId,
-    currency: "cad",
-    payment_method_types: ["acss_debit", "card"],
-    payment_method_options: {
-      acss_debit: {
-        currency: "cad",
-        verification_method: "automatic",
-        mandate_options: {
-          payment_schedule: "interval",
-          interval_description: "Monthly, for the Stratasphere subscription",
-          transaction_type: "business",
+  // Any Stripe failure comes back to the payment step with a message, never
+  // an error page. On a sandbox strata the message says what Stripe said.
+  let url: string;
+  try {
+    const customerId = await getOrCreateStripeCustomer(corporationId, null);
+    const origin = await siteUrl();
+    const session = await (await stripeFor(corporationId)).checkout.sessions.create({
+      mode: "setup",
+      customer: customerId,
+      currency: "cad",
+      payment_method_types: ["acss_debit", "card"],
+      payment_method_options: {
+        acss_debit: {
+          currency: "cad",
+          verification_method: "automatic",
+          mandate_options: {
+            payment_schedule: "interval",
+            interval_description: "Monthly, for the Stratasphere subscription",
+            transaction_type: "business",
+          },
         },
       },
-    },
-    metadata: { corporation_id: corporationId, billing_interval: interval },
-    success_url: `${origin}/strata/${corporationId}/billing/setup-complete?session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${origin}/strata/${corporationId}/billing?plan=${interval}&step=payment`,
-  });
-  if (!session.url) throw new Error("Stripe did not return a setup page.");
-  redirect(session.url);
+      metadata: { corporation_id: corporationId, billing_interval: interval },
+      success_url: `${origin}/strata/${corporationId}/billing/setup-complete?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${origin}${back}`,
+    });
+    if (!session.url) throw new Error("Stripe did not return a setup page.");
+    url = session.url;
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    const mode = await stripeModeFor(corporationId).catch(() => "live" as const);
+    console.error(`[startPaymentSetup] ${corporationId} (${mode}):`, detail);
+    redirect(`${back}&note=setup-failed${mode === "sandbox" ? `&detail=${encodeURIComponent(detail.slice(0, 300))}` : ""}`);
+  }
+  redirect(url);
 }
 
 /** Step 3: the billing contacts. Saved now, used when paying. */

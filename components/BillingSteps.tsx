@@ -35,6 +35,7 @@ export function BillingSteps({
   addressSame,
   civicAddress,
   verifying,
+  setupError = null,
 }: {
   corpId: string;
   unitCount: number;
@@ -46,6 +47,7 @@ export function BillingSteps({
   addressSame: boolean;
   civicAddress: string;
   verifying: boolean;
+  setupError?: string | null;
 }) {
   // Never past a step whose prerequisites aren't met.
   const furthest: BillingStep = !paymentMethod ? "payment" : !billingEmail || !billingAddress ? "contact" : "review";
@@ -129,6 +131,11 @@ export function BillingSteps({
       {step === "payment" && (
         <div className="billing-step">
           <h3>Payment method</h3>
+          {setupError && (
+            <p className="form-error" role="alert" data-testid="billing-setup-error">
+              {setupError}
+            </p>
+          )}
           {paymentMethod ? (
             <>
               <p>
