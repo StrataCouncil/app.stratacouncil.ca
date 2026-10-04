@@ -9,7 +9,7 @@ import { getStrataAccess } from "@/lib/data/strata";
 import { DOCUMENTS_BUCKET } from "@/lib/documents";
 import type { MinutesContent } from "@/lib/meetings/minutes";
 import { minutesPdf } from "@/lib/exports/minutes-pdf";
-import { exportFileName } from "@/lib/exports/agenda-docx";
+import { exportFileName, meetingDocumentName } from "@/lib/exports/filename";
 import { queueDocumentIndexing } from "@/lib/kb/queue";
 import { loadLetterhead } from "@/lib/data/management";
 
@@ -79,7 +79,7 @@ export async function finalizeMeetingMinutes(corpId: string, meetingId: string):
     if (meeting?.minutesContent && user) {
       const content = meeting.minutesContent as MinutesContent;
       const pdf = await minutesPdf(content, { finalizedAt: new Date().toISOString(), letterhead: await loadLetterhead(corpId) });
-      const fileName = exportFileName(corpId, meeting.type, meeting.meetingDate, "MINUTES", "pdf");
+      const fileName = exportFileName(corpId, meeting.meetingDate, meetingDocumentName(meeting.type, "Minutes"), "pdf");
       const path = `${corpId}/${randomUUID()}/${fileName}`;
       const admin = createAdminClient();
       const { error: upErr } = await admin.storage.from(DOCUMENTS_BUCKET).upload(path, pdf, { contentType: "application/pdf" });

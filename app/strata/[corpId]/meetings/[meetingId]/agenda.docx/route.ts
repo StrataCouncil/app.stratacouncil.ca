@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getMeeting } from "@/lib/data/meetings";
-import { agendaDocx, exportFileName } from "@/lib/exports/agenda-docx";
+import { agendaDocx } from "@/lib/exports/agenda-docx";
+import { exportFileName, meetingDocumentName } from "@/lib/exports/filename";
 import { loadLetterhead } from "@/lib/data/management";
 
 /** Agenda export (.docx). Any member can download the agenda (RLS: members read meetings). */
@@ -26,7 +27,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ corpId:
   return new NextResponse(new Uint8Array(buffer), {
     headers: {
       "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      "Content-Disposition": `attachment; filename="${exportFileName(corp.strata_plan_number, meeting.type, meeting.meetingDate, "AGENDA", "docx")}"`,
+      "Content-Disposition": `attachment; filename="${exportFileName(corp.strata_plan_number, meeting.meetingDate, meetingDocumentName(meeting.type, "Agenda"), "docx")}"`,
       "Cache-Control": "private, no-store",
     },
   });

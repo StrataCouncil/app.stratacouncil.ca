@@ -14,12 +14,14 @@ export type Track = {
   certificateIssued: boolean;
 };
 
+// Nobody has progress until training is on real tables (note 3, 2026-10-05):
+// every track reads "not started" on Home, Council Training and the roster.
 export const tracks: Track[] = [
-  { slug: "mal", title: "General Council (MaL)", moduleCount: 6, completedModules: 6, certificateIssued: true },
-  { slug: "president", title: "President", moduleCount: 5, completedModules: 2, certificateIssued: false },
+  { slug: "mal", title: "General Council (MaL)", moduleCount: 6, completedModules: 0, certificateIssued: false },
+  { slug: "president", title: "President", moduleCount: 5, completedModules: 0, certificateIssued: false },
   { slug: "vice-president", title: "Vice President", moduleCount: 4, completedModules: 0, certificateIssued: false },
   { slug: "treasurer", title: "Treasurer", moduleCount: 7, completedModules: 0, certificateIssued: false },
-  { slug: "secretary", title: "Secretary", moduleCount: 5, completedModules: 1, certificateIssued: false },
+  { slug: "secretary", title: "Secretary", moduleCount: 5, completedModules: 0, certificateIssued: false },
 ];
 
 export type Module = {

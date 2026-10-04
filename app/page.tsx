@@ -1,8 +1,13 @@
 import Link from "next/link";
+import { AutoRefresh } from "@/components/AutoRefresh";
 import { AppShell } from "@/components/AppShell";
 import { getConnectedCorporations } from "@/lib/data/corporations";
 import { getCurrentProfile } from "@/lib/data/profile";
 import { tracks } from "@/lib/placeholder-data";
+import { getCurrentAnnouncements } from "@/lib/data/announcements";
+import { HomeAnnouncements } from "@/components/HomeAnnouncements";
+import { TrainingWelcome } from "@/components/TrainingWelcome";
+import { HomeStratasphereCard } from "@/components/HomeStratasphereCard";
 import { corporationRoleLabels, isCorporationRole } from "@/lib/strata";
 import { createClient } from "@/lib/supabase/server";
 
@@ -13,11 +18,19 @@ import { createClient } from "@/lib/supabase/server";
  * track list lives at `/training`; this page summarizes it rather than
  * repeating it.
  *
- * Profile and connected stratas are real; training progress is still
- * placeholder data until Education is on real tables.
+ * Profile and connected stratas are real; training progress reads "not
+ * started" until Education is on real tables.
+ *
+ * Also (note 3, 2026-10-05): announcements posted by Super Admins, a
+ * dismissible "How Council Training works", and a Stratasphere card for
+ * people whose strata isn't subscribed.
  */
 export default async function HomePage() {
-  const [profile, corporations] = await Promise.all([getCurrentProfile(), getConnectedCorporations()]);
+  const [profile, corporations, announcements] = await Promise.all([
+    getCurrentProfile(),
+    getConnectedCorporations(),
+    getCurrentAnnouncements(),
+  ]);
 
   const supabase = await createClient();
   const { data: roleRows } = profile
@@ -32,6 +45,9 @@ export default async function HomePage() {
     rolesByCorp.set(r.corporation_id, [...(rolesByCorp.get(r.corporation_id) ?? []), corporationRoleLabels[r.role]]);
   }
   const firstCorp = corporations[0];
+  // The Stratasphere card: only when none of their stratas is subscribed.
+  const subscribedAny = corporations.some((c) => c.subscriptionStatus === "active");
+  const adminCorp = corporations.find((c) => (rolesByCorp.get(c.id) ?? []).includes(corporationRoleLabels.admin));
   const firstName = profile?.fullName.trim().split(" ")[0];
 
   const completed = tracks.filter((t) => t.certificateIssued);
@@ -44,11 +60,14 @@ export default async function HomePage() {
 
   return (
     <AppShell active="home">
+      <AutoRefresh />
       <div className="wrap page">
         <div className="page-header">
           <h1>{firstName ? `Welcome back, ${firstName}` : "Welcome back"}</h1>
           <p>Here&rsquo;s where things stand across your training and your strata.</p>
         </div>
+
+        <HomeAnnouncements announcements={announcements} />
 
         <div className="grid-cards" style={{ marginBottom: "2.5rem" }}>
           <div className="card">
@@ -67,8 +86,14 @@ export default async function HomePage() {
           <div className="card">
             <h3>Training progress</h3>
             <p>
-              {completed.length} completed &middot; {inProgress.length} in
-              progress &middot; {notStarted.length} not started
+              {completed.length === 0 && inProgress.length === 0 ? (
+                <>Not started yet. {tracks.length} tracks to choose from.</>
+              ) : (
+                <>
+                  {completed.length} completed &middot; {inProgress.length} in progress &middot; {notStarted.length} not
+                  started
+                </>
+              )}
             </p>
             <Link
               href="/training"
@@ -95,6 +120,14 @@ export default async function HomePage() {
             </Link>
           </div>
         </div>
+
+        {completed.length === 0 && inProgress.length === 0 && <TrainingWelcome />}
+
+        {!subscribedAny && (
+          <HomeStratasphereCard
+            action={corporations.length === 0 ? { kind: "connect" } : adminCorp ? { kind: "plans", corpId: adminCorp.id } : { kind: "request", corpId: firstCorp.id }}
+          />
+        )}
 
         {inProgress.length > 0 && (
           <>

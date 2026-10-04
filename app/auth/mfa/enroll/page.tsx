@@ -1,5 +1,6 @@
 "use client";
 
+import { exportFileName, todayInBC } from "@/lib/exports/filename";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -82,7 +83,8 @@ export default function MfaEnrollPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "stratacouncil-backup-codes.txt";
+    // Same pattern as every export: whose, when, what.
+    a.download = exportFileName("StrataCouncil", todayInBC(), "Backup Codes", "txt");
     a.click();
     URL.revokeObjectURL(url);
   }

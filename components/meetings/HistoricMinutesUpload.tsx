@@ -9,26 +9,42 @@ import { analyzeHistoricMinutes, saveHistoricMinutes, type ExtractedDecision, ty
 import type { UploadedFile } from "@/app/strata/[corpId]/documents/actions";
 
 /**
- * Upload historic minutes: the file is checked against this strata's plan
+ * Upload historic minutes: each file is checked against this strata's plan
  * number, its decisions are read out, and the uploader reviews them before
  * anything is saved. Only carried motions go into the decision ledger.
+ *
+ * Several files at once (note 7, 2026-10-05): they upload and are read one
+ * after another in the background, and are reviewed one at a time, each
+ * saved or skipped. Each is indexed on its own, as with a single file.
  */
+type QueueItem = {
+  id: number;
+  name: string;
+  state: "waiting" | "reading" | "ready" | "failed" | "saved" | "skipped";
+  file?: UploadedFile;
+  analysis?: HistoricAnalysis;
+  message?: string;
+};
+
+const MAX_MINUTES_FILES = 10;
+
 export function HistoricMinutesUpload({ corpId, aiAvailable }: { corpId: string; aiAvailable: boolean }) {
   const router = useRouter();
-  const [file, setFile] = useState<UploadedFile | null>(null);
-  const [analysis, setAnalysis] = useState<HistoricAnalysis | null>(null);
+  const [queue, setQueue] = useState<QueueItem[]>([]);
   const [keep, setKeep] = useState<Record<number, boolean>>({});
-  const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  async function choose(f: File | undefined) {
-    if (!f) return;
-    setError(null);
-    setAnalysis(null);
-    setBusy(true);
+  const setItem = (id: number, patch: Partial<QueueItem>) =>
+    setQueue((q) => q.map((it) => (it.id === id ? { ...it, ...patch } : it)));
+
+  const reading = queue.some((it) => it.state === "waiting" || it.state === "reading");
+  const current = queue.find((it) => it.state === "ready");
+  const analysis = current?.analysis ?? null;
+
+  async function readOne(item: QueueItem, f: File) {
+    setItem(item.id, { state: "reading" });
     try {
-      setStatus("Uploading…");
       const tickets = await createDocumentUploads(corpId, [{ name: f.name, size: f.size }]);
       if (!tickets.ok) throw new Error(tickets.error);
       const t = tickets.tickets[0];
@@ -37,37 +53,52 @@ export function HistoricMinutesUpload({ corpId, aiAvailable }: { corpId: string;
       });
       if (upErr) throw new Error("The upload didn't finish.");
       const uploaded = { path: t.path, name: f.name, size: f.size, type: f.type };
-      setStatus("Checking the strata plan number and reading the decisions…");
       const result = await analyzeHistoricMinutes(corpId, uploaded);
       if (!result.ok) throw new Error(result.error);
-      setFile(uploaded);
-      setAnalysis(result);
-      setKeep(Object.fromEntries(result.decisions.map((d, i) => [i, d.outcome === "CARRIED"])));
-      setStatus(null);
+      setItem(item.id, { state: "ready", file: uploaded, analysis: result });
     } catch (err) {
-      setStatus(null);
-      setError(err instanceof Error ? err.message : "Something went wrong.");
-    } finally {
-      setBusy(false);
+      setItem(item.id, { state: "failed", message: err instanceof Error ? err.message : "Something went wrong." });
     }
   }
 
+  async function choose(list: FileList | null) {
+    const files = Array.from(list ?? []);
+    if (files.length === 0) return;
+    setError(files.length > MAX_MINUTES_FILES ? `Up to ${MAX_MINUTES_FILES} files at a time; the first ${MAX_MINUTES_FILES} are being read.` : null);
+    const start = Date.now();
+    const items: QueueItem[] = files.slice(0, MAX_MINUTES_FILES).map((f, i) => ({ id: start + i, name: f.name, state: "waiting" }));
+    setQueue(items);
+    // One after another: each file is read by the AI on its own.
+    for (let i = 0; i < items.length; i++) await readOne(items[i], files[i]);
+  }
+
+  // A newly reviewed file starts with its carried motions ticked.
+  const [keepFor, setKeepFor] = useState<number | null>(null);
+  if (current && keepFor !== current.id) {
+    setKeepFor(current.id);
+    setKeep(Object.fromEntries((current.analysis?.decisions ?? []).map((d, i) => [i, d.outcome === "CARRIED"])));
+  }
+
   async function save() {
-    if (!file || !analysis) return;
-    setBusy(true);
+    if (!current?.file || !analysis) return;
+    setSaving(true);
     setError(null);
     const chosen = analysis.decisions.filter((_, i) => keep[i]);
-    const result = await saveHistoricMinutes(corpId, file, { meetingDate: analysis.meetingDate, meetingType: analysis.meetingType }, chosen);
-    setBusy(false);
+    const result = await saveHistoricMinutes(corpId, current.file, { meetingDate: analysis.meetingDate, meetingType: analysis.meetingType }, chosen);
+    setSaving(false);
     if (!result.ok) return setError(result.error);
-    setStatus(`Saved. ${result.recorded} decision${result.recorded === 1 ? "" : "s"} added to the decision ledger.`);
-    setFile(null);
-    setAnalysis(null);
+    setItem(current.id, { state: "saved", message: `${result.recorded} decision${result.recorded === 1 ? "" : "s"} added to the ledger.` });
     router.refresh();
   }
 
+  function skip() {
+    if (current) setItem(current.id, { state: "skipped", message: "Skipped, not saved." });
+  }
+
+  const setAnalysis = (next: HistoricAnalysis) => current && setItem(current.id, { analysis: next });
   const update = (i: number, patch: Partial<ExtractedDecision>) =>
-    setAnalysis((a) => (a ? { ...a, decisions: a.decisions.map((d, j) => (j === i ? { ...d, ...patch } : d)) } : a));
+    analysis && setAnalysis({ ...analysis, decisions: analysis.decisions.map((d, j) => (j === i ? { ...d, ...patch } : d)) });
+  const busy = reading || saving;
 
   return (
     <section className="card" style={{ marginBottom: "1.5rem" }} data-testid="historic-minutes">
@@ -77,16 +108,17 @@ export function HistoricMinutesUpload({ corpId, aiAvailable }: { corpId: string;
         with your records and indexed, and the motions they carried are added to the decision ledger that Stratasphere&trade;
         draws on. Names are removed before the AI reads them.
       </p>
-      {!analysis && (
-        <label className={`button button-secondary${busy || !aiAvailable ? " button--disabled" : ""}`} style={{ alignSelf: "flex-start" }}>
-          Choose minutes file
+      {!analysis && !reading && (
+        <label className={`button button-secondary${!aiAvailable ? " button--disabled" : ""}`} style={{ alignSelf: "flex-start" }}>
+          Choose minutes files
           <input
             type="file"
             accept=".pdf,.docx,.txt"
+            multiple
             className="visually-hidden"
-            disabled={busy || !aiAvailable}
+            disabled={!aiAvailable}
             onChange={(e) => {
-              void choose(e.target.files?.[0]);
+              void choose(e.target.files);
               e.target.value = "";
             }}
             data-testid="historic-minutes-file"
@@ -94,13 +126,45 @@ export function HistoricMinutesUpload({ corpId, aiAvailable }: { corpId: string;
         </label>
       )}
       {!aiAvailable && <p className="card__meta">Reading decisions out of minutes needs a Stratasphere&trade; subscription. You can still upload the file under Documents.</p>}
-      {status && <p className="card__meta" role="status">{status}</p>}
+      {queue.length > 0 && (
+        <ul className="historic-queue" data-testid="historic-queue">
+          {queue.map((it) => (
+            <li key={it.id} data-state={it.state} data-current={it.id === current?.id}>
+              <span className="historic-queue__name">{it.name}</span>
+              <span className="historic-queue__state">
+                {it.state === "waiting"
+                  ? "Waiting"
+                  : it.state === "reading"
+                    ? "Checking the plan number and reading the decisions…"
+                    : it.state === "ready"
+                      ? it.id === current?.id
+                        ? "Reviewing below"
+                        : "Ready to review"
+                      : it.message}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {queue.length > 0 && !reading && !current && (
+        <p className="card__meta" role="status">
+          All {queue.length} done.{" "}
+          <button type="button" className="link-button" onClick={() => setQueue([])}>
+            Upload more
+          </button>
+        </p>
+      )}
       {error && <p className="form-error" role="alert">{error}</p>}
 
       {analysis && (
         <div className="historic-review">
           <p>
-            <strong>{analysis.planNumber} confirmed.</strong> {analysis.decisions.length} decision{analysis.decisions.length === 1 ? "" : "s"} found.
+            {queue.length > 1 && (
+              <span className="pill" style={{ marginRight: "0.5rem" }}>
+                File {queue.findIndex((it) => it.id === current?.id) + 1} of {queue.length}
+              </span>
+            )}
+            <strong>{current?.name}: {analysis.planNumber} confirmed.</strong> {analysis.decisions.length} decision{analysis.decisions.length === 1 ? "" : "s"} found.
             Check them, then save. Only carried motions go into the ledger.
           </p>
           <div className="field-grid">
@@ -140,11 +204,11 @@ export function HistoricMinutesUpload({ corpId, aiAvailable }: { corpId: string;
             ))}
           </ul>
           <div className="role-editor__actions">
-            <button type="button" className="button button-secondary" onClick={() => { setAnalysis(null); setFile(null); }} disabled={busy}>
-              Cancel
+            <button type="button" className="button button-secondary" onClick={skip} disabled={saving} data-testid="historic-minutes-skip">
+              {queue.length > 1 ? "Skip this file" : "Cancel"}
             </button>
-            <button type="button" className="button button-primary" onClick={save} disabled={busy} data-testid="historic-minutes-save">
-              {busy ? "Saving…" : "Save minutes and decisions"}
+            <button type="button" className="button button-primary" onClick={save} disabled={saving} data-testid="historic-minutes-save">
+              {saving ? "Saving…" : "Save minutes and decisions"}
             </button>
           </div>
         </div>

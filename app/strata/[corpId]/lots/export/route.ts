@@ -1,3 +1,4 @@
+import { exportFileName, todayInBC } from "@/lib/exports/filename";
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { rosterFields, toRosterCsv, type RosterCsvRow } from "@/lib/roster-csv";
@@ -41,8 +42,7 @@ export async function GET(
 
   const lots = (rows ?? []) as unknown as RosterCsvRow[];
   const csv = toRosterCsv(template ? lots.map((r) => ({ lot_number: r.lot_number })) : lots);
-  const date = new Date().toISOString().slice(0, 10);
-  const filename = template ? `${corpId}-owner-roster-template.csv` : `${corpId}-owner-roster-${date}.csv`;
+  const filename = exportFileName(corpId, todayInBC(), template ? "Owner Roster Template" : "Owner Roster", "csv");
 
   // BOM so Excel reads it as UTF-8 (accented owner names); parseCsv strips it.
   return new NextResponse("\uFEFF" + csv, {
