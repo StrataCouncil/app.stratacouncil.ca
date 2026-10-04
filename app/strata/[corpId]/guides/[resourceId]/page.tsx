@@ -81,7 +81,7 @@ export default async function KnowledgeResourcePage({
               <h2>This template requires a subscription</h2>
               <p>
                 Policy templates are downloadable, editable documents &mdash; the one
-                part of the Knowledge Library that&rsquo;s behind Stratasphere&trade;.
+                part of the Library that&rsquo;s behind Stratasphere&trade;.
                 Playbooks, guides, financial insights and legislation updates stay
                 free for every connected member.
               </p>

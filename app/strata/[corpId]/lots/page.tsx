@@ -24,7 +24,7 @@ export default async function StrataLotsPage({
   return (
     <>
       <StrataSphereNav active="lots" />
-      <h2 style={{ marginBottom: "0.4rem" }}>Strata lots</h2>
+      <h2 style={{ marginBottom: "0.4rem" }}>Owners</h2>
 
       {!roster ? (
         <p className="roster-notice">Couldn&rsquo;t load the roster. Try refreshing the page.</p>

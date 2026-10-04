@@ -93,7 +93,7 @@ export function OwnerRoster({
         <p className="roster-table__legend">
           Council: <strong>P</strong> President &middot; <strong>VP</strong> Vice President &middot;{" "}
           <strong>T</strong> Treasurer &middot; <strong>S</strong> Secretary &middot; <strong>M@L</strong> Member at
-          Large. Set on Council &amp; Roles.
+          Large. Set on Council.
         </p>
       </div>
     </>

@@ -50,6 +50,7 @@ async function requireAdmin(corporationId: string) {
 
 function refresh(corporationId: string) {
   revalidatePath(`/strata/${corporationId}`);
+  revalidatePath(`/strata/${corporationId}/council`);
 }
 
 // ── Invites ────────────────────────────────────────────────────────────

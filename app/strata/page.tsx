@@ -114,7 +114,7 @@ export default async function StrataSetupPage({
           </p>
           {corporations.map((c) => (
             <Link key={c.id} href={`/strata/${c.id}/guides`} className="button button-primary">
-              {c.buildingName ?? c.legalName}: Knowledge Library
+              {c.buildingName ?? c.legalName}: Library
             </Link>
           ))}
           <Link href="/training" className="button button-secondary">

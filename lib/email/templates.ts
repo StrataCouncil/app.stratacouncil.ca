@@ -183,11 +183,11 @@ export function inviteAcceptedEmail(params: {
   const who = escapeHtml(params.memberName ? `${params.memberName} (${params.memberEmail})` : params.memberEmail);
   const html = wrap(`
     <p style="margin:0 0 16px;font-size:16px;color:${INK};">${who} accepted your invitation and joined <strong>${name}</strong> on StrataCouncil.ca.</p>
-    <p style="margin:0 0 8px;font-size:14px;color:${INK};">They have no roles yet. Assign them on Council &amp; Roles. If this isn&rsquo;t who you meant to invite, remove them there.</p>
-    ${button(params.openUrl, "Open Council & Roles")}
+    <p style="margin:0 0 8px;font-size:14px;color:${INK};">They have no roles yet. Assign them on the Council page. If this isn&rsquo;t who you meant to invite, remove them there.</p>
+    ${button(params.openUrl, "Open Council")}
   `);
   const whoText = params.memberName ? `${params.memberName} (${params.memberEmail})` : params.memberEmail;
-  const text = `${whoText} accepted your invitation and joined ${params.corporationName} on StrataCouncil.ca.\n\nThey have no roles yet. Assign them on Council & Roles. If this isn't who you meant to invite, remove them there:\n\n${params.openUrl}`;
+  const text = `${whoText} accepted your invitation and joined ${params.corporationName} on StrataCouncil.ca.\n\nThey have no roles yet. Assign them on the Council page. If this isn't who you meant to invite, remove them there:\n\n${params.openUrl}`;
   return { subject: `${whoText} joined ${params.corporationName}`, html, text };
 }
 

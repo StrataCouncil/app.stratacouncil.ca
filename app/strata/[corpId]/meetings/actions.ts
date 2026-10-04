@@ -500,7 +500,7 @@ export async function launchMeeting(
       return {
         ok: false,
         error:
-          "No council members are tied to a strata lot yet. On Council & Roles, set each council member's strata lot, then launch.",
+          "No council members are tied to a strata lot yet. On Council, set each council member's strata lot, then launch.",
       };
     }
   }
