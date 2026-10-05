@@ -413,11 +413,10 @@ export async function startPaymentSetup(corporationId: string, interval: Billing
           mandate_options: {
             // Lets the subscription's invoices use this debit agreement on
             // their own. Without it, each payment waits for the agreement
-            // to be accepted again, and the first one never starts.
+            // to be accepted again, and the first one never starts. Stripe
+            // allows nothing else here alongside it (schedule, interval
+            // description, transaction type): it words the agreement itself.
             default_for: ["invoice", "subscription"],
-            payment_schedule: "interval",
-            interval_description: "Monthly, for the Stratasphere subscription",
-            transaction_type: "business",
           },
         },
       },
@@ -431,7 +430,7 @@ export async function startPaymentSetup(corporationId: string, interval: Billing
     const detail = error instanceof Error ? error.message : String(error);
     const mode = await stripeModeFor(corporationId).catch(() => "live" as const);
     console.error(`[startPaymentSetup] ${corporationId} (${mode}):`, detail);
-    redirect(`${back}&note=setup-failed${mode === "sandbox" ? `&detail=${encodeURIComponent(detail.slice(0, 300))}` : ""}`);
+    redirect(`${back}&note=setup-failed${mode === "sandbox" ? `&detail=${encodeURIComponent(detail.slice(0, 800))}` : ""}`);
   }
   redirect(url);
 }

@@ -343,7 +343,7 @@ export default async function BillingPage({
             setupError={
               note === "setup-failed"
                 ? stripeMode === "sandbox" && detail
-                  ? `Sandbox: ${detail.slice(0, 300)}`
+                  ? `Sandbox: ${detail.slice(0, 800)}`
                   : "Stripe's secure payment page couldn't be opened. Please try again. If this keeps happening, contact us."
                 : null
             }
