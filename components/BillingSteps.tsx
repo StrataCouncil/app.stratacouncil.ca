@@ -94,6 +94,10 @@ export function BillingSteps({
           </p>
           <div className="billing-plans">
             <div className="billing-plan" data-selected={interval === "monthly"} data-testid="plan-monthly">
+              {/* Empty rows matching the Annual card's badge and saving line, so the two cards line up. */}
+              <span className="billing-plan__badge billing-plan__badge--empty" aria-hidden="true">
+                &nbsp;
+              </span>
               <strong>Monthly</strong>
               <span className="billing-plan__price">
                 {fmt(monthly.total)}
@@ -103,6 +107,7 @@ export function BillingSteps({
                 {fmt(DISPLAY_RATES.monthly.basePriceMonthly)} base + {fmt(DISPLAY_RATES.monthly.perUnitMonthly)} per lot.
                 Month to month; cancel any month.
               </span>
+              <span className="billing-plan__saving" aria-hidden="true" />
               <Link href={href("payment", "monthly")} className="button button-secondary billing-plan__choose" data-testid="choose-monthly">
                 Monthly plan
               </Link>

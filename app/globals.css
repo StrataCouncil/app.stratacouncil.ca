@@ -4264,8 +4264,9 @@ li[data-done="true"] .checklist__mark {
   margin: 0;
 }
 .billing-plan .button.billing-plan__choose {
-  margin-top: auto;
-  align-self: flex-end;
+  margin-top: 0.5rem;
+  align-self: end;
+  justify-self: end;
 }
 .modal--wide .billing-step__form {
   max-width: none;
@@ -4276,6 +4277,7 @@ li[data-done="true"] .checklist__mark {
 }
 .billing-plan .billing-plan__saving {
   margin-bottom: 0.5rem;
+  min-height: 1px;
 }
 .billing-review__note {
   display: block;
@@ -4321,8 +4323,7 @@ li[data-done="true"] .checklist__mark {
   gap: 0.75rem;
 }
 @media (max-width: 640px) {
-  .billing-address__row,
-  .billing-plans {
+  .billing-address__row {
     grid-template-columns: 1fr;
   }
 }
@@ -4414,13 +4415,18 @@ li[data-done="true"] .checklist__mark {
 .billing-plans {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 1rem;
+  column-gap: 1rem;
+  row-gap: 0;
 }
+/* Both cards share one set of rows (badge, title, price, description,
+   saving, button), so each line sits level with its neighbour. */
 .billing-plan {
   position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
+  display: grid;
+  grid-row: span 6;
+  grid-template-rows: subgrid;
+  row-gap: 0.5rem;
+  align-items: start;
   padding: 1.25rem;
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
@@ -4431,12 +4437,18 @@ li[data-done="true"] .checklist__mark {
 .billing-plan:hover {
   border-color: var(--ink);
 }
+.billing-plan__badge--empty {
+  visibility: hidden;
+}
 .billing-plan--recommended {
   border: 2px solid var(--accent);
+  /* The thicker border, taken back out of the padding. */
+  padding: calc(1.25rem - 1px);
   background: rgba(180, 96, 47, 0.04);
 }
 .billing-plan__badge {
   align-self: flex-start;
+  justify-self: start;
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -4467,6 +4479,22 @@ li[data-done="true"] .checklist__mark {
 .billing-plan .button {
   align-self: flex-start;
   margin-top: 0.5rem;
+}
+/* Phones: the plans stack, each card on its own rows. After the rules
+   above so it wins. */
+@media (max-width: 640px) {
+  .billing-plans {
+    grid-template-columns: 1fr;
+    row-gap: 1rem;
+  }
+  .billing-plan {
+    grid-row: auto;
+    grid-template-rows: none;
+  }
+  .billing-plan__badge--empty,
+  .billing-plan__saving:empty {
+    display: none;
+  }
 }
 .billing-review {
   display: grid;
