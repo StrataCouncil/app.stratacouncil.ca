@@ -30,7 +30,7 @@ export default async function OverviewPage({ params }: { params: Promise<{ corpI
   const [roster, meetings, news, { data: corp }, { count: namedLots }, { count: documents }] = await Promise.all([
     getCorporationRoster(corpId),
     listMeetings(corpId),
-    getCurrentAnnouncements(5),
+    getCurrentAnnouncements("overview", 5),
     supabase
       .from("strata_corporations")
       .select("strata_plan_number, legal_name, building_name, address, unit_count, jurisdiction")

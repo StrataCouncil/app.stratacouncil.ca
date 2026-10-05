@@ -44,6 +44,17 @@ export function AnnouncementForm() {
           <input name="link_label" maxLength={40} placeholder="Read more" />
         </label>
       </div>
+      <fieldset className="field announcement-form__places">
+        <span>Where it shows</span>
+        <label className="checkbox-row">
+          <input type="checkbox" name="show_on_home" defaultChecked data-testid="announcement-home" />
+          Home page
+        </label>
+        <label className="checkbox-row">
+          <input type="checkbox" name="show_on_overview" defaultChecked data-testid="announcement-overview" />
+          Stratasphere&trade; Overview (every strata)
+        </label>
+      </fieldset>
       <div className="field-grid">
         <label className="field">
           <span>Who sees it</span>
@@ -64,7 +75,7 @@ export function AnnouncementForm() {
       )}
       {state?.ok && (
         <p className="card__meta" role="status">
-          Posted. It&rsquo;s on everyone&rsquo;s home page and every strata&rsquo;s Overview now.
+          Posted. It&rsquo;s showing now.
         </p>
       )}
       <button type="submit" className="button button-primary" disabled={pending} style={{ alignSelf: "flex-start" }}>

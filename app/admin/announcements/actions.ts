@@ -21,9 +21,12 @@ export async function createAnnouncement(_prev: AnnouncementResult | null, formD
   const ends = clean(formData.get("expires_on"), 10);
   const rawCategory = formData.get("category");
   const category = isAnnouncementCategory(rawCategory) ? rawCategory : "general";
+  const showOnHome = formData.get("show_on_home") === "on";
+  const showOnOverview = formData.get("show_on_overview") === "on";
 
   if (!title) return { ok: false, error: "Give it a title." };
   if (!body) return { ok: false, error: "Write the announcement." };
+  if (!showOnHome && !showOnOverview) return { ok: false, error: "Choose where it shows: the Home page, Stratasphere Overview, or both." };
   // An outside address (https://) or a page in the app (/training).
   if (linkUrl && !/^(https:\/\/\S+|\/(?!\/)\S*)$/.test(linkUrl)) {
     return { ok: false, error: "Links start with https://, or with / for a page in the app (like /training)." };
@@ -39,6 +42,8 @@ export async function createAnnouncement(_prev: AnnouncementResult | null, formD
     link_label: linkUrl ? linkLabel || "Read more" : null,
     audience,
     category,
+    show_on_home: showOnHome,
+    show_on_overview: showOnOverview,
     expires_at: expiresAt,
     created_by: auth.user.id,
   });

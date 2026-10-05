@@ -23,8 +23,8 @@ export default async function AnnouncementsPage() {
           <h1>Announcements</h1>
           <p>
             News for every StrataCouncil.ca customer, subscribed or not: new features, changes, new or updated
-            training, additions to the Library, legislation. Shows on the home page (newest three) and on every
-            strata&rsquo;s Overview (newest five). Keep them short.
+            training, additions to the Library, legislation. Choose the Home page, every strata&rsquo;s Stratasphere&trade;
+            Overview, or both. Home shows the newest three; Overview the newest five. Keep them short.
           </p>
         </div>
 
@@ -45,7 +45,9 @@ export default async function AnnouncementsPage() {
                   </div>
                   <p>{a.body}</p>
                   <p className="card__meta">
-                    {announcementCategories[a.category]} &middot; {a.audience === "admins" ? "Strata admins only" : "Everyone"} &middot; Posted {fmt(a.publishedAt)}
+                    {announcementCategories[a.category]} &middot;{" "}
+                    {a.showOnHome && a.showOnOverview ? "Home and Overview" : a.showOnHome ? "Home only" : "Overview only"} &middot;{" "}
+                    {a.audience === "admins" ? "Strata admins only" : "Everyone"} &middot; Posted {fmt(a.publishedAt)}
                     {a.expiresAt ? ` · ${ended ? "Ended" : "Until"} ${fmt(a.expiresAt)}` : ""}
                     {a.linkUrl ? ` · Links to ${a.linkUrl}` : ""}
                   </p>
