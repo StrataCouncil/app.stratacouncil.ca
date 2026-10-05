@@ -18,6 +18,8 @@ import { createClient } from "@/lib/supabase/server";
 export interface StrataAccess {
   corpId: string;
   subscribed: boolean;
+  /** Subscribed, with Stripe still confirming the first payment (0030). */
+  pending: boolean;
   freeMeetingUsed: boolean;
   roles: string[];
   isAdmin: boolean;
@@ -42,7 +44,7 @@ export const getStrataAccess = cache(async (corpId: string): Promise<StrataAcces
       .select("strata_plan_number, free_meeting_used")
       .eq("strata_plan_number", corpId)
       .maybeSingle(),
-    supabase.from("subscriptions").select("status").eq("corporation_id", corpId).maybeSingle(),
+    supabase.from("subscriptions").select("status, stripe_subscription_id, stripe_status").eq("corporation_id", corpId).maybeSingle(),
     supabase
       .from("corporation_role_assignments")
       .select("role")
@@ -64,6 +66,7 @@ export const getStrataAccess = cache(async (corpId: string): Promise<StrataAcces
   return {
     corpId: corp.strata_plan_number,
     subscribed: sub?.status === "active",
+    pending: sub?.status !== "active" && Boolean(sub?.stripe_subscription_id) && sub?.stripe_status === "incomplete",
     freeMeetingUsed: corp.free_meeting_used,
     roles,
     isAdmin: superAdmin === true || roles.includes("admin"),

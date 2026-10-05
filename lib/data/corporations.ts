@@ -18,6 +18,8 @@ export interface ConnectedCorporation {
   legalName: string;
   address: string;
   subscriptionStatus: "active" | "deactivated";
+  /** Subscribed, with Stripe still confirming the first payment (0030). */
+  pending?: boolean;
 }
 
 export async function getConnectedCorporations(): Promise<
@@ -45,12 +47,17 @@ export async function getConnectedCorporations(): Promise<
       .in("strata_plan_number", corpIds),
     supabase
       .from("subscriptions")
-      .select("corporation_id, status")
+      .select("corporation_id, status, stripe_subscription_id, stripe_status")
       .in("corporation_id", corpIds),
   ]);
 
   const statusByCorp = new Map(
     (subs ?? []).map((s) => [s.corporation_id, s.status])
+  );
+  const pendingCorps = new Set(
+    (subs ?? [])
+      .filter((s) => s.status !== "active" && s.stripe_subscription_id && s.stripe_status === "incomplete")
+      .map((s) => s.corporation_id)
   );
 
   return (corps ?? []).map((c) => ({
@@ -62,5 +69,6 @@ export async function getConnectedCorporations(): Promise<
       statusByCorp.get(c.strata_plan_number) === "active"
         ? "active"
         : "deactivated",
+    pending: pendingCorps.has(c.strata_plan_number),
   }));
 }

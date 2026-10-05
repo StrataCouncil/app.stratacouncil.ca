@@ -11,6 +11,8 @@ import { createContext, useContext } from "react";
 export interface StrataContextValue {
   corpId: string;
   subscribed: boolean;
+  /** Subscribed, with Stripe still confirming the first payment. */
+  pending: boolean;
   isAdmin: boolean;
   /** Admin or Manager: sees the Management tab. */
   canManage: boolean;
@@ -26,6 +28,11 @@ export function StrataContextProvider({
   children: React.ReactNode;
 }) {
   return <StrataContext.Provider value={value}>{children}</StrataContext.Provider>;
+}
+
+/** The same, or null outside a strata's pages (the home page). */
+export function useOptionalStrata(): StrataContextValue | null {
+  return useContext(StrataContext);
 }
 
 export function useStrata(): StrataContextValue {

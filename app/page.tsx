@@ -125,7 +125,17 @@ export default async function HomePage() {
 
         {!subscribedAny && (
           <HomeStratasphereCard
-            action={corporations.length === 0 ? { kind: "connect" } : adminCorp ? { kind: "plans", corpId: adminCorp.id } : { kind: "request", corpId: firstCorp.id }}
+            action={
+              corporations.length === 0
+                ? { kind: "connect" }
+                : adminCorp
+                  ? adminCorp.pending
+                    ? { kind: "pending", corpId: adminCorp.id, isAdmin: true }
+                    : { kind: "plans", corpId: adminCorp.id }
+                  : firstCorp.pending
+                    ? { kind: "pending", corpId: firstCorp.id, isAdmin: false }
+                    : { kind: "request", corpId: firstCorp.id }
+            }
           />
         )}
 

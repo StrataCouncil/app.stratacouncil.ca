@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useOptionalStrata } from "@/components/StrataContext";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { DOCUMENTS_BUCKET } from "@/lib/documents";
@@ -30,6 +31,7 @@ const MAX_MINUTES_FILES = 10;
 
 export function HistoricMinutesUpload({ corpId, aiAvailable }: { corpId: string; aiAvailable: boolean }) {
   const router = useRouter();
+  const subscriptionPending = useOptionalStrata()?.pending ?? false;
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [keep, setKeep] = useState<Record<number, boolean>>({});
   const [error, setError] = useState<string | null>(null);
@@ -125,7 +127,13 @@ export function HistoricMinutesUpload({ corpId, aiAvailable }: { corpId: string;
           />
         </label>
       )}
-      {!aiAvailable && <p className="card__meta">Reading decisions out of minutes needs a Stratasphere&trade; subscription. You can still upload the file under Documents.</p>}
+      {!aiAvailable && (
+        <p className="card__meta">
+          {subscriptionPending
+            ? "Reading decisions out of minutes unlocks once your Stratasphere™ subscription goes through (it's pending). You can still upload the file under Documents."
+            : "Reading decisions out of minutes needs a Stratasphere™ subscription. You can still upload the file under Documents."}
+        </p>
+      )}
       {queue.length > 0 && (
         <ul className="historic-queue" data-testid="historic-queue">
           {queue.map((it) => (
