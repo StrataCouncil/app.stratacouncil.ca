@@ -487,8 +487,9 @@ export async function startSubscriptionCheckout(
       automatic_tax: { enabled: true },
       payment_method_types: ["acss_debit", "card"],
       payment_method_options: {
+        // No currency here: Stripe refuses it in subscription mode; the
+        // plan's prices are in CAD.
         acss_debit: {
-          currency: "cad",
           verification_method: "automatic",
           // A strata corporation's account: a business agreement, not personal.
           mandate_options: { transaction_type: "business" },
