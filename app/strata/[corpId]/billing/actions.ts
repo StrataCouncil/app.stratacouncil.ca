@@ -8,6 +8,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { stripeFor, stripeModeFor } from "@/lib/stripe/client";
 import { annualTermEnd, getPriceIds, type BillingInterval } from "@/lib/stripe/prices";
 import { parseCivicAddress, readBillingAddress, toStripeAddress, type BillingAddress } from "@/lib/billing-address";
+import { recordPaymentMethodUpdate, recordSubscriptionCheckout } from "@/lib/stripe/checkout-results";
 import { syncSubscription } from "@/lib/stripe/sync";
 import { parseEmails } from "@/lib/roster-csv";
 import { isStrataAdmin } from "@/lib/auth/strata-admin";
@@ -157,31 +158,6 @@ async function getOrCreateStripeCustomer(corporationId: string, billingEmail: st
     );
 
   return customer.id;
-}
-
-/** Payment-method update / "Invoices" — both live in the Stripe-hosted
- * Billing Portal rather than a hand-built card form or invoice list. */
-export async function openBillingPortal(corporationId: string) {
-  await requireAdmin(corporationId);
-
-  const admin = createAdminClient();
-  const { data: sub } = await admin
-    .from("subscriptions")
-    .select("stripe_customer_id")
-    .eq("corporation_id", corporationId)
-    .maybeSingle();
-  if (!sub?.stripe_customer_id) {
-    throw new Error("No billing account on file yet — subscribe first.");
-  }
-
-  const origin = await siteUrl();
-  const stripe = await stripeFor(corporationId);
-  const portal = await stripe.billingPortal.sessions.create({
-    customer: sub.stripe_customer_id,
-    return_url: `${origin}/strata/${corporationId}/billing`,
-  });
-
-  redirect(portal.url);
 }
 
 /**
@@ -384,58 +360,7 @@ export async function cancelSubscription(corporationId: string) {
 
 const isInterval = (v: string): v is BillingInterval => v === "monthly" || v === "annual";
 
-/**
- * Step 2: save a payment method on Stripe's own secure page (Checkout in
- * setup mode), so card and bank details never touch our servers. Stripe
- * collects the pre-authorized debit mandate there too. It returns to
- * ./setup-complete, which makes the method the default, then step 3.
- */
-export async function startPaymentSetup(corporationId: string, interval: BillingInterval) {
-  await requireAdmin(corporationId);
-  if (!isInterval(interval)) throw new Error("Choose a plan first.");
-  const back = `/strata/${corporationId}/billing?plan=${interval}&step=payment`;
-
-  // Any Stripe failure comes back to the payment step with a message, never
-  // an error page. On a sandbox strata the message says what Stripe said.
-  let url: string;
-  try {
-    const customerId = await getOrCreateStripeCustomer(corporationId, null);
-    const origin = await siteUrl();
-    const session = await (await stripeFor(corporationId)).checkout.sessions.create({
-      mode: "setup",
-      customer: customerId,
-      currency: "cad",
-      payment_method_types: ["acss_debit", "card"],
-      payment_method_options: {
-        acss_debit: {
-          currency: "cad",
-          verification_method: "automatic",
-          mandate_options: {
-            // Lets the subscription's invoices use this debit agreement on
-            // their own. Without it, each payment waits for the agreement
-            // to be accepted again, and the first one never starts. Stripe
-            // allows nothing else here alongside it (schedule, interval
-            // description, transaction type): it words the agreement itself.
-            default_for: ["invoice", "subscription"],
-          },
-        },
-      },
-      metadata: { corporation_id: corporationId, billing_interval: interval },
-      success_url: `${origin}/strata/${corporationId}/billing/setup-complete?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${origin}${back}`,
-    });
-    if (!session.url) throw new Error("Stripe did not return a setup page.");
-    url = session.url;
-  } catch (error) {
-    const detail = error instanceof Error ? error.message : String(error);
-    const mode = await stripeModeFor(corporationId).catch(() => "live" as const);
-    console.error(`[startPaymentSetup] ${corporationId} (${mode}):`, detail);
-    redirect(`${back}&note=setup-failed${mode === "sandbox" ? `&detail=${encodeURIComponent(detail.slice(0, 800))}` : ""}`);
-  }
-  redirect(url);
-}
-
-/** Step 3: the billing contacts. Saved now, used when paying. */
+/** Step 2: the billing contacts and address. Saved now, used when paying. */
 export async function saveBillingContacts(
   corporationId: string,
   interval: BillingInterval,
@@ -477,10 +402,14 @@ export async function saveBillingContacts(
     .maybeSingle();
   if (sub?.stripe_customer_id) {
     try {
-      await (await stripeFor(corporationId)).customers.update(sub.stripe_customer_id, {
-        email: emails.first,
-        address: toStripeAddress(address),
-      });
+      const stripe = await stripeFor(corporationId);
+      // A customer deleted in Stripe is replaced when paying; nothing to update now.
+      if (await customerStillExists(stripe, sub.stripe_customer_id)) {
+        await stripe.customers.update(sub.stripe_customer_id, {
+          email: emails.first,
+          address: toStripeAddress(address),
+        });
+      }
     } catch (error) {
       console.error("[saveBillingContacts]", error instanceof Error ? error.message : error);
       return { error: "Couldn't save these details with Stripe. Please try again." };
@@ -496,112 +425,175 @@ export async function saveBillingContacts(
 }
 
 /**
- * Step 4: create the subscription on the saved payment method. A card
- * charge settles now; a pre-authorized debit takes a few business days,
- * and the webhook switches the subscription on when Stripe confirms it.
+ * The last step: Stripe's own payment form, shown inside our dialog
+ * (embedded Checkout, subscription mode). The admin adds the bank account
+ * or card and confirms, and Stripe creates the subscription in the same
+ * go. A pre-authorized debit agreement is set up as Business: a strata
+ * corporation's account. Returns the form's client secret, or why it
+ * couldn't open (Stripe's own words on a sandbox strata).
  */
-export async function paySubscription(
+export async function startSubscriptionCheckout(
   corporationId: string,
-  interval: BillingInterval,
-  _prev: { error: string } | undefined,
-  _formData: FormData
-): Promise<{ error: string } | undefined> {
+  interval: BillingInterval
+): Promise<{ clientSecret: string; sessionId: string } | { error: string }> {
   await requireAdmin(corporationId);
   if (!isInterval(interval)) return { error: "Choose a plan first." };
 
   const admin = createAdminClient();
-  const [{ data: sub }, { data: corp }] = await Promise.all([
+  const [{ data: corp }, { data: sub }] = await Promise.all([
+    admin.from("strata_corporations").select("unit_count").eq("strata_plan_number", corporationId).maybeSingle(),
     admin
       .from("subscriptions")
-      .select("stripe_customer_id, billing_email, billing_address, status, stripe_subscription_id, stripe_status")
+      .select("status, stripe_subscription_id, stripe_status, billing_email, billing_address")
       .eq("corporation_id", corporationId)
       .maybeSingle(),
-    admin.from("strata_corporations").select("unit_count").eq("strata_plan_number", corporationId).single(),
   ]);
   if (!corp) return { error: "Corporation not found." };
-  if (sub?.status === "active") redirect(`/strata/${corporationId}/billing`);
-  if (!sub?.stripe_customer_id) return { error: "Add a payment method first." };
-  if (!sub.billing_email) return { error: "Add a billing contact email first." };
+  if (sub?.status === "active") return { error: "This strata is already subscribed." };
+  if (sub?.stripe_subscription_id && sub.stripe_status === "incomplete") {
+    return { error: "A first payment is already in progress. Check Billing for where it stands." };
+  }
+  if (!sub?.billing_email) return { error: "Add a billing contact email first." };
   if (!sub.billing_address) return { error: "Add a billing address first." };
-  // A first payment already processing: don't start a second subscription.
-  if (sub.stripe_subscription_id && sub.stripe_status === "incomplete") redirect(`/strata/${corporationId}/billing`);
 
-  // Everything that talks to Stripe is caught: a failure shows as a
-  // message on the form, never as an error page. On a sandbox strata the
-  // message carries the actual cause (it's a test strata, and the cause is
-  // usually a missing STRIPE_TEST_* setting).
   const mode = await stripeModeFor(corporationId);
   try {
     const stripe = await stripeFor(corporationId);
-    const customer = await stripe.customers.retrieve(sub.stripe_customer_id);
-    let defaultPm =
-      !customer.deleted && customer.invoice_settings?.default_payment_method
-        ? String(
-            typeof customer.invoice_settings.default_payment_method === "string"
-              ? customer.invoice_settings.default_payment_method
-              : customer.invoice_settings.default_payment_method.id
-          )
-        : null;
-    // A bank account confirmed by micro-deposits after the setup page:
-    // on file, but never made the default. Make it the default now.
-    if (!defaultPm) {
-      const onFile = await stripe.paymentMethods.list({ customer: sub.stripe_customer_id, limit: 1 });
-      if (onFile.data[0]) {
-        defaultPm = onFile.data[0].id;
-        await stripe.customers.update(sub.stripe_customer_id, { invoice_settings: { default_payment_method: defaultPm } });
-      }
+    const customerId = await getOrCreateStripeCustomer(corporationId, sub.billing_email);
+    // Never a second subscription: if Stripe already has one for this
+    // customer (say the app missed recording it), record it and stop.
+    const existing = await stripe.subscriptions.list({ customer: customerId, status: "all", limit: 10 });
+    const live = existing.data.find((s) => ["active", "trialing", "past_due", "incomplete", "unpaid"].includes(s.status));
+    if (live) {
+      await syncSubscription(live, mode);
+      return { error: "This strata already has a subscription. Close this window to see it on Billing." };
     }
-    if (!defaultPm) return { error: "Add a payment method first." };
-
-    const { base, perUnit } = getPriceIds(interval, mode);
     // Stripe calculates GST from the customer's address.
-    await stripe.customers.update(sub.stripe_customer_id, { address: toStripeAddress(sub.billing_address as BillingAddress) });
-    const created = await stripe.subscriptions.create({
-      customer: sub.stripe_customer_id,
-      items: [
+    await stripe.customers.update(customerId, {
+      email: firstEmail(sub.billing_email),
+      address: toStripeAddress(sub.billing_address as BillingAddress),
+    });
+    const { base, perUnit } = getPriceIds(interval, mode);
+    const origin = await siteUrl();
+    const metadata = { corporation_id: corporationId, billing_interval: interval };
+    const session = await stripe.checkout.sessions.create({
+      ui_mode: "embedded",
+      mode: "subscription",
+      customer: customerId,
+      line_items: [
         { price: base, quantity: 1 },
         { price: perUnit, quantity: corp.unit_count },
       ],
-      default_payment_method: defaultPm,
       automatic_tax: { enabled: true },
-      payment_behavior: "allow_incomplete",
-      metadata: { corporation_id: corporationId, billing_interval: interval },
-      expand: ["latest_invoice.payment_intent"],
+      payment_method_types: ["acss_debit", "card"],
+      payment_method_options: {
+        acss_debit: {
+          currency: "cad",
+          verification_method: "automatic",
+          // A strata corporation's account: a business agreement, not personal.
+          mandate_options: { transaction_type: "business" },
+        },
+      },
+      subscription_data: { metadata },
+      metadata,
+      // Bank sign-in and cards finish inside the form; a few banks need a
+      // redirect, which comes back to the same result page.
+      redirect_on_completion: "if_required",
+      return_url: `${origin}/strata/${corporationId}/billing/checkout-complete?session_id={CHECKOUT_SESSION_ID}`,
     });
-    // A declined first payment leaves the subscription "incomplete", which
-    // would read as Pending. Cancel it and say so instead.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const firstPayment = (created.latest_invoice as any)?.payment_intent;
-    if (created.status === "incomplete" && firstPayment?.status === "requires_payment_method") {
-      await stripe.subscriptions.cancel(created.id);
-      return { error: "The payment was declined. Go back and use a different payment method." };
-    }
-    // Waiting on something other than micro-deposits (a debit agreement
-    // saved before it could be used for subscriptions): it would never
-    // start, so cancel it and ask for the payment method again.
-    if (created.status === "incomplete" && firstPayment?.status === "requires_action" && !firstPayment.next_action?.verify_with_microdeposits) {
-      await stripe.subscriptions.cancel(created.id);
-      return { error: "Stripe needs this payment method authorized again. Go back to Payment method, choose Use a different payment method, and add it again. Nothing was charged." };
-    }
-    // Recorded now rather than when the webhook arrives: a card payment
-    // shows Active straight away, a debit still processing shows Pending.
-    await syncSubscription(created, mode);
+    if (!session.client_secret) return { error: "Stripe didn't return a payment form. Please try again." };
+    return { clientSecret: session.client_secret, sessionId: session.id };
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
-    console.error(`[paySubscription] ${corporationId} (${mode}):`, detail);
+    console.error(`[startSubscriptionCheckout] ${corporationId} (${mode}):`, detail);
     return {
       error:
         mode === "sandbox"
           ? `Sandbox: ${detail}`
-          : "Stripe couldn't take the payment. Check the payment method, or add a different one. If this keeps happening, contact us.",
+          : "Stripe's payment form couldn't be opened. Please try again. If this keeps happening, contact us.",
     };
   }
-  redirect(`/strata/${corporationId}/billing?subscribed=1`);
+}
+
+/**
+ * After the payment form completes: record the new subscription now
+ * rather than waiting for the webhook, and make its payment method the
+ * customer's default (shown on Billing, used for renewals). Safe to run
+ * twice (the form's callback and the return page can both call it).
+ */
+export async function finishSubscriptionCheckout(corporationId: string, sessionId: string): Promise<{ ok: boolean }> {
+  await requireAdmin(corporationId);
+  return { ok: await recordSubscriptionCheckout(corporationId, sessionId) };
+}
+
+/**
+ * Billing → Update payment method: Stripe's form inside our dialog
+ * again, in setup mode, saving a new bank account or card for the
+ * subscription. Stripe only allows a saved debit agreement to pay
+ * subscriptions when it's marked for them (default_for), and then it
+ * picks the Type of Service itself.
+ */
+export async function startPaymentMethodUpdate(
+  corporationId: string
+): Promise<{ clientSecret: string; sessionId: string } | { error: string }> {
+  await requireAdmin(corporationId);
+  const admin = createAdminClient();
+  const { data: sub } = await admin
+    .from("subscriptions")
+    .select("stripe_customer_id, billing_email")
+    .eq("corporation_id", corporationId)
+    .maybeSingle();
+  if (!sub?.stripe_customer_id) return { error: "Subscribe first; the payment method is added then." };
+
+  const mode = await stripeModeFor(corporationId);
+  try {
+    const stripe = await stripeFor(corporationId);
+    const customerId = await getOrCreateStripeCustomer(corporationId, sub.billing_email ?? null);
+    const origin = await siteUrl();
+    const session = await stripe.checkout.sessions.create({
+      ui_mode: "embedded",
+      mode: "setup",
+      currency: "cad",
+      customer: customerId,
+      payment_method_types: ["acss_debit", "card"],
+      payment_method_options: {
+        acss_debit: {
+          currency: "cad",
+          verification_method: "automatic",
+          mandate_options: { default_for: ["invoice", "subscription"] },
+        },
+      },
+      setup_intent_data: { metadata: { corporation_id: corporationId, purpose: "update_payment_method" } },
+      metadata: { corporation_id: corporationId, purpose: "update_payment_method" },
+      redirect_on_completion: "if_required",
+      return_url: `${origin}/strata/${corporationId}/billing/payment-updated?session_id={CHECKOUT_SESSION_ID}`,
+    });
+    if (!session.client_secret) return { error: "Stripe didn't return a payment form. Please try again." };
+    return { clientSecret: session.client_secret, sessionId: session.id };
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    console.error(`[startPaymentMethodUpdate] ${corporationId} (${mode}):`, detail);
+    return {
+      error:
+        mode === "sandbox"
+          ? `Sandbox: ${detail}`
+          : "Stripe's payment form couldn't be opened. Please try again. If this keeps happening, contact us.",
+    };
+  }
+}
+
+/** After the update form completes: use the new method from now on, if it's ready. */
+export async function finishPaymentMethodUpdate(
+  corporationId: string,
+  sessionId: string
+): Promise<{ state: "updated" | "verify" | "failed" }> {
+  await requireAdmin(corporationId);
+  return { state: await recordPaymentMethodUpdate(corporationId, sessionId) };
 }
 
 /**
  * A first payment that can't go through (declined, or a bank account that
- * won't verify): cancel that subscription and go back to the payment step
+ * won't verify): cancel that subscription and go back to the payment form
  * to use a different method. Nothing was charged.
  */
 export async function restartSubscription(corporationId: string) {
@@ -623,5 +615,5 @@ export async function restartSubscription(corporationId: string) {
       .update({ stripe_subscription_id: null, stripe_status: null, status: "deactivated" })
       .eq("corporation_id", corporationId);
   }
-  redirect(`/strata/${corporationId}/billing?plan=${sub?.billing_interval === "monthly" ? "monthly" : "annual"}&step=payment`);
+  redirect(`/strata/${corporationId}/billing?plan=${sub?.billing_interval === "monthly" ? "monthly" : "annual"}&step=pay`);
 }

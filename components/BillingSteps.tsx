@@ -1,59 +1,51 @@
 import Link from "next/link";
 import { calculateBilling, DISPLAY_RATES, type BillingInterval } from "@/lib/stripe/prices";
-import { startPaymentSetup } from "@/app/strata/[corpId]/billing/actions";
-import { BillingContactForm, BillingPayForm } from "@/components/BillingStepForms";
+import { BillingContactForm, BillingPayStep } from "@/components/BillingStepForms";
 import { COMPANY_LEGAL_NAME, COMPANY_NAME, STATEMENT_DESCRIPTOR } from "@/lib/company";
 import { formatBillingAddress, type BillingAddress } from "@/lib/billing-address";
 
-export type BillingStep = "plan" | "payment" | "contact" | "review";
+export type BillingStep = "plan" | "contact" | "review" | "pay";
 
 const stepLabels: Record<BillingStep, string> = {
   plan: "Plan",
-  payment: "Payment method",
   contact: "Billing details",
   review: "Review",
+  pay: "Payment",
 };
-const order: BillingStep[] = ["plan", "payment", "contact", "review"];
+const order: BillingStep[] = ["plan", "contact", "review", "pay"];
 
 const fmt = (n: number) => n.toLocaleString("en-CA", { style: "currency", currency: "CAD" });
 
 /**
  * Subscribing, one step at a time, inside the billing dialog: plan →
- * payment method → billing details (contacts and address) → review. The
- * step lives in the URL, so Stripe's secure payment-method page can return
- * straight to the next one. Every step has Cancel, and Back where there's
- * somewhere to go back to.
+ * billing details (contacts and address) → review → payment, where
+ * Stripe's own form, shown right in the dialog, takes the bank account or
+ * card and creates the subscription. The step lives in the URL. Every
+ * step has Cancel, and Back where there's somewhere to go back to.
  */
 export function BillingSteps({
   corpId,
   unitCount,
   interval,
   step: requested,
-  paymentMethod,
   billingEmail,
   billingAddress,
   addressSame,
   civicAddress,
-  verifying,
-  setupError = null,
-  bankVerifyUrl,
+  publishableKey,
 }: {
   corpId: string;
   unitCount: number;
   interval: BillingInterval;
   step: BillingStep;
-  paymentMethod: { label: string; detail: string } | null;
   billingEmail: string;
   billingAddress: BillingAddress | null;
   addressSame: boolean;
   civicAddress: string;
-  verifying: boolean;
-  setupError?: string | null;
-  /** Bank details typed in by hand, waiting on micro-deposits (undefined: none). */
-  bankVerifyUrl?: string | null;
+  publishableKey: string | null;
 }) {
   // Never past a step whose prerequisites aren't met.
-  const furthest: BillingStep = !paymentMethod ? "payment" : !billingEmail || !billingAddress ? "contact" : "review";
+  const furthest: BillingStep = !billingEmail || !billingAddress ? "contact" : "pay";
   const step = order.indexOf(requested) > order.indexOf(furthest) ? furthest : requested;
   const at = order.indexOf(step);
   const href = (s: BillingStep, plan: BillingInterval = interval) => `/strata/${corpId}/billing?plan=${plan}&step=${s}`;
@@ -111,7 +103,7 @@ export function BillingSteps({
                 Month to month; cancel any month.
               </span>
               <span className="billing-plan__saving" aria-hidden="true" />
-              <Link href={href("payment", "monthly")} className="button button-secondary billing-plan__choose" data-testid="choose-monthly">
+              <Link href={href("contact", "monthly")} className="button button-secondary billing-plan__choose" data-testid="choose-monthly">
                 Monthly plan
               </Link>
             </div>
@@ -127,7 +119,7 @@ export function BillingSteps({
                 full year, billed monthly.
               </span>
               <span className="billing-plan__saving">Saves {fmt(yearlySaving)} a year over monthly</span>
-              <Link href={href("payment", "annual")} className="button button-primary billing-plan__choose" data-testid="choose-annual">
+              <Link href={href("contact", "annual")} className="button button-primary billing-plan__choose" data-testid="choose-annual">
                 Annual plan
               </Link>
             </div>
@@ -136,91 +128,9 @@ export function BillingSteps({
         </div>
       )}
 
-      {step === "payment" && (
-        <div className="billing-step">
-          <h3>Payment method</h3>
-          {setupError && (
-            <p className="form-error" role="alert" data-testid="billing-setup-error">
-              {setupError}
-            </p>
-          )}
-          {paymentMethod ? (
-            <>
-              <p>
-                <strong>{paymentMethod.label}</strong>
-                <br />
-                <span className="card__meta">{paymentMethod.detail}</span>
-              </p>
-              <form action={startPaymentSetup.bind(null, corpId, interval)}>
-                <button className="link-button">Use a different payment method</button>
-              </form>
-            </>
-          ) : bankVerifyUrl !== undefined ? (
-            <div className="billing-outcome billing-outcome--attention" role="status" data-testid="billing-verify-bank">
-              <strong>Verify the bank account</strong>
-              <p>
-                Stripe is sending two small deposits to the bank account, usually within one or two business days.
-                When they show on the statement, enter the two amounts on Stripe&rsquo;s page, then come back here to
-                finish subscribing. Nothing is charged until you subscribe.
-              </p>
-              <div className="billing-outcome__actions">
-                {bankVerifyUrl && (
-                  <a href={bankVerifyUrl} className="button button-primary" target="_blank" rel="noopener noreferrer">
-                    Enter the deposit amounts
-                  </a>
-                )}
-                <form action={startPaymentSetup.bind(null, corpId, interval)}>
-                  <button className="link-button">Use a different payment method</button>
-                </form>
-              </div>
-            </div>
-          ) : (
-            <>
-              <p className="card__meta">
-                Pre-authorized debit from the strata&rsquo;s Canadian bank account is recommended; a credit card works
-                too. You&rsquo;ll enter the details on Stripe&rsquo;s secure page and come straight back here. Nothing
-                is charged until you subscribe on the last step.
-              </p>
-              <p className="card__meta">
-                For pre-authorized debit, signing in to your bank on Stripe&rsquo;s page is quickest. Typing in the
-                account numbers works too, but then Stripe confirms the account with two small deposits first, which
-                takes a business day or two.
-              </p>
-              <p className="card__meta">
-                Payments are processed by Stripe for {COMPANY_LEGAL_NAME}, the company behind StrataCouncil.ca, so
-                you&rsquo;ll see {COMPANY_NAME} on the secure payment page.
-              </p>
-            </>
-          )}
-          <div className="billing-step__nav">
-            {cancel}
-            <span className="billing-step__nav-right">
-              {back("plan")}
-              {paymentMethod ? (
-                <Link href={href("contact")} className="button button-primary" data-testid="payment-continue">
-                  Next
-                </Link>
-              ) : bankVerifyUrl !== undefined ? null : (
-                <form action={startPaymentSetup.bind(null, corpId, interval)}>
-                  <button className="button button-primary" data-testid="add-payment-method">
-                    Add payment method
-                  </button>
-                </form>
-              )}
-            </span>
-          </div>
-        </div>
-      )}
-
       {step === "contact" && (
         <div className="billing-step">
           <h3>Billing details</h3>
-          {verifying && (
-            <p className="sync-note" role="status">
-              Your bank account is being verified by Stripe. You can finish setting up now; the first debit goes
-              through once it&rsquo;s confirmed.
-            </p>
-          )}
           <BillingContactForm
             corpId={corpId}
             interval={interval}
@@ -229,12 +139,12 @@ export function BillingSteps({
             defaultSame={addressSame}
             civicAddress={civicAddress}
             cancelHref={cancelHref}
-            backHref={href("payment")}
+            backHref={href("plan")}
           />
         </div>
       )}
 
-      {step === "review" && paymentMethod && billingAddress && (
+      {step === "review" && billingAddress && (
         <div className="billing-step">
           <h3>Review</h3>
           <dl className="billing-review">
@@ -259,12 +169,6 @@ export function BillingSteps({
               </dd>
             </div>
             <div>
-              <dt>Payment method</dt>
-              <dd>
-                {paymentMethod.label} <Link href={href("payment")}>Change</Link>
-              </dd>
-            </div>
-            <div>
               <dt>Billing contacts</dt>
               <dd>
                 {billingEmail} <Link href={href("contact")}>Change</Link>
@@ -282,7 +186,34 @@ export function BillingSteps({
               ? "You are subscribing to a full year of Stratasphere™, billed monthly. You may cancel at any time during your subscription period, but your payment method will be billed monthly until the expiration date. If you do cancel prior to the expiration date, you will have access to Stratasphere™ until it expires."
               : "You are subscribing month to month, billed monthly. You may cancel at any time; you will have access to Stratasphere™ until the end of the month you have paid for."}
           </p>
-          <BillingPayForm corpId={corpId} interval={interval} cancelHref={cancelHref} backHref={href("contact")} />
+          <div className="billing-step__nav">
+            {cancel}
+            <span className="billing-step__nav-right">
+              {back("contact")}
+              <Link href={href("pay")} className="button button-primary" data-testid="billing-to-payment">
+                Continue to payment
+              </Link>
+            </span>
+          </div>
+        </div>
+      )}
+
+      {step === "pay" && (
+        <div className="billing-step">
+          <h3>Payment</h3>
+          <p className="card__meta">
+            {fmt(chosen.total)} a month incl. GST. Pre-authorized debit from the strata&rsquo;s bank account is
+            recommended: signing in to your bank is quickest, while typed-in account numbers are confirmed with two small
+            deposits first (a business day or two). Processed securely by Stripe for {COMPANY_LEGAL_NAME} (shown as{" "}
+            {COMPANY_NAME}).
+          </p>
+          <BillingPayStep
+            corpId={corpId}
+            interval={interval}
+            publishableKey={publishableKey}
+            cancelHref={cancelHref}
+            backHref={href("review")}
+          />
         </div>
       )}
     </div>

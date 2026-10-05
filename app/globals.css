@@ -5250,3 +5250,12 @@ abbr.role-tag--short {
   max-width: 34rem;
   margin: 0 auto;
 }
+
+/* Stripe's payment form inside our dialogs (embedded Checkout). */
+.stripe-embedded {
+  min-height: 420px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 0.5rem 0;
+  background: #fff;
+}
