@@ -491,8 +491,13 @@ export async function startSubscriptionCheckout(
         // plan's prices are in CAD.
         acss_debit: {
           verification_method: "automatic",
-          // A strata corporation's account: a business agreement, not personal.
-          mandate_options: { transaction_type: "business" },
+          // The debit agreement Stripe requires for bank debits: monthly,
+          // and for a strata corporation's account, so Business.
+          mandate_options: {
+            payment_schedule: "interval",
+            interval_description: "Monthly, for the Stratasphere subscription",
+            transaction_type: "business",
+          },
         },
       },
       subscription_data: { metadata },
