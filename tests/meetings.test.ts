@@ -112,14 +112,19 @@ test("normalizeAgenda tolerates junk and old shapes", () => {
 
 import { callToOrderScript, itemScript, zonedInstant } from "../lib/meetings/scripts.ts";
 
+// Clock-change checks use Toronto: newer time-zone data may put British
+// Columbia on permanent daylight time, so a Vancouver winter hour depends on
+// the machine's data. The code follows whatever the runtime's data says.
 test("zonedInstant converts the meeting's wall clock, across DST", () => {
+  assert.equal(zonedInstant("2026-07-01", "19:00", "America/Toronto").toISOString(), "2026-07-01T23:00:00.000Z");
+  assert.equal(zonedInstant("2026-12-01", "19:00", "America/Toronto").toISOString(), "2026-12-02T00:00:00.000Z");
   assert.equal(zonedInstant("2026-07-01", "19:00", "America/Vancouver").toISOString(), "2026-07-02T02:00:00.000Z");
-  assert.equal(zonedInstant("2026-12-01", "19:00", "America/Vancouver").toISOString(), "2026-12-02T03:00:00.000Z");
   assert.equal(zonedInstant("2026-12-01", "09:30", "America/St_Johns").toISOString(), "2026-12-01T13:00:00.000Z");
 });
 
 test("scripts: no-quorum branch only once someone is marked", () => {
-  const base = { type: "council" as const, planNumber: "EPS9048", chair: null, required: 3, timezone: "America/Vancouver", now: new Date("2026-11-05T03:02:00Z") };
+  // 7:02 p.m. in Toronto on November 4 (standard time, UTC-5).
+  const base = { type: "council" as const, planNumber: "EPS9048", chair: null, required: 3, timezone: "America/Toronto", now: new Date("2026-11-05T00:02:00Z") };
   assert.equal(callToOrderScript({ ...base, quorumMet: false, counted: 0 }).title, "Call to Order script");
   const none = callToOrderScript({ ...base, quorumMet: false, counted: 2 });
   assert.match(none.title, /No quorum/);

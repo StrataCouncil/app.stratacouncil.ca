@@ -17,6 +17,6 @@ select pg_temp.expect('the lot shows Treasurer',
 reset role;
 -- Old data with both is cleaned by the migration's cleanup block.
 insert into corporation_role_assignments (corporation_id, role, user_id) values ('BCS-1234', 'member_at_large', '00000000-0000-0000-0000-00000000000c');
-\i /var/tmp/sct/migrations/0022_stratasphere_memory_and_roles.sql
+\ir ../../migrations/0022_stratasphere_memory_and_roles.sql
 select pg_temp.expect('cleanup removes member at large from executives',
   not exists (select 1 from corporation_role_assignments where corporation_id = 'BCS-1234' and user_id = '00000000-0000-0000-0000-00000000000c' and role = 'member_at_large'));
