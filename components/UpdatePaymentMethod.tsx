@@ -53,17 +53,20 @@ export function UpdatePaymentMethod({ corpId, publishableKey }: { corpId: string
       )}
       {state === "updated" && (
         <p className="form-alert form-alert--ok" role="status" data-testid="payment-method-updated">
-          Updated. The new payment method pays from the next charge on.
+          <strong>Payment method updated</strong>
+          The new payment method pays from the next charge on.
         </p>
       )}
       {state === "verify" && (
         <p className="form-alert form-alert--ok" role="status" data-testid="payment-method-verify">
-          Saved. Stripe will send two small deposits to confirm the bank account; Billing shows where to enter them. Until
+          <strong>Bank account saved</strong>
+          Stripe will send two small deposits to confirm the bank account; Billing shows where to enter them. Until
           then, the current payment method keeps paying.
         </p>
       )}
       {state === "failed" && (
         <p className="form-alert form-alert--error" role="alert">
+          <strong>Not saved</strong>
           The payment method couldn&rsquo;t be saved. Please try again.
         </p>
       )}

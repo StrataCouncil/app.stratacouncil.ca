@@ -3173,17 +3173,32 @@ button.chat-source:hover {
   font-size: 0.92rem;
   line-height: 1.45;
 }
+/* In the house style of Billing's outcome cards: white, with a coloured
+   rule down the left. */
+.form-alert,
+.card p.form-alert {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-left-width: 4px;
+  color: var(--ink);
+}
 .form-alert--error,
 .card p.form-alert--error {
-  color: var(--danger);
-  background: var(--danger-bg);
-  border: 1px solid rgba(166, 52, 42, 0.3);
+  border-left-color: var(--danger);
 }
 .form-alert--ok,
 .card p.form-alert--ok {
+  border-left-color: var(--free);
+}
+.form-alert strong {
+  display: block;
+  margin-bottom: 0.15rem;
+}
+.form-alert--error strong {
+  color: var(--danger);
+}
+.form-alert--ok strong {
   color: var(--free);
-  background: var(--free-bg);
-  border: 1px solid rgba(47, 115, 85, 0.3);
 }
 
 /* ── Meetings: agenda builder, item editor, checklist ──────────────── */
@@ -5266,4 +5281,78 @@ abbr.role-tag--short {
 }
 .subscribe-pay__button {
   align-self: flex-end;
+}
+/* A link styled as a button inside a card: its own width, like the form buttons. */
+.billing-card__action {
+  align-self: flex-start;
+}
+
+/* Stratasphere assistant on phones: the chat fills the screen, and the
+   conversation list slides in as a drawer from the left. */
+.chat-mobile-bar,
+.chat-drawer-backdrop {
+  display: none;
+}
+@media (max-width: 899px) {
+  .chat-shell {
+    position: relative;
+    height: calc(100dvh - 200px);
+    min-height: 420px;
+  }
+  .chat-sidebar {
+    position: absolute;
+    inset: 0 auto 0 0;
+    z-index: 3;
+    width: min(300px, 85%);
+    transform: translateX(-102%);
+    transition: transform 0.2s ease;
+    box-shadow: 4px 0 16px rgba(27, 42, 65, 0.15);
+  }
+  .chat-shell[data-list-open="true"] .chat-sidebar {
+    transform: none;
+  }
+  .chat-drawer-backdrop {
+    display: block;
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    border: 0;
+    padding: 0;
+    background: rgba(27, 42, 65, 0.35);
+    cursor: pointer;
+  }
+  .chat-mobile-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.6rem 0.75rem;
+    border-bottom: 1px solid var(--line);
+  }
+  .chat-mobile-bar__title {
+    flex: 1;
+    min-width: 0;
+    font-weight: 600;
+    font-size: 0.9rem;
+    text-align: center;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  /* The title is in the bar; keep the sources note small. */
+  .chat-kb-banner__title {
+    display: none;
+  }
+  .chat-kb-banner {
+    font-size: 0.72rem;
+  }
+  .chat-transcript {
+    padding: 1rem 0.85rem;
+  }
+  .chat-composer {
+    padding: 0.75rem;
+  }
+  /* 16px stops phones zooming in when the box is tapped. */
+  .chat-composer textarea {
+    font-size: 16px;
+  }
 }

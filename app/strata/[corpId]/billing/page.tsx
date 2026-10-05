@@ -420,14 +420,14 @@ export default async function BillingPage({
                 <strong>{paymentMethod.label}</strong>
                 <p className="card__meta">{paymentMethod.detail}</p>
               </div>
-              <Link href={`/strata/${corpId}/billing?update=payment`} className="button button-secondary button-small" data-testid="update-payment-method-cta">
+              <Link href={`/strata/${corpId}/billing?update=payment`} className="button button-secondary button-small billing-card__action" data-testid="update-payment-method-cta">
                 Update payment method
               </Link>
             </>
           ) : sub?.stripe_customer_id ? (
             <>
               <p>No payment method on file yet.</p>
-              <Link href={`/strata/${corpId}/billing?update=payment`} className="button button-secondary button-small" data-testid="add-payment-method-cta">
+              <Link href={`/strata/${corpId}/billing?update=payment`} className="button button-secondary button-small billing-card__action" data-testid="add-payment-method-cta">
                 Add card or pre-authorized debit
               </Link>
             </>
