@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { isStrataAdmin } from "@/lib/auth/strata-admin";
-import { recordSubscriptionPayment } from "@/lib/stripe/checkout-results";
+import { recordSubscriptionPayment } from "@/lib/stripe/payment-results";
 
 /**
  * Where the subscribe dialog's payment form returns when a bank or card

@@ -102,7 +102,7 @@ function PayForm({ corpId, subscriptionId, total }: { corpId: string; subscripti
       elements,
       confirmParams: {
         // Only for a bank or card check that has to leave the page.
-        return_url: `${window.location.origin}/strata/${corpId}/billing/checkout-complete?subscription_id=${subscriptionId}`,
+        return_url: `${window.location.origin}/strata/${corpId}/billing/payment-complete?subscription_id=${subscriptionId}`,
       },
       redirect: "if_required",
     });

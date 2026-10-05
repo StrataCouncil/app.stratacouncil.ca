@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isStrataAdmin } from "@/lib/auth/strata-admin";
 import { getStripe, publishableKeyFor, stripeModeFor, type StripeMode } from "@/lib/stripe/client";
-import { settlePaymentMethodUpdate } from "@/lib/stripe/checkout-results";
+import { settlePaymentMethodUpdate } from "@/lib/stripe/payment-results";
 import { UpdatePaymentMethod } from "@/components/UpdatePaymentMethod";
 import { annualTermEnd, calculateBilling } from "@/lib/stripe/prices";
 import { StatementsPeriodSelect } from "@/components/StatementsPeriodSelect";
@@ -183,7 +183,7 @@ export default async function BillingPage({
   let defaultPaymentMethodId: string | null = null;
   if (sub?.stripe_customer_id) {
     try {
-      // The customer's default method (set in billing step 2), else the first on file.
+      // The customer's default method (set when subscribing or updating), else the first on file.
       const stripe = getStripe(stripeMode);
       const customer = await stripe.customers.retrieve(sub.stripe_customer_id, {
         expand: ["invoice_settings.default_payment_method"],
@@ -212,7 +212,7 @@ export default async function BillingPage({
   }
 
   // A payment-method update waiting on micro-deposits shows its link here;
-  // one verified since is put to use now (lib/stripe/checkout-results).
+  // one verified since is put to use now (lib/stripe/payment-results).
   const updateVerify =
     subscribed && sub?.stripe_customer_id
       ? await settlePaymentMethodUpdate(

@@ -8,7 +8,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { stripeFor, stripeModeFor } from "@/lib/stripe/client";
 import { annualTermEnd, getPriceIds, type BillingInterval } from "@/lib/stripe/prices";
 import { parseCivicAddress, readBillingAddress, toStripeAddress, type BillingAddress } from "@/lib/billing-address";
-import { recordPaymentMethodUpdate, recordSubscriptionPayment } from "@/lib/stripe/checkout-results";
+import { recordPaymentMethodUpdate, recordSubscriptionPayment } from "@/lib/stripe/payment-results";
 import type Stripe from "stripe";
 import { syncSubscription } from "@/lib/stripe/sync";
 import { parseEmails } from "@/lib/roster-csv";

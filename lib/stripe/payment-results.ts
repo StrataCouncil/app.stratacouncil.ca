@@ -4,10 +4,15 @@ import { syncSubscription } from "@/lib/stripe/sync";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
- * What happens after Stripe's embedded payment form finishes, shared by
- * the form's own completion callback and the return pages Stripe uses
- * when a bank needs a redirect. Server only. Every check ties the Stripe
- * session to this strata before anything is recorded.
+ * Recording what Stripe's in-app forms did, shared by the forms' own
+ * completion callbacks, the return pages Stripe uses when a bank needs a
+ * redirect, and the webhook:
+ *   - subscribing: the Payment Element confirmed a subscription's first
+ *     payment (recordSubscriptionPayment)
+ *   - updating the payment method: an embedded Checkout in setup mode
+ *     saved a new one (recordPaymentMethodUpdate, settlePaymentMethodUpdate)
+ * Server only. Every check ties the Stripe object to this strata before
+ * anything is recorded.
  */
 
 async function storedIds(corporationId: string) {

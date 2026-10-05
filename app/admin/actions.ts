@@ -155,6 +155,11 @@ export async function setStripeSandbox(corpId: string, sandbox: boolean): Promis
         committed_until: null,
         cancel_at: null,
         current_period_end: null,
+        // A fresh start in the other mode: no Stripe status or activation
+        // carried over (so it reads "Not subscribed", not "Deactivated").
+        stripe_status: null,
+        activated_at: null,
+        status: "deactivated",
       })
       .eq("corporation_id", corpId);
     if (error) {
