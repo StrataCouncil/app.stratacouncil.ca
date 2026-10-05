@@ -11,8 +11,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
  * real customers are billed normally. Each strata's Stripe IDs belong to
  * one mode only.
  *
- *   live:    STRIPE_SECRET_KEY,      STRIPE_WEBHOOK_SECRET
- *   sandbox: STRIPE_TEST_SECRET_KEY, STRIPE_TEST_WEBHOOK_SECRET
+ *   live:    STRIPE_SECRET_KEY,      STRIPE_WEBHOOK_SECRET,      STRIPE_PUBLISHABLE_KEY
+ *   sandbox: STRIPE_TEST_SECRET_KEY, STRIPE_TEST_WEBHOOK_SECRET, STRIPE_TEST_PUBLISHABLE_KEY
  *
  * Lazily constructed so a missing key fails loudly the moment billing code
  * actually runs, rather than crashing every route that imports this file.
@@ -64,4 +64,17 @@ export function webhookSecrets(): Array<{ mode: StripeMode; secret: string }> {
   if (process.env.STRIPE_WEBHOOK_SECRET) out.push({ mode: "live", secret: process.env.STRIPE_WEBHOOK_SECRET });
   if (process.env.STRIPE_TEST_WEBHOOK_SECRET) out.push({ mode: "sandbox", secret: process.env.STRIPE_TEST_WEBHOOK_SECRET });
   return out;
+}
+
+/**
+ * The publishable key for Stripe's payment form in the browser (pk_…),
+ * handed to the page by the server so it follows the strata's mode
+ * without a rebuild. Null when it isn't set, and the form says so.
+ */
+export function publishableKeyFor(mode: StripeMode): string | null {
+  const key = mode === "sandbox" ? process.env.STRIPE_TEST_PUBLISHABLE_KEY : process.env.STRIPE_PUBLISHABLE_KEY;
+  if (!key) return null;
+  // A live key on a sandbox strata would take real payments.
+  if (mode === "sandbox" && !key.startsWith("pk_test_")) return null;
+  return key;
 }

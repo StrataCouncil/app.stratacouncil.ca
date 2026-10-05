@@ -9,10 +9,18 @@ import { Modal } from "@/components/Modal";
  * doesn't, so a half-done payment isn't lost to a stray click. Each step's
  * progress is saved as it's completed, so reopening picks up from there.
  */
-export function BillingDialog({ closeHref, children }: { closeHref: string; children: React.ReactNode }) {
+export function BillingDialog({
+  closeHref,
+  title = "Subscribe to Stratasphere™",
+  children,
+}: {
+  closeHref: string;
+  title?: string;
+  children: React.ReactNode;
+}) {
   const router = useRouter();
   return (
-    <Modal title="Subscribe to Stratasphere™" onClose={() => router.push(closeHref)} wide closeOnBackdrop={false} testId="billing-dialog">
+    <Modal title={title} onClose={() => router.push(closeHref)} wide closeOnBackdrop={false} testId="billing-dialog">
       {children}
     </Modal>
   );

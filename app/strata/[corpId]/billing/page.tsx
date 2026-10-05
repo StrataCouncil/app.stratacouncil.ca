@@ -3,7 +3,9 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isStrataAdmin } from "@/lib/auth/strata-admin";
-import { getStripe, stripeModeFor, type StripeMode } from "@/lib/stripe/client";
+import { getStripe, publishableKeyFor, stripeModeFor, type StripeMode } from "@/lib/stripe/client";
+import { settlePaymentMethodUpdate } from "@/lib/stripe/checkout-results";
+import { UpdatePaymentMethod } from "@/components/UpdatePaymentMethod";
 import { annualTermEnd, calculateBilling } from "@/lib/stripe/prices";
 import { StatementsPeriodSelect } from "@/components/StatementsPeriodSelect";
 import { BillingDialog } from "@/components/BillingDialog";
@@ -20,9 +22,7 @@ import {
   cancelSubscription,
   restartSubscription,
   keepCurrentPlan,
-  openBillingPortal,
   updateBillingEmail,
-  startPaymentSetup,
 } from "./actions";
 
 /**
@@ -98,13 +98,13 @@ export default async function BillingPage({
   searchParams,
 }: {
   params: Promise<{ corpId: string }>;
-  searchParams: Promise<{ period?: string; plan?: string; step?: string; note?: string; detail?: string; subscribed?: string }>;
+  searchParams: Promise<{ period?: string; plan?: string; step?: string; note?: string; subscribed?: string; update?: string }>;
 }) {
   const { corpId } = await params;
-  const { period: rawPeriod, plan: rawPlan, step: rawStep, note, detail, subscribed: justSubscribed } = await searchParams;
+  const { period: rawPeriod, plan: rawPlan, step: rawStep, note, subscribed: justSubscribed, update } = await searchParams;
   const chosenPlan = rawPlan === "monthly" ? "monthly" : "annual";
   // A step in the address opens the subscribe dialog (2026-10-05).
-  const dialogOpen = (["plan", "payment", "contact", "review"] as const).includes(rawStep as BillingStep);
+  const dialogOpen = (["plan", "contact", "review", "pay"] as const).includes(rawStep as BillingStep);
   const step: BillingStep = dialogOpen ? (rawStep as BillingStep) : "plan";
   const period = rawPeriod && periodBounds(rawPeriod) ? rawPeriod : null;
 
@@ -180,6 +180,7 @@ export default async function BillingPage({
   // A real card/PAD label needs a live Stripe read — acceptable here
   // since this is a low-traffic, admin-only page, not a hot path.
   let paymentMethod: { label: string; detail: string } | null = null;
+  let defaultPaymentMethodId: string | null = null;
   if (sub?.stripe_customer_id) {
     try {
       // The customer's default method (set in billing step 2), else the first on file.
@@ -193,6 +194,7 @@ export default async function BillingPage({
           ? customer.invoice_settings.default_payment_method
           : null;
       const pm = def ?? fallback.data[0];
+      defaultPaymentMethodId = def?.id ?? null;
       if (pm?.card) {
         paymentMethod = {
           label: `${pm.card.brand.replace(/^\w/, (c) => c.toUpperCase())} ending ${pm.card.last4}`,
@@ -209,25 +211,18 @@ export default async function BillingPage({
     }
   }
 
-  // Bank details typed in by hand wait on two micro-deposits before they
-  // can be used: find that setup, for the "Verify the bank account" link.
-  // Looked up whenever there's no usable payment method yet, so an admin
-  // who left and came back days later finds it on Billing straight away.
-  let bankVerifyUrl: string | null | undefined;
-  if (sub?.stripe_customer_id && !paymentMethod && !subscribed && !pending) {
-    try {
-      const intents = await getStripe(stripeMode).setupIntents.list({ customer: sub.stripe_customer_id, limit: 5 });
-      const waiting = intents.data.find((i) => i.status === "requires_action" && i.next_action?.verify_with_microdeposits);
-      if (waiting) bankVerifyUrl = waiting.next_action?.verify_with_microdeposits?.hosted_verification_url ?? null;
-    } catch (error) {
-      console.error("billing/page: failed to load bank verification:", error);
-    }
-  }
-  // Verified while the dialog waited on the payment step: carry on to the
-  // next step by itself (the page refreshes every few seconds while waiting).
-  if (dialogOpen && step === "payment" && note === "verify-bank" && paymentMethod) {
-    redirect(`/strata/${corpId}/billing?plan=${chosenPlan}&step=contact`);
-  }
+  // A payment-method update waiting on micro-deposits shows its link here;
+  // one verified since is put to use now (lib/stripe/checkout-results).
+  const updateVerify =
+    subscribed && sub?.stripe_customer_id
+      ? await settlePaymentMethodUpdate(
+          getStripe(stripeMode),
+          sub.stripe_customer_id,
+          sub.stripe_subscription_id ?? null,
+          defaultPaymentMethodId
+        )
+      : null;
+  const publishableKey = publishableKeyFor(stripeMode);
 
   const statements =
     period && sub?.stripe_customer_id ? await loadStatements(stripeMode, sub.stripe_customer_id, period) : null;
@@ -351,33 +346,7 @@ export default async function BillingPage({
         </p>
       )}
 
-      {bankVerifyUrl !== undefined && (
-        <>
-          {/* Checks every few seconds, so verifying on Stripe's page moves this on by itself. */}
-          <AutoRefresh seconds={5} />
-          {!dialogOpen && (
-            <div className="billing-outcome billing-outcome--attention" role="status" data-testid="billing-verify-bank-card">
-              <strong>Verify the bank account to finish subscribing</strong>
-              <p>
-                Stripe sent two small deposits to the strata&rsquo;s bank account; they usually show within one or two
-                business days. Enter the two amounts on Stripe&rsquo;s page, and this page carries on by itself.
-              </p>
-              <div className="billing-outcome__actions">
-                {bankVerifyUrl && (
-                  <a href={bankVerifyUrl} className="button button-primary" target="_blank" rel="noopener noreferrer">
-                    Enter the deposit amounts
-                  </a>
-                )}
-                <form action={startPaymentSetup.bind(null, corpId, chosenPlan)}>
-                  <button className="link-button">Use a different payment method</button>
-                </form>
-              </div>
-            </div>
-          )}
-        </>
-      )}
-
-      {!subscribed && !pending && !justSubscribed && bankVerifyUrl === undefined && (
+      {!subscribed && !pending && !justSubscribed && (
         <div className="card billing-subscribe" data-testid="billing-subscribe">
           <h3>{STRATASPHERE_TITLE}</h3>
           <p>{STRATASPHERE_PITCH}</p>
@@ -398,21 +367,37 @@ export default async function BillingPage({
             unitCount={unitCount}
             interval={chosenPlan}
             step={step}
-            paymentMethod={paymentMethod}
             billingEmail={billingEmail}
             billingAddress={(sub?.billing_address as BillingAddress | null) ?? null}
             addressSame={sub?.billing_address_same ?? true}
             civicAddress={corp.address ?? ""}
-            verifying={note === "verifying"}
-            bankVerifyUrl={bankVerifyUrl}
-            setupError={
-              note === "setup-failed"
-                ? stripeMode === "sandbox" && detail
-                  ? `Sandbox: ${detail.slice(0, 800)}`
-                  : "Stripe's secure payment page couldn't be opened. Please try again. If this keeps happening, contact us."
-                : null
-            }
+            publishableKey={publishableKey}
           />
+        </BillingDialog>
+      )}
+
+      {subscribed && updateVerify && (
+        <div className="billing-outcome billing-outcome--attention" role="status" data-testid="billing-update-verify">
+          <AutoRefresh seconds={30} />
+          <strong>Verify the new bank account</strong>
+          <p>
+            Stripe sent two small deposits to the new bank account; they usually show within one or two business days.
+            Enter the two amounts on Stripe&rsquo;s page and it&rsquo;s used from then on. Until then, the current
+            payment method keeps paying.
+          </p>
+          {updateVerify.verifyUrl && (
+            <div className="billing-outcome__actions">
+              <a href={updateVerify.verifyUrl} className="button button-primary" target="_blank" rel="noopener noreferrer">
+                Enter the deposit amounts
+              </a>
+            </div>
+          )}
+        </div>
+      )}
+
+      {subscribed && update === "payment" && (
+        <BillingDialog closeHref={`/strata/${corpId}/billing`} title="Update payment method">
+          <UpdatePaymentMethod corpId={corpId} publishableKey={publishableKey} />
         </BillingDialog>
       )}
 
@@ -435,20 +420,16 @@ export default async function BillingPage({
                 <strong>{paymentMethod.label}</strong>
                 <p className="card__meta">{paymentMethod.detail}</p>
               </div>
-              <form action={openBillingPortal.bind(null, corpId)}>
-                <button className="button button-secondary button-small" data-testid="update-payment-method-cta">
-                  Update payment method
-                </button>
-              </form>
+              <Link href={`/strata/${corpId}/billing?update=payment`} className="button button-secondary button-small" data-testid="update-payment-method-cta">
+                Update payment method
+              </Link>
             </>
           ) : sub?.stripe_customer_id ? (
             <>
               <p>No payment method on file yet.</p>
-              <form action={openBillingPortal.bind(null, corpId)}>
-                <button className="button button-secondary button-small" data-testid="add-payment-method-cta">
-                  Add card or pre-authorized debit
-                </button>
-              </form>
+              <Link href={`/strata/${corpId}/billing?update=payment`} className="button button-secondary button-small" data-testid="add-payment-method-cta">
+                Add card or pre-authorized debit
+              </Link>
             </>
           ) : (
             <p className="card__meta">
