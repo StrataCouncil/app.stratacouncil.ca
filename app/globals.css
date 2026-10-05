@@ -4519,14 +4519,15 @@ li[data-done="true"] .checklist__mark {
 }
 .billing-review {
   display: grid;
-  gap: 0.6rem;
+  gap: 0;
   margin: 0;
+  line-height: 1.4;
 }
 .billing-review > div {
   display: grid;
   grid-template-columns: 160px 1fr;
   gap: 1rem;
-  padding-bottom: 0.6rem;
+  padding: 0.45rem 0;
   border-bottom: 1px solid var(--line);
 }
 .billing-review dt {

@@ -191,6 +191,19 @@ export default async function BillingPage({
     }
   }
 
+  // Bank details typed in by hand wait on two micro-deposits before they
+  // can be used: find that setup, for the "Verify your bank account" link.
+  let bankVerifyUrl: string | null | undefined;
+  if (sub?.stripe_customer_id && !paymentMethod && dialogOpen) {
+    try {
+      const intents = await getStripe(stripeMode).setupIntents.list({ customer: sub.stripe_customer_id, limit: 5 });
+      const waiting = intents.data.find((i) => i.status === "requires_action" && i.next_action?.verify_with_microdeposits);
+      if (waiting) bankVerifyUrl = waiting.next_action?.verify_with_microdeposits?.hosted_verification_url ?? null;
+    } catch (error) {
+      console.error("billing/page: failed to load bank verification:", error);
+    }
+  }
+
   const statements =
     period && sub?.stripe_customer_id ? await loadStatements(stripeMode, sub.stripe_customer_id, period) : null;
 
@@ -340,6 +353,7 @@ export default async function BillingPage({
             addressSame={sub?.billing_address_same ?? true}
             civicAddress={corp.address ?? ""}
             verifying={note === "verifying"}
+            bankVerifyUrl={bankVerifyUrl}
             setupError={
               note === "setup-failed"
                 ? stripeMode === "sandbox" && detail
