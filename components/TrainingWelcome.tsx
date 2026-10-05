@@ -49,11 +49,12 @@ export function TrainingWelcome() {
           their own. Take them in any order.
         </li>
         <li>
-          <strong>Go at your own pace.</strong> Each module takes about 10 to 15 minutes.
+          <strong>Go at your own pace.</strong> Modules open in order and take about 10 to 15 minutes each. Your progress
+          saves as you finish each section, so you can stop and pick up later. There&rsquo;s no pass or fail.
         </li>
         <li>
-          <strong>Earn certificates that stay with you.</strong> They&rsquo;re yours, not your strata&rsquo;s, and show
-          on your council&rsquo;s roster.
+          <strong>Earn credentials that stay with you.</strong> They&rsquo;re yours, not your strata&rsquo;s, and show
+          on your training page and your council&rsquo;s roster.
         </li>
       </ol>
       <Link href="/training" className="button button-primary button-small" style={{ alignSelf: "flex-start" }}>

@@ -8,7 +8,7 @@ import { createClient } from "@/lib/supabase/server";
 /**
  * Standalone Stratasphere assistant: never free, not even during the
  * trial window (doc01 §4b). Only the embedded Meeting Mode assistant is
- * ever free. Conversations are the signed-in person's own (0019).
+ * ever free. Conversations are the signed-in person's own (0033).
  */
 export default async function AssistantPage({
   params,

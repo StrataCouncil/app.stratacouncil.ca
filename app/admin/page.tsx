@@ -40,6 +40,9 @@ export default async function AdminConsolePage() {
         </div>
 
         <p style={{ marginBottom: "2rem" }}>
+          <Link href="/admin/training" className="button button-secondary" data-testid="admin-training-link">
+            Council Training
+          </Link>{" "}
           <Link href="/admin/legislation" className="button button-secondary" data-testid="admin-legislation-link">
             Legislation library
           </Link>{" "}

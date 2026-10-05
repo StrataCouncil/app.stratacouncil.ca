@@ -3,7 +3,7 @@ import { AutoRefresh } from "@/components/AutoRefresh";
 import { AppShell } from "@/components/AppShell";
 import { getConnectedCorporations } from "@/lib/data/corporations";
 import { getCurrentProfile } from "@/lib/data/profile";
-import { tracks } from "@/lib/placeholder-data";
+import { getTrainingTracks } from "@/lib/data/training";
 import { getCurrentAnnouncements } from "@/lib/data/announcements";
 import { HomeAnnouncements } from "@/components/HomeAnnouncements";
 import { TrainingWelcome } from "@/components/TrainingWelcome";
@@ -18,19 +18,26 @@ import { createClient } from "@/lib/supabase/server";
  * track list lives at `/training`; this page summarizes it rather than
  * repeating it.
  *
- * Profile and connected stratas are real; training progress reads "not
- * started" until Education is on real tables.
+ * Profile, connected stratas and training progress are all real.
  *
  * Also (note 3, 2026-10-05): announcements posted by Super Admins, a
  * dismissible "How Council Training works", and a Stratasphere card for
  * people whose strata isn't subscribed.
  */
 export default async function HomePage() {
-  const [profile, corporations, announcements] = await Promise.all([
+  const [profile, corporations, announcements, trainingTracks] = await Promise.all([
     getCurrentProfile(),
     getConnectedCorporations(),
     getCurrentAnnouncements("home"),
+    getTrainingTracks(),
   ]);
+  const tracks = trainingTracks.map((t) => ({
+    slug: t.slug,
+    title: t.title,
+    moduleCount: t.modules.length,
+    completedModules: t.modules.filter((m) => m.completed).length,
+    certificateIssued: Boolean(t.credential),
+  }));
 
   const supabase = await createClient();
   const { data: roleRows } = profile
