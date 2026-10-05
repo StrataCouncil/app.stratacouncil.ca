@@ -24,6 +24,11 @@ export default async function AdminTrainingPage() {
             Build modules from sections and screens, preview them as a learner, and publish. Learners only ever see published
             versions; your drafts autosave.
           </p>
+          <p>
+            <Link href="/admin/training/ai" className="button button-primary" data-testid="admin-training-ai">
+              Build modules from documents
+            </Link>
+          </p>
         </div>
         {review.length > 0 && (
           <p className="sync-note" role="status" style={{ marginBottom: "1.25rem" }}>

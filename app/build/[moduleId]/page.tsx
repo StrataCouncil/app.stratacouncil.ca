@@ -18,6 +18,7 @@ export default async function AuthorModuleBuilderPage({ params }: { params: Prom
         publishedAt: draft.publishedAt,
         draftUpdatedAt: draft.draftUpdatedAt,
         readyForReviewAt: draft.readyForReviewAt,
+        aiDraftedFrom: draft.aiDraftedFrom,
       }}
       initialContent={draft.content}
       canPublish={Boolean(profile?.isSuperAdmin)}

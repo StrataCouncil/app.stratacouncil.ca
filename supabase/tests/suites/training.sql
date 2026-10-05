@@ -77,3 +77,15 @@ select pg_temp.expect('an outsider sees no one''s credential', (select count(*) 
 select pg_temp.expect('learners can''t edit tracks', pg_temp.fails($$delete from training_tracks$$) or (select count(*) from training_tracks) = 5);
 set test.uid = '00000000-0000-0000-0000-00000000000d';
 select pg_temp.expect('Super Admin sees every credential', (select count(*) from training_credentials) = 1);
+
+-- AI imports are Super Admin only.
+reset role;
+insert into training_imports (id, title) values ('20000000-0000-0000-0000-000000000001', 'Guide');
+set role authenticated;
+set test.uid = '00000000-0000-0000-0000-00000000000d';
+select pg_temp.expect('Super Admin sees imports', (select count(*) from training_imports) = 1);
+set test.uid = '00000000-0000-0000-0000-00000000000b';
+select pg_temp.expect('a strata admin sees no imports', (select count(*) from training_imports) = 0);
+select pg_temp.expect('and can''t start one', pg_temp.fails($$insert into training_imports (title) values ('x')$$));
+set test.uid = '00000000-0000-0000-0000-00000000000c';
+select pg_temp.expect('an author sees no imports', (select count(*) from training_imports) = 0);

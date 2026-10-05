@@ -31,6 +31,8 @@ export interface BuilderModule {
   publishedAt: string | null;
   draftUpdatedAt: string | null;
   readyForReviewAt: string | null;
+  /** Set when the AI module builder wrote the first draft (the source document's title). */
+  aiDraftedFrom?: string | null;
 }
 
 type Selection = { kind: "settings" } | { kind: "screen"; screenId: string };
@@ -206,6 +208,12 @@ export function ModuleBuilder({
           </button>
         )}
       </header>
+      {module.aiDraftedFrom && module.publishedVersion === 0 && (
+        <p className="builder__ai-note" role="note">
+          <strong>Drafted by AI</strong> from &ldquo;{module.aiDraftedFrom}&rdquo;. Check every fact, number and reference against
+          the source before publishing, and record narration from the scripts on each screen.
+        </p>
+      )}
       {save.state === "error" && (
         <p className="builder__alert" role="alert">
           {save.error}
@@ -579,19 +587,19 @@ function ScreenSettings({ moduleId, screen, onChange }: { moduleId: string; scre
           onChange={(src) => onChange({ ...screen, narration: { ...screen.narration, src } })}
           onClear={screen.narration.src ? () => onChange({ ...screen, narration: { src: "", transcript: screen.narration.transcript } }) : undefined}
         />
-        {screen.narration.src && (
-          <>
-            <audio src={screen.narration.src} controls preload="metadata" className="be-audio" />
-            <label className="field">
-              <span>Captions (the narration as text; learners can turn these on)</span>
-              <textarea
-                rows={3}
-                value={screen.narration.transcript}
-                onChange={(e) => onChange({ ...screen, narration: { ...screen.narration, transcript: e.target.value } })}
-              />
-            </label>
-          </>
-        )}
+        {screen.narration.src && <audio src={screen.narration.src} controls preload="metadata" className="be-audio" />}
+        <label className="field">
+          <span>
+            {screen.narration.src
+              ? "Captions (the narration as text; learners can turn these on)"
+              : "Narration script (record it, then upload the audio above; it becomes the captions)"}
+          </span>
+          <textarea
+            rows={3}
+            value={screen.narration.transcript}
+            onChange={(e) => onChange({ ...screen, narration: { ...screen.narration, transcript: e.target.value } })}
+          />
+        </label>
       </div>
     </section>
   );
