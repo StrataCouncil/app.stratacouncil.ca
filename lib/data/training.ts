@@ -191,7 +191,9 @@ export async function getModuleDraft(moduleId: string) {
   const [{ data: mod }, { data: draft }] = await Promise.all([
     supabase
       .from("training_modules")
-      .select("id, title, summary, estimated_minutes, published_version, published_at, track:training_tracks(id, code, title)")
+      .select(
+        "id, title, summary, estimated_minutes, published_version, published_at, ai_drafted, track:training_tracks(id, code, title), source:training_imports(title)"
+      )
       .eq("id", moduleId)
       .maybeSingle(),
     supabase.from("training_module_drafts").select("content, updated_at, ready_for_review_at").eq("module_id", moduleId).maybeSingle(),
@@ -209,6 +211,10 @@ export async function getModuleDraft(moduleId: string) {
     content: normalizeModuleContent(draft.content),
     draftUpdatedAt: draft.updated_at as string,
     readyForReviewAt: (draft.ready_for_review_at as string | null) ?? null,
+    /** Drafted by the AI module builder; the title of its source document when the reader may see it. */
+    aiDraftedFrom: mod.ai_drafted
+      ? ((Array.isArray(mod.source) ? mod.source[0] : mod.source) as { title: string } | null)?.title ?? "a document"
+      : null,
   };
 }
 
