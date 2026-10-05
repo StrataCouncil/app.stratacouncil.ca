@@ -171,3 +171,13 @@ test("a module's narration voice survives normalization only with a sane id", ()
   assert.deepEqual(normalizeModuleContent({ voice: { id: "21m00Tcm4TlvDq8ikWAM", name: "Rachel" } }).voice, { id: "21m00Tcm4TlvDq8ikWAM", name: "Rachel" });
   assert.equal(normalizeModuleContent({ voice: { id: "../../x", name: "Bad" } }).voice, null);
 });
+
+test("audio, uploaded video and slides blocks hold up Next; embeds can't report so they don't", () => {
+  const screen = newScreen("S");
+  const audio = { ...newBlock("audio"), src: "https://x.supabase.co/a.mp3" } as ReturnType<typeof newBlock>;
+  const video = { ...newBlock("video"), url: "https://x.supabase.co/v.mp4" } as ReturnType<typeof newBlock>;
+  const embed = { ...newBlock("video"), url: "https://youtu.be/dQw4w9WgXcQ" } as ReturnType<typeof newBlock>;
+  const slides = { ...newBlock("slides"), slides: [{ id: "s1", src: "https://x/1.png", alt: "a", caption: "", audio: "", transcript: "" }] } as ReturnType<typeof newBlock>;
+  screen.blocks = [audio, video, embed, slides];
+  assert.deepEqual(screenRequirements(screen), [audio.id, video.id, slides.id]);
+});

@@ -5,7 +5,9 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProfile } from "@/lib/data/profile";
-import { normalizeModuleContent, publishProblems } from "@/lib/training/content";
+import { normalizeModuleContent, publishProblems, type Screen } from "@/lib/training/content";
+import { applyTightened, screenForTightening, TIGHTEN_INSTRUCTIONS, tightenSchema } from "@/lib/training/ai";
+import { askClaudeJson } from "@/lib/ai/claude";
 import { listVoices, NarrationError, speak, type Voice } from "@/lib/media/elevenlabs";
 import { PhotoError, searchPhotos, trackPhotoUse, type StockPhoto } from "@/lib/media/unsplash";
 
@@ -318,5 +320,39 @@ export async function chooseStockPhoto(moduleId: string, downloadLocation: strin
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof PhotoError ? e.message : "Couldn't use that photo." };
+  }
+}
+
+// ── Tighten with AI ────────────────────────────────────────────────────
+
+/**
+ * Rewrite one screen's on-screen text so it reads at a glance while the
+ * narration plays. Only the text-type blocks change: the narration script
+ * (and so any audio made from it), questions, scenarios and media are kept
+ * exactly as they are. Course text only; no one's details are involved.
+ */
+export async function tightenScreen(moduleId: string, raw: unknown): Promise<Result<{ screen: Screen }>> {
+  if (!(await canAuthor(moduleId))) return { ok: false, error: "You can't edit this module." };
+  const screen = normalizeModuleContent({ sections: [{ id: "s", title: "s", screens: [raw] }] }).sections[0]?.screens[0];
+  if (!screen) return { ok: false, error: "That screen couldn't be read." };
+  const blocks = screenForTightening(screen);
+  if (!blocks.length) return { ok: true, screen };
+  try {
+    const result = await askClaudeJson<unknown>({
+      system: TIGHTEN_INSTRUCTIONS,
+      messages: [
+        {
+          role: "user",
+          content: `Screen title: ${screen.title}\n\nNarration (read aloud with the screen):\n${screen.narration.transcript || "(none)"}\n\nCurrent on-screen blocks:\n${JSON.stringify(blocks, null, 1)}`,
+        },
+      ],
+      schema: tightenSchema,
+      effort: "low",
+      maxTokens: 8000,
+    });
+    return { ok: true, screen: applyTightened(screen, result) };
+  } catch (e) {
+    console.error("[tightenScreen]", e instanceof Error ? e.message : e);
+    return { ok: false, error: "The AI couldn't tighten this screen. Try again." };
   }
 }

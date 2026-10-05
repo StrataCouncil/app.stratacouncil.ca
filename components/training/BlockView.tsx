@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { calloutLabels, ratingLabels, videoSource, type Block } from "@/lib/training/content";
 import { RichText } from "@/components/training/RichText";
 import { PhotoCreditLine } from "@/components/training/PhotoPicker";
@@ -40,15 +40,15 @@ export function BlockView({ block, onDone }: { block: Block; onDone?: () => void
         </figure>
       );
     case "slides":
-      return <Slides block={block} />;
+      return <Slides block={block} onDone={onDone} />;
     case "video":
-      return <Video block={block} />;
+      return <Video block={block} onDone={onDone} />;
     case "audio":
       if (!block.src) return <Missing what="audio" />;
       return (
         <figure className="lesson-audio">
           {block.title && <figcaption className="lesson-audio__title">{block.title}</figcaption>}
-          <audio src={block.src} controls preload="metadata" />
+          <audio src={block.src} controls preload="auto" onEnded={() => onDone?.()} />
           <Transcript text={block.transcript} />
         </figure>
       );
@@ -126,11 +126,15 @@ export function Transcript({ text, label = "Transcript" }: { text: string; label
   );
 }
 
-function Slides({ block }: { block: Extract<Block, { type: "slides" }> }) {
+function Slides({ block, onDone }: { block: Extract<Block, { type: "slides" }>; onDone?: () => void }) {
   const [i, setI] = useState(0);
   const slides = block.slides.filter((s) => s.src);
+  const at = Math.min(i, Math.max(0, slides.length - 1));
+  // Done once the learner has reached the last slide.
+  useEffect(() => {
+    if (slides.length && at === slides.length - 1) onDone?.();
+  }, [at, slides.length, onDone]);
   if (slides.length === 0) return <Missing what="slides" />;
-  const at = Math.min(i, slides.length - 1);
   const s = slides[at];
   return (
     <figure className="lesson-slides" aria-roledescription="carousel">
@@ -161,7 +165,7 @@ function Slides({ block }: { block: Extract<Block, { type: "slides" }> }) {
   );
 }
 
-function Video({ block }: { block: Extract<Block, { type: "video" }> }) {
+function Video({ block, onDone }: { block: Extract<Block, { type: "video" }>; onDone?: () => void }) {
   const source = videoSource(block.url);
   if (!source) return <Missing what="video" />;
   return (
@@ -176,7 +180,7 @@ function Video({ block }: { block: Extract<Block, { type: "video" }> }) {
             loading="lazy"
           />
         ) : (
-          <video src={source.src} controls preload="metadata" />
+          <video src={source.src} controls preload="metadata" onEnded={() => onDone?.()} />
         )}
       </div>
       {block.caption && <figcaption>{block.caption}</figcaption>}

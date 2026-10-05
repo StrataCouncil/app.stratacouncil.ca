@@ -24,7 +24,9 @@ const defaultSettings: Settings = { largeText: false, autoplay: true, shortcuts:
  * click-to-reveal item opened. Nothing is graded. Progress saves as each
  * section is finished.
  *
- * `preview` (the builder) never saves, and nothing is locked.
+ * `preview` (the builder) never saves and every section can be opened, but
+ * each screen still waits like it does for learners unless the author
+ * turns on `skipWaits`.
  */
 export function ModulePlayer({
   moduleId,
@@ -35,6 +37,7 @@ export function ModulePlayer({
   track,
   nextModule,
   preview = false,
+  skipWaits = false,
   startScreenId,
 }: {
   moduleId: string;
@@ -45,6 +48,8 @@ export function ModulePlayer({
   track: { title: string; slug: string };
   nextModule: { id: string; title: string } | null;
   preview?: boolean;
+  /** Author preview only: let Next through without waiting. */
+  skipWaits?: boolean;
   startScreenId?: string;
 }) {
   const sections = content.sections;
@@ -103,7 +108,12 @@ export function ModulePlayer({
       }),
     [index]
   );
-  const alreadyDone = preview || index < reached || (page && done.has(sections[page.sectionIndex]?.id));
+  // Screens the learner has already finished (moved past with Next) don't wait again.
+  const [passed, setPassed] = useState<Set<number>>(new Set());
+  const alreadyDone =
+    skipWaits ||
+    passed.has(index) ||
+    (!preview && (index < reached || Boolean(page && done.has(sections[page.sectionIndex]?.id))));
   const ready = alreadyDone || required.every((id) => satisfied.has(id));
 
   // ── Narration ──
@@ -118,6 +128,22 @@ export function ModulePlayer({
     const a = audio.current;
     if (a && narration && settings.autoplay && interacted.current) a.play().catch(() => {});
   }, [index, narration, settings.autoplay]);
+  // Fetch the next screen's narration while this one plays, so it's ready when the learner moves on.
+  const nextNarration = (() => {
+    const n = pages[index + 1];
+    return n?.kind === "screen" ? n.screen.narration.src : "";
+  })();
+  useEffect(() => {
+    if (!nextNarration) return;
+    const a = new Audio();
+    a.preload = "auto";
+    a.src = nextNarration;
+    return () => {
+      a.removeAttribute("src");
+      a.load();
+    };
+  }, [nextNarration]);
+
   function togglePlay() {
     const a = audio.current;
     if (!a) return;
@@ -150,6 +176,7 @@ export function ModulePlayer({
       }
       setDone((d) => new Set(d).add(section.id));
     }
+    setPassed((p) => (p.has(index) ? p : new Set(p).add(index)));
     if (isLast) {
       setFinished(true);
     } else {
@@ -320,7 +347,7 @@ export function ModulePlayer({
                     ref={audio}
                     key={page.key}
                     src={narration.src}
-                    preload="metadata"
+                    preload="auto"
                     onPlay={() => setPlaying(true)}
                     onPause={() => setPlaying(false)}
                     onTimeUpdate={(e) => {

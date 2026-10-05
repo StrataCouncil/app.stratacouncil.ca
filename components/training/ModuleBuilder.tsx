@@ -19,7 +19,15 @@ import {
   type ScreenLayout,
   type Section,
 } from "@/lib/training/content";
-import { generateNarration, getNarrationVoices, markReadyForReview, publishModule, saveModuleDraft } from "@/app/admin/training/actions";
+import {
+  generateNarration,
+  getNarrationVoices,
+  markReadyForReview,
+  publishModule,
+  saveModuleDraft,
+  tightenScreen,
+} from "@/app/admin/training/actions";
+import { onScreenWords } from "@/lib/training/ai";
 import { PhotoCreditLine, PhotoPicker } from "@/components/training/PhotoPicker";
 import type { Voice } from "@/lib/media/elevenlabs";
 import { BlockEditor, ItemTools, MediaField, move } from "@/components/training/BlockEditor";
@@ -66,6 +74,7 @@ export function ModuleBuilder({
   const [selected, setSelected] = useState<Selection>(firstScreen ? { kind: "screen", screenId: firstScreen } : { kind: "settings" });
   const [mode, setMode] = useState<"edit" | "preview">("edit");
   const [device, setDevice] = useState<"desktop" | "phone">("desktop");
+  const [skipWaits, setSkipWaits] = useState(false);
   const [save, setSave] = useState<{ state: "saved" | "saving" | "error"; at: string | null; error?: string }>({
     state: "saved",
     at: module.draftUpdatedAt,
@@ -152,6 +161,7 @@ export function ModuleBuilder({
 
   // ── Publish / review ──
   const problems = publishProblems(content);
+  const missingAudio = flattenScreens(content).filter((f) => f.screen.narration.transcript.trim() && !f.screen.narration.src).length;
   const [showPublish, setShowPublish] = useState(false);
   async function publish() {
     setPublishing(true);
@@ -329,9 +339,15 @@ export function ModuleBuilder({
                   Phone
                 </button>
               </div>
+              <label className="be-check builder__skip">
+                <input type="checkbox" checked={skipWaits} onChange={(e) => setSkipWaits(e.target.checked)} />
+                Let me skip ahead (authors only; learners always wait for narration and activities)
+              </label>
               <div className="builder__frame builder__frame--player" data-device={device}>
                 <ModulePlayer
                   preview
+                  skipWaits={skipWaits}
+                  key={skipWaits ? "skip" : "wait"}
                   moduleId={module.id}
                   moduleTitle={module.title}
                   version={0}
@@ -350,6 +366,7 @@ export function ModuleBuilder({
                 onChange={(objectives) => setContent((c) => ({ ...c, objectives }))}
                 onAddSection={content.sections.length === 0 ? addSection : undefined}
               />
+              <TightenAll moduleId={module.id} content={content} onTightened={(s) => updateScreen(s.id, () => s)} />
               <NarrationSettings
                 moduleId={module.id}
                 content={content}
@@ -381,6 +398,7 @@ export function ModuleBuilder({
                   Duplicate screen
                 </button>
               </div>
+              <TightenScreen moduleId={module.id} screen={screen} onChange={(s) => updateScreen(screen.id, () => s)} />
 
               <ScreenSettings moduleId={module.id} screen={screen} voice={content.voice ?? null} onChange={(s) => updateScreen(screen.id, () => s)} />
 
@@ -469,6 +487,14 @@ export function ModuleBuilder({
             </ul>
           ) : (
             <p>
+              {missingAudio > 0 && (
+                <>
+                  <strong>
+                    {missingAudio} {missingAudio === 1 ? "screen has" : "screens have"} a narration script but no audio yet
+                  </strong>{" "}
+                  (learners will read {missingAudio === 1 ? "it" : "them"} without narration).{" "}
+                </>
+              )}
               Learners will see this version right away. Anyone partway through the current version keeps their finished
               sections only if they finish it; earned credentials are never taken back.
             </p>
@@ -678,6 +704,126 @@ function NarrationSettings({
               </button>
               {todo.length > 0 && <span className="card__meta">About {characters.toLocaleString("en-CA")} characters of your ElevenLabs allowance.</span>}
             </>
+          )}
+        </div>
+        {error && (
+          <p className="form-alert" role="alert">
+            {error}
+          </p>
+        )}
+      </section>
+    </div>
+  );
+}
+
+/** Most screens should carry about this many words, so they can be read while the narration plays. */
+const WORD_TARGET = 45;
+
+/** Words on screen, and Tighten with AI (with undo) when there are too many. */
+function TightenScreen({ moduleId, screen, onChange }: { moduleId: string; screen: Screen; onChange: (s: Screen) => void }) {
+  const [busy, setBusy] = useState(false);
+  const [undo, setUndo] = useState<Screen | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const words = onScreenWords(screen);
+  useEffect(() => {
+    setUndo(null);
+    setError(null);
+  }, [screen.id]);
+
+  async function tighten() {
+    setBusy(true);
+    setError(null);
+    const before = screen;
+    const r = await tightenScreen(moduleId, screen);
+    setBusy(false);
+    if (!r.ok) return setError(r.error);
+    setUndo(before);
+    onChange({ ...r.screen, id: screen.id });
+  }
+
+  if (words === 0 && !undo) return null;
+  return (
+    <div className="builder__words" data-over={words > WORD_TARGET}>
+      <span>
+        {words} words on screen{words > WORD_TARGET ? ` (aim for about ${WORD_TARGET - 5}; the narration carries the detail)` : ""}
+      </span>
+      {words > 0 && (
+        <button type="button" className="button button-secondary button-small" disabled={busy} onClick={tighten}>
+          {busy ? "Tightening…" : "Tighten with AI"}
+        </button>
+      )}
+      {undo && !busy && (
+        <button
+          type="button"
+          className="text-action"
+          onClick={() => {
+            onChange(undo);
+            setUndo(null);
+          }}
+        >
+          Undo
+        </button>
+      )}
+      {error && (
+        <span className="form-alert" role="alert">
+          {error}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/** Tighten every screen with too many words, one at a time; narration and its audio are untouched. */
+function TightenAll({ moduleId, content, onTightened }: { moduleId: string; content: ModuleContent; onTightened: (s: Screen) => void }) {
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const stopRef = useRef(false);
+  const crowded = flattenScreens(content)
+    .map((f) => f.screen)
+    .filter((s) => onScreenWords(s) > WORD_TARGET);
+
+  async function run() {
+    stopRef.current = false;
+    setError(null);
+    setProgress({ done: 0, total: crowded.length });
+    for (let i = 0; i < crowded.length; i++) {
+      if (stopRef.current) break;
+      const r = await tightenScreen(moduleId, crowded[i]);
+      if (!r.ok) {
+        setError(`Stopped at "${crowded[i].title}": ${r.error}`);
+        break;
+      }
+      onTightened({ ...r.screen, id: crowded[i].id });
+      setProgress({ done: i + 1, total: crowded.length });
+    }
+    setProgress(null);
+  }
+
+  return (
+    <div className="builder__canvas">
+      <section className="builder__block">
+        <div className="builder__block-head">
+          <span className="builder__block-type">Screen text</span>
+        </div>
+        <p className="card__meta">
+          Learners read the screen while the narration plays, so each screen should carry about {WORD_TARGET - 5} words at most.
+          Tighten with AI shortens the on-screen text only; narration, its audio, questions and scenarios stay as they are.
+          Check the results; each screen also has its own Tighten button with Undo.
+        </p>
+        <div className="be-row">
+          {progress ? (
+            <>
+              <span role="status">
+                Tightening: {progress.done} of {progress.total} screens…
+              </span>
+              <button type="button" className="text-action" onClick={() => (stopRef.current = true)}>
+                Stop
+              </button>
+            </>
+          ) : (
+            <button type="button" className="button button-primary button-small" disabled={crowded.length === 0} onClick={run}>
+              {crowded.length ? `Tighten ${crowded.length} crowded ${crowded.length === 1 ? "screen" : "screens"}` : "Every screen is within the word target"}
+            </button>
           )}
         </div>
         {error && (

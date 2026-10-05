@@ -40,7 +40,7 @@ export async function listVoices(): Promise<Voice[]> {
 /** One screen's narration as an MP3. */
 export async function speak(text: string, voiceId: string): Promise<ArrayBuffer> {
   if (!/^[\w-]{1,64}$/.test(voiceId)) throw new NarrationError("Choose a narration voice first.");
-  const res = await fetch(`${API}/text-to-speech/${voiceId}?output_format=mp3_44100_128`, {
+  const res = await fetch(`${API}/text-to-speech/${voiceId}?output_format=mp3_44100_64`, {
     method: "POST",
     headers: { "xi-api-key": key(), "Content-Type": "application/json", Accept: "audio/mpeg" },
     body: JSON.stringify({ text, model_id: MODEL }),

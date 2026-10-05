@@ -139,24 +139,7 @@ export function normalizePlan(raw: unknown): ImportPlan {
 
 const blockTypes = ["text", "callout", "reveal", "summary", "table", "features", "knowledge_check", "scenario", "checklist"] as const;
 
-export const sectionSchema = {
-  type: "object",
-  additionalProperties: false,
-  required: ["screens"],
-  properties: {
-    screens: {
-      type: "array",
-      items: {
-        type: "object",
-        additionalProperties: false,
-        required: ["title", "narration", "photoSearch", "blocks"],
-        properties: {
-          title: str,
-          narration: str,
-          photoSearch: str,
-          blocks: {
-            type: "array",
-            items: {
+const blockSchema = {
               type: "object",
               additionalProperties: false,
               required: [
@@ -210,12 +193,40 @@ export const sectionSchema = {
                 }),
                 rows: nullable({ type: "array", items: strList }),
               },
-            },
+            } as const;
+
+export const sectionSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["screens"],
+  properties: {
+    screens: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["title", "narration", "photoSearch", "blocks"],
+        properties: {
+          title: str,
+          narration: str,
+          photoSearch: str,
+          blocks: {
+            type: "array",
+            items: blockSchema,
           },
         },
       },
     },
   },
+} as const;
+
+
+/** A screen's on-screen blocks rewritten (Tighten with AI). */
+export const tightenSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["blocks"],
+  properties: { blocks: { type: "array", items: blockSchema } },
 } as const;
 
 type AiBlock = {
@@ -434,8 +445,9 @@ ${TRACK_CODES.map((c) => `  - ${c}: ${TRACK_DESCRIPTIONS[c]}`).join("\n")}
 export const SECTION_INSTRUCTIONS = `Write one section of a module as screens. The learner sees one screen at a time, with a title bar and Next.
 
 Screens:
-- 3 to 6 screens per section. Each screen teaches one idea in at most about 120 words of on-screen text, plus its blocks.
-- "narration" is a script read aloud with the screen: 40 to 100 words, conversational, adds to the screen rather than reading it out. Write it to be spoken: no lists, no abbreviations a narrator would stumble on, numbers as words where that reads better.
+- 4 to 7 screens per section. Each screen teaches one idea.
+- The screen is read while the narration plays, so keep it sparse: at most about 40 words of on-screen text in total (knowledge checks and scenarios aside), usually one or two blocks. Show the key words, not sentences: a short line, 2 to 4 bullets of a few words, a callout, cards or a table. Card and reveal text is at most about 15 words each. Never put the explanation on screen; that's the narration's job.
+- "narration" is a script read aloud with the screen: 40 to 90 words, conversational. It explains what the screen shows, without reading the screen out word for word. Write it to be spoken: no lists, no abbreviations a narrator would stumble on, numbers as words where that reads better.
 - "photoSearch" is two to five words to search a stock-photo library for a picture that suits the screen (real people, buildings, meetings, documents; e.g. "condo building balconies", "people at meeting table"). Never names, logos or text.
 - The section's first screen sets up why the topic matters to council.
 
@@ -452,3 +464,109 @@ Blocks (choose the ones that fit; vary them):
 
 Include at least one knowledge check in every section. Include a scenario in at least one section of the module. End the module's last section with a summary block.
 Leave every field that doesn't apply to a block as null.`;
+
+// ── Tighten with AI: make an existing screen sparser ───────────────────
+
+/** Blocks Tighten with AI may rewrite; questions, scenarios and media are kept exactly as they are. */
+const TIGHTENABLE = new Set(["text", "callout", "reveal", "summary", "checklist", "features", "table"]);
+export const isTightenable = (b: Block) => TIGHTENABLE.has(b.type);
+
+/** Words of on-screen text in a screen's rewritable blocks. */
+export function onScreenWords(screen: Screen): number {
+  return screen.blocks
+    .filter(isTightenable)
+    .map((b) => blockText(b))
+    .join(" ")
+    .split(/\s+/)
+    .filter(Boolean).length;
+}
+
+function blockText(b: Block): string {
+  switch (b.type) {
+    case "text":
+      return docToMarkdown(b.doc);
+    case "callout":
+      return [b.title, docToMarkdown(b.doc)].join(" ");
+    case "reveal":
+      return b.items.map((i) => `${i.title} ${i.body}`).join(" ");
+    case "summary":
+      return [b.title, ...b.points.map((p) => p.text)].join(" ");
+    case "checklist":
+      return [b.title, ...b.items.map((i) => i.text)].join(" ");
+    case "features":
+      return b.items.map((i) => `${i.title} ${i.text}`).join(" ");
+    case "table":
+      return b.rows.flat().join(" ");
+    default:
+      return "";
+  }
+}
+
+/** The builder's rich text back to the light markdown the AI writes. */
+export function docToMarkdown(doc: RichNode | undefined): string {
+  if (!doc) return "";
+  const inlineText = (n: RichNode): string => {
+    if (n.type === "text") {
+      const t = n.text ?? "";
+      const marks = n.marks?.map((m) => m.type) ?? [];
+      return marks.includes("bold") ? `**${t}**` : marks.includes("italic") ? `*${t}*` : t;
+    }
+    if (n.type === "hardBreak") return " ";
+    return (n.content ?? []).map(inlineText).join("");
+  };
+  return (doc.content ?? [])
+    .map((n) => {
+      if (n.type === "heading") return `${n.attrs?.level === 3 ? "###" : "##"} ${inlineText(n)}`;
+      if (n.type === "bulletList" || n.type === "orderedList")
+        return (n.content ?? []).map((li, i) => `${n.type === "orderedList" ? `${i + 1}.` : "-"} ${inlineText(li)}`).join("\n");
+      return inlineText(n);
+    })
+    .filter((s) => s.trim())
+    .join("\n\n");
+}
+
+/** A screen's rewritable blocks in the AI's own format, for Tighten with AI. */
+export function screenForTightening(screen: Screen) {
+  return screen.blocks.filter(isTightenable).map((b) => {
+    const base = { type: b.type } as Record<string, unknown>;
+    if (b.type === "text") base.text = docToMarkdown(b.doc);
+    if (b.type === "callout") Object.assign(base, { variant: b.variant, title: b.title, text: docToMarkdown(b.doc), reference: b.reference });
+    if (b.type === "reveal") Object.assign(base, { style: b.style, items: b.items.map((i) => ({ title: i.title, text: i.body })) });
+    if (b.type === "summary") Object.assign(base, { title: b.title, items: b.points.map((p) => ({ title: "", text: p.text })) });
+    if (b.type === "checklist") Object.assign(base, { title: b.title, items: b.items.map((i) => ({ title: "", text: i.text })) });
+    if (b.type === "features") Object.assign(base, { items: b.items.map((i) => ({ title: i.title, text: i.text })) });
+    if (b.type === "table") Object.assign(base, { title: b.caption, rows: b.rows });
+    return base;
+  });
+}
+
+/**
+ * Put the rewritten blocks in place of the screen's rewritable ones, where
+ * the first of them was; every other block (questions, scenarios, media)
+ * stays as and where it was. Icons and photos on cards are kept by position.
+ */
+export function applyTightened(screen: Screen, raw: unknown): Screen {
+  const rewritten = (((raw as { blocks?: AiBlock[] })?.blocks ?? []) as AiBlock[])
+    .filter((b) => TIGHTENABLE.has(b.type))
+    .map(toBlock)
+    .filter((b): b is Block => b !== null);
+  if (!rewritten.length) return screen;
+  const oldFeatures = screen.blocks.find((b) => b.type === "features");
+  for (const b of rewritten) {
+    if (b.type === "features" && oldFeatures?.type === "features") {
+      b.items = b.items.map((it, i) => ({ ...it, image: oldFeatures.items[i]?.image ?? "" }));
+    }
+  }
+  const first = screen.blocks.findIndex(isTightenable);
+  const kept = screen.blocks.filter((b) => !isTightenable(b));
+  const at = screen.blocks.slice(0, Math.max(0, first)).filter((b) => !isTightenable(b)).length;
+  return { ...screen, blocks: [...kept.slice(0, at), ...rewritten, ...kept.slice(at)] };
+}
+
+export const TIGHTEN_INSTRUCTIONS = `Rewrite the on-screen blocks of one Council Training screen so they can be read at a glance while the narration plays.
+
+- At most about 40 words of on-screen text in total, usually one or two blocks. Key words, not sentences: a short line, 2 to 4 bullets of a few words, a callout, cards or a table. Card and reveal text at most about 15 words each.
+- The narration (given below) already explains the detail. Keep only what the learner should see; don't repeat the narration.
+- Keep the meaning and every fact the screen needs. Never add facts, numbers, references or examples that aren't already there. Keep any "reference" as it is.
+- Use only these block types: text, callout, reveal, summary, checklist, features, table. Leave every field that doesn't apply as null.
+- Plain Canadian English. No emoji.`;
