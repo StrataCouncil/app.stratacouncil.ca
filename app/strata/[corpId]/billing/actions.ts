@@ -534,7 +534,7 @@ export async function paySubscription(
   try {
     const stripe = await stripeFor(corporationId);
     const customer = await stripe.customers.retrieve(sub.stripe_customer_id);
-    const defaultPm =
+    let defaultPm =
       !customer.deleted && customer.invoice_settings?.default_payment_method
         ? String(
             typeof customer.invoice_settings.default_payment_method === "string"
@@ -542,6 +542,15 @@ export async function paySubscription(
               : customer.invoice_settings.default_payment_method.id
           )
         : null;
+    // A bank account confirmed by micro-deposits after the setup page:
+    // on file, but never made the default. Make it the default now.
+    if (!defaultPm) {
+      const onFile = await stripe.paymentMethods.list({ customer: sub.stripe_customer_id, limit: 1 });
+      if (onFile.data[0]) {
+        defaultPm = onFile.data[0].id;
+        await stripe.customers.update(sub.stripe_customer_id, { invoice_settings: { default_payment_method: defaultPm } });
+      }
+    }
     if (!defaultPm) return { error: "Add a payment method first." };
 
     const { base, perUnit } = getPriceIds(interval, mode);

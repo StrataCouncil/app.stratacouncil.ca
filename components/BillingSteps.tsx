@@ -36,6 +36,7 @@ export function BillingSteps({
   civicAddress,
   verifying,
   setupError = null,
+  bankVerifyUrl,
 }: {
   corpId: string;
   unitCount: number;
@@ -48,6 +49,8 @@ export function BillingSteps({
   civicAddress: string;
   verifying: boolean;
   setupError?: string | null;
+  /** Bank details typed in by hand, waiting on micro-deposits (undefined: none). */
+  bankVerifyUrl?: string | null;
 }) {
   // Never past a step whose prerequisites aren't met.
   const furthest: BillingStep = !paymentMethod ? "payment" : !billingEmail || !billingAddress ? "contact" : "review";
@@ -152,12 +155,37 @@ export function BillingSteps({
                 <button className="link-button">Use a different payment method</button>
               </form>
             </>
+          ) : bankVerifyUrl !== undefined ? (
+            <div className="billing-outcome billing-outcome--attention" role="status" data-testid="billing-verify-bank">
+              <strong>Verify the bank account</strong>
+              <p>
+                Stripe is sending two small deposits to the bank account, usually within one or two business days.
+                When they show on the statement, enter the two amounts on Stripe&rsquo;s page, then come back here to
+                finish subscribing. Nothing is charged until you subscribe.
+              </p>
+              <div className="billing-outcome__actions">
+                {bankVerifyUrl && (
+                  <a href={bankVerifyUrl} className="button button-primary" target="_blank" rel="noopener noreferrer">
+                    Enter the deposit amounts
+                  </a>
+                )}
+                <form action={startPaymentSetup.bind(null, corpId, interval)}>
+                  <button className="link-button">Use a different payment method</button>
+                </form>
+              </div>
+            </div>
           ) : (
             <>
               <p className="card__meta">
                 Pre-authorized debit from the strata&rsquo;s Canadian bank account is recommended; a credit card works
                 too. You&rsquo;ll enter the details on Stripe&rsquo;s secure page and come straight back here. Nothing
                 is charged until you subscribe on the last step.
+              </p>
+              <p className="card__meta">
+                For pre-authorized debit, set <strong>Type of Service</strong> to <strong>Business</strong> on
+                Stripe&rsquo;s page for a strata corporation&rsquo;s account (Personal only if the account is in a
+                person&rsquo;s name). Signing in to your bank there is quickest; typing in the account numbers works too,
+                but then Stripe confirms the account with two small deposits first.
               </p>
               <p className="card__meta">
                 Payments are processed by Stripe for {COMPANY_LEGAL_NAME}, the company behind StrataCouncil.ca, so
@@ -173,7 +201,7 @@ export function BillingSteps({
                 <Link href={href("contact")} className="button button-primary" data-testid="payment-continue">
                   Next
                 </Link>
-              ) : (
+              ) : bankVerifyUrl !== undefined ? null : (
                 <form action={startPaymentSetup.bind(null, corpId, interval)}>
                   <button className="button button-primary" data-testid="add-payment-method">
                     Add payment method

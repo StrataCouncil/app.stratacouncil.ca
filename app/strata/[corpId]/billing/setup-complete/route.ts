@@ -48,10 +48,16 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           : intent.payment_method.id
         : null;
     if (!pm) return back("payment", plan);
+    const status = typeof intent !== "string" ? intent?.status : null;
+    // Bank details typed in by hand: Stripe sends two micro-deposits to
+    // confirm the account, and it can't be used until they're entered.
+    // The payment step shows the link to do that.
+    if (status === "requires_action" && typeof intent !== "string" && intent?.next_action?.verify_with_microdeposits) {
+      return back("payment", plan, "verify-bank");
+    }
+    if (status !== "succeeded") return back("payment", plan);
     await stripe.customers.update(customerId, { invoice_settings: { default_payment_method: pm } });
-    // A pre-authorized debit can still be confirming its bank account.
-    const pending = typeof intent !== "string" && intent?.status !== "succeeded";
-    return back("contact", plan, pending ? "verifying" : undefined);
+    return back("contact", plan);
   } catch (error) {
     // redirect() throws on purpose; let it through.
     if (error && typeof error === "object" && "digest" in error) throw error;
