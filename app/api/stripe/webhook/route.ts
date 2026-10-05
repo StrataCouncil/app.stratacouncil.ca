@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import type Stripe from "stripe";
 import { getStripe, webhookSecrets, type StripeMode } from "@/lib/stripe/client";
 import { sameMode, syncSubscription } from "@/lib/stripe/sync";
-import { recordPaymentMethodUpdate, recordSubscriptionCheckout } from "@/lib/stripe/checkout-results";
+import { recordPaymentMethodUpdate } from "@/lib/stripe/checkout-results";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendTransactionalEmail } from "@/lib/email/mailtrap";
 import { invoiceCopyEmail } from "@/lib/email/templates";
@@ -32,7 +32,10 @@ async function deactivate(sub: Stripe.Subscription, mode: StripeMode) {
   await admin
     .from("subscriptions")
     .update({ status: "deactivated", stripe_status: sub.status, cancel_at: null, pending_interval: null, pending_interval_at: null, stripe_schedule_id: null })
-    .eq("corporation_id", corporationId);
+    .eq("corporation_id", corporationId)
+    // Only the subscription on record: an unpaid one opened in the subscribe
+    // dialog and then replaced or cancelled never touches the strata.
+    .eq("stripe_subscription_id", sub.id);
 }
 
 /**
@@ -116,13 +119,9 @@ export async function POST(request: NextRequest) {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
         const corpId = session.metadata?.corporation_id;
-        // The in-app payment forms (2026-10-10): record them the same way
-        // the app does when the form finishes, in case the browser didn't.
+        // The in-app payment-method update form: record it the same way the
+        // app does when the form finishes, in case the browser didn't.
         if (corpId && (await sameMode(corpId, mode))) {
-          if (session.mode === "subscription") {
-            await recordSubscriptionCheckout(corpId, session.id);
-            break;
-          }
           if (session.metadata?.purpose === "update_payment_method") {
             await recordPaymentMethodUpdate(corpId, session.id);
             break;

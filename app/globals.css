@@ -5259,3 +5259,11 @@ abbr.role-tag--short {
   padding: 0.5rem 0;
   background: #fff;
 }
+.subscribe-pay {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+.subscribe-pay__button {
+  align-self: flex-end;
+}
