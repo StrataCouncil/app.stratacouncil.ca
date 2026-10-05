@@ -71,14 +71,17 @@ export async function getCurrentAnnouncements(place: "home" | "overview", limit 
   return (data as Row[]).map(toAnnouncement);
 }
 
-/** Every announcement, current or ended, for the Super Admin page. Null for anyone else. */
-export async function listAllAnnouncements(): Promise<Announcement[] | null> {
+/**
+ * Every announcement, current or ended, for the Super Admin page. Null for
+ * anyone else. A failed read says so, rather than looking like an empty list.
+ */
+export async function listAllAnnouncements(): Promise<{ announcements: Announcement[]; error: string | null } | null> {
   const auth = await requireSuperAdmin();
   if (!auth) return null;
   const { data, error } = await auth.supabase.from("announcements").select(columns).order("published_at", { ascending: false }).limit(100);
   if (error) {
     console.error("[announcements]", error.message);
-    return [];
+    return { announcements: [], error: error.message };
   }
-  return (data as Row[]).map(toAnnouncement);
+  return { announcements: (data as Row[]).map(toAnnouncement), error: null };
 }
