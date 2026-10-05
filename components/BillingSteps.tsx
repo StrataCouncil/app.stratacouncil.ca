@@ -205,12 +205,13 @@ export function BillingSteps({
             {fmt(chosen.total)} a month incl. GST. Pre-authorized debit from the strata&rsquo;s bank account is
             recommended: signing in to your bank is quickest, while typed-in account numbers are confirmed with two small
             deposits first (a business day or two). Processed securely by Stripe for {COMPANY_LEGAL_NAME} (shown as{" "}
-            {COMPANY_NAME}).
+            {COMPANY_NAME}). Nothing is charged until you click Subscribe.
           </p>
           <BillingPayStep
             corpId={corpId}
             interval={interval}
             publishableKey={publishableKey}
+            total={fmt(chosen.total)}
             cancelHref={cancelHref}
             backHref={href("review")}
           />

@@ -21,27 +21,36 @@ async function storedIds(corporationId: string) {
 
 const idOf = (v: string | { id: string } | null | undefined) => (v ? (typeof v === "string" ? v : v.id) : null);
 
-/** A completed subscribe form: record the subscription and its payment method. */
-export async function recordSubscriptionCheckout(corporationId: string, sessionId: string): Promise<boolean> {
-  if (!sessionId.startsWith("cs_")) return false;
+/**
+ * A subscription whose first payment was just confirmed in the dialog:
+ * clear its "awaiting payment" mark, make the method it was paid with the
+ * customer's default too (Billing shows it; renewals use it), and record
+ * it. False if it isn't this strata's, or nothing has been paid yet.
+ */
+export async function recordSubscriptionPayment(corporationId: string, subscriptionId: string): Promise<boolean> {
+  if (!subscriptionId.startsWith("sub_")) return false;
   const mode = await stripeModeFor(corporationId);
   const stripe = getStripe(mode);
   try {
-    const [session, ids] = await Promise.all([
-      stripe.checkout.sessions.retrieve(sessionId, { expand: ["subscription"] }),
+    const [sub, ids] = await Promise.all([
+      stripe.subscriptions.retrieve(subscriptionId, { expand: ["latest_invoice.payment_intent"] }),
       storedIds(corporationId),
     ]);
-    if (session.mode !== "subscription" || session.metadata?.corporation_id !== corporationId) return false;
-    if (!ids?.stripe_customer_id || idOf(session.customer) !== ids.stripe_customer_id) return false;
-    const sub = session.subscription && typeof session.subscription !== "string" ? session.subscription : null;
-    if (!sub) return false;
-    // The method just added pays this subscription; make it the customer's
-    // default too, so Billing shows it and renewals use it.
-    const pm = idOf(sub.default_payment_method as string | Stripe.PaymentMethod | null);
+    if (sub.metadata?.corporation_id !== corporationId) return false;
+    if (!ids?.stripe_customer_id || idOf(sub.customer) !== ids.stripe_customer_id) return false;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const intent = (sub.latest_invoice as any)?.payment_intent as Stripe.PaymentIntent | null | undefined;
+    if (sub.status === "incomplete" && (!intent || ["requires_payment_method", "requires_confirmation"].includes(intent.status))) {
+      return false;
+    }
+    const updated = await stripe.subscriptions.update(subscriptionId, { metadata: { awaiting_payment: "" } });
+    const pm =
+      idOf(updated.default_payment_method as string | Stripe.PaymentMethod | null) ??
+      idOf(intent?.payment_method as string | Stripe.PaymentMethod | null | undefined);
     if (pm) await stripe.customers.update(ids.stripe_customer_id, { invoice_settings: { default_payment_method: pm } });
-    return await syncSubscription(sub, mode);
+    return await syncSubscription(updated, mode);
   } catch (error) {
-    console.error(`[recordSubscriptionCheckout] ${corporationId}:`, error instanceof Error ? error.message : error);
+    console.error(`[recordSubscriptionPayment] ${corporationId}:`, error instanceof Error ? error.message : error);
     return false;
   }
 }

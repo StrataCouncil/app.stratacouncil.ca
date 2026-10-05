@@ -622,7 +622,7 @@ export default async function BillingPage({
       <div className="card billing-section" data-testid="billing-corporations-card">
         <h3>Admin Stratas</h3>
         <p className="card__meta" style={{ margin: "0 0 0.75rem" }}>
-          Open a strata to manage its own billing. The one you&rsquo;re viewing is highlighted.
+          Open another strata to manage its own billing. The one you&rsquo;re viewing is highlighted.
         </p>
         <div className="roster-table-wrap">
           <table className="roster-table">
@@ -640,9 +640,14 @@ export default async function BillingPage({
               {corpRows.map((r) => (
                 <tr key={r.id} data-current={r.id === corpId ? "true" : undefined} className={r.id === corpId ? "billing-row--current" : undefined}>
                   <td>
-                    <Link href={`/strata/${r.id}/billing`} style={{ fontWeight: 600 }}>
-                      {r.id}
-                    </Link>
+                    {/* The strata you're on is plain text: its billing is this page. */}
+                    {r.id === corpId ? (
+                      <strong>{r.id}</strong>
+                    ) : (
+                      <Link href={`/strata/${r.id}/billing`} style={{ fontWeight: 600 }}>
+                        {r.id}
+                      </Link>
+                    )}
                     <div className="roster-table__meta">{r.name}</div>
                   </td>
                   <td>{r.address || "—"}</td>

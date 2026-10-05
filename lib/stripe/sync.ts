@@ -1,5 +1,5 @@
 import type Stripe from "stripe";
-import { stripeModeFor, type StripeMode } from "@/lib/stripe/client";
+import { getStripe, stripeModeFor, type StripeMode } from "@/lib/stripe/client";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { computeCommittedUntil } from "@/lib/stripe/prices";
 
@@ -41,6 +41,24 @@ export async function syncSubscription(sub: Stripe.Subscription, mode: StripeMod
     return false;
   }
   if (!(await sameMode(corporationId, mode))) return false;
+
+  // Opened in the subscribe dialog but not paid yet (awaiting_payment):
+  // not a subscription to record, and not "pending" either. Once its first
+  // payment is confirmed (processing, or a bank account to verify), it is.
+  // One that lapsed unpaid (incomplete_expired) never was.
+  if (sub.metadata?.awaiting_payment === "1" && sub.status === "incomplete_expired") return false;
+  if (sub.status === "incomplete" && sub.metadata?.awaiting_payment === "1") {
+    try {
+      const invoiceId = typeof sub.latest_invoice === "string" ? sub.latest_invoice : sub.latest_invoice?.id;
+      const invoice = invoiceId ? await getStripe(mode).invoices.retrieve(invoiceId, { expand: ["payment_intent"] }) : null;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const intent = (invoice as any)?.payment_intent as Stripe.PaymentIntent | null | undefined;
+      if (!intent || ["requires_payment_method", "requires_confirmation"].includes(intent.status)) return false;
+    } catch (error) {
+      console.error(`[syncSubscription] ${sub.id}: couldn't check its first payment:`, error instanceof Error ? error.message : error);
+      return false;
+    }
+  }
 
   const { data: existing } = await admin
     .from("subscriptions")

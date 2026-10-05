@@ -1,10 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useCallback, useState } from "react";
-import { useRouter } from "next/navigation";
-import { finishSubscriptionCheckout, saveBillingContacts, startSubscriptionCheckout } from "@/app/strata/[corpId]/billing/actions";
-import { StripeEmbeddedForm } from "@/components/StripeEmbeddedForm";
+import { useActionState, useState } from "react";
+import { saveBillingContacts } from "@/app/strata/[corpId]/billing/actions";
+import { SubscribePaymentForm } from "@/components/SubscribePaymentForm";
 import type { BillingInterval } from "@/lib/stripe/prices";
 import { PROVINCES, type BillingAddress } from "@/lib/billing-address";
 
@@ -122,51 +121,30 @@ export function BillingContactForm({
   );
 }
 
-/**
- * Billing step 4: Stripe's payment form, inside the dialog. Adding the
- * bank account or card here and confirming creates the subscription.
- */
+/** Billing step 4: Stripe's payment form inside the dialog; paying there subscribes. */
 export function BillingPayStep({
   corpId,
   interval,
   publishableKey,
+  total,
   cancelHref,
   backHref,
 }: {
   corpId: string;
   interval: BillingInterval;
   publishableKey: string | null;
+  total: string;
   cancelHref: string;
   backHref: string;
 }) {
-  const router = useRouter();
-  const [finishing, setFinishing] = useState(false);
-  const start = useCallback(() => startSubscriptionCheckout(corpId, interval), [corpId, interval]);
-  const complete = useCallback(
-    async (sessionId: string) => {
-      setFinishing(true);
-      try {
-        await finishSubscriptionCheckout(corpId, sessionId);
-      } catch {
-        // The webhook and Billing's own check with Stripe record it anyway.
-      }
-      router.push(`/strata/${corpId}/billing?subscribed=1`);
-    },
-    [corpId, router]
-  );
-
   return (
     <div className="billing-step__form">
-      {!publishableKey ? (
+      {publishableKey ? (
+        <SubscribePaymentForm corpId={corpId} interval={interval} publishableKey={publishableKey} total={total} />
+      ) : (
         <p className="form-alert form-alert--error" role="alert">
           Payments aren&rsquo;t set up yet: Stripe&rsquo;s publishable key is missing. Contact us.
         </p>
-      ) : finishing ? (
-        <p className="form-alert form-alert--ok" role="status" data-testid="billing-finishing">
-          Done. Finishing up&hellip;
-        </p>
-      ) : (
-        <StripeEmbeddedForm publishableKey={publishableKey} start={start} onComplete={complete} />
       )}
       <div className="billing-step__nav">
         <Link href={cancelHref} className="button button-secondary" data-testid="billing-cancel">
