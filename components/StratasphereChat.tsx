@@ -265,6 +265,9 @@ export function StratasphereChat({
   const transcript = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLTextAreaElement>(null);
   const selectSeq = useRef(0);
+  // Phones: the conversation list is a drawer over the chat (CSS decides;
+  // on a desktop the list is always beside it and this does nothing).
+  const [listOpen, setListOpen] = useState(false);
 
   // Follow the answer as it streams, unless the reader has scrolled up.
   useEffect(() => {
@@ -281,6 +284,7 @@ export function StratasphereChat({
   }, [draft]);
 
   async function select(id: string) {
+    setListOpen(false);
     if (streaming || id === activeId) return;
     const seq = ++selectSeq.current;
     setActiveId(id);
@@ -301,6 +305,7 @@ export function StratasphereChat({
   }
 
   function newChat() {
+    setListOpen(false);
     if (streaming) return;
     selectSeq.current++;
     setActiveId(null);
@@ -477,8 +482,9 @@ export function StratasphereChat({
   const activeTitle = conversations.find((c) => c.id === activeId)?.title;
 
   return (
-    <div className="chat-shell" data-testid="stratasphere-chat">
-      <aside className="chat-sidebar">
+    <div className="chat-shell" data-list-open={listOpen} data-testid="stratasphere-chat">
+      {listOpen && <button type="button" className="chat-drawer-backdrop" aria-label="Close conversations" onClick={() => setListOpen(false)} />}
+      <aside className="chat-sidebar" id="chat-conversations">
         <button className="button button-secondary chat-sidebar__new" data-testid="new-chat" onClick={newChat} disabled={streaming}>
           New conversation
         </button>
@@ -595,6 +601,22 @@ export function StratasphereChat({
       </aside>
 
       <div className="chat-main">
+        <div className="chat-mobile-bar">
+          <button
+            type="button"
+            className="button button-secondary button-small"
+            aria-expanded={listOpen}
+            aria-controls="chat-conversations"
+            onClick={() => setListOpen(true)}
+            data-testid="chat-open-list"
+          >
+            Conversations
+          </button>
+          <span className="chat-mobile-bar__title">{activeTitle ?? "New conversation"}</span>
+          <button type="button" className="button button-secondary button-small" onClick={newChat} disabled={streaming}>
+            New
+          </button>
+        </div>
         <div className="chat-kb-banner" data-testid="kb-banner">
           {activeTitle ? <strong className="chat-kb-banner__title">{activeTitle}</strong> : null}
           <span>
@@ -668,7 +690,7 @@ export function StratasphereChat({
           <textarea
             ref={input}
             rows={1}
-            placeholder="Ask about your strata's records or BC strata law"
+            placeholder="Ask Stratasphere a question"
             value={draft}
             maxLength={4000}
             onChange={(e) => setDraft(e.target.value)}
