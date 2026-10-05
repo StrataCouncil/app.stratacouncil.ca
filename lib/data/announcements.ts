@@ -10,11 +10,14 @@ export interface Announcement {
   linkLabel: string | null;
   audience: "everyone" | "admins";
   category: AnnouncementCategory;
+  /** Where it shows (0032): the Home page, every strata's Overview, or both. */
+  showOnHome: boolean;
+  showOnOverview: boolean;
   publishedAt: string;
   expiresAt: string | null;
 }
 
-const columns = "id, title, body, link_url, link_label, audience, category, published_at, expires_at";
+const columns = "id, title, body, link_url, link_label, audience, category, show_on_home, show_on_overview, published_at, expires_at";
 
 type Row = {
   id: string;
@@ -24,6 +27,8 @@ type Row = {
   link_label: string | null;
   audience: string;
   category: string | null;
+  show_on_home: boolean | null;
+  show_on_overview: boolean | null;
   published_at: string;
   expires_at: string | null;
 };
@@ -36,15 +41,17 @@ const toAnnouncement = (r: Row): Announcement => ({
   linkLabel: r.link_label,
   audience: r.audience === "admins" ? "admins" : "everyone",
   category: isAnnouncementCategory(r.category) ? r.category : "general",
+  showOnHome: r.show_on_home !== false,
+  showOnOverview: r.show_on_overview !== false,
   publishedAt: r.published_at,
   expiresAt: r.expires_at,
 });
 
 /**
  * The newest announcements for the signed-in person (RLS: current, and
- * meant for them). Shown on the home page and on every strata's Overview.
+ * meant for them), for one place: the Home page or a strata's Overview.
  */
-export async function getCurrentAnnouncements(limit = 3): Promise<Announcement[]> {
+export async function getCurrentAnnouncements(place: "home" | "overview", limit = 3): Promise<Announcement[]> {
   const supabase = await createClient();
   const now = new Date().toISOString();
   // RLS already limits this to current announcements, except for Super
@@ -54,6 +61,7 @@ export async function getCurrentAnnouncements(limit = 3): Promise<Announcement[]
     .select(columns)
     .lte("published_at", now)
     .or(`expires_at.is.null,expires_at.gt.${now}`)
+    .eq(place === "home" ? "show_on_home" : "show_on_overview", true)
     .order("published_at", { ascending: false })
     .limit(limit);
   if (error) {

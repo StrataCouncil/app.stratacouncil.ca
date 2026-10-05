@@ -29,7 +29,7 @@ export default async function HomePage() {
   const [profile, corporations, announcements] = await Promise.all([
     getCurrentProfile(),
     getConnectedCorporations(),
-    getCurrentAnnouncements(),
+    getCurrentAnnouncements("home"),
   ]);
 
   const supabase = await createClient();

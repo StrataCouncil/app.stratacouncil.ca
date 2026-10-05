@@ -1202,6 +1202,27 @@ button {
 .announcement-form {
   margin-bottom: 1rem;
 }
+.announcement-form__places {
+  border: 0;
+  margin: 0 0 1.1rem;
+  padding: 0;
+}
+.announcement-form__places > span {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.announcement-form__places .checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-weight: 400;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+.announcement-form__places .checkbox-row input {
+  padding: 0;
+  margin: 0;
+}
 .announcement-admin-list {
   list-style: none;
   margin: 0;
