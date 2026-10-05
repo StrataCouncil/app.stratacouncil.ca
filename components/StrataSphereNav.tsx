@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { useStrata } from "@/components/StrataContext";
 import { RequestSubscriptionButton } from "@/components/RequestSubscriptionButton";
 import { STRATASPHERE_PITCH, STRATASPHERE_TITLE } from "@/components/StratasphereValue";
+import { SubscriptionPendingNote } from "@/components/SubscriptionPendingNote";
 
 /**
  * StrataSphere sub-nav (doc03 "second level"): free sections show fully
@@ -55,7 +56,7 @@ function LockIcon() {
 }
 
 export function StrataSphereNav({ active }: { active: string }) {
-  const { corpId, subscribed, isAdmin, canManage } = useStrata();
+  const { corpId, subscribed, pending, isAdmin, canManage } = useStrata();
   const items = allItems.filter((i) => (!i.managersOnly || canManage) && (!i.adminsOnly || isAdmin));
   const [prompt, setPrompt] = useState<string | null>(null);
 
@@ -100,6 +101,7 @@ export function StrataSphereNav({ active }: { active: string }) {
         <SubscribePrompt
           corpId={corpId}
           isAdmin={isAdmin}
+          pending={pending}
           onClose={() => setPrompt(null)}
         />
       )}
@@ -110,10 +112,12 @@ export function StrataSphereNav({ active }: { active: string }) {
 function SubscribePrompt({
   corpId,
   isAdmin,
+  pending,
   onClose,
 }: {
   corpId: string;
   isAdmin: boolean;
+  pending: boolean;
   onClose: () => void;
 }) {
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -137,18 +141,18 @@ function SubscribePrompt({
         onClick={(e) => e.stopPropagation()}
         data-testid="subscribe-prompt"
       >
-        <h2 id="subscribe-prompt-title">{STRATASPHERE_TITLE}</h2>
-        <p>{STRATASPHERE_PITCH}</p>
-        {!isAdmin && (
+        <h2 id="subscribe-prompt-title">{pending ? "Stratasphere™ is on its way" : STRATASPHERE_TITLE}</h2>
+        {pending ? <SubscriptionPendingNote /> : <p>{STRATASPHERE_PITCH}</p>}
+        {!isAdmin && !pending && (
           <p className="card__meta">
             Only your strata&rsquo;s admin can subscribe. Request it and we&rsquo;ll email them for you.
           </p>
         )}
         <div className="role-editor__actions">
           <button ref={closeRef} type="button" className="button button-secondary" onClick={onClose}>
-            Not now
+            {pending ? "OK" : "Not now"}
           </button>
-          {isAdmin ? (
+          {pending ? null : isAdmin ? (
             <Link
               href={`/strata/${corpId}/billing?step=plan`}
               className="button button-primary"

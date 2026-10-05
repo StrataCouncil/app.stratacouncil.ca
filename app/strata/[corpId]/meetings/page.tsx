@@ -9,6 +9,7 @@ import { formatMeetingWhen } from "@/lib/meetings/format";
 import { meetingStatus } from "@/lib/meetings/status";
 import { RequestSubscriptionButton } from "@/components/RequestSubscriptionButton";
 import { councilRoles } from "@/lib/strata";
+import { SubscriptionPendingNote } from "@/components/SubscriptionPendingNote";
 
 /**
  * Meetings. Before the free meeting is used, the first-meeting checklist
@@ -105,7 +106,9 @@ export default async function MeetingsPage({ params }: { params: Promise<{ corpI
             You can keep setting up draft meetings and agendas. Launching one needs a subscription. Documents, finalized
             minutes and everything from your free meeting stay fully accessible either way.
           </p>
-          {access.isAdmin ? (
+          {access.pending ? (
+            <SubscriptionPendingNote />
+          ) : access.isAdmin ? (
             <Link href={`/strata/${corpId}/billing`} className="button button-primary" data-testid="meetings-subscribe-cta">
               See plans
             </Link>

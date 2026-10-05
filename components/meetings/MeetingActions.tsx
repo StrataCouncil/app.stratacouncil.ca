@@ -7,6 +7,8 @@ import { deleteMeeting, launchMeeting, type MeetingDetailsInput } from "@/app/st
 import { MeetingDetailsForm } from "@/components/meetings/MeetingDetailsForm";
 import type { ChairCandidate } from "@/lib/data/meetings";
 import { RequestSubscriptionButton } from "@/components/RequestSubscriptionButton";
+import { SubscriptionPendingNote } from "@/components/SubscriptionPendingNote";
+import { useOptionalStrata } from "@/components/StrataContext";
 
 function Dialog({ title, onClose, children, wide }: { title: string; onClose: () => void; children: React.ReactNode; wide?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -64,6 +66,7 @@ export function LaunchMeetingButton({
   }
 
   const blocked = !subscribed && !trialAvailable;
+  const subscriptionPending = useOptionalStrata()?.pending ?? false;
   return (
     <>
       <button
@@ -78,7 +81,12 @@ export function LaunchMeetingButton({
       </button>
       {open && (
         <Dialog title="Launch Meeting Mode?" onClose={() => setOpen(false)}>
-          {blocked ? (
+          {blocked && subscriptionPending ? (
+            <>
+              <p>Your free meeting has been used. You can launch this one as soon as your subscription goes through.</p>
+              <SubscriptionPendingNote />
+            </>
+          ) : blocked ? (
             <p>
               Your free meeting has been used. Running another meeting needs a Stratasphere&trade; subscription.
             </p>
@@ -98,7 +106,7 @@ export function LaunchMeetingButton({
             <button type="button" className="button button-secondary" onClick={() => setOpen(false)} disabled={pending}>
               Not now
             </button>
-            {blocked || needsSubscription ? (
+            {(blocked || needsSubscription) && subscriptionPending ? null : blocked || needsSubscription ? (
               isAdmin ? (
                 <Link href={`/strata/${corpId}/billing`} className="button button-primary">
                   See plans

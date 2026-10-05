@@ -2,11 +2,21 @@
 
 import { useState, useTransition } from "react";
 import { requestSubscription } from "@/app/strata/[corpId]/subscription-request-actions";
+import { useOptionalStrata } from "@/components/StrataContext";
+import { SubscriptionPendingNote } from "@/components/SubscriptionPendingNote";
 
-/** For members who aren't the admin: asks the admin(s) by email to subscribe. */
-export function RequestSubscriptionButton({ corpId }: { corpId: string }) {
+/**
+ * For members who aren't the admin: asks the admin(s) by email to
+ * subscribe. While a subscription is pending there's nothing to ask for,
+ * so it says that instead.
+ */
+export function RequestSubscriptionButton({ corpId, subscriptionPending }: { corpId: string; subscriptionPending?: boolean }) {
+  const strata = useOptionalStrata();
   const [state, setState] = useState<{ sent?: boolean; error?: string }>({});
   const [pending, startTransition] = useTransition();
+  if (subscriptionPending ?? (strata?.corpId === corpId && strata.pending)) {
+    return <SubscriptionPendingNote corpId={corpId} isAdmin={false} />;
+  }
   if (state.sent) {
     return (
       <span className="card__meta" role="status" data-testid="subscription-requested">

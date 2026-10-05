@@ -1,12 +1,18 @@
 import Link from "next/link";
 import { RequestSubscriptionButton } from "@/components/RequestSubscriptionButton";
+import { SubscriptionPendingNote } from "@/components/SubscriptionPendingNote";
 
-type Action = { kind: "connect" } | { kind: "plans"; corpId: string } | { kind: "request"; corpId: string };
+type Action =
+  | { kind: "connect" }
+  | { kind: "plans"; corpId: string }
+  | { kind: "request"; corpId: string }
+  | { kind: "pending"; corpId: string; isAdmin: boolean };
 
 /**
  * What Stratasphere does, on Home, for people whose strata isn't
  * subscribed (note 3, 2026-10-05). The button fits who's looking: connect
- * first, see plans (an admin), or ask the admin (anyone else).
+ * first, see plans (an admin), or ask the admin (anyone else). While that
+ * strata's subscription is pending, it says so instead.
  */
 export function HomeStratasphereCard({ action }: { action: Action }) {
   return (
@@ -21,7 +27,9 @@ export function HomeStratasphereCard({ action }: { action: Action }) {
         </p>
       </div>
       <div className="home-stratasphere__action">
-        {action.kind === "connect" ? (
+        {action.kind === "pending" ? (
+          <SubscriptionPendingNote corpId={action.corpId} isAdmin={action.isAdmin} />
+        ) : action.kind === "connect" ? (
           <Link href="/strata" className="button button-primary">
             Connect to a strata
           </Link>

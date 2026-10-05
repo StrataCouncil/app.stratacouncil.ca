@@ -269,7 +269,7 @@ export default async function OverviewPage({ params }: { params: Promise<{ corpI
             </div>
             <div>
               <dt>Stratasphere&trade;</dt>
-              <dd>{access.subscribed ? "Subscribed" : "Not subscribed"}</dd>
+              <dd>{access.subscribed ? "Subscribed" : access.pending ? "Subscription pending" : "Not subscribed"}</dd>
             </div>
           </dl>
         </section>
