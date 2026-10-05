@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { completeSection } from "@/app/training/actions";
 import { BlockView, Transcript } from "@/components/training/BlockView";
+import { PhotoCreditLine } from "@/components/training/PhotoPicker";
 import { screenRequirements, type ModuleContent, type Screen } from "@/lib/training/content";
 
 type Page =
@@ -295,6 +296,7 @@ export function ModulePlayer({
                 <div className="player__aside">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={screen.image.src} alt={screen.image.alt} />
+                  <PhotoCreditLine credit={screen.image.credit} />
                 </div>
               )}
             </div>

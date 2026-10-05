@@ -6,6 +6,8 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProfile } from "@/lib/data/profile";
 import { normalizeModuleContent, publishProblems } from "@/lib/training/content";
+import { listVoices, NarrationError, speak, type Voice } from "@/lib/media/elevenlabs";
+import { PhotoError, searchPhotos, trackPhotoUse, type StockPhoto } from "@/lib/media/unsplash";
 
 /**
  * The Module Builder's writes. Super Admins do everything; Authors (0033,
@@ -251,4 +253,70 @@ export async function removeModuleAuthor(moduleId: string, userId: string): Prom
   if (error) return { ok: false, error: "Couldn't remove the author." };
   refresh(moduleId);
   return { ok: true };
+}
+
+// ── Narration (ElevenLabs) and stock photos (Unsplash) ─────────────────
+
+/** The voices on the ElevenLabs account, for the module's narration voice. */
+export async function getNarrationVoices(moduleId: string): Promise<Result<{ voices: Voice[] }>> {
+  if (!(await canAuthor(moduleId))) return { ok: false, error: "You can't edit this module." };
+  try {
+    return { ok: true, voices: await listVoices() };
+  } catch (e) {
+    return { ok: false, error: e instanceof NarrationError ? e.message : "Couldn't load the voices." };
+  }
+}
+
+/**
+ * Voice one screen's narration script and store the MP3 with the module's
+ * other media. The builder puts the returned URL on the screen and records
+ * which script it was made from.
+ */
+export async function generateNarration(
+  moduleId: string,
+  text: string,
+  voiceId: string
+): Promise<Result<{ url: string; voicedText: string }>> {
+  if (!(await canAuthor(moduleId))) return { ok: false, error: "You can't edit this module." };
+  const script = text.trim();
+  if (!script) return { ok: false, error: "Write the narration script first." };
+  if (script.length > 5000) return { ok: false, error: "That script is too long for one screen (5,000 characters at most)." };
+  try {
+    const audio = await speak(script, voiceId);
+    const path = `${new Date().getFullYear()}/narration/${randomUUID()}.mp3`;
+    const admin = createAdminClient();
+    const { error } = await admin.storage.from(MEDIA_BUCKET).upload(path, audio, { contentType: "audio/mpeg" });
+    if (error) {
+      console.error("[generateNarration] upload", error.message);
+      return { ok: false, error: "The audio was made but couldn't be saved. Try again." };
+    }
+    return { ok: true, url: admin.storage.from(MEDIA_BUCKET).getPublicUrl(path).data.publicUrl, voicedText: script };
+  } catch (e) {
+    return { ok: false, error: e instanceof NarrationError ? e.message : "Couldn't make the narration. Try again." };
+  }
+}
+
+export async function searchStockPhotos(
+  moduleId: string,
+  query: string,
+  page = 1
+): Promise<Result<{ photos: StockPhoto[]; totalPages: number }>> {
+  if (!(await canAuthor(moduleId))) return { ok: false, error: "You can't edit this module." };
+  try {
+    const r = await searchPhotos(query, Math.max(1, Math.min(20, Math.floor(page))));
+    return { ok: true, photos: r.photos, totalPages: r.totalPages };
+  } catch (e) {
+    return { ok: false, error: e instanceof PhotoError ? e.message : "Photo search didn't work. Try again." };
+  }
+}
+
+/** An author chose a photo: tell Unsplash, as their guidelines require. */
+export async function chooseStockPhoto(moduleId: string, downloadLocation: string): Promise<Result> {
+  if (!(await canAuthor(moduleId))) return { ok: false, error: "You can't edit this module." };
+  try {
+    await trackPhotoUse(downloadLocation);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof PhotoError ? e.message : "Couldn't use that photo." };
+  }
 }

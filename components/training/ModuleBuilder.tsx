@@ -10,6 +10,7 @@ import {
   newBlock,
   newScreen,
   newSection,
+  narrationOutOfDate,
   publishProblems,
   type Block,
   type BlockType,
@@ -18,7 +19,9 @@ import {
   type ScreenLayout,
   type Section,
 } from "@/lib/training/content";
-import { markReadyForReview, publishModule, saveModuleDraft } from "@/app/admin/training/actions";
+import { generateNarration, getNarrationVoices, markReadyForReview, publishModule, saveModuleDraft } from "@/app/admin/training/actions";
+import { PhotoCreditLine, PhotoPicker } from "@/components/training/PhotoPicker";
+import type { Voice } from "@/lib/media/elevenlabs";
 import { BlockEditor, ItemTools, MediaField, move } from "@/components/training/BlockEditor";
 import { ModulePlayer } from "@/components/training/ModulePlayer";
 import { Modal } from "@/components/Modal";
@@ -211,7 +214,7 @@ export function ModuleBuilder({
       {module.aiDraftedFrom && module.publishedVersion === 0 && (
         <p className="builder__ai-note" role="note">
           <strong>Drafted by AI</strong> from &ldquo;{module.aiDraftedFrom}&rdquo;. Check every fact, number and reference against
-          the source before publishing, and record narration from the scripts on each screen.
+          the source before publishing, then add photos and narration (Module settings can voice every screen at once).
         </p>
       )}
       {save.state === "error" && (
@@ -341,11 +344,21 @@ export function ModuleBuilder({
               </div>
             </div>
           ) : selected.kind === "settings" || !screen || !section ? (
-            <ModuleSettings
-              content={content}
-              onChange={(objectives) => setContent((c) => ({ ...c, objectives }))}
-              onAddSection={content.sections.length === 0 ? addSection : undefined}
-            />
+            <>
+              <ModuleSettings
+                content={content}
+                onChange={(objectives) => setContent((c) => ({ ...c, objectives }))}
+                onAddSection={content.sections.length === 0 ? addSection : undefined}
+              />
+              <NarrationSettings
+                moduleId={module.id}
+                content={content}
+                onVoice={(voice) => setContent((c) => ({ ...c, voice }))}
+                onVoiced={(screenId, url, voicedText) =>
+                  updateScreen(screenId, (s) => ({ ...s, narration: { ...s.narration, src: url, voicedText } }))
+                }
+              />
+            </>
           ) : (
             <div className="builder__canvas">
               <label className="field builder__section-field">
@@ -369,7 +382,7 @@ export function ModuleBuilder({
                 </button>
               </div>
 
-              <ScreenSettings moduleId={module.id} screen={screen} onChange={(s) => updateScreen(screen.id, () => s)} />
+              <ScreenSettings moduleId={module.id} screen={screen} voice={content.voice ?? null} onChange={(s) => updateScreen(screen.id, () => s)} />
 
               <Inserter onPick={(t) => insertBlock(0, t)} />
               {screen.blocks.map((b, i) => {
@@ -551,10 +564,161 @@ function ModuleSettings({
   );
 }
 
+/**
+ * The module's narration voice, and voicing every screen whose audio is
+ * missing or older than its script, one screen at a time.
+ */
+function NarrationSettings({
+  moduleId,
+  content,
+  onVoice,
+  onVoiced,
+}: {
+  moduleId: string;
+  content: ModuleContent;
+  onVoice: (v: { id: string; name: string } | null) => void;
+  onVoiced: (screenId: string, url: string, voicedText: string) => void;
+}) {
+  const [voices, setVoices] = useState<Voice[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  const [stop, setStop] = useState(false);
+  const stopRef = useRef(false);
+  stopRef.current = stop;
+
+  const screens = flattenScreens(content).map((f) => f.screen);
+  const todo = screens.filter((s) => s.narration.transcript.trim() && (!s.narration.src || narrationOutOfDate(s)));
+  const characters = todo.reduce((n, s) => n + s.narration.transcript.trim().length, 0);
+  const voiced = screens.filter((s) => s.narration.src && !narrationOutOfDate(s)).length;
+
+  async function loadVoices() {
+    setLoading(true);
+    setError(null);
+    const r = await getNarrationVoices(moduleId);
+    setLoading(false);
+    if (!r.ok) return setError(r.error);
+    setVoices(r.voices);
+  }
+
+  async function voiceAll() {
+    if (!content.voice) return setError("Choose a voice first.");
+    setError(null);
+    setStop(false);
+    setProgress({ done: 0, total: todo.length });
+    for (let i = 0; i < todo.length; i++) {
+      if (stopRef.current) break;
+      const s = todo[i];
+      const r = await generateNarration(moduleId, s.narration.transcript, content.voice.id);
+      if (!r.ok) {
+        setError(`Stopped at "${s.title}": ${r.error}`);
+        break;
+      }
+      onVoiced(s.id, r.url, r.voicedText);
+      setProgress({ done: i + 1, total: todo.length });
+    }
+    setProgress(null);
+  }
+
+  return (
+    <div className="builder__canvas">
+      <section className="builder__block">
+        <div className="builder__block-head">
+          <span className="builder__block-type">Narration</span>
+        </div>
+        <p className="card__meta">
+          Generated with ElevenLabs from each screen&rsquo;s narration script. {voiced} of {screens.length} screens have up-to-date
+          narration.
+        </p>
+        <div className="be-row">
+          <span>
+            Voice: <strong>{content.voice?.name ?? "not chosen"}</strong>
+          </span>
+          <button type="button" className="button button-secondary button-small" onClick={loadVoices} disabled={loading}>
+            {loading ? "Loading voices…" : content.voice ? "Change voice" : "Choose a voice"}
+          </button>
+        </div>
+        {voices && (
+          <ul className="voice-list">
+            {voices.map((v) => (
+              <li key={v.id} data-chosen={content.voice?.id === v.id}>
+                <div>
+                  <strong>{v.name}</strong>
+                  {v.description && <span className="card__meta"> &middot; {v.description}</span>}
+                </div>
+                {v.previewUrl && <audio src={v.previewUrl} controls preload="none" aria-label={`Sample of ${v.name}`} />}
+                <button
+                  type="button"
+                  className="button button-secondary button-small"
+                  onClick={() => {
+                    onVoice({ id: v.id, name: v.name });
+                    setVoices(null);
+                  }}
+                >
+                  {content.voice?.id === v.id ? "Chosen" : "Use this voice"}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="be-row">
+          {progress ? (
+            <>
+              <span role="status">
+                Making audio: {progress.done} of {progress.total} screens…
+              </span>
+              <button type="button" className="text-action" onClick={() => setStop(true)}>
+                Stop
+              </button>
+            </>
+          ) : (
+            <>
+              <button type="button" className="button button-primary button-small" disabled={!content.voice || todo.length === 0} onClick={voiceAll}>
+                {todo.length ? `Generate narration for ${todo.length} ${todo.length === 1 ? "screen" : "screens"}` : "All narration is up to date"}
+              </button>
+              {todo.length > 0 && <span className="card__meta">About {characters.toLocaleString("en-CA")} characters of your ElevenLabs allowance.</span>}
+            </>
+          )}
+        </div>
+        {error && (
+          <p className="form-alert" role="alert">
+            {error}
+          </p>
+        )}
+      </section>
+    </div>
+  );
+}
+
 const layoutLabels: Record<ScreenLayout, string> = { full: "Full width", split: "Text with a picture beside it" };
 
 /** A screen's layout, side picture and narration. */
-function ScreenSettings({ moduleId, screen, onChange }: { moduleId: string; screen: Screen; onChange: (s: Screen) => void }) {
+function ScreenSettings({
+  moduleId,
+  screen,
+  voice,
+  onChange,
+}: {
+  moduleId: string;
+  screen: Screen;
+  voice: { id: string; name: string } | null;
+  onChange: (s: Screen) => void;
+}) {
+  const [picking, setPicking] = useState(false);
+  const [voicing, setVoicing] = useState(false);
+  const [narrationError, setNarrationError] = useState<string | null>(null);
+  const stale = narrationOutOfDate(screen);
+
+  async function voiceIt() {
+    if (!voice) return setNarrationError("Choose a narration voice in Module settings first.");
+    setVoicing(true);
+    setNarrationError(null);
+    const r = await generateNarration(moduleId, screen.narration.transcript, voice.id);
+    setVoicing(false);
+    if (!r.ok) return setNarrationError(r.error);
+    onChange({ ...screen, narration: { ...screen.narration, src: r.url, voicedText: r.voicedText } });
+  }
+
   return (
     <section className="builder__block builder__screen-settings">
       <div className="be-row">
@@ -568,38 +732,81 @@ function ScreenSettings({ moduleId, screen, onChange }: { moduleId: string; scre
             ))}
           </select>
         </label>
+        <button type="button" className="button button-secondary button-small builder__find-photo" onClick={() => setPicking(true)}>
+          {screen.image.src ? "Change photo" : "Find a photo"}
+        </button>
       </div>
       {screen.layout === "split" && (
         <div className="be-stack">
-          <MediaField moduleId={moduleId} kind="image" value={screen.image.src} label="The picture beside the text" onChange={(src) => onChange({ ...screen, image: { ...screen.image, src } })} />
+          <MediaField
+            moduleId={moduleId}
+            kind="image"
+            value={screen.image.src}
+            label="Or upload your own picture"
+            onChange={(src) => onChange({ ...screen, image: { ...screen.image, src, credit: null } })}
+          />
+          <PhotoCreditLine credit={screen.image.credit} />
           <label className="field">
             <span>Picture description (alt text)</span>
             <input value={screen.image.alt} maxLength={500} onChange={(e) => onChange({ ...screen, image: { ...screen.image, alt: e.target.value } })} />
           </label>
         </div>
       )}
-      <div className="be-stack">
-        <MediaField
+      {picking && (
+        <PhotoPicker
           moduleId={moduleId}
-          kind="audio"
-          value={screen.narration.src}
-          label={screen.narration.src ? "Narration added. Next waits until it finishes." : "Narration (optional): an MP3 or M4A that plays with this screen"}
-          onChange={(src) => onChange({ ...screen, narration: { ...screen.narration, src } })}
-          onClear={screen.narration.src ? () => onChange({ ...screen, narration: { src: "", transcript: screen.narration.transcript } }) : undefined}
+          initialQuery={screen.image.hint || screen.title}
+          onClose={() => setPicking(false)}
+          onPick={(p) => {
+            onChange({ ...screen, layout: "split", image: { ...screen.image, src: p.src, alt: p.alt || screen.image.alt, credit: p.credit } });
+            setPicking(false);
+          }}
         />
-        {screen.narration.src && <audio src={screen.narration.src} controls preload="metadata" className="be-audio" />}
+      )}
+
+      <div className="be-stack">
         <label className="field">
-          <span>
-            {screen.narration.src
-              ? "Captions (the narration as text; learners can turn these on)"
-              : "Narration script (record it, then upload the audio above; it becomes the captions)"}
-          </span>
+          <span>Narration script (also the captions)</span>
           <textarea
             rows={3}
             value={screen.narration.transcript}
             onChange={(e) => onChange({ ...screen, narration: { ...screen.narration, transcript: e.target.value } })}
           />
         </label>
+        <div className="be-row builder__narration">
+          <button
+            type="button"
+            className={`button ${screen.narration.src && !stale ? "button-secondary" : "button-primary"} button-small`}
+            disabled={voicing || !screen.narration.transcript.trim()}
+            onClick={voiceIt}
+            title={voice ? `Voice: ${voice.name}` : "Choose a voice in Module settings"}
+          >
+            {voicing ? "Making audio…" : screen.narration.src ? "Regenerate narration" : "Generate narration"}
+          </button>
+          <span className="card__meta">
+            {voice ? `Voice: ${voice.name}` : "No voice chosen yet (Module settings)"}
+            {screen.narration.transcript.trim() ? ` · ${screen.narration.transcript.trim().length.toLocaleString("en-CA")} characters` : ""}
+          </span>
+        </div>
+        {stale && (
+          <p className="builder__stale" role="status">
+            The script has changed since this audio was made. Regenerate it so the narration matches the captions.
+          </p>
+        )}
+        {narrationError && (
+          <p className="form-alert" role="alert">
+            {narrationError}
+          </p>
+        )}
+        {screen.narration.src && <audio src={screen.narration.src} controls preload="metadata" className="be-audio" key={screen.narration.src} />}
+        <MediaField
+          moduleId={moduleId}
+          kind="audio"
+          value={screen.narration.src}
+          label={screen.narration.src ? "Narration added. Next waits until it finishes." : "Or upload your own recording (MP3 or M4A)"}
+          onChange={(src) => onChange({ ...screen, narration: { ...screen.narration, src, voicedText: "" } })}
+          onClear={screen.narration.src ? () => onChange({ ...screen, narration: { ...screen.narration, src: "", voicedText: "" } }) : undefined}
+        />
       </div>
     </section>
   );
