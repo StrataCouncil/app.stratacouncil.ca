@@ -1,6 +1,7 @@
 /**
- * Council Training content: a module is lessons, a lesson is a stack of
- * typed blocks (the Articulate Rise model). This file is the one definition
+ * Council Training content: a module is sections (the player's menu), a
+ * section is screens (shown one at a time, with a title bar, a counter
+ * and optional narration), and a screen is a stack of typed blocks. This file is the one definition
  * of that shape. The builder edits it, the learner view renders it, and
  * `normalizeModuleContent` is applied to anything coming from the browser
  * or the database, so only known blocks with sane values are ever stored
@@ -119,6 +120,9 @@ export type Block =
     }
   | { id: string; type: "checklist"; title: string; items: { id: string; text: string }[] }
   | { id: string; type: "summary"; title: string; points: { id: string; text: string }[] }
+  | { id: string; type: "table"; caption: string; header: boolean; rows: string[][] }
+  | { id: string; type: "features"; items: { id: string; image: string; title: string; text: string }[] }
+  | { id: string; type: "gallery"; images: { id: string; src: string; alt: string; caption: string }[] }
   | { id: string; type: "divider" };
 
 /** A slide is an image, optionally narrated (an audio file that plays with it). */
@@ -127,8 +131,25 @@ export type Slide = { id: string; src: string; alt: string; caption: string; aud
 export type RevealStyle = "accordion" | "cards";
 
 export type BlockType = Block["type"];
-export type Lesson = { id: string; title: string; blocks: Block[] };
-export type ModuleContent = { lessons: Lesson[] };
+
+/** "full": blocks across the screen. "split": blocks on the left, a picture on the right. */
+export type ScreenLayout = "full" | "split";
+export type Screen = {
+  id: string;
+  title: string;
+  layout: ScreenLayout;
+  /** The picture beside the blocks on a split screen. */
+  image: { src: string; alt: string };
+  /** Narration that plays with the screen; Next waits for it to finish. */
+  narration: { src: string; transcript: string };
+  blocks: Block[];
+};
+export type Section = { id: string; title: string; screens: Screen[] };
+export type ModuleContent = {
+  /** "After this module you can…": shown on the opening screen and again in the recap. */
+  objectives: string[];
+  sections: Section[];
+};
 
 /** The block menu, in the order the builder offers them. */
 export const blockCatalog: { type: BlockType; label: string; description: string }[] = [
@@ -142,7 +163,10 @@ export const blockCatalog: { type: BlockType; label: string; description: string
   { type: "knowledge_check", label: "Knowledge check", description: "A practice question with feedback. Not graded." },
   { type: "scenario", label: "Scenario", description: "A real situation: pick a response, see what happens." },
   { type: "checklist", label: "Checklist", description: "Steps or takeaways the learner can tick off." },
-  { type: "summary", label: "Summary", description: "The key points of the lesson, to close it out." },
+  { type: "summary", label: "Summary", description: "The key points, to close out a section." },
+  { type: "features", label: "Icon row", description: "Two to four icons or pictures, each with a short caption." },
+  { type: "table", label: "Table", description: "Rows and columns, e.g. deadlines or who does what." },
+  { type: "gallery", label: "Image grid", description: "Several pictures with captions." },
   { type: "divider", label: "Divider", description: "A visual break between sections." },
 ];
 
@@ -190,6 +214,20 @@ export function newBlock(type: BlockType): Block {
       };
     case "summary":
       return { id, type, title: "Summary", points: [{ id: newId("p"), text: "" }] };
+    case "table":
+      return { id, type, caption: "", header: true, rows: [["", ""], ["", ""]] };
+    case "features":
+      return {
+        id,
+        type,
+        items: [
+          { id: newId("f"), image: "", title: "", text: "" },
+          { id: newId("f"), image: "", title: "", text: "" },
+          { id: newId("f"), image: "", title: "", text: "" },
+        ],
+      };
+    case "gallery":
+      return { id, type, images: [] };
     case "knowledge_check": {
       const a = newId("o"), b = newId("o");
       return { id, type, question: "", options: [{ id: a, text: "", feedback: "" }, { id: b, text: "", feedback: "" }], correctId: a, explanation: "", studyTip: "", reference: "" };
@@ -220,6 +258,8 @@ export function cloneBlock(block: Block): Block {
   if (copy.type === "checklist") copy.items = copy.items.map((i) => ({ ...i, id: newId("i") }));
   if (copy.type === "reveal") copy.items = copy.items.map((i) => ({ ...i, id: newId("r") }));
   if (copy.type === "summary") copy.points = copy.points.map((p) => ({ ...p, id: newId("p") }));
+  if (copy.type === "features") copy.items = copy.items.map((i) => ({ ...i, id: newId("f") }));
+  if (copy.type === "gallery") copy.images = copy.images.map((i) => ({ ...i, id: newId("g") }));
   if (copy.type === "scenario") copy.choices = copy.choices.map((c) => ({ ...c, id: newId("c") }));
   if (copy.type === "knowledge_check") {
     const map = new Map(copy.options.map((o) => [o.id, newId("o")]));
@@ -369,6 +409,35 @@ function normalizeBlock(raw: unknown): Block | null {
           return { id: idOf(x.id, "i"), text: str(x.text, 500) };
         }),
       };
+    case "table": {
+      const rows = list(b.rows, 40).map((r) => list(r, 8).map((c) => str(c, 500)));
+      const cols = Math.max(1, ...rows.map((r) => r.length));
+      return {
+        id,
+        type: "table",
+        caption: str(b.caption, 300),
+        header: b.header !== false,
+        rows: (rows.length ? rows : [[""]]).map((r) => [...r, ...Array(cols - r.length).fill("")]),
+      };
+    }
+    case "features":
+      return {
+        id,
+        type: "features",
+        items: list(b.items, 4).map((i) => {
+          const x = (i ?? {}) as Record<string, unknown>;
+          return { id: idOf(x.id, "f"), image: safeMediaUrl(x.image), title: str(x.title, 120), text: str(x.text, 500) };
+        }),
+      };
+    case "gallery":
+      return {
+        id,
+        type: "gallery",
+        images: list(b.images, 24).map((i) => {
+          const x = (i ?? {}) as Record<string, unknown>;
+          return { id: idOf(x.id, "g"), src: safeMediaUrl(x.src), alt: str(x.alt, 500), caption: str(x.caption, 300) };
+        }),
+      };
     case "divider":
       return { id, type: "divider" };
     default:
@@ -376,48 +445,116 @@ function normalizeBlock(raw: unknown): Block | null {
   }
 }
 
+export function newScreen(title = "New screen"): Screen {
+  return { id: newId("s"), title, layout: "full", image: { src: "", alt: "" }, narration: { src: "", transcript: "" }, blocks: [newBlock("text")] };
+}
+
+export function newSection(title = "New section"): Section {
+  return { id: newId("sec"), title, screens: [newScreen("Introduction")] };
+}
+
+function normalizeScreen(raw: unknown, seen: Set<string>): Screen {
+  const x = (raw ?? {}) as Record<string, unknown>;
+  let id = idOf(x.id, "s");
+  if (seen.has(id)) id = newId("s");
+  seen.add(id);
+  const image = (x.image ?? {}) as Record<string, unknown>;
+  const narration = (x.narration ?? {}) as Record<string, unknown>;
+  return {
+    id,
+    title: str(x.title, 200) || "Untitled screen",
+    layout: x.layout === "split" ? "split" : "full",
+    image: { src: safeMediaUrl(image.src), alt: str(image.alt, 500) },
+    narration: { src: safeMediaUrl(narration.src), transcript: str(narration.transcript, 50000) },
+    blocks: list(x.blocks, 60).map(normalizeBlock).filter((b): b is Block => b !== null),
+  };
+}
+
 export function normalizeModuleContent(raw: unknown): ModuleContent {
+  const r = (raw ?? {}) as Record<string, unknown>;
   const seen = new Set<string>();
-  const lessons = list((raw as { lessons?: unknown })?.lessons, 50).map((l) => {
-    const x = (l ?? {}) as Record<string, unknown>;
-    let id = idOf(x.id, "l");
-    if (seen.has(id)) id = newId("l");
+  const screenIds = new Set<string>();
+  // Early drafts stored { lessons: [{ id, title, blocks }] }: each lesson becomes a one-screen section.
+  const rawSections = Array.isArray(r.sections)
+    ? r.sections
+    : list(r.lessons, 50).map((l) => {
+        const x = (l ?? {}) as Record<string, unknown>;
+        return { id: x.id, title: x.title, screens: [{ id: `${String(x.id ?? "l")}_1`, title: x.title, blocks: x.blocks }] };
+      });
+  const sections = list(rawSections, 30).map((sec) => {
+    const x = (sec ?? {}) as Record<string, unknown>;
+    let id = idOf(x.id, "sec");
+    if (seen.has(id)) id = newId("sec");
     seen.add(id);
     return {
       id,
-      title: str(x.title, 200) || "Untitled lesson",
-      blocks: list(x.blocks, 200).map(normalizeBlock).filter((b): b is Block => b !== null),
+      title: str(x.title, 200) || "Untitled section",
+      screens: list(x.screens, 60).map((s) => normalizeScreen(s, screenIds)),
     };
   });
-  return { lessons };
+  return {
+    objectives: list(r.objectives, 12).map((o) => str(o, 300)).filter((o) => o.trim()),
+    sections,
+  };
+}
+
+/** Every screen in order, with where it sits (the player's counter is position + 1). */
+export function flattenScreens(content: ModuleContent) {
+  return content.sections.flatMap((section, sectionIndex) =>
+    section.screens.map((screen, indexInSection) => ({ section, sectionIndex, screen, indexInSection }))
+  );
 }
 
 // ── Learner rules ──────────────────────────────────────────────────────
 
-/** Blocks the learner must answer before a lesson can be completed. */
-export const isInteractive = (b: Block) => b.type === "knowledge_check" || b.type === "scenario";
+/**
+ * What the learner must do on a screen before Next: listen to the
+ * narration to the end, answer every knowledge check and scenario, and
+ * open every click-to-reveal item. Nothing is graded.
+ */
+export function screenRequirements(screen: Screen): string[] {
+  const ids = screen.narration.src ? ["narration"] : [];
+  for (const b of screen.blocks) {
+    if (b.type === "knowledge_check" || b.type === "scenario") ids.push(b.id);
+    if (b.type === "reveal" && b.items.some((i) => i.title.trim() || i.body.trim())) ids.push(b.id);
+  }
+  return ids;
+}
 
 /** Problems to fix before publishing, in plain words. Empty means ready. */
 export function publishProblems(content: ModuleContent): string[] {
   const problems: string[] = [];
-  if (content.lessons.length === 0) problems.push("Add at least one lesson.");
-  content.lessons.forEach((l, li) => {
-    const where = `Lesson ${li + 1} ("${l.title}")`;
-    if (l.blocks.length === 0) problems.push(`${where} has no content.`);
-    l.blocks.forEach((b, bi) => {
-      const at = `${where}, block ${bi + 1}`;
-      if (b.type === "image" && (!b.src || !b.alt.trim())) problems.push(`${at}: the image needs a file and a description (alt text).`);
-      if (b.type === "slides" && (b.slides.length === 0 || b.slides.some((s) => !s.src || !s.alt.trim())))
-        problems.push(`${at}: every slide needs an image and a description.`);
-      if (b.type === "audio" && !b.src) problems.push(`${at}: the audio block needs a file.`);
-      if (b.type === "reveal" && b.items.filter((i) => i.title.trim() && i.body.trim()).length < 1)
-        problems.push(`${at}: click to reveal needs at least one item with a heading and text.`);
-      if (b.type === "summary" && !b.points.some((p) => p.text.trim())) problems.push(`${at}: the summary needs at least one point.`);
-      if (b.type === "video" && !videoSource(b.url)) problems.push(`${at}: the video link isn't a YouTube, Vimeo or video file link.`);
-      if (b.type === "knowledge_check" && (!b.question.trim() || b.options.filter((o) => o.text.trim()).length < 2))
-        problems.push(`${at}: the knowledge check needs a question and at least two answers.`);
-      if (b.type === "scenario" && (b.choices.filter((c) => c.text.trim() && c.outcome.trim()).length < 2))
-        problems.push(`${at}: the scenario needs at least two choices, each with an outcome.`);
+  if (content.sections.length === 0) problems.push("Add at least one section.");
+  if (content.objectives.length === 0) problems.push("Add the module's learning objectives (Module settings).");
+  content.sections.forEach((sec, si) => {
+    const inSection = `Section ${si + 1} ("${sec.title}")`;
+    if (sec.screens.length === 0) problems.push(`${inSection} has no screens.`);
+    sec.screens.forEach((sc, ci) => {
+      const where = `${inSection}, screen ${ci + 1} ("${sc.title}")`;
+      if (sc.blocks.length === 0) problems.push(`${where} has no content.`);
+      if (sc.layout === "split" && (!sc.image.src || !sc.image.alt.trim()))
+        problems.push(`${where}: the side picture needs a file and a description (alt text).`);
+      sc.blocks.forEach((b, bi) => {
+        const at = `${where}, block ${bi + 1}`;
+        if (b.type === "image" && (!b.src || !b.alt.trim())) problems.push(`${at}: the image needs a file and a description (alt text).`);
+        if (b.type === "slides" && (b.slides.length === 0 || b.slides.some((s) => !s.src || !s.alt.trim())))
+          problems.push(`${at}: every slide needs an image and a description.`);
+        if (b.type === "video" && !videoSource(b.url)) problems.push(`${at}: the video link isn't a YouTube, Vimeo or video file link.`);
+        if (b.type === "audio" && !b.src) problems.push(`${at}: the audio block needs a file.`);
+        if (b.type === "reveal" && b.items.filter((i) => i.title.trim() && i.body.trim()).length < 1)
+          problems.push(`${at}: click to reveal needs at least one item with a heading and text.`);
+        if (b.type === "summary" && !b.points.some((p) => p.text.trim())) problems.push(`${at}: the summary needs at least one point.`);
+        if (b.type === "features" && !b.items.some((i) => i.title.trim() || i.text.trim())) problems.push(`${at}: the icon row needs at least one item.`);
+        if (b.type === "features" && b.items.some((i) => i.image && !i.title.trim() && !i.text.trim()))
+          problems.push(`${at}: every icon needs a caption.`);
+        if (b.type === "gallery" && (b.images.length === 0 || b.images.some((i) => !i.src || !i.alt.trim())))
+          problems.push(`${at}: every picture in the grid needs a file and a description.`);
+        if (b.type === "table" && !b.rows.some((r) => r.some((c) => c.trim()))) problems.push(`${at}: the table is empty.`);
+        if (b.type === "knowledge_check" && (!b.question.trim() || b.options.filter((o) => o.text.trim()).length < 2))
+          problems.push(`${at}: the knowledge check needs a question and at least two answers.`);
+        if (b.type === "scenario" && b.choices.filter((c) => c.text.trim() && c.outcome.trim()).length < 2)
+          problems.push(`${at}: the scenario needs at least two choices, each with an outcome.`);
+      });
     });
   });
   return problems;

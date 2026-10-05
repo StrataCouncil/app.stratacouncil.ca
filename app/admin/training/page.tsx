@@ -21,7 +21,7 @@ export default async function AdminTrainingPage() {
         <div className="page-header">
           <h1>Council Training</h1>
           <p>
-            Build modules from lessons and blocks, preview them as a learner, and publish. Learners only ever see published
+            Build modules from sections and screens, preview them as a learner, and publish. Learners only ever see published
             versions; your drafts autosave.
           </p>
         </div>

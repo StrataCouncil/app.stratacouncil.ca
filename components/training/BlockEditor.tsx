@@ -274,6 +274,172 @@ export function BlockEditor({ moduleId, block, onChange }: { moduleId: string; b
         </div>
       );
 
+    case "table": {
+      const cols = block.rows[0]?.length ?? 1;
+      const setCell = (r: number, c: number, v: string) =>
+        onChange({ ...block, rows: block.rows.map((row, ri) => (ri === r ? row.map((x, ci) => (ci === c ? v : x)) : row)) });
+      return (
+        <div className="be-stack">
+          <label className="field">
+            <span>Caption (optional)</span>
+            <input value={block.caption} maxLength={300} onChange={(e) => onChange({ ...block, caption: e.target.value })} />
+          </label>
+          <label className="be-check">
+            <input type="checkbox" checked={block.header} onChange={(e) => onChange({ ...block, header: e.target.checked })} /> First row is a header
+          </label>
+          <div className="be-table">
+            <table>
+              <tbody>
+                {block.rows.map((row, r) => (
+                  <tr key={r} data-header={block.header && r === 0}>
+                    {row.map((cell, c) => (
+                      <td key={c}>
+                        <input value={cell} maxLength={500} aria-label={`Row ${r + 1}, column ${c + 1}`} onChange={(e) => setCell(r, c, e.target.value)} />
+                      </td>
+                    ))}
+                    <td>
+                      {block.rows.length > 1 && (
+                        <button
+                          type="button"
+                          className="be-icon be-icon--danger"
+                          aria-label={`Remove row ${r + 1}`}
+                          onClick={() => onChange({ ...block, rows: block.rows.filter((_, i) => i !== r) })}
+                        >
+                          &times;
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="be-row">
+            {block.rows.length < 40 && (
+              <button type="button" className="text-action" onClick={() => onChange({ ...block, rows: [...block.rows, Array(cols).fill("")] })}>
+                + Add row
+              </button>
+            )}
+            {cols < 8 && (
+              <button type="button" className="text-action" onClick={() => onChange({ ...block, rows: block.rows.map((r) => [...r, ""]) })}>
+                + Add column
+              </button>
+            )}
+            {cols > 1 && (
+              <button type="button" className="text-action" onClick={() => onChange({ ...block, rows: block.rows.map((r) => r.slice(0, -1)) })}>
+                Remove last column
+              </button>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    case "features":
+      return (
+        <div className="be-stack">
+          <p className="card__meta">Two to four items side by side, each an icon or small picture with a caption.</p>
+          {block.items.map((it, i) => (
+            <div key={it.id} className="be-item">
+              <div className="be-item__head">
+                <strong>Item {i + 1}</strong>
+                <ItemTools
+                  index={i}
+                  count={block.items.length}
+                  onMove={(d) => onChange({ ...block, items: move(block.items, i, d) })}
+                  onRemove={block.items.length > 1 ? () => onChange({ ...block, items: block.items.filter((x) => x.id !== it.id) }) : undefined}
+                />
+              </div>
+              <MediaField
+                moduleId={moduleId}
+                kind="image"
+                value={it.image}
+                label="Icon or picture (SVG or PNG work best)"
+                onChange={(image) => onChange({ ...block, items: block.items.map((x) => (x.id === it.id ? { ...x, image } : x)) })}
+                onClear={it.image ? () => onChange({ ...block, items: block.items.map((x) => (x.id === it.id ? { ...x, image: "" } : x)) }) : undefined}
+              />
+              <input
+                value={it.title}
+                maxLength={120}
+                placeholder="Heading (optional)"
+                aria-label={`Item ${i + 1} heading`}
+                onChange={(e) => onChange({ ...block, items: block.items.map((x) => (x.id === it.id ? { ...x, title: e.target.value } : x)) })}
+              />
+              <textarea
+                rows={2}
+                value={it.text}
+                maxLength={500}
+                placeholder="Caption"
+                aria-label={`Item ${i + 1} caption`}
+                onChange={(e) => onChange({ ...block, items: block.items.map((x) => (x.id === it.id ? { ...x, text: e.target.value } : x)) })}
+              />
+            </div>
+          ))}
+          {block.items.length < 4 && (
+            <button
+              type="button"
+              className="text-action"
+              onClick={() => onChange({ ...block, items: [...block.items, { id: newId("f"), image: "", title: "", text: "" }] })}
+            >
+              + Add item
+            </button>
+          )}
+        </div>
+      );
+
+    case "gallery":
+      return (
+        <div className="be-stack">
+          {block.images.length === 0 && <p className="card__meta">No pictures yet.</p>}
+          {block.images.map((im, i) => (
+            <div key={im.id} className="be-item">
+              <div className="be-item__head">
+                <strong>Picture {i + 1}</strong>
+                <ItemTools
+                  index={i}
+                  count={block.images.length}
+                  onMove={(d) => onChange({ ...block, images: move(block.images, i, d) })}
+                  onRemove={() => onChange({ ...block, images: block.images.filter((x) => x.id !== im.id) })}
+                />
+              </div>
+              <MediaField
+                moduleId={moduleId}
+                kind="image"
+                value={im.src}
+                onChange={(src) => onChange({ ...block, images: block.images.map((x) => (x.id === im.id ? { ...x, src } : x)) })}
+              />
+              <div className="be-row">
+                <label className="field be-grow">
+                  <span>Alt text</span>
+                  <input
+                    value={im.alt}
+                    maxLength={500}
+                    onChange={(e) => onChange({ ...block, images: block.images.map((x) => (x.id === im.id ? { ...x, alt: e.target.value } : x)) })}
+                  />
+                </label>
+                <label className="field be-grow">
+                  <span>Caption (optional)</span>
+                  <input
+                    value={im.caption}
+                    maxLength={300}
+                    onChange={(e) => onChange({ ...block, images: block.images.map((x) => (x.id === im.id ? { ...x, caption: e.target.value } : x)) })}
+                  />
+                </label>
+              </div>
+            </div>
+          ))}
+          {block.images.length < 24 && (
+            <button
+              type="button"
+              className="text-action"
+              onClick={() => onChange({ ...block, images: [...block.images, { id: newId("g"), src: "", alt: "", caption: "" }] })}
+            >
+              + Add picture
+            </button>
+          )}
+        </div>
+      );
+
     case "knowledge_check":
       return (
         <div className="be-stack">
@@ -453,7 +619,7 @@ export function BlockEditor({ moduleId, block, onChange }: { moduleId: string; b
   }
 }
 
-function move<T>(list: T[], i: number, d: -1 | 1): T[] {
+export function move<T>(list: T[], i: number, d: -1 | 1): T[] {
   const j = i + d;
   if (j < 0 || j >= list.length) return list;
   const out = [...list];
@@ -461,7 +627,7 @@ function move<T>(list: T[], i: number, d: -1 | 1): T[] {
   return out;
 }
 
-function ItemTools({ index, count, onMove, onRemove }: { index: number; count: number; onMove: (d: -1 | 1) => void; onRemove?: () => void }) {
+export function ItemTools({ index, count, onMove, onRemove }: { index: number; count: number; onMove: (d: -1 | 1) => void; onRemove?: () => void }) {
   return (
     <span className="be-tools">
       <button type="button" className="be-icon" onClick={() => onMove(-1)} disabled={index === 0} aria-label="Move up" title="Move up">
@@ -480,7 +646,7 @@ function ItemTools({ index, count, onMove, onRemove }: { index: number; count: n
 }
 
 /** Upload an image or video to the training media bucket, or paste a link. */
-function MediaField({
+export function MediaField({
   moduleId,
   kind,
   value,

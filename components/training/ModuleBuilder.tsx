@@ -1,22 +1,26 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   blockCatalog,
   cloneBlock,
+  flattenScreens,
   newBlock,
-  newId,
+  newScreen,
+  newSection,
   publishProblems,
   type Block,
   type BlockType,
-  type Lesson,
   type ModuleContent,
+  type Screen,
+  type ScreenLayout,
+  type Section,
 } from "@/lib/training/content";
 import { markReadyForReview, publishModule, saveModuleDraft } from "@/app/admin/training/actions";
-import { BlockEditor } from "@/components/training/BlockEditor";
-import { LessonView } from "@/components/training/LessonView";
+import { BlockEditor, ItemTools, MediaField, move } from "@/components/training/BlockEditor";
+import { ModulePlayer } from "@/components/training/ModulePlayer";
 import { Modal } from "@/components/Modal";
 
 export interface BuilderModule {
@@ -29,10 +33,14 @@ export interface BuilderModule {
   readyForReviewAt: string | null;
 }
 
+type Selection = { kind: "settings" } | { kind: "screen"; screenId: string };
+
 /**
- * The Module Builder (modelled on Articulate Rise): lessons down the side,
- * a lesson's blocks in the middle, each block edited in place, with a
- * learner preview at desktop or phone width. Everything autosaves to the
+ * The Module Builder. A module is sections (the learner's menu), each a
+ * run of screens shown one at a time; a screen is a stack of blocks, full
+ * width or beside a picture, with optional narration. The left side is the
+ * outline, the middle edits the selected screen, and Preview runs the
+ * real player at desktop or phone width. Everything autosaves to the
  * draft; learners only see a version once it's published.
  */
 export function ModuleBuilder({
@@ -49,7 +57,8 @@ export function ModuleBuilder({
 }) {
   const router = useRouter();
   const [content, setContent] = useState<ModuleContent>(initialContent);
-  const [lessonId, setLessonId] = useState<string | null>(initialContent.lessons[0]?.id ?? null);
+  const firstScreen = flattenScreens(initialContent)[0]?.screen.id;
+  const [selected, setSelected] = useState<Selection>(firstScreen ? { kind: "screen", screenId: firstScreen } : { kind: "settings" });
   const [mode, setMode] = useState<"edit" | "preview">("edit");
   const [device, setDevice] = useState<"desktop" | "phone">("desktop");
   const [save, setSave] = useState<{ state: "saved" | "saving" | "error"; at: string | null; error?: string }>({
@@ -84,52 +93,59 @@ export function ModuleBuilder({
     return () => window.removeEventListener("beforeunload", warn);
   }, [save.state]);
 
-  const lesson = content.lessons.find((l) => l.id === lessonId) ?? null;
-  const lessonIndex = content.lessons.findIndex((l) => l.id === lessonId);
+  // ── Outline edits ──
+  const located = selected.kind === "screen" ? flattenScreens(content).find((f) => f.screen.id === selected.screenId) : undefined;
+  const screen = located?.screen ?? null;
+  const section = located?.section ?? null;
 
-  const updateLesson = useCallback((id: string, fn: (l: Lesson) => Lesson) => {
-    setContent((c) => ({ lessons: c.lessons.map((l) => (l.id === id ? fn(l) : l)) }));
-  }, []);
-  const setBlocks = (fn: (b: Block[]) => Block[]) => lesson && updateLesson(lesson.id, (l) => ({ ...l, blocks: fn(l.blocks) }));
+  const setSections = (fn: (s: Section[]) => Section[]) => setContent((c) => ({ ...c, sections: fn(c.sections) }));
+  const updateSection = (id: string, fn: (s: Section) => Section) => setSections((ss) => ss.map((s) => (s.id === id ? fn(s) : s)));
+  const updateScreen = (id: string, fn: (s: Screen) => Screen) =>
+    setSections((ss) => ss.map((sec) => ({ ...sec, screens: sec.screens.map((s) => (s.id === id ? fn(s) : s)) })));
+  const setBlocks = (fn: (b: Block[]) => Block[]) => screen && updateScreen(screen.id, (s) => ({ ...s, blocks: fn(s.blocks) }));
 
-  function addLesson() {
-    const l: Lesson = { id: newId("l"), title: `Lesson ${content.lessons.length + 1}`, blocks: [newBlock("text")] };
-    setContent((c) => ({ lessons: [...c.lessons, l] }));
-    setLessonId(l.id);
+  function addSection() {
+    const sec = newSection(`Section ${content.sections.length + 1}`);
+    setSections((ss) => [...ss, sec]);
+    setSelected({ kind: "screen", screenId: sec.screens[0].id });
     setMode("edit");
   }
-  function moveLesson(i: number, d: -1 | 1) {
-    setContent((c) => {
-      const j = i + d;
-      if (j < 0 || j >= c.lessons.length) return c;
-      const lessons = [...c.lessons];
-      [lessons[i], lessons[j]] = [lessons[j], lessons[i]];
-      return { lessons };
-    });
+  function addScreen(sectionId: string) {
+    const s = newScreen();
+    updateSection(sectionId, (sec) => ({ ...sec, screens: [...sec.screens, s] }));
+    setSelected({ kind: "screen", screenId: s.id });
+    setMode("edit");
   }
-  const [confirmDelete, setConfirmDelete] = useState<Lesson | null>(null);
-  function deleteLesson(l: Lesson) {
-    setContent((c) => {
-      const lessons = c.lessons.filter((x) => x.id !== l.id);
-      if (lessonId === l.id) setLessonId(lessons[0]?.id ?? null);
-      return { lessons };
+  function moveScreen(sectionId: string, i: number, d: -1 | 1) {
+    updateSection(sectionId, (sec) => ({ ...sec, screens: move(sec.screens, i, d) }));
+  }
+  function duplicateScreen(sectionId: string, s: Screen) {
+    const copy: Screen = { ...JSON.parse(JSON.stringify(s)), id: newScreen().id, title: `${s.title} (copy)` };
+    copy.blocks = s.blocks.map(cloneBlock);
+    updateSection(sectionId, (sec) => {
+      const i = sec.screens.findIndex((x) => x.id === s.id);
+      return { ...sec, screens: [...sec.screens.slice(0, i + 1), copy, ...sec.screens.slice(i + 1)] };
     });
+    setSelected({ kind: "screen", screenId: copy.id });
+  }
+  const [confirmDelete, setConfirmDelete] = useState<{ kind: "section"; section: Section } | { kind: "screen"; screen: Screen } | null>(null);
+  function deleteConfirmed() {
+    if (!confirmDelete) return;
+    if (confirmDelete.kind === "section") {
+      setSections((ss) => ss.filter((s) => s.id !== confirmDelete.section.id));
+      if (confirmDelete.section.screens.some((s) => s.id === screen?.id)) setSelected({ kind: "settings" });
+    } else {
+      setSections((ss) => ss.map((sec) => ({ ...sec, screens: sec.screens.filter((s) => s.id !== confirmDelete.screen.id) })));
+      if (screen?.id === confirmDelete.screen.id) setSelected({ kind: "settings" });
+    }
     setConfirmDelete(null);
   }
 
   function insertBlock(at: number, type: BlockType) {
     setBlocks((b) => [...b.slice(0, at), newBlock(type), ...b.slice(at)]);
   }
-  function moveBlock(i: number, d: -1 | 1) {
-    setBlocks((b) => {
-      const j = i + d;
-      if (j < 0 || j >= b.length) return b;
-      const out = [...b];
-      [out[i], out[j]] = [out[j], out[i]];
-      return out;
-    });
-  }
 
+  // ── Publish / review ──
   const problems = publishProblems(content);
   const [showPublish, setShowPublish] = useState(false);
   async function publish() {
@@ -157,6 +173,7 @@ export function ModuleBuilder({
         : save.at
           ? `Draft saved ${new Date(save.at).toLocaleTimeString("en-CA", { hour: "numeric", minute: "2-digit" })}`
           : "Draft";
+  const screenCount = flattenScreens(content).length;
 
   return (
     <div className="builder">
@@ -175,7 +192,7 @@ export function ModuleBuilder({
           <button type="button" data-active={mode === "edit"} onClick={() => setMode("edit")}>
             Edit
           </button>
-          <button type="button" data-active={mode === "preview"} onClick={() => setMode("preview")}>
+          <button type="button" data-active={mode === "preview"} onClick={() => setMode("preview")} disabled={screenCount === 0}>
             Preview
           </button>
         </div>
@@ -185,11 +202,15 @@ export function ModuleBuilder({
           </button>
         ) : (
           <button type="button" className={`button ${readyAt ? "button-secondary" : "button-primary"} button-small`} onClick={toggleReady}>
-            {readyAt ? "Ready for review ✓" : "Mark ready for review"}
+            {readyAt ? "Ready for review (undo)" : "Mark ready for review"}
           </button>
         )}
       </header>
-      {save.state === "error" && <p className="builder__alert" role="alert">{save.error}</p>}
+      {save.state === "error" && (
+        <p className="builder__alert" role="alert">
+          {save.error}
+        </p>
+      )}
       {notice && (
         <p className="builder__notice" role="status">
           {notice}{" "}
@@ -200,44 +221,94 @@ export function ModuleBuilder({
       )}
 
       <div className="builder__body">
-        <nav className="builder__lessons" aria-label="Lessons">
-          <div className="builder__lessons-head">Lessons</div>
-          <ol>
-            {content.lessons.map((l, i) => (
-              <li key={l.id} data-active={l.id === lessonId}>
-                <button type="button" className="builder__lesson" onClick={() => setLessonId(l.id)}>
-                  <span className="builder__lesson-num">{i + 1}</span>
-                  <span>{l.title}</span>
-                </button>
+        <nav className="builder__lessons builder__outline" aria-label="Module outline">
+          <button
+            type="button"
+            className="builder__settings-link"
+            data-active={selected.kind === "settings"}
+            onClick={() => {
+              setSelected({ kind: "settings" });
+              setMode("edit");
+            }}
+          >
+            Module settings
+            <span className="card__meta">
+              {content.objectives.length} {content.objectives.length === 1 ? "objective" : "objectives"}
+            </span>
+          </button>
+
+          {content.sections.map((sec, si) => (
+            <div key={sec.id} className="builder__section">
+              <div className="builder__section-head">
+                <span className="builder__section-title">
+                  <span className="builder__lesson-num">{si + 1}</span>
+                  {sec.title}
+                </span>
                 <span className="be-tools">
-                  <button type="button" className="be-icon" onClick={() => moveLesson(i, -1)} disabled={i === 0} aria-label={`Move ${l.title} up`}>
+                  <button
+                    type="button"
+                    className="be-icon"
+                    onClick={() => setSections((ss) => move(ss, si, -1))}
+                    disabled={si === 0}
+                    aria-label={`Move section ${sec.title} up`}
+                  >
                     &uarr;
                   </button>
-                  <button type="button" className="be-icon" onClick={() => moveLesson(i, 1)} disabled={i === content.lessons.length - 1} aria-label={`Move ${l.title} down`}>
+                  <button
+                    type="button"
+                    className="be-icon"
+                    onClick={() => setSections((ss) => move(ss, si, 1))}
+                    disabled={si === content.sections.length - 1}
+                    aria-label={`Move section ${sec.title} down`}
+                  >
                     &darr;
                   </button>
-                  <button type="button" className="be-icon be-icon--danger" onClick={() => setConfirmDelete(l)} aria-label={`Delete ${l.title}`}>
+                  <button
+                    type="button"
+                    className="be-icon be-icon--danger"
+                    onClick={() => setConfirmDelete({ kind: "section", section: sec })}
+                    aria-label={`Delete section ${sec.title}`}
+                  >
                     &times;
                   </button>
                 </span>
-              </li>
-            ))}
-          </ol>
-          <button type="button" className="button button-secondary button-small builder__add-lesson" onClick={addLesson} data-testid="builder-add-lesson">
-            + Add lesson
+              </div>
+              <ol>
+                {sec.screens.map((s, i) => (
+                  <li key={s.id} data-active={screen?.id === s.id}>
+                    <button
+                      type="button"
+                      className="builder__lesson"
+                      onClick={() => {
+                        setSelected({ kind: "screen", screenId: s.id });
+                      }}
+                    >
+                      <span className="builder__lesson-num">
+                        {si + 1}.{i + 1}
+                      </span>
+                      <span>{s.title}</span>
+                    </button>
+                    <ItemTools
+                      index={i}
+                      count={sec.screens.length}
+                      onMove={(d) => moveScreen(sec.id, i, d)}
+                      onRemove={() => setConfirmDelete({ kind: "screen", screen: s })}
+                    />
+                  </li>
+                ))}
+              </ol>
+              <button type="button" className="text-action builder__add-screen" onClick={() => addScreen(sec.id)}>
+                + Add screen
+              </button>
+            </div>
+          ))}
+          <button type="button" className="button button-secondary button-small builder__add-lesson" onClick={addSection} data-testid="builder-add-section">
+            + Add section
           </button>
         </nav>
 
         <main className="builder__main">
-          {!lesson ? (
-            <div className="builder__empty">
-              <h2>Start with a lesson</h2>
-              <p className="card__meta">A module is a few short lessons. Each lesson is a stack of blocks: text, images, video, questions and scenarios.</p>
-              <button type="button" className="button button-primary" onClick={addLesson}>
-                Add the first lesson
-              </button>
-            </div>
-          ) : mode === "preview" ? (
+          {mode === "preview" && screenCount > 0 ? (
             <div className="builder__preview">
               <div className="builder__devices" role="group" aria-label="Preview width">
                 <button type="button" data-active={device === "desktop"} onClick={() => setDevice("desktop")}>
@@ -247,34 +318,53 @@ export function ModuleBuilder({
                   Phone
                 </button>
               </div>
-              <div className="builder__frame" data-device={device}>
-                <LessonView key={lesson.id + JSON.stringify(lesson).length} lesson={lesson} />
-                <div className="lesson-nav">
-                  <button type="button" className="text-action" disabled={lessonIndex <= 0} onClick={() => setLessonId(content.lessons[lessonIndex - 1].id)}>
-                    &larr; Previous lesson
-                  </button>
-                  <button
-                    type="button"
-                    className="button button-primary button-small"
-                    disabled={lessonIndex >= content.lessons.length - 1}
-                    onClick={() => setLessonId(content.lessons[lessonIndex + 1].id)}
-                  >
-                    Continue
-                  </button>
-                </div>
+              <div className="builder__frame builder__frame--player" data-device={device}>
+                <ModulePlayer
+                  preview
+                  moduleId={module.id}
+                  moduleTitle={module.title}
+                  version={0}
+                  content={content}
+                  completedSectionIds={[]}
+                  track={{ title: module.trackTitle, slug: "" }}
+                  nextModule={null}
+                  startScreenId={screen?.id}
+                />
               </div>
             </div>
+          ) : selected.kind === "settings" || !screen || !section ? (
+            <ModuleSettings
+              content={content}
+              onChange={(objectives) => setContent((c) => ({ ...c, objectives }))}
+              onAddSection={content.sections.length === 0 ? addSection : undefined}
+            />
           ) : (
             <div className="builder__canvas">
-              <input
-                className="builder__lesson-title"
-                value={lesson.title}
-                maxLength={200}
-                aria-label="Lesson title"
-                onChange={(e) => updateLesson(lesson.id, (l) => ({ ...l, title: e.target.value }))}
-              />
+              <label className="field builder__section-field">
+                <span>Section {content.sections.findIndex((s) => s.id === section.id) + 1} (the learner&rsquo;s menu)</span>
+                <input
+                  value={section.title}
+                  maxLength={200}
+                  onChange={(e) => updateSection(section.id, (s) => ({ ...s, title: e.target.value }))}
+                />
+              </label>
+              <div className="builder__screen-head">
+                <input
+                  className="builder__lesson-title"
+                  value={screen.title}
+                  maxLength={200}
+                  aria-label="Screen title (shown in the title bar)"
+                  onChange={(e) => updateScreen(screen.id, (s) => ({ ...s, title: e.target.value }))}
+                />
+                <button type="button" className="text-action" onClick={() => duplicateScreen(section.id, screen)}>
+                  Duplicate screen
+                </button>
+              </div>
+
+              <ScreenSettings moduleId={module.id} screen={screen} onChange={(s) => updateScreen(screen.id, () => s)} />
+
               <Inserter onPick={(t) => insertBlock(0, t)} />
-              {lesson.blocks.map((b, i) => {
+              {screen.blocks.map((b, i) => {
                 const meta = blockCatalog.find((c) => c.type === b.type);
                 return (
                   <div key={b.id}>
@@ -282,10 +372,17 @@ export function ModuleBuilder({
                       <div className="builder__block-head">
                         <span className="builder__block-type">{meta?.label}</span>
                         <span className="be-tools">
-                          <button type="button" className="be-icon" onClick={() => moveBlock(i, -1)} disabled={i === 0} aria-label="Move block up" title="Move up">
+                          <button type="button" className="be-icon" onClick={() => setBlocks((bs) => move(bs, i, -1))} disabled={i === 0} aria-label="Move block up" title="Move up">
                             &uarr;
                           </button>
-                          <button type="button" className="be-icon" onClick={() => moveBlock(i, 1)} disabled={i === lesson.blocks.length - 1} aria-label="Move block down" title="Move down">
+                          <button
+                            type="button"
+                            className="be-icon"
+                            onClick={() => setBlocks((bs) => move(bs, i, 1))}
+                            disabled={i === screen.blocks.length - 1}
+                            aria-label="Move block down"
+                            title="Move down"
+                          >
                             &darr;
                           </button>
                           <button
@@ -308,11 +405,7 @@ export function ModuleBuilder({
                           </button>
                         </span>
                       </div>
-                      <BlockEditor
-                        moduleId={module.id}
-                        block={b}
-                        onChange={(nb) => setBlocks((bs) => bs.map((x) => (x.id === b.id ? nb : x)))}
-                      />
+                      <BlockEditor moduleId={module.id} block={b} onChange={(nb) => setBlocks((bs) => bs.map((x) => (x.id === b.id ? nb : x)))} />
                     </section>
                     <Inserter onPick={(t) => insertBlock(i + 1, t)} />
                   </div>
@@ -324,14 +417,22 @@ export function ModuleBuilder({
       </div>
 
       {confirmDelete && (
-        <Modal title={`Delete "${confirmDelete.title}"?`} onClose={() => setConfirmDelete(null)}>
-          <p>The lesson and its {confirmDelete.blocks.length} blocks are removed from the draft. Published versions aren&rsquo;t affected until you publish again.</p>
+        <Modal
+          title={`Delete "${confirmDelete.kind === "section" ? confirmDelete.section.title : confirmDelete.screen.title}"?`}
+          onClose={() => setConfirmDelete(null)}
+        >
+          <p>
+            {confirmDelete.kind === "section"
+              ? `The section and its ${confirmDelete.section.screens.length} ${confirmDelete.section.screens.length === 1 ? "screen are" : "screens are"} removed from the draft.`
+              : `The screen and its ${confirmDelete.screen.blocks.length} ${confirmDelete.screen.blocks.length === 1 ? "block are" : "blocks are"} removed from the draft.`}{" "}
+            Published versions aren&rsquo;t affected until you publish again.
+          </p>
           <div className="role-editor__actions">
             <button type="button" className="button button-secondary" onClick={() => setConfirmDelete(null)}>
               Cancel
             </button>
-            <button type="button" className="button button-danger" onClick={() => deleteLesson(confirmDelete)}>
-              Delete lesson
+            <button type="button" className="button button-danger" onClick={deleteConfirmed}>
+              Delete {confirmDelete.kind}
             </button>
           </div>
         </Modal>
@@ -347,8 +448,8 @@ export function ModuleBuilder({
             </ul>
           ) : (
             <p>
-              Learners will see this version right away. Anyone partway through the current version keeps their completed
-              lessons only if they finish it; earned credentials are never taken back.
+              Learners will see this version right away. Anyone partway through the current version keeps their finished
+              sections only if they finish it; earned credentials are never taken back.
             </p>
           )}
           <div className="role-editor__actions">
@@ -364,6 +465,135 @@ export function ModuleBuilder({
         </Modal>
       )}
     </div>
+  );
+}
+
+/** Learning objectives: the player's opening screen lists them, and the closing recap repeats them. */
+function ModuleSettings({
+  content,
+  onChange,
+  onAddSection,
+}: {
+  content: ModuleContent;
+  onChange: (objectives: string[]) => void;
+  onAddSection?: () => void;
+}) {
+  const [draft, setDraft] = useState("");
+  const objectives = content.objectives;
+  return (
+    <div className="builder__canvas">
+      <h2 className="builder__lesson-title">Module settings</h2>
+      <section className="builder__block">
+        <div className="builder__block-head">
+          <span className="builder__block-type">Learning objectives</span>
+        </div>
+        <p className="card__meta">
+          What a learner can do after this module, e.g. &ldquo;Explain what council can decide without a vote of the
+          owners&rdquo;. They open the module on its own screen and come back in the closing recap.
+        </p>
+        <div className="be-stack">
+          {objectives.map((o, i) => (
+            <div key={i} className="be-row">
+              <input
+                className="be-grow"
+                value={o}
+                maxLength={300}
+                aria-label={`Objective ${i + 1}`}
+                onChange={(e) => onChange(objectives.map((x, j) => (j === i ? e.target.value : x)))}
+              />
+              <ItemTools
+                index={i}
+                count={objectives.length}
+                onMove={(d) => onChange(move(objectives, i, d))}
+                onRemove={() => onChange(objectives.filter((_, j) => j !== i))}
+              />
+            </div>
+          ))}
+          {objectives.length < 12 && (
+            <form
+              className="be-row"
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!draft.trim()) return;
+                onChange([...objectives, draft.trim()]);
+                setDraft("");
+              }}
+            >
+              <input className="be-grow" value={draft} maxLength={300} placeholder="Add an objective" onChange={(e) => setDraft(e.target.value)} />
+              <button className="button button-secondary button-small" disabled={!draft.trim()}>
+                Add
+              </button>
+            </form>
+          )}
+        </div>
+      </section>
+      {onAddSection && (
+        <div className="builder__empty">
+          <h2>Then add the first section</h2>
+          <p className="card__meta">
+            Sections are the learner&rsquo;s menu. Each one is a few screens, shown one at a time: text, pictures, narration,
+            questions and scenarios.
+          </p>
+          <button type="button" className="button button-primary" onClick={onAddSection}>
+            Add the first section
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const layoutLabels: Record<ScreenLayout, string> = { full: "Full width", split: "Text with a picture beside it" };
+
+/** A screen's layout, side picture and narration. */
+function ScreenSettings({ moduleId, screen, onChange }: { moduleId: string; screen: Screen; onChange: (s: Screen) => void }) {
+  return (
+    <section className="builder__block builder__screen-settings">
+      <div className="be-row">
+        <label className="field">
+          <span>Layout</span>
+          <select value={screen.layout} onChange={(e) => onChange({ ...screen, layout: e.target.value as ScreenLayout })}>
+            {(Object.keys(layoutLabels) as ScreenLayout[]).map((l) => (
+              <option key={l} value={l}>
+                {layoutLabels[l]}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      {screen.layout === "split" && (
+        <div className="be-stack">
+          <MediaField moduleId={moduleId} kind="image" value={screen.image.src} label="The picture beside the text" onChange={(src) => onChange({ ...screen, image: { ...screen.image, src } })} />
+          <label className="field">
+            <span>Picture description (alt text)</span>
+            <input value={screen.image.alt} maxLength={500} onChange={(e) => onChange({ ...screen, image: { ...screen.image, alt: e.target.value } })} />
+          </label>
+        </div>
+      )}
+      <div className="be-stack">
+        <MediaField
+          moduleId={moduleId}
+          kind="audio"
+          value={screen.narration.src}
+          label={screen.narration.src ? "Narration added. Next waits until it finishes." : "Narration (optional): an MP3 or M4A that plays with this screen"}
+          onChange={(src) => onChange({ ...screen, narration: { ...screen.narration, src } })}
+          onClear={screen.narration.src ? () => onChange({ ...screen, narration: { src: "", transcript: screen.narration.transcript } }) : undefined}
+        />
+        {screen.narration.src && (
+          <>
+            <audio src={screen.narration.src} controls preload="metadata" className="be-audio" />
+            <label className="field">
+              <span>Captions (the narration as text; learners can turn these on)</span>
+              <textarea
+                rows={3}
+                value={screen.narration.transcript}
+                onChange={(e) => onChange({ ...screen, narration: { ...screen.narration, transcript: e.target.value } })}
+              />
+            </label>
+          </>
+        )}
+      </div>
+    </section>
   );
 }
 

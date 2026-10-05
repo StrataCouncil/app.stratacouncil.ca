@@ -75,7 +75,7 @@ export function AdminTrainingList({ tracks, authors }: { tracks: AdminTrack[]; a
                       </Link>
                       {m.estimatedMinutes && <div className="roster-table__meta">{m.estimatedMinutes} min</div>}
                     </td>
-                    <td data-center="true">{m.lessonCount}</td>
+                    <td data-center="true">{m.screenCount}</td>
                     <td>
                       <span className={`billing-tag ${m.publishedVersion ? "billing-tag--ok" : "billing-tag--off"}`}>
                         {m.publishedVersion ? `Published v${m.publishedVersion}` : "Draft"}

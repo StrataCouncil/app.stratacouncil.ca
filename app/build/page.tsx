@@ -19,7 +19,7 @@ export default async function BuildHomePage() {
               <div>
                 <div className="module-row__title">{m.title}</div>
                 <div className="module-row__meta">
-                  {m.trackTitle} &middot; {m.lessonCount} {m.lessonCount === 1 ? "lesson" : "lessons"} &middot;{" "}
+                  {m.trackTitle} &middot; {m.screenCount} {m.screenCount === 1 ? "screen" : "screens"} &middot;{" "}
                   {m.publishedVersion ? `published v${m.publishedVersion}` : "not published"}
                   {m.readyForReview ? " · ready for review" : ""}
                 </div>

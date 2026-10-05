@@ -1,21 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import {
-  calloutLabels,
-  ratingLabels,
-  videoSource,
-  type Block,
-} from "@/lib/training/content";
+import { calloutLabels, ratingLabels, videoSource, type Block } from "@/lib/training/content";
 import { RichText } from "@/components/training/RichText";
 
 /**
  * One block as the learner sees it. The builder's preview renders the
  * same component, so what an author sees is exactly what learners get.
- * `onAnswered` fires the first time a knowledge check or scenario is
- * answered (the lesson's Continue waits on those).
+ * `onDone` fires once a block that the screen waits on is finished: a
+ * knowledge check or scenario answered, every click-to-reveal item opened.
  */
-export function BlockView({ block, onAnswered }: { block: Block; onAnswered?: () => void }) {
+export function BlockView({ block, onDone }: { block: Block; onDone?: () => void }) {
   switch (block.type) {
     case "text":
       return <RichText doc={block.doc} />;
@@ -51,7 +46,7 @@ export function BlockView({ block, onAnswered }: { block: Block; onAnswered?: ()
         </figure>
       );
     case "reveal":
-      return <Reveal block={block} />;
+      return <Reveal block={block} onDone={onDone} />;
     case "summary":
       return (
         <section className="lesson-summary">
@@ -65,10 +60,44 @@ export function BlockView({ block, onAnswered }: { block: Block; onAnswered?: ()
           </ul>
         </section>
       );
+    case "table":
+      return <Table block={block} />;
+    case "features":
+      return (
+        <div className="lesson-features" data-count={block.items.length}>
+          {block.items
+            .filter((i) => i.image || i.title.trim() || i.text.trim())
+            .map((i) => (
+              <div key={i.id} className="lesson-feature">
+                {i.image && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={i.image} alt="" loading="lazy" />
+                )}
+                {i.title && <div className="lesson-feature__title">{i.title}</div>}
+                {i.text && <p>{i.text}</p>}
+              </div>
+            ))}
+        </div>
+      );
+    case "gallery":
+      if (!block.images.some((i) => i.src)) return <Missing what="pictures" />;
+      return (
+        <div className="lesson-gallery">
+          {block.images
+            .filter((i) => i.src)
+            .map((i) => (
+              <figure key={i.id}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={i.src} alt={i.alt} loading="lazy" />
+                {i.caption && <figcaption>{i.caption}</figcaption>}
+              </figure>
+            ))}
+        </div>
+      );
     case "knowledge_check":
-      return <KnowledgeCheck block={block} onAnswered={onAnswered} />;
+      return <KnowledgeCheck block={block} onDone={onDone} />;
     case "scenario":
-      return <Scenario block={block} onAnswered={onAnswered} />;
+      return <Scenario block={block} onDone={onDone} />;
     case "checklist":
       return <Checklist block={block} />;
     case "divider":
@@ -78,6 +107,16 @@ export function BlockView({ block, onAnswered }: { block: Block; onAnswered?: ()
 
 function Missing({ what }: { what: string }) {
   return <div className="lesson-missing">No {what} added yet.</div>;
+}
+
+export function Transcript({ text, label = "Transcript" }: { text: string; label?: string }) {
+  if (!text.trim()) return null;
+  return (
+    <details className="lesson-video__transcript">
+      <summary>{label}</summary>
+      <div>{text}</div>
+    </details>
+  );
 }
 
 function Slides({ block }: { block: Extract<Block, { type: "slides" }> }) {
@@ -139,132 +178,189 @@ function Video({ block }: { block: Extract<Block, { type: "video" }> }) {
   );
 }
 
-function Transcript({ text }: { text: string }) {
-  if (!text.trim()) return null;
+function Table({ block }: { block: Extract<Block, { type: "table" }> }) {
+  const rows = block.rows.filter((r) => r.some((c) => c.trim()));
+  if (rows.length === 0) return <Missing what="table" />;
+  const head = block.header ? rows[0] : null;
+  const body = block.header ? rows.slice(1) : rows;
   return (
-    <details className="lesson-video__transcript">
-      <summary>Transcript</summary>
-      <div>{text}</div>
-    </details>
+    <div className="lesson-table">
+      <table>
+        {block.caption && <caption>{block.caption}</caption>}
+        {head && (
+          <thead>
+            <tr>
+              {head.map((c, i) => (
+                <th key={i} scope="col">
+                  {c}
+                </th>
+              ))}
+            </tr>
+          </thead>
+        )}
+        <tbody>
+          {body.map((r, ri) => (
+            <tr key={ri}>
+              {r.map((c, ci) => (
+                <td key={ci}>{c}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
-function Reveal({ block }: { block: Extract<Block, { type: "reveal" }> }) {
-  const [open, setOpen] = useState<Set<string>>(new Set());
+function Reveal({ block, onDone }: { block: Extract<Block, { type: "reveal" }>; onDone?: () => void }) {
   const items = block.items.filter((i) => i.title.trim() || i.body.trim());
-  const toggle = (id: string) =>
+  const [open, setOpen] = useState<Set<string>>(new Set());
+  const [seen, setSeen] = useState<Set<string>>(new Set());
+  function toggle(id: string) {
     setOpen((o) => {
       const n = new Set(o);
       if (n.has(id)) n.delete(id);
       else n.add(id);
       return n;
     });
+    if (seen.has(id)) return;
+    const n = new Set(seen).add(id);
+    setSeen(n);
+    if (items.every((i) => n.has(i.id))) onDone?.();
+  }
   if (items.length === 0) return <Missing what="items" />;
+  const left = items.filter((i) => !seen.has(i.id)).length;
+  const hint = (
+    <p className="lesson-reveal__hint" aria-live="polite">
+      {left === 0 ? "You've opened them all." : `Select each ${block.style === "cards" ? "card" : "heading"} to learn more (${left} to go).`}
+    </p>
+  );
 
   if (block.style === "cards") {
     return (
-      <div className="lesson-cards">
-        {items.map((i) => (
-          <button key={i.id} type="button" className="lesson-card" data-flipped={open.has(i.id)} aria-pressed={open.has(i.id)} onClick={() => toggle(i.id)}>
-            <span className="lesson-card__face">{open.has(i.id) ? i.body : i.title}</span>
-            <span className="lesson-card__hint">{open.has(i.id) ? "Click to flip back" : "Click to reveal"}</span>
-          </button>
-        ))}
+      <div>
+        <div className="lesson-cards">
+          {items.map((i) => (
+            <button
+              key={i.id}
+              type="button"
+              className="lesson-card"
+              data-flipped={open.has(i.id)}
+              data-seen={seen.has(i.id)}
+              aria-pressed={open.has(i.id)}
+              onClick={() => toggle(i.id)}
+            >
+              <span className="lesson-card__face">{open.has(i.id) ? i.body : i.title}</span>
+              <span className="lesson-card__hint">{open.has(i.id) ? "Select to flip back" : "Select to reveal"}</span>
+            </button>
+          ))}
+        </div>
+        {hint}
       </div>
     );
   }
   return (
-    <div className="lesson-accordion">
-      {items.map((i) => (
-        <div key={i.id} className="lesson-accordion__item" data-open={open.has(i.id)}>
-          <button type="button" aria-expanded={open.has(i.id)} onClick={() => toggle(i.id)}>
-            <span>{i.title}</span>
-            <span aria-hidden="true">{open.has(i.id) ? "−" : "+"}</span>
-          </button>
-          {open.has(i.id) && <div className="lesson-accordion__body">{i.body}</div>}
-        </div>
-      ))}
+    <div>
+      <div className="lesson-accordion">
+        {items.map((i) => (
+          <div key={i.id} className="lesson-accordion__item" data-open={open.has(i.id)} data-seen={seen.has(i.id)}>
+            <button type="button" aria-expanded={open.has(i.id)} onClick={() => toggle(i.id)}>
+              <span>{i.title}</span>
+              <span aria-hidden="true">{open.has(i.id) ? "−" : "+"}</span>
+            </button>
+            {open.has(i.id) && <div className="lesson-accordion__body">{i.body}</div>}
+          </div>
+        ))}
+      </div>
+      {hint}
     </div>
   );
 }
 
-function KnowledgeCheck({ block, onAnswered }: { block: Extract<Block, { type: "knowledge_check" }>; onAnswered?: () => void }) {
+const letter = (i: number) => String.fromCharCode(65 + i);
+
+/**
+ * A practice question. Once answered, the learner sees their answer, the
+ * correct one, why each option is right or wrong, a study note and the
+ * reference. Not graded, and any answer lets them move on.
+ */
+function KnowledgeCheck({ block, onDone }: { block: Extract<Block, { type: "knowledge_check" }>; onDone?: () => void }) {
   const [chosen, setChosen] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const options = block.options.filter((o) => o.text.trim());
-  const picked = options.find((o) => o.id === chosen);
+  const pickedIndex = options.findIndex((o) => o.id === chosen);
+  const correctIndex = options.findIndex((o) => o.id === block.correctId);
   const correct = submitted && chosen === block.correctId;
+  const why = options.map((o, i) => ({ ...o, i })).filter((o) => o.feedback.trim());
 
   return (
-    <fieldset className="lesson-check" data-state={submitted ? (correct ? "correct" : "incorrect") : "open"}>
-      <legend className="lesson-check__label">Knowledge check</legend>
-      <div className="lesson-check__question">{block.question || "Question"}</div>
-      <div className="lesson-check__options">
-        {options.map((o) => (
-          <label key={o.id} className="lesson-option" data-chosen={chosen === o.id} data-correct={submitted && o.id === block.correctId}>
-            <input
-              type="radio"
-              name={block.id}
-              checked={chosen === o.id}
-              disabled={submitted}
-              onChange={() => setChosen(o.id)}
-            />
-            {o.text}
-          </label>
-        ))}
-      </div>
-      {!submitted ? (
-        <button
-          type="button"
-          className="button button-primary button-small"
-          disabled={!chosen}
-          onClick={() => {
-            setSubmitted(true);
-            onAnswered?.();
-          }}
-        >
-          Check answer
-        </button>
-      ) : (
-        <div className="lesson-check__result" role="status">
-          <strong>{correct ? "Correct." : "Not quite."}</strong>
-          {block.explanation && <p>{block.explanation}</p>}
-          <ul className="lesson-check__answers">
-            {options.map((o) => (
-              <li key={o.id} data-correct={o.id === block.correctId} data-chosen={o.id === picked?.id}>
-                <span className="lesson-check__answer">
-                  {o.id === block.correctId ? "Answer: " : ""}
-                  {o.text}
-                </span>
-                {o.feedback && <span className="lesson-check__why">{o.feedback}</span>}
-              </li>
+    <section className="kc" data-state={submitted ? (correct ? "correct" : "incorrect") : "open"}>
+      <header className="kc__head">
+        <span className="kc__label">Knowledge check</span>
+        {submitted && <span className="kc__badge">{correct ? "Correct" : "Incorrect"}</span>}
+      </header>
+      <div className="kc__body">
+        <p className="kc__question">{block.question || "Question"}</p>
+        {!submitted ? (
+          <fieldset className="kc__options">
+            <legend className="visually-hidden">Choose one answer</legend>
+            {options.map((o, i) => (
+              <label key={o.id} className="kc__option" data-chosen={chosen === o.id}>
+                <input type="radio" name={block.id} checked={chosen === o.id} onChange={() => setChosen(o.id)} />
+                <span className="kc__letter">{letter(i)}</span>
+                <span>{o.text}</span>
+              </label>
             ))}
-          </ul>
-          {block.studyTip && (
-            <p className="lesson-check__tip">
-              <strong>Study tip.</strong> {block.studyTip}
-            </p>
-          )}
-          {block.reference && <p className="lesson-check__ref">{block.reference}</p>}
-          {!correct && (
             <button
               type="button"
-              className="text-action"
+              className="button button-primary"
+              disabled={!chosen}
               onClick={() => {
-                setSubmitted(false);
-                setChosen(null);
+                setSubmitted(true);
+                onDone?.();
               }}
             >
-              Try again
+              Submit
             </button>
-          )}
-        </div>
-      )}
-    </fieldset>
+          </fieldset>
+        ) : (
+          <div role="status">
+            <p className="kc__answer kc__answer--yours">
+              <strong>Your answer ({letter(pickedIndex)}):</strong> {options[pickedIndex]?.text}
+            </p>
+            {!correct && correctIndex >= 0 && (
+              <p className="kc__answer kc__answer--correct">
+                <strong>Correct answer ({letter(correctIndex)}):</strong> {options[correctIndex].text}
+              </p>
+            )}
+            {block.explanation && <p className="kc__explanation">{block.explanation}</p>}
+            {why.length > 0 && (
+              <ul className="kc__why">
+                {why.map((o) => (
+                  <li key={o.id} data-correct={o.id === block.correctId}>
+                    <strong>
+                      ({letter(o.i)}) {o.id === block.correctId ? "Correct" : "Incorrect"}.
+                    </strong>{" "}
+                    {o.feedback}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {block.studyTip && (
+              <div className="kc__note">
+                <div className="kc__note-label">Study note</div>
+                <p>{block.studyTip}</p>
+              </div>
+            )}
+            {block.reference && <span className="kc__ref">{block.reference}</span>}
+          </div>
+        )}
+      </div>
+    </section>
   );
 }
 
-function Scenario({ block, onAnswered }: { block: Extract<Block, { type: "scenario" }>; onAnswered?: () => void }) {
+function Scenario({ block, onDone }: { block: Extract<Block, { type: "scenario" }>; onDone?: () => void }) {
   const [chosen, setChosen] = useState<string | null>(null);
   const choices = block.choices.filter((c) => c.text.trim());
   const picked = choices.find((c) => c.id === chosen);
@@ -282,7 +378,7 @@ function Scenario({ block, onAnswered }: { block: Extract<Block, { type: "scenar
             data-chosen={chosen === c.id}
             data-rating={chosen ? c.rating : undefined}
             onClick={() => {
-              if (!chosen) onAnswered?.();
+              if (!chosen) onDone?.();
               setChosen(c.id);
             }}
           >

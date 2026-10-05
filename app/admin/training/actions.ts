@@ -34,7 +34,7 @@ function refresh(moduleId?: string) {
   if (moduleId) revalidatePath(`/admin/training/${moduleId}`);
 }
 
-/** Autosave: the whole module's lessons and blocks, cleaned up first. */
+/** Autosave: the whole module's sections, screens and blocks, cleaned up first. */
 export async function saveModuleDraft(moduleId: string, content: unknown): Promise<Result<{ savedAt: string }>> {
   const me = await getCurrentProfile();
   if (!me || !(await canAuthor(moduleId))) return { ok: false, error: "You can't edit this module." };

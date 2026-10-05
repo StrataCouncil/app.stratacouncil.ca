@@ -7,7 +7,7 @@ grant execute on function pg_temp.expect(text,boolean), pg_temp.fails(text) to a
 
 select pg_temp.expect('five tracks seeded, no modules', (select count(*) from training_tracks) = 5 and (select count(*) from training_modules) = 0);
 
--- Super Admin builds a two-lesson module in the General Council track, and a second, empty one.
+-- Super Admin builds a two-section module in the General Council track, and a second, empty one.
 set role authenticated;
 set test.uid = '00000000-0000-0000-0000-00000000000d';  -- Sam, Super Admin
 insert into training_modules (id, track_id, order_index, title)
@@ -15,8 +15,8 @@ insert into training_modules (id, track_id, order_index, title)
 insert into training_modules (id, track_id, order_index, title)
   select '10000000-0000-0000-0000-000000000002', id, 2, 'Meetings' from training_tracks where code = 'mal';
 insert into training_module_drafts (module_id, content) values
-  ('10000000-0000-0000-0000-000000000001', '{"lessons":[{"id":"l1","title":"One","blocks":[]},{"id":"l2","title":"Two","blocks":[]}]}'),
-  ('10000000-0000-0000-0000-000000000002', '{"lessons":[]}');
+  ('10000000-0000-0000-0000-000000000001', '{"sections":[{"id":"l1","title":"One","screens":[]},{"id":"l2","title":"Two","screens":[]}]}'),
+  ('10000000-0000-0000-0000-000000000002', '{"sections":[]}');
 select pg_temp.expect('an empty module can''t be published', pg_temp.fails($$select publish_training_module('10000000-0000-0000-0000-000000000002')$$));
 select pg_temp.expect('publishing gives version 1', publish_training_module('10000000-0000-0000-0000-000000000001') = 1);
 
@@ -24,8 +24,8 @@ select pg_temp.expect('publishing gives version 1', publish_training_module('100
 insert into training_module_authors (module_id, user_id) values ('10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-00000000000c');
 set test.uid = '00000000-0000-0000-0000-00000000000c';
 select pg_temp.expect('an author sees only their module''s draft', (select array_agg(module_id) from training_module_drafts) = array['10000000-0000-0000-0000-000000000001'::uuid]);
-update training_module_drafts set content = '{"lessons":[{"id":"l1","title":"One edited","blocks":[]},{"id":"l2","title":"Two","blocks":[]}]}' where module_id = '10000000-0000-0000-0000-000000000001';
-select pg_temp.expect('an author can edit their draft', (select content -> 'lessons' -> 0 ->> 'title' from training_module_drafts) = 'One edited');
+update training_module_drafts set content = '{"sections":[{"id":"l1","title":"One edited","screens":[]},{"id":"l2","title":"Two","screens":[]}]}' where module_id = '10000000-0000-0000-0000-000000000001';
+select pg_temp.expect('an author can edit their draft', (select content -> 'sections' -> 0 ->> 'title' from training_module_drafts) = 'One edited');
 select pg_temp.expect('an author can''t publish', pg_temp.fails($$select publish_training_module('10000000-0000-0000-0000-000000000001')$$));
 select pg_temp.expect('an author can''t add modules', pg_temp.fails($$insert into training_modules (track_id, title) select id, 'x' from training_tracks limit 1$$));
 
@@ -35,32 +35,32 @@ select pg_temp.expect('a learner sees no drafts', (select count(*) from training
 select pg_temp.expect('a learner sees published versions', (select count(*) from training_module_versions) = 1);
 select pg_temp.expect('a learner can''t write progress directly',
   pg_temp.fails($$insert into training_progress (user_id, module_id, version) values ('00000000-0000-0000-0000-00000000000e', '10000000-0000-0000-0000-000000000001', 1)$$));
-select pg_temp.expect('a lesson outside the module is refused',
-  pg_temp.fails($$select complete_training_lesson('10000000-0000-0000-0000-000000000001', 1, 'nope')$$));
+select pg_temp.expect('a section outside the module is refused',
+  pg_temp.fails($$select complete_training_section('10000000-0000-0000-0000-000000000001', 1, 'nope')$$));
 
 -- Bob (admin of BCS-1234) works through module 1. Module 2 is unpublished, so no credential yet.
 set test.uid = '00000000-0000-0000-0000-00000000000b';
-select pg_temp.expect('first lesson: module not complete',
-  (complete_training_lesson('10000000-0000-0000-0000-000000000001', 1, 'l1') ->> 'moduleComplete')::boolean = false);
-select pg_temp.expect('repeating a lesson is harmless',
-  (select completed_lessons from training_progress where user_id = '00000000-0000-0000-0000-00000000000b') = array['l1']
-  and (complete_training_lesson('10000000-0000-0000-0000-000000000001', 1, 'l1') ->> 'moduleComplete')::boolean = false);
-select pg_temp.expect('last lesson completes the module, no credential while a module is unpublished',
+select pg_temp.expect('first section: module not complete',
+  (complete_training_section('10000000-0000-0000-0000-000000000001', 1, 'l1') ->> 'moduleComplete')::boolean = false);
+select pg_temp.expect('repeating a section is harmless',
+  (select completed_sections from training_progress where user_id = '00000000-0000-0000-0000-00000000000b') = array['l1']
+  and (complete_training_section('10000000-0000-0000-0000-000000000001', 1, 'l1') ->> 'moduleComplete')::boolean = false);
+select pg_temp.expect('last section completes the module, no credential while a module is unpublished',
   (select r ->> 'moduleComplete' = 'true' and r ->> 'credentialEarned' = 'false'
-   from complete_training_lesson('10000000-0000-0000-0000-000000000001', 1, 'l2') r));
+   from complete_training_section('10000000-0000-0000-0000-000000000001', 1, 'l2') r));
 
--- Module 2 published: one lesson to go, then the credential.
+-- Module 2 published: one section to go, then the credential.
 set test.uid = '00000000-0000-0000-0000-00000000000d';
-update training_module_drafts set content = '{"lessons":[{"id":"m1","title":"Only","blocks":[]}]}' where module_id = '10000000-0000-0000-0000-000000000002';
+update training_module_drafts set content = '{"sections":[{"id":"m1","title":"Only","screens":[]}]}' where module_id = '10000000-0000-0000-0000-000000000002';
 select publish_training_module('10000000-0000-0000-0000-000000000002');
 set test.uid = '00000000-0000-0000-0000-00000000000b';
 select pg_temp.expect('finishing every module earns the track credential',
-  (complete_training_lesson('10000000-0000-0000-0000-000000000002', 1, 'm1') ->> 'credentialEarned')::boolean);
+  (complete_training_section('10000000-0000-0000-0000-000000000002', 1, 'm1') ->> 'credentialEarned')::boolean);
 select pg_temp.expect('the learner sees their credential', (select count(*) from training_credentials) = 1);
 
 -- Republishing never takes the credential back or reopens a finished module.
 set test.uid = '00000000-0000-0000-0000-00000000000d';
-update training_module_drafts set content = '{"lessons":[{"id":"m1","title":"Only","blocks":[]},{"id":"m2","title":"New","blocks":[]}]}' where module_id = '10000000-0000-0000-0000-000000000002';
+update training_module_drafts set content = '{"sections":[{"id":"m1","title":"Only","screens":[]},{"id":"m2","title":"New","screens":[]}]}' where module_id = '10000000-0000-0000-0000-000000000002';
 select pg_temp.expect('republishing gives version 2', publish_training_module('10000000-0000-0000-0000-000000000002') = 2);
 reset role;
 select pg_temp.expect('the credential stays after a revision', exists (select 1 from training_credentials where user_id = '00000000-0000-0000-0000-00000000000b'));

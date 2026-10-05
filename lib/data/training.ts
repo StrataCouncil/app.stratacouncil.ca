@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { normalizeModuleContent, type ModuleContent } from "@/lib/training/content";
+import { flattenScreens, normalizeModuleContent, type ModuleContent } from "@/lib/training/content";
 
 /**
  * Council Training reads (0033). Learners see tracks, module outlines and
@@ -17,7 +17,7 @@ export interface TrainingModuleSummary {
   publishedVersion: number;
   publishedAt: string | null;
   /** The signed-in learner's progress, if any. */
-  completedLessons: number;
+  completedSections: number;
   completed: boolean;
 }
 
@@ -47,7 +47,7 @@ export async function getTrainingTracks(): Promise<TrainingTrack[]> {
       .select("id, track_id, order_index, title, summary, estimated_minutes, published_version, published_at")
       .order("order_index"),
     user
-      ? supabase.from("training_progress").select("module_id, completed_lessons, completed_at").eq("user_id", user.id)
+      ? supabase.from("training_progress").select("module_id, completed_sections, completed_at").eq("user_id", user.id)
       : Promise.resolve({ data: [] }),
     user
       ? supabase.from("training_credentials").select("track_id, issued_at").eq("user_id", user.id)
@@ -78,7 +78,7 @@ export async function getTrainingTracks(): Promise<TrainingTrack[]> {
             estimatedMinutes: m.estimated_minutes,
             publishedVersion: m.published_version,
             publishedAt: m.published_at,
-            completedLessons: (p?.completed_lessons as string[] | undefined)?.length ?? 0,
+            completedSections: (p?.completed_sections as string[] | undefined)?.length ?? 0,
             completed: Boolean(p?.completed_at),
           };
         }),
@@ -86,13 +86,34 @@ export async function getTrainingTracks(): Promise<TrainingTrack[]> {
   });
 }
 
+export type ModuleStatus = "done" | "open" | "locked" | "soon";
+
+/**
+ * Modules open in order within a track (doc03 Stage 3): a published module
+ * opens once every published module before it is complete. Unpublished
+ * modules show as coming soon and don't hold anything up.
+ */
+export function moduleStatuses(track: TrainingTrack): Map<string, ModuleStatus> {
+  const out = new Map<string, ModuleStatus>();
+  let blocked = false;
+  for (const m of [...track.modules].sort((a, b) => a.orderIndex - b.orderIndex)) {
+    if (m.publishedVersion === 0) out.set(m.id, "soon");
+    else if (m.completed) out.set(m.id, "done");
+    else {
+      out.set(m.id, blocked ? "locked" : "open");
+      blocked = true;
+    }
+  }
+  return out;
+}
+
 export interface PublishedModule {
   module: TrainingModuleSummary;
   track: { id: string; title: string; slug: string };
   version: number;
   content: ModuleContent;
-  completedLessonIds: string[];
-  /** Progress was made against an older version (lesson ids may not match). */
+  completedSectionIds: string[];
+  /** Progress was made against an older version (section ids may not match). */
   progressVersion: number | null;
 }
 
@@ -116,7 +137,7 @@ export async function getPublishedModule(moduleId: string): Promise<PublishedMod
     user
       ? supabase
           .from("training_progress")
-          .select("version, completed_lessons")
+          .select("version, completed_sections")
           .eq("user_id", user.id)
           .eq("module_id", moduleId)
           .maybeSingle()
@@ -128,7 +149,7 @@ export async function getPublishedModule(moduleId: string): Promise<PublishedMod
     track: { id: track.id, title: track.title, slug: track.slug },
     version: mod.publishedVersion,
     content: normalizeModuleContent(version.content),
-    completedLessonIds: (progress?.completed_lessons as string[] | undefined) ?? [],
+    completedSectionIds: (progress?.completed_sections as string[] | undefined) ?? [],
     progressVersion: (progress?.version as number | undefined) ?? null,
   };
 }
@@ -140,7 +161,7 @@ export interface AdminModule extends TrainingModuleSummary {
   readyForReview: boolean;
   /** The draft changed after the last publish. */
   hasUnpublishedChanges: boolean;
-  lessonCount: number;
+  screenCount: number;
 }
 
 export async function getAdminTraining() {
@@ -152,14 +173,14 @@ export async function getAdminTraining() {
     ...t,
     modules: t.modules.map((m): AdminModule => {
       const d = draftBy.get(m.id);
-      const lessonCount = normalizeModuleContent(d?.content).lessons.length;
+      const screenCount = flattenScreens(normalizeModuleContent(d?.content)).length;
       return {
         ...m,
         draftUpdatedAt: d?.updated_at ?? null,
         readyForReview: Boolean(d?.ready_for_review_at),
-        lessonCount,
+        screenCount,
         hasUnpublishedChanges:
-          lessonCount > 0 && (!m.publishedAt || (Boolean(d?.updated_at) && d!.updated_at > m.publishedAt)),
+          screenCount > 0 && (!m.publishedAt || (Boolean(d?.updated_at) && d!.updated_at > m.publishedAt)),
       };
     }),
   }));
@@ -247,7 +268,7 @@ export async function getMyAuthoredModules() {
         trackOrder: t?.order_index ?? 0,
         order: m.order_index as number,
         publishedVersion: m.published_version as number,
-        lessonCount: normalizeModuleContent(d?.content).lessons.length,
+        screenCount: flattenScreens(normalizeModuleContent(d?.content)).length,
         updatedAt: (d?.updated_at as string | undefined) ?? null,
         readyForReview: Boolean(d?.ready_for_review_at),
       };

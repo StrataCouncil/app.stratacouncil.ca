@@ -1,16 +1,16 @@
--- Council Training: tracks, modules built from lessons and blocks, published
+-- Council Training: tracks, modules built from sections, screens and blocks, published
 -- versions, learner progress and credentials. Safe to run more than once.
 -- Run the whole file in one go.
 --
 -- There is no pass or fail. A module is complete once the learner has gone
--- through every lesson; knowledge checks and scenarios give feedback but
+-- through every screen; knowledge checks and scenarios give feedback but
 -- any answer counts. A credential is a record that the learner finished
 -- every module in a track. It only exists inside StrataCouncil.ca (their
 -- training page, and Council & Roles for strata-mates): no certificate
 -- number, nothing to download or share.
 --
 -- How content works:
---   A module's lessons and blocks are one JSON document (lib/training/content.ts
+--   A module's sections, screens and blocks are one JSON document (lib/training/content.ts
 --   defines and validates it). Super Admins edit a draft
 --   (training_module_drafts, never visible to learners) and publish it as a
 --   numbered, immutable version (training_module_versions). Learners always
@@ -56,7 +56,7 @@ create index if not exists training_modules_track_idx on public.training_modules
 
 create table if not exists public.training_module_drafts (
   module_id uuid primary key references public.training_modules(id) on delete cascade,
-  content jsonb not null default '{"lessons":[]}'::jsonb,
+  content jsonb not null default '{"objectives":[],"sections":[]}'::jsonb,
   updated_at timestamptz not null default now(),
   updated_by uuid references public.profiles(id),
   ready_for_review_at timestamptz             -- set by an Author; cleared on publish
@@ -84,7 +84,7 @@ create table if not exists public.training_progress (
   user_id uuid not null references public.profiles(id) on delete cascade,
   module_id uuid not null references public.training_modules(id) on delete cascade,
   version int not null,
-  completed_lessons text[] not null default '{}',
+  completed_sections text[] not null default '{}',
   completed_at timestamptz,
   updated_at timestamptz not null default now(),
   primary key (user_id, module_id)
@@ -98,8 +98,15 @@ create table if not exists public.training_credentials (
   unique (user_id, track_id)
 );
 
--- In case an early draft of this migration (with certificate numbers) was run.
+-- In case an early draft of this migration was run.
 alter table public.training_credentials drop column if exists certificate_number;
+do $$ begin
+  if exists (select 1 from information_schema.columns
+             where table_schema = 'public' and table_name = 'training_progress' and column_name = 'completed_lessons') then
+    alter table public.training_progress rename column completed_lessons to completed_sections;
+  end if;
+end $$;
+drop function if exists public.complete_training_lesson(uuid, int, text);
 
 grant select, insert, update, delete on
   public.training_tracks, public.training_modules, public.training_module_drafts, public.training_module_authors
@@ -209,8 +216,8 @@ begin
   end if;
 
   select content into v_content from public.training_module_drafts where module_id = p_module_id;
-  if v_content is null or jsonb_array_length(coalesce(v_content -> 'lessons', '[]'::jsonb)) = 0 then
-    raise exception 'Add at least one lesson before publishing.';
+  if v_content is null or jsonb_array_length(coalesce(v_content -> 'sections', '[]'::jsonb)) = 0 then
+    raise exception 'Add at least one section before publishing.';
   end if;
 
   select published_version + 1 into v_version from public.training_modules where id = p_module_id for update;
@@ -231,10 +238,11 @@ end;
 $$;
 
 -- ── Learner progress ───────────────────────────────────────────────────
--- Marks one lesson of a published version complete. When every lesson of
--- that version is done the module is complete; when every module in the
+-- Marks one section of a published version complete (the player calls this
+-- when the learner moves past its last screen). When every section of that
+-- version is done the module is complete; when every module in the
 -- track is published and complete, the track's credential is issued (once).
-create or replace function public.complete_training_lesson(p_module_id uuid, p_version int, p_lesson_id text)
+create or replace function public.complete_training_section(p_module_id uuid, p_version int, p_section_id text)
 returns jsonb
 language plpgsql
 security definer
@@ -242,7 +250,7 @@ set search_path = public
 as $$
 declare
   v_content jsonb;
-  v_lesson_ids text[];
+  v_section_ids text[];
   v_done text[];
   v_track uuid;
   v_module_complete boolean;
@@ -258,29 +266,29 @@ begin
     raise exception 'That version of the module isn''t available.';
   end if;
 
-  select coalesce(array_agg(l ->> 'id'), '{}') into v_lesson_ids
-    from jsonb_array_elements(v_content -> 'lessons') l;
-  if not (p_lesson_id = any(v_lesson_ids)) then
-    raise exception 'That lesson isn''t part of the module.';
+  select coalesce(array_agg(l ->> 'id'), '{}') into v_section_ids
+    from jsonb_array_elements(v_content -> 'sections') l;
+  if not (p_section_id = any(v_section_ids)) then
+    raise exception 'That section isn''t part of the module.';
   end if;
 
-  insert into public.training_progress (user_id, module_id, version, completed_lessons)
-  values (auth.uid(), p_module_id, p_version, array[p_lesson_id])
+  insert into public.training_progress (user_id, module_id, version, completed_sections)
+  values (auth.uid(), p_module_id, p_version, array[p_section_id])
   on conflict (user_id, module_id) do update
-    set completed_lessons = case
+    set completed_sections = case
           -- Progress made against an older version starts fresh on the new one,
           -- except that a completed module stays completed.
           when training_progress.version <> excluded.version and training_progress.completed_at is null
-            then array[p_lesson_id]
-          when p_lesson_id = any(training_progress.completed_lessons)
-            then training_progress.completed_lessons
-          else training_progress.completed_lessons || p_lesson_id
+            then array[p_section_id]
+          when p_section_id = any(training_progress.completed_sections)
+            then training_progress.completed_sections
+          else training_progress.completed_sections || p_section_id
         end,
         version = case when training_progress.completed_at is null then excluded.version else training_progress.version end,
         updated_at = now()
-  returning completed_lessons into v_done;
+  returning completed_sections into v_done;
 
-  v_module_complete := v_lesson_ids <@ v_done;
+  v_module_complete := v_section_ids <@ v_done;
   if v_module_complete then
     update public.training_progress set completed_at = coalesce(completed_at, now())
       where user_id = auth.uid() and module_id = p_module_id;
@@ -315,9 +323,9 @@ $$;
 revoke all on function public.can_author_training_module(uuid) from public;
 grant execute on function public.can_author_training_module(uuid) to authenticated;
 revoke all on function public.publish_training_module(uuid) from public;
-revoke all on function public.complete_training_lesson(uuid, int, text) from public;
+revoke all on function public.complete_training_section(uuid, int, text) from public;
 grant execute on function public.publish_training_module(uuid) to authenticated;
-grant execute on function public.complete_training_lesson(uuid, int, text) to authenticated;
+grant execute on function public.complete_training_section(uuid, int, text) to authenticated;
 
 -- ── Media (images, slides, video files) ────────────────────────────────
 -- Public read: training content isn't private, and public URLs keep pages
