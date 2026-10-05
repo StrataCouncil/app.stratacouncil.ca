@@ -411,6 +411,10 @@ export async function startPaymentSetup(corporationId: string, interval: Billing
           currency: "cad",
           verification_method: "automatic",
           mandate_options: {
+            // Lets the subscription's invoices use this debit agreement on
+            // their own. Without it, each payment waits for the agreement
+            // to be accepted again, and the first one never starts.
+            default_for: ["invoice", "subscription"],
             payment_schedule: "interval",
             interval_description: "Monthly, for the Stratasphere subscription",
             transaction_type: "business",
@@ -563,6 +567,13 @@ export async function paySubscription(
     if (created.status === "incomplete" && firstPayment?.status === "requires_payment_method") {
       await stripe.subscriptions.cancel(created.id);
       return { error: "The payment was declined. Go back and use a different payment method." };
+    }
+    // Waiting on something other than micro-deposits (a debit agreement
+    // saved before it could be used for subscriptions): it would never
+    // start, so cancel it and ask for the payment method again.
+    if (created.status === "incomplete" && firstPayment?.status === "requires_action" && !firstPayment.next_action?.verify_with_microdeposits) {
+      await stripe.subscriptions.cancel(created.id);
+      return { error: "Stripe needs this payment method authorized again. Go back to Payment method, choose Use a different payment method, and add it again. Nothing was charged." };
     }
     // Recorded now rather than when the webhook arrives: a card payment
     // shows Active straight away, a debit still processing shows Pending.

@@ -25,7 +25,12 @@ export async function firstPaymentState(stripe: Stripe, subscriptionId: string):
     if (intent.status === "requires_action") {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const next = intent.next_action as any;
-      return { state: "verify", verifyUrl: next?.verify_with_microdeposits?.hosted_verification_url ?? null };
+      if (next?.verify_with_microdeposits) {
+        return { state: "verify", verifyUrl: next.verify_with_microdeposits.hosted_verification_url ?? null };
+      }
+      // Anything else (a debit agreement that wasn't saved for
+      // subscriptions) never resolves on its own: start again.
+      return { state: "failed", reason: "The payment method needs to be authorized again." };
     }
     if (intent.status === "requires_payment_method" || intent.status === "canceled") {
       return { state: "failed", reason: intent.last_payment_error?.message ?? null };
