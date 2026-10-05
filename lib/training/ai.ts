@@ -149,10 +149,11 @@ export const sectionSchema = {
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["title", "narration", "blocks"],
+        required: ["title", "narration", "photoSearch", "blocks"],
         properties: {
           title: str,
           narration: str,
+          photoSearch: str,
           blocks: {
             type: "array",
             items: {
@@ -233,7 +234,7 @@ type AiBlock = {
   choices?: { text: string; outcome: string; rating: string }[] | null;
   rows?: string[][] | null;
 };
-type AiScreen = { title?: string; narration?: string; blocks?: AiBlock[] };
+type AiScreen = { title?: string; narration?: string; photoSearch?: string; blocks?: AiBlock[] };
 
 /** One AI block in the Module Builder's shape; null when there's nothing usable in it. */
 export function toBlock(b: AiBlock): Block | null {
@@ -327,8 +328,8 @@ export function toScreens(raw: unknown): Screen[] {
       id: newId("s"),
       title: (s.title ?? "").trim().slice(0, 200) || "Untitled screen",
       layout: "full" as const,
-      image: { src: "", alt: "" },
-      narration: { src: "", transcript: (s.narration ?? "").trim() },
+      image: { src: "", alt: "", credit: null, hint: (s.photoSearch ?? "").trim().slice(0, 200) },
+      narration: { src: "", transcript: (s.narration ?? "").trim(), voicedText: "" },
       blocks: (s.blocks ?? []).map(toBlock).filter((b): b is Block => b !== null),
     }))
     .filter((s) => s.blocks.length > 0);
@@ -434,7 +435,8 @@ export const SECTION_INSTRUCTIONS = `Write one section of a module as screens. T
 
 Screens:
 - 3 to 6 screens per section. Each screen teaches one idea in at most about 120 words of on-screen text, plus its blocks.
-- "narration" is a script read aloud with the screen: 40 to 100 words, conversational, adds to the screen rather than reading it out.
+- "narration" is a script read aloud with the screen: 40 to 100 words, conversational, adds to the screen rather than reading it out. Write it to be spoken: no lists, no abbreviations a narrator would stumble on, numbers as words where that reads better.
+- "photoSearch" is two to five words to search a stock-photo library for a picture that suits the screen (real people, buildings, meetings, documents; e.g. "condo building balconies", "people at meeting table"). Never names, logos or text.
 - The section's first screen sets up why the topic matters to council.
 
 Blocks (choose the ones that fit; vary them):

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { calloutLabels, ratingLabels, videoSource, type Block } from "@/lib/training/content";
 import { RichText } from "@/components/training/RichText";
+import { PhotoCreditLine } from "@/components/training/PhotoPicker";
 
 /**
  * One block as the learner sees it. The builder's preview renders the
@@ -29,7 +30,13 @@ export function BlockView({ block, onDone }: { block: Block; onDone?: () => void
         <figure className="lesson-figure">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={block.src} alt={block.alt} loading="lazy" />
-          {block.caption && <figcaption>{block.caption}</figcaption>}
+          {(block.caption || block.credit) && (
+            <figcaption>
+              {block.caption}
+              {block.caption && block.credit && " "}
+              <PhotoCreditLine credit={block.credit} />
+            </figcaption>
+          )}
         </figure>
       );
     case "slides":

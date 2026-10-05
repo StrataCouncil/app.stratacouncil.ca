@@ -16,6 +16,7 @@ import {
   type ScenarioRating,
 } from "@/lib/training/content";
 import { RichTextEditor } from "@/components/training/RichTextEditor";
+import { PhotoCreditLine, PhotoPicker, type PickedPhoto } from "@/components/training/PhotoPicker";
 
 /** The editing form for one block. Every change goes straight to `onChange`. */
 export function BlockEditor({ moduleId, block, onChange }: { moduleId: string; block: Block; onChange: (b: Block) => void }) {
@@ -58,7 +59,9 @@ export function BlockEditor({ moduleId, block, onChange }: { moduleId: string; b
     case "image":
       return (
         <div className="be-stack">
-          <MediaField moduleId={moduleId} kind="image" value={block.src} onChange={(src) => onChange({ ...block, src })} />
+          <ImagePickerButton moduleId={moduleId} query={block.alt || block.caption} onPick={(p) => onChange({ ...block, src: p.src, alt: p.alt || block.alt, credit: p.credit })} />
+          <MediaField moduleId={moduleId} kind="image" value={block.src} label="Or upload your own" onChange={(src) => onChange({ ...block, src, credit: null })} />
+          <PhotoCreditLine credit={block.credit} />
           <label className="field">
             <span>Description for screen readers (alt text)</span>
             <input value={block.alt} maxLength={500} onChange={(e) => onChange({ ...block, alt: e.target.value })} />
@@ -717,5 +720,27 @@ export function MediaField({
       />
       {error && <p className="form-error" role="alert">{error}</p>}
     </div>
+  );
+}
+
+function ImagePickerButton({ moduleId, query, onPick }: { moduleId: string; query: string; onPick: (p: PickedPhoto) => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button type="button" className="button button-secondary button-small" style={{ alignSelf: "flex-start" }} onClick={() => setOpen(true)}>
+        Find a photo
+      </button>
+      {open && (
+        <PhotoPicker
+          moduleId={moduleId}
+          initialQuery={query}
+          onClose={() => setOpen(false)}
+          onPick={(p) => {
+            onPick(p);
+            setOpen(false);
+          }}
+        />
+      )}
+    </>
   );
 }

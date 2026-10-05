@@ -9,6 +9,8 @@ import {
   newBlock,
   newScreen,
   newSection,
+  narrationOutOfDate,
+  normalizeCredit,
   normalizeDoc,
   normalizeModuleContent,
   publishProblems,
@@ -140,4 +142,32 @@ test("publish checks catch what a learner would trip over", () => {
   assert.match(problems[0], /side picture/);
   assert.match(problems[1], /alt text/);
   assert.match(problems[2], /at least two answers/);
+});
+
+test("photo credits are kept only with genuine Unsplash links", () => {
+  const good = { source: "unsplash", name: "Annie Spratt", profileUrl: "https://unsplash.com/@anniespratt?utm_source=x", photoUrl: "https://unsplash.com/photos/abc" };
+  assert.deepEqual(normalizeCredit(good), good);
+  assert.equal(normalizeCredit({ ...good, profileUrl: "https://evil.example/@a" }), null);
+  assert.equal(normalizeCredit({ ...good, profileUrl: "javascript:alert(1)" }), null);
+  assert.equal(normalizeCredit({ ...good, name: "" }), null);
+  assert.equal(normalizeCredit({ ...good, source: "other" }), null);
+  const c = normalizeModuleContent({ sections: [{ id: "s", title: "S", screens: [{ id: "x", title: "X", image: { src: "https://images.unsplash.com/p", alt: "a", credit: good }, blocks: [] }] }] });
+  assert.equal(c.sections[0].screens[0].image.credit?.name, "Annie Spratt");
+});
+
+test("narration made from an older script is flagged and blocks publishing", () => {
+  const screen = newScreen("S");
+  screen.narration = { src: "https://x.supabase.co/a.mp3", transcript: "New words.", voicedText: "Old words." };
+  assert.equal(narrationOutOfDate(screen), true);
+  assert.match(publishProblems({ objectives: ["x"], sections: [{ id: "s", title: "S", screens: [screen] }] }).join(" "), /Regenerate the narration/);
+  screen.narration.voicedText = "New words.";
+  assert.equal(narrationOutOfDate(screen), false);
+  // Uploaded recordings carry no voicedText and are never flagged.
+  screen.narration.voicedText = "";
+  assert.equal(narrationOutOfDate(screen), false);
+});
+
+test("a module's narration voice survives normalization only with a sane id", () => {
+  assert.deepEqual(normalizeModuleContent({ voice: { id: "21m00Tcm4TlvDq8ikWAM", name: "Rachel" } }).voice, { id: "21m00Tcm4TlvDq8ikWAM", name: "Rachel" });
+  assert.equal(normalizeModuleContent({ voice: { id: "../../x", name: "Bad" } }).voice, null);
 });

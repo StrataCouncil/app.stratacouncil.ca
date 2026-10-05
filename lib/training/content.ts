@@ -96,7 +96,7 @@ export type ScenarioRating = "best" | "okay" | "poor";
 export type Block =
   | { id: string; type: "text"; doc: RichDoc }
   | { id: string; type: "callout"; variant: CalloutVariant; title: string; doc: RichDoc; reference: string }
-  | { id: string; type: "image"; src: string; alt: string; caption: string }
+  | { id: string; type: "image"; src: string; alt: string; caption: string; credit: PhotoCredit | null }
   | { id: string; type: "slides"; slides: Slide[] }
   | { id: string; type: "video"; url: string; caption: string; transcript: string }
   | { id: string; type: "audio"; src: string; title: string; transcript: string }
@@ -138,14 +138,24 @@ export type Screen = {
   id: string;
   title: string;
   layout: ScreenLayout;
-  /** The picture beside the blocks on a split screen. */
-  image: { src: string; alt: string };
-  /** Narration that plays with the screen; Next waits for it to finish. */
-  narration: { src: string; transcript: string };
+  /** The picture beside the blocks on a split screen; `hint` is a suggested photo search. */
+  image: { src: string; alt: string; credit: PhotoCredit | null; hint: string };
+  /**
+   * Narration that plays with the screen; Next waits for it to finish.
+   * `transcript` is the script (and the captions); `voicedText` is the
+   * script the current audio was generated from, so the builder can tell
+   * when the audio is out of date.
+   */
+  narration: { src: string; transcript: string; voicedText: string };
   blocks: Block[];
 };
 export type Section = { id: string; title: string; screens: Screen[] };
+/** Who took a stock photo, linked as the photo library requires (Unsplash: photographer and Unsplash, both linked). */
+export type PhotoCredit = { source: "unsplash"; name: string; profileUrl: string; photoUrl: string };
+
 export type ModuleContent = {
+  /** The narration voice for generated audio (ElevenLabs voice id and name). */
+  voice?: { id: string; name: string } | null;
   /** "After this module you can…": shown on the opening screen and again in the recap. */
   objectives: string[];
   sections: Section[];
@@ -195,7 +205,7 @@ export function newBlock(type: BlockType): Block {
     case "callout":
       return { id, type, variant: "key", title: "", doc: emptyDoc(), reference: "" };
     case "image":
-      return { id, type, src: "", alt: "", caption: "" };
+      return { id, type, src: "", alt: "", caption: "", credit: null };
     case "slides":
       return { id, type, slides: [] };
     case "video":
@@ -271,6 +281,25 @@ export function cloneBlock(block: Block): Block {
 
 // ── Media and video ────────────────────────────────────────────────────
 
+/** A photo credit, kept only if its links really are the photo library's. */
+export function normalizeCredit(raw: unknown): PhotoCredit | null {
+  const c = (raw ?? null) as Record<string, unknown> | null;
+  if (!c || c.source !== "unsplash") return null;
+  const onUnsplash = (u: unknown) => {
+    const href = safeHref(u);
+    if (!href) return "";
+    const host = new URL(href).hostname;
+    return host === "unsplash.com" || host.endsWith(".unsplash.com") ? href : "";
+  };
+  const name = str(c.name, 120).trim();
+  const profileUrl = onUnsplash(c.profileUrl);
+  const photoUrl = onUnsplash(c.photoUrl);
+  return name && profileUrl && photoUrl ? { source: "unsplash", name, profileUrl, photoUrl } : null;
+}
+
+/** Narration audio made from an older version of the script. */
+export const narrationOutOfDate = (s: Screen) => Boolean(s.narration.src && s.narration.voicedText && s.narration.voicedText !== s.narration.transcript);
+
 /** Images and video files must come from https (in practice, our training-media bucket). */
 export function safeMediaUrl(src: unknown): string {
   const href = safeHref(src);
@@ -325,7 +354,7 @@ function normalizeBlock(raw: unknown): Block | null {
         reference: str(b.reference, 200),
       };
     case "image":
-      return { id, type: "image", src: safeMediaUrl(b.src), alt: str(b.alt, 500), caption: str(b.caption, 500) };
+      return { id, type: "image", src: safeMediaUrl(b.src), alt: str(b.alt, 500), caption: str(b.caption, 500), credit: normalizeCredit(b.credit) };
     case "slides":
       return {
         id,
@@ -446,7 +475,14 @@ function normalizeBlock(raw: unknown): Block | null {
 }
 
 export function newScreen(title = "New screen"): Screen {
-  return { id: newId("s"), title, layout: "full", image: { src: "", alt: "" }, narration: { src: "", transcript: "" }, blocks: [newBlock("text")] };
+  return {
+    id: newId("s"),
+    title,
+    layout: "full",
+    image: { src: "", alt: "", credit: null, hint: "" },
+    narration: { src: "", transcript: "", voicedText: "" },
+    blocks: [newBlock("text")],
+  };
 }
 
 export function newSection(title = "New section"): Section {
@@ -464,8 +500,12 @@ function normalizeScreen(raw: unknown, seen: Set<string>): Screen {
     id,
     title: str(x.title, 200) || "Untitled screen",
     layout: x.layout === "split" ? "split" : "full",
-    image: { src: safeMediaUrl(image.src), alt: str(image.alt, 500) },
-    narration: { src: safeMediaUrl(narration.src), transcript: str(narration.transcript, 50000) },
+    image: { src: safeMediaUrl(image.src), alt: str(image.alt, 500), credit: normalizeCredit(image.credit), hint: str(image.hint, 200) },
+    narration: {
+      src: safeMediaUrl(narration.src),
+      transcript: str(narration.transcript, 50000),
+      voicedText: str(narration.voicedText, 50000),
+    },
     blocks: list(x.blocks, 60).map(normalizeBlock).filter((b): b is Block => b !== null),
   };
 }
@@ -492,7 +532,10 @@ export function normalizeModuleContent(raw: unknown): ModuleContent {
       screens: list(x.screens, 60).map((s) => normalizeScreen(s, screenIds)),
     };
   });
+  const voice = (r.voice ?? null) as Record<string, unknown> | null;
   return {
+    voice:
+      voice && typeof voice.id === "string" && /^[\w-]{1,64}$/.test(voice.id) ? { id: voice.id, name: str(voice.name, 100) || "Voice" } : null,
     objectives: list(r.objectives, 12).map((o) => str(o, 300)).filter((o) => o.trim()),
     sections,
   };
@@ -532,6 +575,7 @@ export function publishProblems(content: ModuleContent): string[] {
     sec.screens.forEach((sc, ci) => {
       const where = `${inSection}, screen ${ci + 1} ("${sc.title}")`;
       if (sc.blocks.length === 0) problems.push(`${where} has no content.`);
+      if (narrationOutOfDate(sc)) problems.push(`${where}: the script changed after the narration was made. Regenerate the narration.`);
       if (sc.layout === "split" && (!sc.image.src || !sc.image.alt.trim()))
         problems.push(`${where}: the side picture needs a file and a description (alt text).`);
       sc.blocks.forEach((b, bi) => {
