@@ -3158,10 +3158,32 @@ button.chat-source:hover {
     grid-template-columns: 1fr;
   }
 }
-.form-error {
+.form-error,
+.card p.form-error {
   color: var(--danger);
   font-size: 0.9rem;
   margin: 0.5rem 0;
+}
+/* A message that has to be seen: what went wrong, or that it worked. */
+.form-alert,
+.card p.form-alert {
+  margin: 0.25rem 0;
+  padding: 0.65rem 0.9rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+.form-alert--error,
+.card p.form-alert--error {
+  color: var(--danger);
+  background: var(--danger-bg);
+  border: 1px solid rgba(166, 52, 42, 0.3);
+}
+.form-alert--ok,
+.card p.form-alert--ok {
+  color: var(--free);
+  background: var(--free-bg);
+  border: 1px solid rgba(47, 115, 85, 0.3);
 }
 
 /* ── Meetings: agenda builder, item editor, checklist ──────────────── */
