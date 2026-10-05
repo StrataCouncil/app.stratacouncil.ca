@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import type Stripe from "stripe";
 import { getStripe, webhookSecrets, type StripeMode } from "@/lib/stripe/client";
 import { sameMode, syncSubscription } from "@/lib/stripe/sync";
-import { recordPaymentMethodUpdate } from "@/lib/stripe/checkout-results";
+import { recordPaymentMethodUpdate } from "@/lib/stripe/payment-results";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendTransactionalEmail } from "@/lib/email/mailtrap";
 import { invoiceCopyEmail } from "@/lib/email/templates";
@@ -121,19 +121,10 @@ export async function POST(request: NextRequest) {
         const corpId = session.metadata?.corporation_id;
         // The in-app payment-method update form: record it the same way the
         // app does when the form finishes, in case the browser didn't.
-        if (corpId && (await sameMode(corpId, mode))) {
-          if (session.metadata?.purpose === "update_payment_method") {
-            await recordPaymentMethodUpdate(corpId, session.id);
-            break;
-          }
-        }
-        if (session.subscription) {
-          const subId =
-            typeof session.subscription === "string"
-              ? session.subscription
-              : session.subscription.id;
-          const sub = await getStripe(mode).subscriptions.retrieve(subId);
-          await syncSubscription(sub, mode);
+        // (Subscriptions aren't created through Checkout; they arrive as
+        // customer.subscription.* events above.)
+        if (corpId && session.metadata?.purpose === "update_payment_method" && (await sameMode(corpId, mode))) {
+          await recordPaymentMethodUpdate(corpId, session.id);
         }
         break;
       }

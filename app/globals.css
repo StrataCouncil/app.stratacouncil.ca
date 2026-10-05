@@ -1522,25 +1522,8 @@ button {
   font-size: 1rem;
 }
 
-.billing-interval-options {
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-}
 
-.billing-interval-option {
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  padding: 0.75rem 1rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-}
 
-.billing-interval-option[data-selected="true"] {
-  border-color: var(--accent);
-  background: rgba(180, 96, 47, 0.07);
-}
 
 /* Document folders */
 
@@ -4330,9 +4313,6 @@ li[data-done="true"] .checklist__mark {
   max-width: none;
   align-items: stretch;
 }
-.modal--wide .billing-pay {
-  min-width: 0;
-}
 .billing-plan .billing-plan__saving {
   margin-bottom: 0.5rem;
   min-height: 1px;
@@ -4464,12 +4444,6 @@ li[data-done="true"] .checklist__mark {
   color: var(--ink);
 }
 
-.billing-step__actions {
-  display: flex;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-  align-items: center;
-}
 .billing-plans {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -4573,9 +4547,6 @@ li[data-done="true"] .checklist__mark {
 }
 .billing-review dd {
   margin: 0;
-}
-.billing-pay {
-  min-width: 260px;
 }
 
 /* Footer: the company behind StrataCouncil.ca */

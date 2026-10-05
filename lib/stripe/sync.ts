@@ -78,7 +78,7 @@ export async function syncSubscription(sub: Stripe.Subscription, mode: StripeMod
   // Stripe moved `current_period_end` from the Subscription object onto
   // each Subscription Item in its 2025 API versions; read both shapes so
   // this keeps working regardless of which API version the account is
-  // pinned to (Checkout Sessions created above don't set this explicitly).
+  // pinned to (the subscribe action doesn't set one explicitly).
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const subAny = sub as any;
   const periodEndUnix: number | null =
