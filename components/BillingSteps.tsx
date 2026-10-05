@@ -182,10 +182,9 @@ export function BillingSteps({
                 is charged until you subscribe on the last step.
               </p>
               <p className="card__meta">
-                For pre-authorized debit, set <strong>Type of Service</strong> to <strong>Business</strong> on
-                Stripe&rsquo;s page for a strata corporation&rsquo;s account (Personal only if the account is in a
-                person&rsquo;s name). Signing in to your bank there is quickest; typing in the account numbers works too,
-                but then Stripe confirms the account with two small deposits first.
+                For pre-authorized debit, signing in to your bank on Stripe&rsquo;s page is quickest. Typing in the
+                account numbers works too, but then Stripe confirms the account with two small deposits first, which
+                takes a business day or two.
               </p>
               <p className="card__meta">
                 Payments are processed by Stripe for {COMPANY_LEGAL_NAME}, the company behind StrataCouncil.ca, so

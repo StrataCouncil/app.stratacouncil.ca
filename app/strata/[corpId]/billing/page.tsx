@@ -22,6 +22,7 @@ import {
   keepCurrentPlan,
   openBillingPortal,
   updateBillingEmail,
+  startPaymentSetup,
 } from "./actions";
 
 /**
@@ -209,9 +210,11 @@ export default async function BillingPage({
   }
 
   // Bank details typed in by hand wait on two micro-deposits before they
-  // can be used: find that setup, for the "Verify your bank account" link.
+  // can be used: find that setup, for the "Verify the bank account" link.
+  // Looked up whenever there's no usable payment method yet, so an admin
+  // who left and came back days later finds it on Billing straight away.
   let bankVerifyUrl: string | null | undefined;
-  if (sub?.stripe_customer_id && !paymentMethod && dialogOpen) {
+  if (sub?.stripe_customer_id && !paymentMethod && !subscribed && !pending) {
     try {
       const intents = await getStripe(stripeMode).setupIntents.list({ customer: sub.stripe_customer_id, limit: 5 });
       const waiting = intents.data.find((i) => i.status === "requires_action" && i.next_action?.verify_with_microdeposits);
@@ -219,6 +222,11 @@ export default async function BillingPage({
     } catch (error) {
       console.error("billing/page: failed to load bank verification:", error);
     }
+  }
+  // Verified while the dialog waited on the payment step: carry on to the
+  // next step by itself (the page refreshes every few seconds while waiting).
+  if (dialogOpen && step === "payment" && note === "verify-bank" && paymentMethod) {
+    redirect(`/strata/${corpId}/billing?plan=${chosenPlan}&step=contact`);
   }
 
   const statements =
@@ -343,7 +351,33 @@ export default async function BillingPage({
         </p>
       )}
 
-      {!subscribed && !pending && !justSubscribed && (
+      {bankVerifyUrl !== undefined && (
+        <>
+          {/* Checks every few seconds, so verifying on Stripe's page moves this on by itself. */}
+          <AutoRefresh seconds={5} />
+          {!dialogOpen && (
+            <div className="billing-outcome billing-outcome--attention" role="status" data-testid="billing-verify-bank-card">
+              <strong>Verify the bank account to finish subscribing</strong>
+              <p>
+                Stripe sent two small deposits to the strata&rsquo;s bank account; they usually show within one or two
+                business days. Enter the two amounts on Stripe&rsquo;s page, and this page carries on by itself.
+              </p>
+              <div className="billing-outcome__actions">
+                {bankVerifyUrl && (
+                  <a href={bankVerifyUrl} className="button button-primary" target="_blank" rel="noopener noreferrer">
+                    Enter the deposit amounts
+                  </a>
+                )}
+                <form action={startPaymentSetup.bind(null, corpId, chosenPlan)}>
+                  <button className="link-button">Use a different payment method</button>
+                </form>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {!subscribed && !pending && !justSubscribed && bankVerifyUrl === undefined && (
         <div className="card billing-subscribe" data-testid="billing-subscribe">
           <h3>{STRATASPHERE_TITLE}</h3>
           <p>{STRATASPHERE_PITCH}</p>
