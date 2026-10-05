@@ -1,7 +1,17 @@
 /** The AI module builder's conversions. Run: npm test */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { assembleModule, markdownToDoc, normalizePlan, toBlock, toScreens } from "../lib/training/ai.ts";
+import {
+  applyTightened,
+  assembleModule,
+  docToMarkdown,
+  markdownToDoc,
+  normalizePlan,
+  onScreenWords,
+  screenForTightening,
+  toBlock,
+  toScreens,
+} from "../lib/training/ai.ts";
 import { docText, publishProblems, screenRequirements } from "../lib/training/content.ts";
 
 const nulls = {
@@ -90,4 +100,37 @@ test("a plan is tidied and an assembled module passes the publish checks", () =>
   ]);
   assert.equal(content.sections[0].title, "Roles");
   assert.deepEqual(publishProblems(content), []);
+});
+
+test("rich text goes back to markdown-lite and round-trips", () => {
+  const md = "## Who decides\n\nCouncil **governs** day to day.\n\n- Owners vote\n- Council acts";
+  assert.equal(docToMarkdown(markdownToDoc(md)), md);
+});
+
+test("Tighten with AI rewrites only the text blocks and keeps narration, questions and order", () => {
+  const kc = toBlock({
+    ...nulls,
+    type: "knowledge_check",
+    question: "Q?",
+    options: [
+      { text: "A", correct: true, why: "" },
+      { text: "B", correct: false, why: "" },
+    ],
+  })!;
+  const screen = toScreens({
+    screens: [{ title: "Busy", narration: "Long narration.", blocks: [{ ...nulls, type: "text", text: "word ".repeat(80) }] }],
+  })[0];
+  screen.blocks.push(kc);
+  screen.narration.src = "https://x.supabase.co/a.mp3";
+  screen.narration.voicedText = "Long narration.";
+  assert.equal(onScreenWords(screen), 80);
+  assert.equal(screenForTightening(screen).length, 1);
+
+  const tightened = applyTightened(screen, { blocks: [{ ...nulls, type: "callout", variant: "key", text: "Owners share ownership." }] });
+  assert.deepEqual(tightened.blocks.map((b) => b.type), ["callout", "knowledge_check"]);
+  assert.equal(tightened.blocks[1], kc);
+  assert.deepEqual(tightened.narration, screen.narration);
+  assert.equal(onScreenWords(tightened), 3);
+  // A reply with nothing usable leaves the screen alone.
+  assert.equal(applyTightened(screen, { blocks: [] }), screen);
 });

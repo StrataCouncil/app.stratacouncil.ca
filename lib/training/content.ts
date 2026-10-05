@@ -552,14 +552,19 @@ export function flattenScreens(content: ModuleContent) {
 
 /**
  * What the learner must do on a screen before Next: listen to the
- * narration to the end, answer every knowledge check and scenario, and
- * open every click-to-reveal item. Nothing is graded.
+ * narration to the end, answer every knowledge check and scenario, open
+ * every click-to-reveal item, play audio and uploaded video blocks to the
+ * end, and click through every slide. Nothing is graded. (YouTube and
+ * Vimeo embeds can't report when they finish, so they don't hold up Next.)
  */
 export function screenRequirements(screen: Screen): string[] {
   const ids = screen.narration.src ? ["narration"] : [];
   for (const b of screen.blocks) {
     if (b.type === "knowledge_check" || b.type === "scenario") ids.push(b.id);
     if (b.type === "reveal" && b.items.some((i) => i.title.trim() || i.body.trim())) ids.push(b.id);
+    if (b.type === "audio" && b.src) ids.push(b.id);
+    if (b.type === "video" && videoSource(b.url)?.kind === "file") ids.push(b.id);
+    if (b.type === "slides" && b.slides.some((s) => s.src)) ids.push(b.id);
   }
   return ids;
 }
