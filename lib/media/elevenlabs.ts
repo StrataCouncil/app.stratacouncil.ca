@@ -57,8 +57,13 @@ async function explain(res: Response) {
     detail = typeof body.detail === "string" ? body.detail : `${body.detail?.status ?? ""} ${body.detail?.message ?? ""}`;
   } catch {}
   console.error("[elevenlabs]", res.status, detail.slice(0, 300));
-  if (res.status === 401) return "ElevenLabs didn't accept the key. Check ELEVENLABS_API_KEY and its permissions.";
-  if (/quota|credits|limit/i.test(detail) || res.status === 402) return "The ElevenLabs plan is out of credits for this month.";
+  // ElevenLabs answers 401 for running out of credits too, so read its reason before blaming the key.
+  if (/quota|credit|character_limit|limit_reached|usage/i.test(detail) || res.status === 402)
+    return "ElevenLabs is out of credits: either the plan's monthly allowance or the usage limit set on the API key is used up. Raise the limit or upgrade the plan, then generate the rest.";
+  if (/unusual_activity|free_users_not_allowed|payment/i.test(detail))
+    return `ElevenLabs refused the request (${detail.trim().slice(0, 120)}). Check the account at elevenlabs.io.`;
+  if (res.status === 401)
+    return `ElevenLabs didn't accept the key${detail.trim() ? ` (${detail.trim().slice(0, 120)})` : ""}. Check ELEVENLABS_API_KEY and its permissions.`;
   if (res.status === 429) return "ElevenLabs is busy. Wait a moment and try again.";
   return "ElevenLabs couldn't make the audio. Try again.";
 }
