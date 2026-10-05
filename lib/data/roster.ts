@@ -1,3 +1,4 @@
+import { getCredentialsFor } from "@/lib/data/training";
 import { createClient } from "@/lib/supabase/server";
 import { isCorporationRole, type CorporationRole } from "@/lib/strata";
 import { isStrataAdmin } from "@/lib/auth/strata-admin";
@@ -29,6 +30,8 @@ export interface RosterMember {
   roles: CorporationRole[];
   /** Signed link to their profile picture, if they've added one. */
   avatarUrl: string | null;
+  /** Council Training credentials held (track codes). */
+  credentials: string[];
 }
 
 export interface PendingInvite {
@@ -120,8 +123,11 @@ export async function getCorporationRoster(
       lotNumber: m.lot_number ?? null,
       roles: rolesByUser.get(m.user_id) ?? [],
       avatarUrl: m.avatar_path ? avatars.get(m.avatar_path) ?? null : null,
+      credentials: [],
     })
   );
+  const credentials = await getCredentialsFor(members.map((m) => m.userId));
+  for (const m of members) m.credentials = [...(credentials.get(m.userId) ?? [])];
 
   const isAdmin = await isStrataAdmin(supabase, corporationId);
 

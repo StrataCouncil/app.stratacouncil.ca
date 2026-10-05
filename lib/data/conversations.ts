@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { StratasphereSource } from "@/lib/ai/stratasphere";
 
 /**
- * The signed-in person's own Stratasphere history for one strata (0019).
+ * The signed-in person's own Stratasphere history for one strata (0033).
  * RLS limits every read to the owner, so nothing here filters by user.
  */
 export interface ConversationSummary {

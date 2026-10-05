@@ -22,7 +22,7 @@ import type { ConversationMessage, ConversationProject, ConversationSummary } fr
  * Projects, Recents by date), one transcript, a composer. Answers stream in
  * as they're written, and each one lists what it drew on underneath.
  *
- * Conversations are the account holder's alone (0019): not the council's,
+ * Conversations are the account holder's alone (0033): not the council's,
  * not the admin's.
  */
 

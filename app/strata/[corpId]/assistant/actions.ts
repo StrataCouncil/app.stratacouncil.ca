@@ -5,7 +5,7 @@ import type { StratasphereSource } from "@/lib/ai/stratasphere";
 import type { ConversationMessage, ConversationProject } from "@/lib/data/conversations";
 
 /**
- * Managing the signed-in person's own Stratasphere conversations (0019).
+ * Managing the signed-in person's own Stratasphere conversations (0033).
  * Every query runs through the user's client: RLS allows the owner only,
  * so another person's conversation simply isn't found. Questions and
  * answers themselves go through /api/stratasphere/chat.
