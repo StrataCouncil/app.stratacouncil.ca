@@ -11,6 +11,7 @@ import { StrataSphereNav } from "@/components/StrataSphereNav";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { STRATASPHERE_PITCH, STRATASPHERE_TITLE } from "@/components/StratasphereValue";
 import { firstPaymentState, type FirstPayment } from "@/lib/stripe/first-payment";
+import { syncSubscription } from "@/lib/stripe/sync";
 import type { BillingAddress } from "@/lib/billing-address";
 import { BillingSteps, type BillingStep } from "@/components/BillingSteps";
 import { COMPANY_LEGAL_NAME, STATEMENT_DESCRIPTOR } from "@/lib/company";
@@ -144,6 +145,22 @@ export default async function BillingPage({
   // A first payment Stripe is still processing (usually a pre-authorized
   // debit, a few business days): neither subscribed nor not (0030).
   const pending = !subscribed && Boolean(sub?.stripe_subscription_id) && sub?.stripe_status === "incomplete";
+
+  // A safety net for a missed webhook: while this page shows Pending, ask
+  // Stripe where the subscription actually stands. If Stripe has moved on
+  // (paid and active, or expired), record that and show the real state.
+  if (pending) {
+    let moved = false;
+    try {
+      const live = await getStripe(stripeMode).subscriptions.retrieve(sub!.stripe_subscription_id as string);
+      if (live.status !== "incomplete") {
+        moved = await syncSubscription(live, stripeMode);
+      }
+    } catch (error) {
+      console.error("billing/page: couldn't check the subscription with Stripe:", error);
+    }
+    if (moved) redirect(`/strata/${corpId}/billing${justSubscribed ? "?subscribed=1" : ""}`);
+  }
   // Pending can mean a debit on its way, a bank account still to verify,
   // or a payment that failed; ask Stripe which (low traffic, admin only).
   const firstPayment: FirstPayment | null = pending

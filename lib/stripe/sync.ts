@@ -33,14 +33,14 @@ export async function sameMode(corporationId: string, mode: StripeMode) {
  * the subscription, so a card payment shows Active at once instead of
  * waiting for the webhook.
  */
-export async function syncSubscription(sub: Stripe.Subscription, mode: StripeMode) {
+export async function syncSubscription(sub: Stripe.Subscription, mode: StripeMode): Promise<boolean> {
   const admin = createAdminClient();
   const corporationId = sub.metadata?.corporation_id;
   if (!corporationId) {
     console.error(`stripe-webhook: subscription ${sub.id} has no corporation_id metadata.`);
-    return;
+    return false;
   }
-  if (!(await sameMode(corporationId, mode))) return;
+  if (!(await sameMode(corporationId, mode))) return false;
 
   const { data: existing } = await admin
     .from("subscriptions")
@@ -93,7 +93,7 @@ export async function syncSubscription(sub: Stripe.Subscription, mode: StripeMod
   const switchSettled =
     Boolean(existing?.pending_interval) && (existing!.pending_interval === billingInterval || !sub.schedule);
 
-  await admin
+  const { error: writeError } = await admin
     .from("subscriptions")
     .upsert(
       {
@@ -114,6 +114,10 @@ export async function syncSubscription(sub: Stripe.Subscription, mode: StripeMod
       },
       { onConflict: "corporation_id" }
     );
+  if (writeError) {
+    console.error(`[syncSubscription] ${corporationId}:`, writeError.message);
+    return false;
+  }
 
   // doc01 §4/§4b: the free trial meeting expires the instant a
   // subscription is ever activated, whether or not it was ever used.
@@ -124,5 +128,5 @@ export async function syncSubscription(sub: Stripe.Subscription, mode: StripeMod
       .eq("strata_plan_number", corporationId)
       .eq("free_meeting_used", false);
   }
+  return true;
 }
-
