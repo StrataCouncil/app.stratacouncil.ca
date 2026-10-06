@@ -305,10 +305,10 @@ function KnowledgeCheck({ block, onDone }: { block: Extract<Block, { type: "know
   const why = options.map((o, i) => ({ ...o, i })).filter((o) => o.feedback.trim());
 
   return (
-    <section className="kc" data-state={submitted ? (correct ? "correct" : "incorrect") : "open"}>
+    <section className="kc" data-state={submitted ? (correct ? "correct" : block.warmUp ? "warmup" : "incorrect") : "open"}>
       <header className="kc__head">
-        <span className="kc__label">Knowledge check</span>
-        {submitted && <span className="kc__badge">{correct ? "Correct" : "Incorrect"}</span>}
+        <span className="kc__label">{block.warmUp ? "Warm-up: what do you already know?" : "Knowledge check"}</span>
+        {submitted && <span className="kc__badge">{correct ? (block.warmUp ? "You knew it" : "Correct") : block.warmUp ? "Coming up in this module" : "Incorrect"}</span>}
       </header>
       <div className="kc__body">
         <p className="kc__question">{block.question || "Question"}</p>

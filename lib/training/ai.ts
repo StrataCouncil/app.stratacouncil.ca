@@ -50,6 +50,8 @@ export function parseSources(raw: unknown): ImportSourceRecord[] {
 export interface PlannedSection {
   title: string;
   keyPoints: string[];
+  /** The teaching technique the section uses, in one sentence. */
+  approach: string;
 }
 export interface PlannedModule {
   key: string;
@@ -96,8 +98,8 @@ export const planSchema = {
             items: {
               type: "object",
               additionalProperties: false,
-              required: ["title", "keyPoints"],
-              properties: { title: str, keyPoints: strList },
+              required: ["title", "keyPoints", "approach"],
+              properties: { title: str, keyPoints: strList, approach: str },
             },
           },
         },
@@ -125,7 +127,7 @@ export function normalizePlan(raw: unknown): ImportPlan {
       objectives: texts(x.objectives, 300, 8),
       sections: (Array.isArray(x.sections) ? x.sections : []).slice(0, 10).map((s) => {
         const y = (s ?? {}) as Record<string, unknown>;
-        return { title: text(y.title, 200) || "Untitled section", keyPoints: texts(y.keyPoints, 500, 12) };
+        return { title: text(y.title, 200) || "Untitled section", keyPoints: texts(y.keyPoints, 500, 12), approach: text(y.approach, 500) };
       }),
       ...(x.status === "done" || x.status === "building" || x.status === "failed" || x.status === "pending" ? { status: x.status } : {}),
       ...(typeof x.moduleId === "string" ? { moduleId: x.moduleId } : {}),
@@ -157,6 +159,7 @@ const blockSchema = {
                 "prompt",
                 "choices",
                 "rows",
+                "warmUp",
               ],
               properties: {
                 type: { type: "string", enum: [...blockTypes] },
@@ -192,6 +195,7 @@ const blockSchema = {
                   },
                 }),
                 rows: nullable({ type: "array", items: strList }),
+                warmUp: nullable({ type: "boolean" }),
               },
             } as const;
 
@@ -244,6 +248,7 @@ type AiBlock = {
   prompt?: string | null;
   choices?: { text: string; outcome: string; rating: string }[] | null;
   rows?: string[][] | null;
+  warmUp?: boolean | null;
 };
 type AiScreen = { title?: string; narration?: string; photoSearch?: string; blocks?: AiBlock[] };
 
@@ -308,6 +313,7 @@ export function toBlock(b: AiBlock): Block | null {
         explanation: b.explanation?.trim() ?? "",
         studyTip: b.studyNote?.trim() ?? "",
         reference: b.reference?.trim() ?? "",
+        ...(b.warmUp === true ? { warmUp: true } : {}),
       };
     }
     case "scenario": {
@@ -424,6 +430,54 @@ export const TRACK_DESCRIPTIONS: Record<TrackCode, string> = {
 };
 
 /** The fixed instructions (cached together with the document across every call for one import). */
+/**
+ * How every module teaches (2026-10-06): BOPPPS for the shape of a module,
+ * Bloom's taxonomy for how deep each track goes, and general sequencing
+ * principles. Not tied to any one module's topic.
+ */
+export const BLOOM_LEVELS: Record<TrackCode, { levels: string; verbs: string }> = {
+  strata_basics: {
+    levels: "Remember and Understand: recall the basics and explain them in their own words",
+    verbs: "name, identify, define, describe, explain, distinguish, recognize",
+  },
+  council_ready: {
+    levels: "Understand and Apply, with some Analyze: use what they know in real council situations",
+    verbs: "explain, apply, choose, follow, use, decide, compare, distinguish",
+  },
+  treasurer: {
+    levels: "Apply and Analyze, with some Evaluate: do the job's tasks and judge the results",
+    verbs: "calculate, prepare, apply, compare, check, analyze, assess, recommend",
+  },
+  secretary: {
+    levels: "Apply and Analyze, with some Evaluate: do the job's tasks and judge the results",
+    verbs: "prepare, draft, apply, check, organize, compare, assess",
+  },
+};
+
+export const TEACHING_APPROACH = `How modules teach:
+
+Always:
+- Start from the learner: before any facts, show why the topic matters to them, with a question (rhetorical is fine), a short situation or a problem from strata life that links to what they already know as an owner.
+- One to three objectives the learner can do by the end, each checkable, each starting with a verb at the track's Bloom levels (given with the module). Questions and activities test at those levels; never go deeper than the track calls for.
+- Known to unknown, concrete to abstract, simple to complex, big picture before detail.
+- Each section answers one question a newcomer would ask, and its title says so in plain words.
+- Define a term the first time it appears; never use an idea before the screen that teaches it, and don't reach into what other modules teach.
+- Break anything dense into steps the learner opens one at a time, rather than one crowded screen.
+- Depth budget: when a topic is complex or belongs to a later module, name it in a sentence, say where it's covered, and move on.
+- Use only the numbers, deadlines and thresholds a volunteer will act on.
+- The learner does something on about half the screens (opens, chooses, works through a situation), and each section ends with a knowledge check on one of the objectives.
+- Close the module by pulling the key points together, back to the objectives, and saying how the learner will use them on council.
+
+Then choose the technique that fits each section's material. Vary them; don't force one model onto everything:
+- Concepts and definitions (concept attainment): start from something familiar (an everyday strata example or analogy), then name the idea, then contrast what it is with what it isn't (flip cards work well).
+- Structures and hierarchies (advance organizer): show the whole first, then open each part in turn.
+- Procedures (worked example, then practice): walk through one real example step by step, let the learner try the next step or a similar case, and leave a checklist to keep.
+- Judgment calls (case-based, experiential cycle): a realistic situation first, then the principle behind the right call, then a second situation to apply it.
+- Common misconceptions (predict, then explain): ask what the learner would expect, then show what the law actually says and why.
+- Retrieval practice: questions that make the learner recall something from an earlier section, not just the screen in front of them.
+- Reflection: a "think about it" prompt connecting the idea to their own strata (no answer needed).
+- Opening a module (BOPPPS-style): a bridge-in, the objectives, and a quick "what do you already know?" (usually rhetorical; occasionally a warm-up knowledge check with "warmUp": true, whose feedback says where it's covered). Good for most openings, not required.`;
+
 export const BUILDER_SYSTEM = `You write Council Training for StrataCouncil.ca: short, practical e-learning modules for volunteer strata council members in British Columbia, Canada. Learners are owners who joined council, not professionals. The design question behind every module is "what do I need to know to make good decisions for the other owners?", not "what does the law say in general".
 
 You work from the source documents given below (each in a <source_document> tag with its title). They are the only source of facts you may use. Some are sections of the Strata Property Act, the Strata Property Regulation or other law (kind "act" or "regulation"), each section opening with its citation; others are guidance. The law is the authority for every rule, number, deadline and vote threshold; guidance is for explanation, examples and practical advice. Where they overlap, combine them; where guidance disagrees with the law, follow the law and say council should check. Cite the law where a rule comes from it, using the section numbers in the passages ("Strata Property Act, s. 45", "Strata Property Regulation, s. 6.6", "Standard Bylaw 23").
@@ -435,14 +489,18 @@ Rules:
 - Plain, warm, direct Canadian English (Canadian spelling: "council", "centre", "favour"). Short sentences. Address the learner as "you". Explain any legal term the first time it appears.
 - Practical over theoretical: what council does, when, who decides, what can go wrong.
 - This is education, not legal advice. Where a situation turns on its facts, say council should get professional advice.
-- No emoji. No exclamation-mark enthusiasm.`;
+- No emoji. No exclamation-mark enthusiasm.
+
+${TEACHING_APPROACH}`;
 
 export const PLAN_INSTRUCTIONS = `Break the source documents into Council Training modules.
 
 - Each module is 10 to 15 minutes for a volunteer (at most about 18 screens) and covers one coherent topic. Prefer several focused modules to one long one; a short document may be a single module.
 - Put each module in the track it best fits:
 ${TRACK_CODES.map((c) => `  - ${c}: ${TRACK_DESCRIPTIONS[c]}`).join("\n")}
-- For each module give: a title (plain, specific, no colon subtitles), a one- or two-sentence summary, an estimate in minutes, 3 to 5 learning objectives (each starting with a verb, e.g. "Explain when council needs a 3/4 vote"), and 3 or 4 sections. Each section has a short title and the key points it will teach, drawn from the documents.
+- For each module give: a title (plain, specific, no colon subtitles), a one- or two-sentence summary, an estimate in minutes, one to three learning objectives (each starting with a verb at the track's Bloom levels, e.g. "Explain when council needs a 3/4 vote"), and 3 or 4 sections. Each section has a short title, the key points it will teach (drawn from the documents), and the teaching technique it uses ("approach", e.g. "Worked example, then practice: ..."), ordered by the teaching principles.
+- Bloom levels by track:
+${TRACK_CODES.map((c) => `  - ${c}: ${BLOOM_LEVELS[c].levels} (verbs such as ${BLOOM_LEVELS[c].verbs})`).join("\n")}
 - Order the modules the way a new council member should take them.
 - "summary" describes the documents and how you've divided them, in two or three sentences.`;
 
@@ -468,10 +526,11 @@ Module: ${target.title}
 Track: ${target.trackCode} (${TRACK_DESCRIPTIONS[target.trackCode]})
 Scope: ${target.summary || "(see the objectives)"}
 Length: ${target.estimatedMinutes ?? 12} minutes, at most about 18 screens
+Depth (Bloom): ${BLOOM_LEVELS[target.trackCode].levels} (verbs such as ${BLOOM_LEVELS[target.trackCode].verbs})
 Learning objectives:
-${target.objectives.map((o) => `- ${o}`).join("\n") || "- (none yet: propose 3 to 5)"}`,
-    `- Return exactly one module with that title and track. Keep the objectives as given${target.objectives.length ? "" : " (propose 3 to 5, each starting with a verb)"}.
-- Choose 3 or 4 sections that together meet every objective. Each section's key points come from the documents.
+${target.objectives.map((o) => `- ${o}`).join("\n") || "- (none yet: propose one to three)"}`,
+    `- Return exactly one module with that title and track. Keep the objectives as given${target.objectives.length ? "" : " (propose one to three, each starting with a verb at the depth above)"}.
+- Choose 3 or 4 sections that together meet every objective, ordered by the teaching principles: the first opens by showing why the topic matters, and the last closes the module. Each section's key points come from the documents, and its "approach" names the technique that fits its material and how it will be used, in one sentence.
 - Teach only what this module's scope and objectives need. Leave out anything the other modules below cover, and anything a volunteer council member won't use.
 - If the documents don't support an objective, say so in "summary" so the author can add a source; don't fill the gap from general knowledge.
 - "summary" (top level) tells the author how you've used the documents and anything missing. The module's own "summary" is one or two sentences for learners.`,
@@ -520,7 +579,7 @@ Screens:
 - The screen is read while the narration plays, so keep it sparse: at most about 40 words of on-screen text in total (knowledge checks and scenarios aside), usually one or two blocks. Show the key words, not sentences: a short line, 2 to 4 bullets of a few words, a callout, cards or a table. Card and reveal text is at most about 15 words each. Never put the explanation on screen; that's the narration's job.
 - "narration" is a script read aloud with the screen: 40 to 90 words, conversational. It explains what the screen shows, without reading the screen out word for word. Write it to be spoken: no lists, no abbreviations a narrator would stumble on, numbers as words where that reads better.
 - "photoSearch" is two to five words to search a stock-photo library for a picture that suits the screen (real people, buildings, meetings, documents; e.g. "condo building balconies", "people at meeting table"). Never names, logos or text.
-- The section's first screen sets up why the topic matters to council.
+- The section's first screen sets up the question the section answers; the module's first screen shows why the whole topic matters. Follow the section's teaching technique (given in its outline).
 
 Blocks (choose the ones that fit; vary them):
 - text: markdown-lite in "text" (paragraphs, "- " bullet lists, **bold**). Keep it short.
@@ -528,12 +587,12 @@ Blocks (choose the ones that fit; vary them):
 - reveal: click to reveal. "style" accordion (headings that open) or cards (flip cards: term on the front, meaning on the back). "items" with title and text. Good for definitions, lists of roles, the parts of something.
 - features: two to four side-by-side items ("items" with a short title and caption), e.g. the three people involved.
 - table: "rows", first row the header, e.g. deadlines, who does what, vote thresholds. "title" is the caption.
-- knowledge_check: a "question" with one right answer and 2 or 3 distractors that sound plausible but are wrong. Mark the right answer "correct": true. Every distractor must be plainly wrong under the source documents, never partly right or right in some cases; if an option could be argued, replace it. Ask about something a council member would actually need to know or do, in plain words. Give each option a one-sentence "why" (why it's right, or why it's wrong), an "explanation" tying it together, a "studyNote" (one or two sentences to remember), and a "reference" to the section that answers the question. Put each knowledge check on its own screen titled "Knowledge check".
+- knowledge_check: a "question" with one right answer and 2 or 3 distractors that sound plausible but are wrong. Mark the right answer "correct": true. Every distractor must be plainly wrong under the source documents, never partly right or right in some cases; if an option could be argued, replace it. Ask about something a council member would actually need to know or do, in plain words. Give each option a one-sentence "why" (why it's right, or why it's wrong), an "explanation" tying it together, a "studyNote" (one or two sentences to remember), and a "reference" to the section that answers the question. Put each knowledge check on its own screen titled "Knowledge check" (a warm-up's screen is titled "What do you already know?" and sets "warmUp": true; every other knowledge check sets "warmUp": false).
 - scenario: a realistic council situation in "text" (invent plausible people and buildings; never real ones), a "prompt", and 2 to 4 "choices", each with an "outcome" (what happens and why) and a "rating" (best, okay, poor).
 - summary: the section's key points in "items" (use the "text" of each item).
 - checklist: practical steps in "items".
 
-Include at least one knowledge check in every section. Include a scenario in at least one section of the module. End the module's last section with a summary block.
+Every section ends with a knowledge check on one of the objectives, at its level. Make about half the screens participatory (reveal, flip cards, a scenario, a question). Include a scenario in at least one section of the module. End the module's last section with a summary block that returns to the objectives and says how the learner will use this on council.
 Leave every field that doesn't apply to a block as null.`;
 
 // ── Tighten with AI: make an existing screen sparser ───────────────────

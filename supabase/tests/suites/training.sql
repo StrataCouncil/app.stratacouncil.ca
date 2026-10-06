@@ -15,6 +15,17 @@ select pg_temp.expect('3 + 6 + 4 + 4 modules by track',
   = array[3, 6, 4, 4]::bigint[]);
 select pg_temp.expect('every further reading link is https',
   not exists (select 1 from training_module_drafts d, jsonb_array_elements(d.content -> 'furtherReading') r where r ->> 'url' not like 'https://%'));
+select pg_temp.expect('0039: every curriculum module has one to three objectives',
+  not exists (select 1 from training_module_drafts d join training_modules m on m.id = d.module_id
+              where m.curriculum_key is not null and jsonb_array_length(d.content -> 'objectives') not between 1 and 3));
+select pg_temp.expect('0039: Strata Basics 2 is the rules a strata lives by',
+  (select title from training_modules where curriculum_key = 'sb2') = 'The rules a strata lives by');
+-- An author's own objectives survive a re-run of 0039.
+update training_module_drafts set content = jsonb_set(content, '{objectives}', '["My own objective"]')
+  where module_id = (select id from training_modules where curriculum_key = 'cr1');
+\i supabase/migrations/0039_training_objectives.sql
+select pg_temp.expect('0039 leaves edited objectives alone',
+  (select content -> 'objectives' from training_module_drafts where module_id = (select id from training_modules where curriculum_key = 'cr1')) = '["My own objective"]'::jsonb);
 -- The checks below build their own modules from scratch.
 delete from training_modules;
 select pg_temp.expect('tracks in curriculum order',
