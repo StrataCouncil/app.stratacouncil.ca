@@ -8087,3 +8087,35 @@ a.track-card:focus-visible {
   font-size: 0.88rem;
   color: var(--muted);
 }
+
+/* A split screen with the picture on the left */
+.player__screen[data-layout="split"][data-side="left"] {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+  padding-right: 1.75rem;
+  padding-left: 0;
+}
+.player__screen[data-layout="split"][data-side="left"] .player__aside {
+  order: -1;
+}
+.player__screen[data-layout="split"][data-side="left"] .player__aside img {
+  border-radius: 0 0 0 var(--radius-lg);
+}
+.player__screen[data-layout="split"][data-side="left"] .player__aside .photo-credit {
+  border-radius: 0 0 0 var(--radius-lg);
+}
+@media (max-width: 899px) {
+  .player__screen[data-layout="split"][data-side="left"] {
+    grid-template-columns: 1fr;
+    padding: 0 0 1.25rem;
+  }
+  .player__screen[data-layout="split"][data-side="left"] .player__aside img {
+    border-radius: 0;
+  }
+}
+.builder__frame--player[data-device="phone"] .player__screen[data-layout="split"][data-side="left"] {
+  grid-template-columns: 1fr;
+  padding: 0 0 1.25rem;
+}
+.builder__side {
+  align-self: flex-end;
+}

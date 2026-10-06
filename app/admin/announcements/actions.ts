@@ -5,7 +5,7 @@ import { requireSuperAdmin } from "@/lib/data/admin";
 import { isAnnouncementCategory } from "@/lib/announcement-categories";
 
 /**
- * Announcements on the Home page and/or every strata's Overview (0028,
+ * Announcements on the Council Training page and/or every strata's Overview (0028,
  * 0031, 0032). Super Admins only; RLS enforces it too. Every action
  * returns a result the page shows, so nothing fails silently.
  */
@@ -38,7 +38,7 @@ function readFields(formData: FormData, allowPastEnd: boolean): { ok: true; fiel
 
   if (!title) return { ok: false, error: "Give it a title." };
   if (!body) return { ok: false, error: "Write the announcement." };
-  if (!showOnHome && !showOnOverview) return { ok: false, error: "Choose where it shows: the Home page, Stratasphere Overview, or both." };
+  if (!showOnHome && !showOnOverview) return { ok: false, error: "Choose where it shows: the Council Training page, Stratasphere Overview, or both." };
   // An outside address (https://) or a page in the app (/training).
   if (linkUrl && !/^(https:\/\/\S+|\/(?!\/)\S*)$/.test(linkUrl)) {
     return { ok: false, error: "Links start with https://, or with / for a page in the app (like /training)." };

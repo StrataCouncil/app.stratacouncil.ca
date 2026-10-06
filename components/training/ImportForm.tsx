@@ -11,7 +11,7 @@ type Picked = { key: string; kind: "upload"; file: File } | { key: string; kind:
 
 /**
  * Start an AI build: one to five documents (uploaded files and/or
- * Legislation library entries), an optional track, and notes for the AI.
+ * Legislation Library entries), an optional track, and notes for the AI.
  * With a target, it writes that curriculum module instead of proposing
  * new ones.
  */
@@ -113,7 +113,7 @@ export function ImportForm({
           <div key={p.key} className="import-form__source">
             <span>
               {p.kind === "upload" ? p.file.name : p.title}
-              <span className="card__meta"> &middot; {p.kind === "upload" ? "upload" : "Legislation library"}</span>
+              <span className="card__meta"> &middot; {p.kind === "upload" ? "upload" : "Legislation Library"}</span>
             </span>
             <button
               type="button"
@@ -154,10 +154,10 @@ export function ImportForm({
           <select
             value={libraryChoice}
             onChange={(e) => setLibraryChoice(e.target.value)}
-            aria-label="Legislation library entry"
+            aria-label="Legislation Library entry"
             disabled={full || Boolean(busy)}
           >
-            <option value="">Or choose from the Legislation library…</option>
+            <option value="">Or choose from the Legislation Library…</option>
             {library
               .filter((l) => !picked.some((p) => p.kind === "library" && p.id === l.id))
               .map((l) => (

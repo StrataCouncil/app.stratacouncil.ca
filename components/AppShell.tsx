@@ -7,8 +7,8 @@ import { getConnectedCorporations } from "@/lib/data/corporations";
 
 /**
  * Top-level app shell (doc03 "Screen layout — two levels, not one flat
- * menu"): Home (the signed-in landing screen) and Council Training are
- * both unswitched, belonging to the user, not any corporation.
+ * menu"): Council Training (the signed-in landing screen; Home was folded
+ * into it on 2026-10-06) belongs to the user, not any corporation.
  *
  * Now reads the real signed-in user instead of the `currentProfile` /
  * `currentCorporation` mocks — this fixes the Stratasphere nav link
@@ -22,7 +22,7 @@ export async function AppShell({
   active,
   children,
 }: {
-  active?: "home" | "training" | "strata" | "admin";
+  active?: "training" | "strata" | "admin";
   children: React.ReactNode;
 }) {
   const profile = await getCurrentProfile();
@@ -34,14 +34,11 @@ export async function AppShell({
     <>
       <header className="app-header">
         <div className="wrap app-header__inner">
-          <Link href="/" className="app-header__brand">
+          <Link href="/training" className="app-header__brand">
             <Logo className="app-header__mark" />
             <span>StrataCouncil.ca</span>
           </Link>
           <nav className="app-nav" aria-label="Primary">
-            <Link href="/" data-active={active === "home"}>
-              Home
-            </Link>
             <Link href="/training" data-active={active === "training"}>
               Council Training
             </Link>

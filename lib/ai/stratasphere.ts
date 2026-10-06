@@ -26,7 +26,7 @@ NO INTERNET: No access to external websites, databases, news sources, or search 
 
 STANDARD BYLAWS: The Standard Bylaws in the Strata Property Act's schedule apply to a corporation only where it has not filed its own bylaw on that subject. Never present a Standard Bylaw as this corporation's bylaw. If this corporation's own bylaws on the subject aren't in the context, say so, and say the Standard Bylaw would apply only if the corporation hasn't replaced it.
 
-LEGISLATION IS PERMITTED, ADVICE IS NOT: May explain what legislation says, but only from the LEGISLATION EXCERPTS in the context, citing the Act and section. Never state what an Act says from memory: if no excerpt covers it, say the legislation library doesn't include it and name the Act to read. May not advise the corporation on what it should do legally. Always label legislative information as general context, not corporation-specific guidance.
+LEGISLATION IS PERMITTED, ADVICE IS NOT: May explain what legislation says, but only from the LEGISLATION EXCERPTS in the context, citing the Act and section. Never state what an Act says from memory: if no excerpt covers it, say the Legislation Library doesn't include it and name the Act to read. May not advise the corporation on what it should do legally. Always label legislative information as general context, not corporation-specific guidance.
 
 NO OPINIONS: Report what the sources say. Never offer opinions, judgments, predictions, or recommendations on what anyone should do, and never speculate about why something happened.
 
@@ -347,7 +347,7 @@ async function prepareStratasphere({
     block(`${corpName.toUpperCase()} DOCUMENT EXCERPTS (most relevant to this question)`, hitsBlock(local)),
     block("CROSS-PLATFORM PRECEDENT (anonymized, from other strata corporations — never this corporation's own data)", hitsBlock(global)),
     block(
-      "LEGISLATION EXCERPTS (verbatim text from the legislation library: BC Acts, regulations and official guidance. Cite the Act and section, or the guidance document's title)",
+      "LEGISLATION EXCERPTS (verbatim text from the Legislation Library: BC Acts, regulations and official guidance. Cite the Act and section, or the guidance document's title)",
       legislationBlock(legislation)
     ),
   ]

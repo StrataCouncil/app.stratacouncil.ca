@@ -309,7 +309,10 @@ export function ModuleBuilder({
       ) : (
         save.state === "error" && (
           <p className="builder__alert" role="alert">
-            {save.error}
+            {save.error}{" "}
+            <button type="button" className="button button-secondary button-small" onClick={() => setContent((c) => ({ ...c }))}>
+              Save now
+            </button>
           </p>
         )
       )}
@@ -458,7 +461,7 @@ export function ModuleBuilder({
                 check={factCheck}
                 outOfDate={checkOutOfDate}
                 canRun={canPublish && content.sections.length > 0}
-                saved={save.state === "saved"}
+                saveState={stale ? "stale" : save.state}
                 onStart={async () => {
                   const r = await startFactCheck(module.id);
                   if (!r.ok) return setNotice(r.error);
@@ -738,7 +741,7 @@ function FactCheckPanel({
   check,
   outOfDate,
   canRun,
-  saved,
+  saveState,
   onStart,
   onMark,
   screenTitle,
@@ -747,7 +750,7 @@ function FactCheckPanel({
   check: FactCheck | null;
   outOfDate: boolean;
   canRun: boolean;
-  saved: boolean;
+  saveState: "saved" | "saving" | "error" | "stale";
   onStart: () => Promise<void>;
   onMark: (index: number, checked: boolean) => Promise<void>;
   screenTitle: (id: string) => string;
@@ -836,14 +839,24 @@ function FactCheckPanel({
           <button
             type="button"
             className={`button ${check?.status === "done" && !outOfDate ? "button-secondary" : "button-primary"} button-small`}
-            disabled={busy || checking || !saved}
+            disabled={busy || checking || saveState !== "saved"}
             onClick={async () => {
               setBusy(true);
               await onStart();
               setBusy(false);
             }}
           >
-            {checking ? "Checking…" : !saved ? "Saving…" : check ? "Check again" : "Check facts"}
+            {checking
+              ? "Checking…"
+              : saveState === "saving"
+                ? "Saving…"
+                : saveState === "stale"
+                  ? "Reload first (see the top of the page)"
+                  : saveState === "error"
+                    ? "Not saved (see the top of the page)"
+                    : check
+                      ? "Check again"
+                      : "Check facts"}
           </button>
         </div>
       )}
@@ -1239,6 +1252,16 @@ function ScreenSettings({
             ))}
           </select>
         </label>
+        {screen.layout === "split" && (
+          <div className="builder__devices builder__side" role="group" aria-label="Picture side">
+            <button type="button" data-active={(screen.imageSide ?? "right") === "left"} onClick={() => onChange({ ...screen, imageSide: "left" })}>
+              Picture left
+            </button>
+            <button type="button" data-active={(screen.imageSide ?? "right") === "right"} onClick={() => onChange({ ...screen, imageSide: "right" })}>
+              Picture right
+            </button>
+          </div>
+        )}
         <button type="button" className="button button-secondary button-small builder__find-photo" onClick={() => setPicking(true)}>
           {screen.image.src ? "Change photo" : "Find a photo"}
         </button>

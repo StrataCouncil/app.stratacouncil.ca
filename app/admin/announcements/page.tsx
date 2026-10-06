@@ -5,7 +5,7 @@ import { AnnouncementForm } from "@/components/AnnouncementForm";
 import { listAllAnnouncements } from "@/lib/data/announcements";
 import { AnnouncementAdminItem } from "@/components/AnnouncementAdminItem";
 
-/** Announcements on the Home page and/or every strata's Overview (0028, 0031, 0032). Super Admins only. */
+/** Announcements on the Council Training page and/or every strata's Overview (0028, 0031, 0032). Super Admins only. */
 export default async function AnnouncementsPage() {
   const list = await listAllAnnouncements();
   if (!list) notFound();
@@ -22,7 +22,7 @@ export default async function AnnouncementsPage() {
           <h1>Announcements</h1>
           <p>
             News for every StrataCouncil.ca customer, subscribed or not: new features, changes, new or updated
-            training, additions to the Library, legislation. Choose the Home page, every strata&rsquo;s Stratasphere&trade;
+            training, additions to the Library, legislation. Choose the Council Training page, every strata&rsquo;s Stratasphere&trade;
             Overview, or both. Home shows the newest three; Overview the newest five. Keep them short.
           </p>
         </div>

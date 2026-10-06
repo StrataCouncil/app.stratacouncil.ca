@@ -19,7 +19,7 @@ export default async function LegislationPage() {
           <Link href="/admin">Super Admin console</Link>
         </p>
         <div className="page-header">
-          <h1>Legislation library</h1>
+          <h1>Legislation Library</h1>
           <p>
             BC Acts, regulations and official guidance that Stratasphere quotes and cites for every strata on the
             platform. It explains the law only from what&rsquo;s here, never from memory, so keep each entry current:

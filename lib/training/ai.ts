@@ -430,6 +430,7 @@ You work from the source documents given below (each in a <source_document> tag 
 
 Rules:
 - Every fact, number, deadline and threshold must come from the source documents. If they don't support something, leave it out. Never invent section numbers, case names, dollar figures or dates.
+- That includes background: history, naming conventions, plan number formats, other agencies, other statutes, how things "usually" work. If a source doesn't say it, don't say it, even if you believe it's true. A shorter module is better than an unsupported one.
 - References name the document and its own section or heading, e.g. "Strata Property Act, s. 45" or "Strata corporations (Province of BC), 'Decision making'". Cite the section that actually says the thing, not the definitions section or a section that only mentions it. Only cite what a document actually contains, and ignore website menus, navigation and page furniture.
 - Plain, warm, direct Canadian English (Canadian spelling: "council", "centre", "favour"). Short sentences. Address the learner as "you". Explain any legal term the first time it appears.
 - Practical over theoretical: what council does, when, who decides, what can go wrong.
@@ -500,6 +501,17 @@ export function pinToCurriculum(plan: ImportPlan, target: CurriculumTarget): Imp
     ],
   };
 }
+
+/** Checking a freshly written section against the build's own sources, before it's saved. */
+export const GROUNDING_CHECK_INSTRUCTIONS = `Check the screens below, just written for a Council Training module, against the source documents above. They may say only what the sources say.
+
+Report:
+- "unsupported": any statement of fact the sources don't state, including background, history, names, formats, numbers, deadlines and how things usually work. Quote it.
+- "contradicted": anything the sources say differently. Put what they say, with its citation, in "library".
+- "wrong_reference": a reference that doesn't point to the section that says the thing (for example, the definitions section). Give the right one in "library" if the sources have it.
+- For each knowledge check: report as "contradicted" a correct answer the sources don't support, or a wrong option that is also right.
+
+Don't report explanations, advice, examples or scenarios that state no rule or fact, or wording and style. "note" says in one plain sentence what to change. Use each screen's id exactly as given. If everything is supported, return no issues.`;
 
 export const SECTION_INSTRUCTIONS = `Write one section of a module as screens. The learner sees one screen at a time, with a title bar and Next.
 

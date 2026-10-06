@@ -44,7 +44,7 @@ export default async function AdminConsolePage() {
             Council Training
           </Link>{" "}
           <Link href="/admin/legislation" className="button button-secondary" data-testid="admin-legislation-link">
-            Legislation library
+            Legislation Library
           </Link>{" "}
           <Link href="/admin/announcements" className="button button-secondary" data-testid="admin-announcements-link">
             Announcements

@@ -138,6 +138,8 @@ export type Screen = {
   id: string;
   title: string;
   layout: ScreenLayout;
+  /** Which side the picture goes on a split screen (right unless set). */
+  imageSide?: "left" | "right";
   /** The picture beside the blocks on a split screen; `hint` is a suggested photo search. */
   image: { src: string; alt: string; credit: PhotoCredit | null; hint: string };
   /**
@@ -505,6 +507,7 @@ function normalizeScreen(raw: unknown, seen: Set<string>): Screen {
     id,
     title: str(x.title, 200) || "Untitled screen",
     layout: x.layout === "split" ? "split" : "full",
+    imageSide: x.imageSide === "left" ? "left" : "right",
     image: { src: safeMediaUrl(image.src), alt: str(image.alt, 500), credit: normalizeCredit(image.credit), hint: str(image.hint, 200) },
     narration: {
       src: safeMediaUrl(narration.src),
