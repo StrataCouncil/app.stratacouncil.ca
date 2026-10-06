@@ -1018,8 +1018,8 @@ function Narration({
   async function make() {
     if (!token) return;
     if (!voice) return onError("Choose a narration voice first, in Module settings.");
-    if (slide.narration && !stale && !window.confirm("This slide already has narration for this script. Create it again (this uses ElevenLabs credits)?")) return;
-    setBusy("Creating narration…");
+    if (slide.narration && !stale && !window.confirm("This slide's narration already matches its script. Update it anyway (this uses ElevenLabs credits)?")) return;
+    setBusy(slide.narration ? "Updating narration…" : "Creating narration…");
     await beforeFiles();
     const r = await generateNarration(moduleId, token, slide.id, slide.narrationScript, voice.id);
     setBusy(null);
@@ -1074,12 +1074,17 @@ function Narration({
         {slide.narration && (
           <div className="be-row">
             <audio src={slide.narration.url} controls preload="none" aria-label="This slide's narration" />
-            {stale && <span className="builder__stale">The script changed after this audio was made.</span>}
+            {stale && <span className="builder__stale">The script changed after this audio was made. Press Update narration.</span>}
           </div>
         )}
         <div className="be-row">
-          <button type="button" className="button button-primary button-small" disabled={Boolean(busy) || !slide.narrationScript.trim()} onClick={make}>
-            {busy ?? (slide.narration ? "Create narration again" : "Create narration")}
+          <button
+            type="button"
+            className={`button ${slide.narration && !stale ? "button-secondary" : "button-primary"} button-small`}
+            disabled={Boolean(busy) || !slide.narrationScript.trim()}
+            onClick={make}
+          >
+            {busy ?? (slide.narration ? "Update narration" : "Create narration")}
           </button>
           <span className="card__meta">Voice: {voice?.name ?? "not chosen (Module settings)"}</span>
         </div>
@@ -1153,6 +1158,7 @@ function NarrateAll({
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const stop = useRef(false);
   const todo = slides.filter((s) => s.narrationScript.trim() && (!s.narration || narrationOutOfDate(s)));
+  const outdated = todo.filter((s) => s.narration).length;
   const ready = slides.filter((s) => s.narration && !narrationOutOfDate(s)).length;
   const characters = todo.reduce((n, s) => n + s.narrationScript.trim().length, 0);
 
@@ -1183,7 +1189,7 @@ function NarrateAll({
         <span className="builder__block-type">Narration for all slides</span>
       </div>
       <p className="card__meta">
-        {ready} of {slides.length} slides have up-to-date narration. {todo.length > 0 ? `${todo.length} need it.` : "None need it."} Voice:{" "}
+        {ready} of {slides.length} slides have up-to-date narration. {todo.length > 0 ? `${todo.length - outdated} need it${outdated ? `, and ${outdated} need updating because the script changed` : ""}.` : "None need it."} Voice:{" "}
         {voice?.name ?? "not chosen"}.
       </p>
       {progress ? (
@@ -1197,7 +1203,7 @@ function NarrateAll({
         </div>
       ) : (
         <button type="button" className="button button-primary button-small" disabled={!todo.length || !voice} onClick={run}>
-          Create narration for {todo.length || "all"} {todo.length === 1 ? "slide" : "slides"}
+          {todo.some((s) => s.narration) ? "Create or update" : "Create"} narration for {todo.length || "all"} {todo.length === 1 ? "slide" : "slides"}
         </button>
       )}
     </section>

@@ -67,7 +67,7 @@ test("narration is out of date once the script changes", () => {
   const s = slide({ narration: audio, narrationScript: "Hello there", narrationVoiced: "Hello there" });
   assert.equal(narrationOutOfDate(s), false);
   assert.equal(narrationOutOfDate({ ...s, narrationScript: "Hello again" }), true);
-  assert.match(slideProblems({ ...s, narrationScript: "Hello again" }).join(" "), /Create the narration again/);
+  assert.match(slideProblems({ ...s, narrationScript: "Hello again" }).join(" "), /Update the narration/);
   assert.match(slideProblems(slide({ narrationScript: "No audio yet" })).join(" "), /no audio yet/);
 });
 
