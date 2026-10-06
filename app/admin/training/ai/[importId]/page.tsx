@@ -41,9 +41,13 @@ export default async function TrainingImportPage({ params }: { params: Promise<{
           {imp.status === "reading" || imp.status === "queued"
             ? "Reading the documents and removing personal information."
             : imp.status === "planning"
-              ? "The AI is reading everything and breaking it into modules. This usually takes a minute or two."
+              ? imp.moduleId
+                ? "The AI is reading everything and planning this module's sections. This usually takes a minute or two."
+                : "The AI is reading everything and breaking it into modules. This usually takes a minute or two."
               : imp.status === "planned"
-                ? "Check the breakdown below: rename, change tracks, edit objectives and sections, or untick modules you don't want. Then write them."
+                ? imp.moduleId
+                  ? "Check the plan below: the sections and key points, and the objectives. Then write it."
+                  : "Check the breakdown below: rename, change tracks, edit objectives and sections, or untick modules you don't want. Then write them."
                 : imp.status === "building"
                   ? "Each section is written in turn, so a module takes a few minutes. You can leave this page; it carries on."
                   : imp.status === "built"
@@ -51,7 +55,7 @@ export default async function TrainingImportPage({ params }: { params: Promise<{
                     : imp.error}
         </p>
 
-        <PlanReview importId={imp.id} initialPlan={imp.plan} status={imp.status} trackTitles={trackTitles} key={imp.updatedAt} />
+        <PlanReview importId={imp.id} initialPlan={imp.plan} status={imp.status} trackTitles={trackTitles} pinned={Boolean(imp.moduleId)} key={imp.updatedAt} />
       </div>
     </AppShell>
   );

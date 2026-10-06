@@ -12,8 +12,10 @@ import {
   newSection,
   narrationOutOfDate,
   publishProblems,
+  newId,
   type Block,
   type BlockType,
+  type FurtherReading,
   type ModuleContent,
   type Screen,
   type ScreenLayout,
@@ -364,7 +366,9 @@ export function ModuleBuilder({
               <ModuleSettings
                 content={content}
                 onChange={(objectives) => setContent((c) => ({ ...c, objectives }))}
+                onReading={(furtherReading) => setContent((c) => ({ ...c, furtherReading }))}
                 onAddSection={content.sections.length === 0 ? addSection : undefined}
+                aiBuildHref={canPublish ? `/admin/training/ai?module=${module.id}` : null}
               />
               <TightenAll moduleId={module.id} content={content} onTightened={(s) => updateScreen(s.id, () => s)} />
               <NarrationSettings
@@ -519,11 +523,16 @@ export function ModuleBuilder({
 function ModuleSettings({
   content,
   onChange,
+  onReading,
   onAddSection,
+  aiBuildHref,
 }: {
   content: ModuleContent;
   onChange: (objectives: string[]) => void;
+  onReading: (reading: FurtherReading[]) => void;
   onAddSection?: () => void;
+  /** Super Admins: write this module's sections with the AI module builder. */
+  aiBuildHref: string | null;
 }) {
   const [draft, setDraft] = useState("");
   const objectives = content.objectives;
@@ -574,19 +583,81 @@ function ModuleSettings({
           )}
         </div>
       </section>
+      <FurtherReadingEditor reading={content.furtherReading ?? []} onChange={onReading} />
+      {aiBuildHref && (
+        <section className="builder__block" data-testid="builder-ai-build">
+          <div className="builder__block-head">
+            <span className="builder__block-type">Build with AI</span>
+          </div>
+          <p className="card__meta">
+            {content.sections.length === 0
+              ? "Give the AI reference documents and it writes this module's sections to the objectives above, as a draft for you to check."
+              : "Rewrites this module's sections from reference documents, to the objectives above. It replaces the current sections; your objectives, further reading and voice stay."}
+          </p>
+          <div>
+            <Link href={aiBuildHref} className={`button ${content.sections.length === 0 ? "button-primary" : "button-secondary"} button-small`}>
+              {content.sections.length === 0 ? "Build this module with AI" : "Rebuild with AI"}
+            </Link>
+          </div>
+        </section>
+      )}
       {onAddSection && (
         <div className="builder__empty">
-          <h2>Then add the first section</h2>
+          <h2>{aiBuildHref ? "Or add the first section yourself" : "Then add the first section"}</h2>
           <p className="card__meta">
             Sections are the learner&rsquo;s menu. Each one is a few screens, shown one at a time: text, pictures, narration,
             questions and scenarios.
           </p>
-          <button type="button" className="button button-primary" onClick={onAddSection}>
+          <button type="button" className={`button ${aiBuildHref ? "button-secondary" : "button-primary"}`} onClick={onAddSection}>
             Add the first section
           </button>
         </div>
       )}
     </div>
+  );
+}
+
+/** Optional links for keen learners, listed on the module's closing recap. Public sources only. */
+function FurtherReadingEditor({ reading, onChange }: { reading: FurtherReading[]; onChange: (r: FurtherReading[]) => void }) {
+  const set = (id: string, patch: Partial<FurtherReading>) => onChange(reading.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+  return (
+    <section className="builder__block" data-testid="further-reading-editor">
+      <div className="builder__block-head">
+        <span className="builder__block-type">Further reading</span>
+      </div>
+      <p className="card__meta">
+        Optional links for anyone who wants to go deeper, shown at the end of the module. Use public sources (the Act, the
+        Province&rsquo;s strata pages, the Civil Resolution Tribunal), never paid or private material.
+      </p>
+      {reading.map((r, i) => (
+        <div key={r.id} className="reading-editor__row">
+          <div className="reading-editor__fields">
+            <input value={r.title} maxLength={200} placeholder="Title" aria-label={`Reading ${i + 1} title`} onChange={(e) => set(r.id, { title: e.target.value })} />
+            <input
+              value={r.url}
+              maxLength={1000}
+              type="url"
+              placeholder="https://"
+              aria-label={`Reading ${i + 1} link`}
+              onChange={(e) => set(r.id, { url: e.target.value })}
+            />
+            <input value={r.note} maxLength={300} placeholder="Why it's worth reading (optional)" aria-label={`Reading ${i + 1} note`} onChange={(e) => set(r.id, { note: e.target.value })} />
+          </div>
+          <ItemTools index={i} count={reading.length} onMove={(d) => onChange(move(reading, i, d))} onRemove={() => onChange(reading.filter((x) => x.id !== r.id))} />
+        </div>
+      ))}
+      {reading.length < 10 && (
+        <div>
+          <button
+            type="button"
+            className="button button-secondary button-small"
+            onClick={() => onChange([...reading, { id: newId("fr"), title: "", url: "", note: "" }])}
+          >
+            Add a link
+          </button>
+        </div>
+      )}
+    </section>
   );
 }
 

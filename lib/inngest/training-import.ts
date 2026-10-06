@@ -9,19 +9,23 @@ import { inngest, TRAINING_IMPORT_BUILD_EVENT, TRAINING_IMPORT_PLAN_EVENT } from
 import {
   assembleModule,
   BUILDER_SYSTEM,
+  curriculumPlanRequest,
   MAX_SOURCE_CHARS,
   normalizePlan,
   parseSources,
+  pinToCurriculum,
   PLAN_INSTRUCTIONS,
   planSchema,
   SECTION_INSTRUCTIONS,
   sectionSchema,
   toScreens,
+  TRACK_CODES,
   TRACK_DESCRIPTIONS,
+  type CurriculumTarget,
   type ImportPlan,
   type PlannedModule,
 } from "@/lib/training/ai";
-import type { Screen } from "@/lib/training/content";
+import { normalizeModuleContent, type Screen } from "@/lib/training/content";
 
 import { TRAINING_IMPORT_BUCKET } from "@/lib/training/ai";
 
@@ -111,26 +115,24 @@ export const planTrainingImport = inngest.createFunction(
 
     return step.run("plan", async () => {
       const imp = await loadImport(id);
+      const target = imp.moduleId ? await curriculumTarget(imp.moduleId) : null;
       const trackNote = imp.trackCode
         ? `Put every module in the ${imp.trackCode} track (${TRACK_DESCRIPTIONS[imp.trackCode as keyof typeof TRACK_DESCRIPTIONS] ?? ""}).`
         : "Choose the best track for each module.";
+      const request = target
+        ? curriculumPlanRequest(target.target, target.others, imp.instructions)
+        : [PLAN_INSTRUCTIONS, trackNote, imp.instructions ? `Notes from the author:\n${imp.instructions}` : ""].filter(Boolean).join("\n\n");
       const raw = await askClaudeJson<unknown>({
         system: systemFor(imp),
-        messages: [
-          {
-            role: "user",
-            content: [PLAN_INSTRUCTIONS, trackNote, imp.instructions ? `Notes from the author:\n${imp.instructions}` : ""]
-              .filter(Boolean)
-              .join("\n\n"),
-          },
-        ],
+        messages: [{ role: "user", content: request }],
         schema: planSchema,
         effort: "high",
         maxTokens: 32000,
       });
-      const plan = normalizePlan(raw);
+      let plan = normalizePlan(raw);
       if (!plan.modules.length) throw new NonRetriableError("The AI didn't find anything to build modules from in this document.");
-      if (imp.trackCode) plan.modules = plan.modules.map((m) => ({ ...m, trackCode: imp.trackCode as PlannedModule["trackCode"] }));
+      if (target) plan = pinToCurriculum(plan, target.target);
+      else if (imp.trackCode) plan.modules = plan.modules.map((m) => ({ ...m, trackCode: imp.trackCode as PlannedModule["trackCode"] }));
       await createAdminClient()
         .from("training_imports")
         .update({ plan, status: "planned", error: null, updated_at: now() })
@@ -186,6 +188,23 @@ export const buildTrainingImport = inngest.createFunction(
         const admin = createAdminClient();
         const imp = await loadImport(id);
         const content = assembleModule(planned, sectionScreens);
+        if (imp.moduleId) {
+          // A curriculum module: replace its sections and objectives, keep its voice and further reading.
+          const { data: existing } = await admin.from("training_module_drafts").select("content").eq("module_id", imp.moduleId).maybeSingle();
+          const before = normalizeModuleContent(existing?.content);
+          const merged = { ...content, voice: before.voice ?? null, furtherReading: before.furtherReading ?? [] };
+          const { error: modErr } = await admin
+            .from("training_modules")
+            .update({ summary: planned.summary, estimated_minutes: planned.estimatedMinutes, ai_drafted: true, source_import_id: id })
+            .eq("id", imp.moduleId);
+          if (modErr) throw new Error(`Saving the module failed: ${modErr.message}`);
+          const { error: draftErr } = await admin
+            .from("training_module_drafts")
+            .upsert({ module_id: imp.moduleId, content: merged, updated_by: imp.createdBy, updated_at: now() });
+          if (draftErr) throw new Error(`Saving the module's content failed: ${draftErr.message}`);
+          await savePlan(id, normalizePlan(imp.plan), key, { status: "done", moduleId: imp.moduleId, error: undefined });
+          return;
+        }
         const { data: track } = await admin.from("training_tracks").select("id").eq("code", planned.trackCode).maybeSingle();
         if (!track) throw new NonRetriableError(`The ${planned.trackCode} track doesn't exist.`);
         const { data: last } = await admin
@@ -236,7 +255,7 @@ async function loadImport(id: string) {
   const admin = createAdminClient();
   const { data } = await admin
     .from("training_imports")
-    .select("id, title, source_text, plan, instructions, created_by, training_tracks(code)")
+    .select("id, title, source_text, plan, instructions, created_by, module_id, training_tracks(code)")
     .eq("id", id)
     .maybeSingle();
   if (!data) throw new NonRetriableError("The import was deleted.");
@@ -248,6 +267,38 @@ async function loadImport(id: string) {
     instructions: (data.instructions as string) ?? "",
     createdBy: data.created_by as string | null,
     trackCode: track?.code ?? null,
+    moduleId: (data.module_id as string | null) ?? null,
+  };
+}
+
+/** The curriculum module an import writes, and the rest of the curriculum for context. */
+async function curriculumTarget(moduleId: string): Promise<{ target: CurriculumTarget; others: { title: string; track: string; summary: string }[] } | null> {
+  const admin = createAdminClient();
+  const [{ data: mod }, { data: draft }, { data: all }] = await Promise.all([
+    admin.from("training_modules").select("id, title, summary, estimated_minutes, training_tracks(code)").eq("id", moduleId).maybeSingle(),
+    admin.from("training_module_drafts").select("content").eq("module_id", moduleId).maybeSingle(),
+    admin.from("training_modules").select("id, title, summary, order_index, training_tracks(title, order_index)"),
+  ]);
+  if (!mod) throw new NonRetriableError("The module this build was for was deleted.");
+  const code = (mod.training_tracks as unknown as { code: string } | null)?.code;
+  const trackCode = TRACK_CODES.find((c) => c === code) ?? "council_ready";
+  const others = (all ?? [])
+    .filter((m) => m.id !== moduleId)
+    .map((m) => {
+      const t = m.training_tracks as unknown as { title: string; order_index: number } | null;
+      return { title: m.title as string, summary: (m.summary as string) ?? "", track: t?.title ?? "", order: (t?.order_index ?? 0) * 1000 + (m.order_index as number) };
+    })
+    .sort((a, b) => a.order - b.order)
+    .map(({ title, track, summary }) => ({ title, track, summary }));
+  return {
+    target: {
+      title: mod.title as string,
+      trackCode,
+      summary: (mod.summary as string) ?? "",
+      estimatedMinutes: (mod.estimated_minutes as number | null) ?? null,
+      objectives: normalizeModuleContent(draft?.content).objectives,
+    },
+    others,
   };
 }
 

@@ -197,3 +197,18 @@ test("the module cover is the first screen photo, with its credit", async () => 
   assert.equal(cover?.src, "https://images.unsplash.com/photo-1");
   assert.equal(cover?.credit?.name, "Pat");
 });
+
+test("further reading: normalized, https only for learners, and checked on publish", async () => {
+  const { normalizeModuleContent, isReadingUrl, publishProblems } = await import("../lib/training/content.ts");
+  const c = normalizeModuleContent({
+    objectives: ["Explain things"],
+    sections: [],
+    furtherReading: [{ title: "The Act", url: "https://www.bclaws.gov.bc.ca/x" }, { title: "Bad", url: "javascript:alert(1)" }, {}, "nope"],
+  });
+  assert.equal(c.furtherReading?.length, 2);
+  assert.ok(c.furtherReading?.every((r) => r.id));
+  assert.equal(isReadingUrl("https://a.ca"), true);
+  assert.equal(isReadingUrl("http://a.ca"), false);
+  assert.equal(isReadingUrl("javascript:alert(1)"), false);
+  assert.ok(publishProblems(c).some((p) => p.startsWith("Further reading 2")));
+});

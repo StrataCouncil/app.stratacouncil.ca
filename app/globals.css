@@ -7903,3 +7903,53 @@ a.track-card:focus-visible {
   color: var(--muted);
   line-height: 1.5;
 }
+
+/* Further reading on a module's recap screen */
+.player__reading {
+  border-top: 1px solid var(--line);
+  padding-top: 1rem;
+  margin-top: 0.5rem;
+}
+.player__reading h4 {
+  margin: 0 0 0.2rem;
+  font-size: 1rem;
+}
+.player__reading p {
+  margin: 0 0 0.6rem;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+.player__reading ul {
+  margin: 0;
+  padding-left: 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  font-size: 0.92rem;
+}
+.player__reading li span {
+  color: var(--muted);
+}
+.reading-editor__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.5rem;
+  align-items: start;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--line);
+}
+.reading-editor__fields {
+  display: grid;
+  gap: 0.4rem;
+}
+.import-form__objectives {
+  margin: 0;
+  padding-left: 1.2rem;
+  font-size: 0.92rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.import-form__objectives li::marker {
+  color: var(--accent);
+}

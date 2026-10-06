@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { normalizePlan, parseSources, type ImportPlan, type ImportSourceRecord } from "@/lib/training/ai";
+import { normalizeModuleContent } from "@/lib/training/content";
 
 /** Reads for the AI module builder (0034). RLS limits every table here to Super Admins. */
 
@@ -10,6 +11,8 @@ export interface TrainingImport {
   title: string;
   sources: ImportSourceRecord[];
   trackId: string | null;
+  /** The curriculum module this build writes (0036), if any. */
+  moduleId: string | null;
   instructions: string;
   status: ImportStatus;
   plan: ImportPlan | null;
@@ -18,7 +21,7 @@ export interface TrainingImport {
   updatedAt: string;
 }
 
-const COLUMNS = "id, title, sources, track_id, instructions, status, plan, error, created_at, updated_at";
+const COLUMNS = "id, title, sources, track_id, module_id, instructions, status, plan, error, created_at, updated_at";
 
 function toImport(r: Record<string, unknown>): TrainingImport {
   return {
@@ -26,6 +29,7 @@ function toImport(r: Record<string, unknown>): TrainingImport {
     title: r.title as string,
     sources: parseSources(r.sources),
     trackId: (r.track_id as string | null) ?? null,
+    moduleId: (r.module_id as string | null) ?? null,
     instructions: (r.instructions as string) ?? "",
     status: r.status as ImportStatus,
     plan: r.plan ? normalizePlan(r.plan) : null,
@@ -77,3 +81,24 @@ export const importStatusLabels: Record<ImportStatus, string> = {
 };
 
 export const isWorking = (s: ImportStatus) => s === "queued" || s === "reading" || s === "planning" || s === "building";
+
+/** A curriculum module to build with AI: its title, track and objectives (from its draft). */
+export async function getBuildTarget(moduleId: string) {
+  const supabase = await createClient();
+  const [{ data: mod }, { data: draft }] = await Promise.all([
+    supabase.from("training_modules").select("id, title, summary, estimated_minutes, training_tracks(title)").eq("id", moduleId).maybeSingle(),
+    supabase.from("training_module_drafts").select("content").eq("module_id", moduleId).maybeSingle(),
+  ]);
+  if (!mod) return null;
+  const content = normalizeModuleContent(draft?.content);
+  return {
+    id: mod.id as string,
+    title: mod.title as string,
+    summary: (mod.summary as string) ?? "",
+    estimatedMinutes: (mod.estimated_minutes as number | null) ?? null,
+    trackTitle: (mod.training_tracks as unknown as { title: string } | null)?.title ?? "",
+    objectives: content.objectives,
+    hasSections: content.sections.length > 0,
+  };
+}
+export type BuildTarget = NonNullable<Awaited<ReturnType<typeof getBuildTarget>>>;
