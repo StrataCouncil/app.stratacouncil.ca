@@ -1,12 +1,12 @@
 import { notFound } from "next/navigation";
 import { ModuleBuilder } from "@/components/training/ModuleBuilder";
 import { getCurrentProfile } from "@/lib/data/profile";
-import { getModuleDraft } from "@/lib/data/training";
+import { getDefaultVoice, getModuleDraft } from "@/lib/data/training";
 
 /** An author's builder. RLS only returns the draft if they're assigned. */
 export default async function AuthorModuleBuilderPage({ params }: { params: Promise<{ moduleId: string }> }) {
   const { moduleId } = await params;
-  const [profile, draft] = await Promise.all([getCurrentProfile(), getModuleDraft(moduleId)]);
+  const [profile, draft, defaultVoice] = await Promise.all([getCurrentProfile(), getModuleDraft(moduleId), getDefaultVoice()]);
   if (!draft) notFound();
   return (
     <ModuleBuilder
@@ -22,6 +22,7 @@ export default async function AuthorModuleBuilderPage({ params }: { params: Prom
         factCheck: draft.factCheck,
       }}
       initialContent={draft.content}
+      defaultVoice={defaultVoice}
       canPublish={Boolean(profile?.isSuperAdmin)}
       backHref="/build"
     />

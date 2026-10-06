@@ -8119,3 +8119,24 @@ a.track-card:focus-visible {
 .builder__side {
   align-self: flex-end;
 }
+.voice-tools {
+  margin-top: 0.75rem;
+  flex-wrap: wrap;
+}
+.voice-tools input {
+  min-width: 12rem;
+}
+.voice-list__actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.35rem;
+}
+.media-cleanup {
+  margin-top: 2rem;
+  max-width: 760px;
+}
+.media-cleanup h2 {
+  font-size: 1.15rem;
+  margin: 0;
+}

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { AdminTrainingList } from "@/components/training/AdminTrainingList";
+import { MediaCleanup } from "@/components/training/MediaCleanup";
 import { getCurrentProfile } from "@/lib/data/profile";
 import { getAdminTraining, getAllModuleAuthors } from "@/lib/data/training";
 
@@ -36,6 +37,7 @@ export default async function AdminTrainingPage() {
           </p>
         )}
         <AdminTrainingList tracks={tracks} authors={authors} />
+        <MediaCleanup />
       </div>
     </AppShell>
   );

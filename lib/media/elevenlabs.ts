@@ -21,20 +21,53 @@ export interface Voice {
   previewUrl: string | null;
 }
 
+/**
+ * Every voice on the account (My Voices), a page at a time: the v2 list
+ * includes them all, where the older v1 list can leave some out.
+ */
 export async function listVoices(): Promise<Voice[]> {
-  const res = await fetch(`${API}/voices`, { headers: { "xi-api-key": key() }, cache: "no-store" });
-  if (!res.ok) throw new NarrationError(await explain(res));
-  const data = (await res.json()) as {
-    voices?: { voice_id: string; name: string; labels?: Record<string, string>; preview_url?: string | null }[];
-  };
-  return (data.voices ?? []).map((v) => ({
+  const out: Voice[] = [];
+  let token: string | null = null;
+  for (let page = 0; page < 20; page++) {
+    const url = new URL("https://api.elevenlabs.io/v2/voices");
+    url.searchParams.set("page_size", "100");
+    if (token) url.searchParams.set("next_page_token", token);
+    const res = await fetch(url, { headers: { "xi-api-key": key() }, cache: "no-store" });
+    if (!res.ok) throw new NarrationError(await explain(res));
+    const data = (await res.json()) as {
+      voices?: { voice_id: string; name: string; labels?: Record<string, string>; preview_url?: string | null; description?: string | null }[];
+      has_more?: boolean;
+      next_page_token?: string | null;
+    };
+    for (const v of data.voices ?? []) out.push(toVoice(v));
+    if (!data.has_more || !data.next_page_token) break;
+    token = data.next_page_token;
+  }
+  return out.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function toVoice(v: { voice_id: string; name: string; labels?: Record<string, string>; preview_url?: string | null }): Voice {
+  return {
     id: v.voice_id,
     name: v.name,
     description: Object.values(v.labels ?? {})
       .filter(Boolean)
       .join(", "),
     previewUrl: v.preview_url ?? null,
-  }));
+  };
+}
+
+/**
+ * One voice by its ElevenLabs id, for a voice that isn't in the list (e.g.
+ * copied from ElevenLabs). Null when ElevenLabs doesn't know it on this
+ * account; a Voice Library voice must be added to My Voices first.
+ */
+export async function getVoice(voiceId: string): Promise<Voice | null> {
+  if (!/^[\w-]{1,64}$/.test(voiceId)) return null;
+  const res = await fetch(`${API}/voices/${voiceId}`, { headers: { "xi-api-key": key() }, cache: "no-store" });
+  if (res.status === 404 || res.status === 400) return null;
+  if (!res.ok) throw new NarrationError(await explain(res));
+  return toVoice((await res.json()) as { voice_id: string; name: string; labels?: Record<string, string>; preview_url?: string | null });
 }
 
 /** One screen's narration as an MP3. */

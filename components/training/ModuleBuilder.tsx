@@ -25,11 +25,13 @@ import {
   generateNarration,
   getNarrationVoices,
   markReadyForReview,
+  findVoice,
   getDraftStamp,
   getFactCheck,
   markFactIssue,
   publishModule,
   saveModuleDraft,
+  setDefaultVoice,
   startFactCheck,
   tightenScreen,
 } from "@/app/admin/training/actions";
@@ -68,11 +70,14 @@ type Selection = { kind: "settings" } | { kind: "screen"; screenId: string };
 export function ModuleBuilder({
   module,
   initialContent,
+  defaultVoice: initialDefaultVoice = null,
   canPublish,
   backHref,
 }: {
   module: BuilderModule;
   initialContent: ModuleContent;
+  /** The narration voice for every module that doesn't set its own (0038). */
+  defaultVoice?: { id: string; name: string } | null;
   /** Super Admin: publish. Author: mark ready for review. */
   canPublish: boolean;
   backHref: string;
@@ -91,6 +96,8 @@ export function ModuleBuilder({
   const [publishing, setPublishing] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [readyAt, setReadyAt] = useState(module.readyForReviewAt);
+  const [defaultVoice, setDefaultVoiceState] = useState(initialDefaultVoice);
+  const voice = content.voice ?? defaultVoice;
 
   // ── Fact check (0037): poll while it runs ──
   const [factCheck, setFactCheck] = useState<FactCheck | null>(module.factCheck ?? null);
@@ -479,6 +486,9 @@ export function ModuleBuilder({
               <NarrationSettings
                 moduleId={module.id}
                 content={content}
+                defaultVoice={defaultVoice}
+                canSetDefault={canPublish}
+                onDefaultVoice={setDefaultVoiceState}
                 onVoice={(voice) => setContent((c) => ({ ...c, voice }))}
                 onVoiced={(screenId, url, voicedText) =>
                   updateScreen(screenId, (s) => ({ ...s, narration: { ...s.narration, src: url, voicedText } }))
@@ -510,7 +520,7 @@ export function ModuleBuilder({
               {issuesBy.has(screen.id) && <ScreenFactNotes issues={issuesBy.get(screen.id)!} outOfDate={checkOutOfDate} onMark={markIssue} />}
               <TightenScreen moduleId={module.id} screen={screen} onChange={(s) => updateScreen(screen.id, () => s)} />
 
-              <ScreenSettings moduleId={module.id} screen={screen} voice={content.voice ?? null} onChange={(s) => updateScreen(screen.id, () => s)} />
+              <ScreenSettings moduleId={module.id} screen={screen} voice={voice} onChange={(s) => updateScreen(screen.id, () => s)} />
 
               <Inserter onPick={(t) => insertBlock(0, t)} />
               {screen.blocks.map((b, i) => {
@@ -940,26 +950,38 @@ function FurtherReadingEditor({ reading, onChange }: { reading: FurtherReading[]
 function NarrationSettings({
   moduleId,
   content,
+  defaultVoice,
+  canSetDefault,
+  onDefaultVoice,
   onVoice,
   onVoiced,
 }: {
   moduleId: string;
   content: ModuleContent;
+  defaultVoice: { id: string; name: string } | null;
+  canSetDefault: boolean;
+  onDefaultVoice: (v: { id: string; name: string } | null) => void;
   onVoice: (v: { id: string; name: string } | null) => void;
   onVoiced: (screenId: string, url: string, voicedText: string) => void;
 }) {
   const [voices, setVoices] = useState<Voice[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [voiceId, setVoiceId] = useState("");
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [stop, setStop] = useState(false);
   const stopRef = useRef(false);
   stopRef.current = stop;
+  // The module's own voice wins; otherwise the default for every module.
+  const voice = content.voice ?? defaultVoice;
 
   const screens = flattenScreens(content).map((f) => f.screen);
   const todo = screens.filter((s) => s.narration.transcript.trim() && (!s.narration.src || narrationOutOfDate(s)));
   const characters = todo.reduce((n, s) => n + s.narration.transcript.trim().length, 0);
   const voiced = screens.filter((s) => s.narration.src && !narrationOutOfDate(s)).length;
+  const shown = (voices ?? []).filter((v) => `${v.name} ${v.description}`.toLowerCase().includes(search.trim().toLowerCase()));
 
   async function loadVoices() {
     setLoading(true);
@@ -970,15 +992,34 @@ function NarrationSettings({
     setVoices(r.voices);
   }
 
+  async function lookUp() {
+    setError(null);
+    const r = await findVoice(moduleId, voiceId);
+    if (!r.ok) return setError(r.error);
+    setVoices((vs) => [r.voice, ...(vs ?? []).filter((v) => v.id !== r.voice.id)]);
+    setVoiceId("");
+    setSearch("");
+  }
+
+  async function useEverywhere(v: { id: string; name: string }) {
+    setError(null);
+    const r = await setDefaultVoice(v);
+    if (!r.ok) return setError(r.error);
+    onDefaultVoice(v);
+    onVoice(null);
+    setVoices(null);
+    setNotice(`${v.name} is now the voice for every module that doesn't choose its own.`);
+  }
+
   async function voiceAll() {
-    if (!content.voice) return setError("Choose a voice first.");
+    if (!voice) return setError("Choose a voice first.");
     setError(null);
     setStop(false);
     setProgress({ done: 0, total: todo.length });
     for (let i = 0; i < todo.length; i++) {
       if (stopRef.current) break;
       const s = todo[i];
-      const r = await generateNarration(moduleId, s.narration.transcript, content.voice.id);
+      const r = await generateNarration(moduleId, s.narration.transcript, voice.id);
       if (!r.ok) {
         setError(`Stopped at "${s.title}": ${r.error}`);
         break;
@@ -1001,34 +1042,74 @@ function NarrationSettings({
         </p>
         <div className="be-row">
           <span>
-            Voice: <strong>{content.voice?.name ?? "not chosen"}</strong>
+            Voice: <strong>{voice?.name ?? "not chosen"}</strong>{" "}
+            {voice && <span className="card__meta">({content.voice ? "this module only" : "the default for every module"})</span>}
           </span>
           <button type="button" className="button button-secondary button-small" onClick={loadVoices} disabled={loading}>
-            {loading ? "Loading voices…" : content.voice ? "Change voice" : "Choose a voice"}
+            {loading ? "Loading voices…" : voice ? "Change voice" : "Choose a voice"}
           </button>
+          {content.voice && defaultVoice && (
+            <button type="button" className="text-action" onClick={() => onVoice(null)}>
+              Use the default ({defaultVoice.name})
+            </button>
+          )}
         </div>
+        {notice && (
+          <p className="card__meta" role="status">
+            {notice}
+          </p>
+        )}
         {voices && (
-          <ul className="voice-list">
-            {voices.map((v) => (
-              <li key={v.id} data-chosen={content.voice?.id === v.id}>
-                <div>
-                  <strong>{v.name}</strong>
-                  {v.description && <span className="card__meta"> &middot; {v.description}</span>}
-                </div>
-                {v.previewUrl && <audio src={v.previewUrl} controls preload="none" aria-label={`Sample of ${v.name}`} />}
-                <button
-                  type="button"
-                  className="button button-secondary button-small"
-                  onClick={() => {
-                    onVoice({ id: v.id, name: v.name });
-                    setVoices(null);
-                  }}
-                >
-                  {content.voice?.id === v.id ? "Chosen" : "Use this voice"}
-                </button>
-              </li>
-            ))}
-          </ul>
+          <>
+            <div className="be-row voice-tools">
+              <input
+                className="be-grow"
+                value={search}
+                placeholder={`Search ${voices.length} voices by name, accent or style`}
+                aria-label="Search voices"
+                onChange={(e) => setSearch(e.target.value)}
+              />
+              <input
+                value={voiceId}
+                placeholder="Or paste an ElevenLabs voice ID"
+                aria-label="ElevenLabs voice ID"
+                maxLength={64}
+                onChange={(e) => setVoiceId(e.target.value)}
+              />
+              <button type="button" className="button button-secondary button-small" disabled={!voiceId.trim()} onClick={lookUp}>
+                Find
+              </button>
+            </div>
+            <ul className="voice-list">
+              {shown.map((v) => (
+                <li key={v.id} data-chosen={voice?.id === v.id}>
+                  <div>
+                    <strong>{v.name}</strong>
+                    {v.description && <span className="card__meta"> &middot; {v.description}</span>}
+                  </div>
+                  {v.previewUrl ? <audio src={v.previewUrl} controls preload="none" aria-label={`Sample of ${v.name}`} /> : <span />}
+                  <span className="voice-list__actions">
+                    {canSetDefault && (
+                      <button type="button" className="button button-secondary button-small" onClick={() => useEverywhere({ id: v.id, name: v.name })}>
+                        {defaultVoice?.id === v.id ? "Default for every module" : "Use for every module"}
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="text-action"
+                      onClick={() => {
+                        onVoice({ id: v.id, name: v.name });
+                        setVoices(null);
+                      }}
+                    >
+                      {content.voice?.id === v.id ? "This module's voice" : "This module only"}
+                    </button>
+                  </span>
+                </li>
+              ))}
+              {shown.length === 0 && <li className="card__meta">No voices match &ldquo;{search}&rdquo;.</li>}
+            </ul>
+          </>
         )}
         <div className="be-row">
           {progress ? (
@@ -1042,7 +1123,7 @@ function NarrationSettings({
             </>
           ) : (
             <>
-              <button type="button" className="button button-primary button-small" disabled={!content.voice || todo.length === 0} onClick={voiceAll}>
+              <button type="button" className="button button-primary button-small" disabled={!voice || todo.length === 0} onClick={voiceAll}>
                 {todo.length ? `Generate narration for ${todo.length} ${todo.length === 1 ? "screen" : "screens"}` : "All narration is up to date"}
               </button>
               {todo.length > 0 && <span className="card__meta">About {characters.toLocaleString("en-CA")} characters of your ElevenLabs allowance.</span>}
