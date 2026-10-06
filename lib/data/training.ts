@@ -187,16 +187,18 @@ export async function getAdminTraining() {
 
 export async function getModuleDraft(moduleId: string) {
   const supabase = await createClient();
-  const [{ data: mod }, { data: draft }] = await Promise.all([
+  const [{ data: mod, error: modError }, { data: draft }] = await Promise.all([
     supabase
       .from("training_modules")
       .select(
-        "id, title, summary, estimated_minutes, published_version, published_at, ai_drafted, track:training_tracks(id, code, title), source:training_imports(title)"
+        // Two links join modules and AI builds (source_import_id, and 0036's module_id): name the one meant.
+        "id, title, summary, estimated_minutes, published_version, published_at, ai_drafted, track:training_tracks(id, code, title), source:training_imports!training_modules_source_import_id_fkey(title)"
       )
       .eq("id", moduleId)
       .maybeSingle(),
     supabase.from("training_module_drafts").select("content, updated_at, ready_for_review_at, fact_check").eq("module_id", moduleId).maybeSingle(),
   ]);
+  if (modError) console.error("[getModuleDraft]", modError.message);
   if (!mod || !draft) return null;
   const track = (Array.isArray(mod.track) ? mod.track[0] : mod.track) as { id: string; code: string; title: string };
   return {
