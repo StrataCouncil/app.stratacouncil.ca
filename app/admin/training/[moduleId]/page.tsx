@@ -21,6 +21,7 @@ export default async function AdminModuleBuilderPage({ params }: { params: Promi
         draftUpdatedAt: draft.draftUpdatedAt,
         readyForReviewAt: draft.readyForReviewAt,
         aiDraftedFrom: draft.aiDraftedFrom,
+        factCheck: draft.factCheck,
       }}
       initialContent={draft.content}
       canPublish

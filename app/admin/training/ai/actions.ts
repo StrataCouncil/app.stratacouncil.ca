@@ -7,6 +7,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { inngest, TRAINING_IMPORT_BUILD_EVENT, TRAINING_IMPORT_PLAN_EVENT } from "@/lib/inngest/client";
 import { normalizePlan, parseSources, TRAINING_IMPORT_BUCKET, type ImportSourceRecord } from "@/lib/training/ai";
 import { titleFromFileName } from "@/lib/legislation";
+import { normalizeModuleContent } from "@/lib/training/content";
+import { moduleQueries } from "@/lib/training/library";
+import { searchLibrary } from "@/lib/training/library-server";
 
 /**
  * The AI module builder's writes, Super Admins only (RLS on
@@ -61,10 +64,13 @@ export async function startImport(input: {
   instructions: string;
   /** Write this curriculum module (0036) instead of proposing new ones. */
   moduleId?: string | null;
+  /** Legislation Library passages to build from (0037). */
+  referenceIds?: string[];
 }): Promise<{ ok: true; id: string } | Fail> {
   const auth = await requireSuperAdmin();
   if (!auth) return notAllowed;
-  if (!input.sources.length) return { ok: false, error: "Add at least one document." };
+  const referenceIds = [...new Set((input.referenceIds ?? []).filter((id) => /^[0-9a-f-]{36}$/i.test(id)))].slice(0, 60);
+  if (!input.sources.length && !referenceIds.length) return { ok: false, error: "Add at least one document or library passage." };
   if (input.sources.length > 5) return { ok: false, error: "Use up to five documents at a time." };
   const admin = createAdminClient();
 
@@ -89,7 +95,7 @@ export async function startImport(input: {
     target = { id: mod.id, title: mod.title, trackId: mod.track_id };
   }
   const first = sources[0];
-  const fallbackTitle = target?.title ?? (first.kind === "upload" ? titleFromFileName(first.fileName) : first.title);
+  const fallbackTitle = target?.title ?? (!first ? "Library passages" : first.kind === "upload" ? titleFromFileName(first.fileName) : first.title);
 
   const { data, error } = await auth.supabase
     .from("training_imports")
@@ -98,6 +104,7 @@ export async function startImport(input: {
       sources,
       track_id: target?.trackId ?? (input.trackId || null),
       module_id: target?.id ?? null,
+      reference_chunk_ids: referenceIds,
       instructions: input.instructions.trim().slice(0, 2000),
       created_by: auth.user.id,
     })
@@ -181,4 +188,49 @@ export async function deleteImport(importId: string): Promise<{ ok: true } | Fai
   await auth.supabase.from("training_imports").delete().eq("id", importId);
   refresh();
   return { ok: true };
+}
+
+export interface FoundReference {
+  id: string;
+  label: string;
+  documentTitle: string;
+  kind: "act" | "regulation" | "guidance";
+  /** The opening of the passage, for the author to judge it by. */
+  preview: string;
+  similarity: number;
+}
+
+/**
+ * The Legislation Library passages that best match a curriculum module's
+ * title, scope and objectives, for the author to tick before building.
+ */
+export async function findModuleReferences(moduleId: string): Promise<{ ok: true; references: FoundReference[] } | Fail> {
+  const auth = await requireSuperAdmin();
+  if (!auth) return notAllowed;
+  const [{ data: mod }, { data: draft }] = await Promise.all([
+    auth.supabase.from("training_modules").select("title, summary").eq("id", moduleId).maybeSingle(),
+    auth.supabase.from("training_module_drafts").select("content").eq("module_id", moduleId).maybeSingle(),
+  ]);
+  if (!mod) return { ok: false, error: "That module wasn't found." };
+  try {
+    const found = await searchLibrary(moduleQueries({ title: mod.title, summary: mod.summary ?? "", objectives: normalizeModuleContent(draft?.content).objectives }));
+    return {
+      ok: true,
+      references: found.map((p) => ({
+        id: p.id,
+        label: p.label,
+        documentTitle: p.documentTitle,
+        kind: p.kind,
+        preview: p.text.split("\n").slice(1).join(" ").replace(/\s+/g, " ").trim().slice(0, 220),
+        similarity: Math.round(p.similarity * 100) / 100,
+      })),
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("[findModuleReferences]", message);
+    return {
+      ok: false,
+      error: message.includes("VOYAGE_API_KEY") ? "Library search isn't set up (missing Voyage key)." : "Couldn't search the library. Try again.",
+    };
+  }
 }

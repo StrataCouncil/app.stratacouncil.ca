@@ -1,9 +1,9 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { createImportUpload, startImport, type ImportSource } from "@/app/admin/training/ai/actions";
+import { createImportUpload, findModuleReferences, startImport, type FoundReference, type ImportSource } from "@/app/admin/training/ai/actions";
 import { TRAINING_IMPORT_BUCKET } from "@/lib/training/ai";
 import type { BuildTarget } from "@/lib/data/training-imports";
 
@@ -27,6 +27,7 @@ export function ImportForm({
   const router = useRouter();
   const fileInput = useRef<HTMLInputElement>(null);
   const [picked, setPicked] = useState<Picked[]>([]);
+  const [references, setReferences] = useState<string[]>([]);
   const [libraryChoice, setLibraryChoice] = useState("");
   const [title, setTitle] = useState("");
   const [trackId, setTrackId] = useState("");
@@ -47,7 +48,7 @@ export function ImportForm({
 
   async function start() {
     setError(null);
-    if (!picked.length) return setError("Add at least one document.");
+    if (!picked.length && !references.length) return setError(target ? "Choose some library passages or add a document." : "Add at least one document.");
     const sources: ImportSource[] = [];
     try {
       for (const p of picked) {
@@ -65,7 +66,7 @@ export function ImportForm({
         sources.push({ kind: "upload", path: ticket.path, fileName: p.file.name, mimeType: p.file.type });
       }
       setBusy("Starting…");
-      const r = await startImport({ sources, title, trackId: trackId || null, instructions, moduleId: target?.id ?? null });
+      const r = await startImport({ sources, title, trackId: trackId || null, instructions, moduleId: target?.id ?? null, referenceIds: references });
       if (!r.ok) throw new Error(r.error);
       router.push(`/admin/training/ai/${r.id}`);
     } catch (e) {
@@ -103,8 +104,11 @@ export function ImportForm({
         </>
       )}
 
+      {target && <ReferencePicker moduleId={target.id} chosen={references} onChange={setReferences} disabled={Boolean(busy)} />}
+
+      {target && <h3 className="import-form__subhead">Other documents (optional)</h3>}
       <div className="import-form__sources">
-        {picked.length === 0 && <p className="card__meta">No documents yet.</p>}
+        {picked.length === 0 && <p className="card__meta">{target ? "None added. Add a whole library entry or upload a file if the passages above miss something." : "No documents yet."}</p>}
         {picked.map((p) => (
           <div key={p.key} className="import-form__source">
             <span>
@@ -224,12 +228,104 @@ export function ImportForm({
           type="button"
           className="button button-primary"
           onClick={start}
-          disabled={Boolean(busy) || picked.length === 0}
+          disabled={Boolean(busy) || (picked.length === 0 && references.length === 0)}
           data-testid="import-start"
         >
           {busy ?? (target ? "Read and plan this module" : "Read and propose modules")}
         </button>
       </div>
+    </section>
+  );
+}
+
+const KIND_LABEL = { act: "Act", regulation: "Regulation", guidance: "Guidance" } as const;
+const PRESELECT = 20;
+
+/**
+ * The Legislation Library passages that match the module's title and
+ * objectives. The best matches start ticked; the author adjusts.
+ */
+function ReferencePicker({
+  moduleId,
+  chosen,
+  onChange,
+  disabled,
+}: {
+  moduleId: string;
+  chosen: string[];
+  onChange: (ids: string[]) => void;
+  disabled: boolean;
+}) {
+  const [found, setFound] = useState<FoundReference[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [open, setOpen] = useState<string | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    findModuleReferences(moduleId).then((r) => {
+      if (!live) return;
+      if (!r.ok) return setError(r.error);
+      setFound(r.references);
+      onChange(r.references.slice(0, PRESELECT).map((x) => x.id));
+    });
+    return () => {
+      live = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [moduleId]);
+
+  const toggle = (id: string) => onChange(chosen.includes(id) ? chosen.filter((x) => x !== id) : [...chosen, id]);
+  const groups = new Map<string, FoundReference[]>();
+  for (const r of found ?? []) groups.set(r.documentTitle, [...(groups.get(r.documentTitle) ?? []), r]);
+
+  return (
+    <section className="ref-picker" data-testid="reference-picker">
+      <div className="ref-picker__head">
+        <h3 className="import-form__subhead">From the Legislation Library</h3>
+        {found && found.length > 0 && (
+          <span className="ref-picker__count">
+            {chosen.length} of {found.length} chosen &middot;{" "}
+            <button type="button" className="text-action" disabled={disabled} onClick={() => onChange(found.map((r) => r.id))}>
+              All
+            </button>{" "}
+            <button type="button" className="text-action" disabled={disabled} onClick={() => onChange([])}>
+              None
+            </button>
+          </span>
+        )}
+      </div>
+      <p className="card__meta">
+        Passages that match this module&rsquo;s objectives, best first. The AI treats the Act and Regulation as the authority and
+        cites their sections. Untick anything that doesn&rsquo;t belong.
+      </p>
+      {error && (
+        <p className="form-alert" role="alert">
+          {error}
+        </p>
+      )}
+      {!found && !error && <p className="card__meta">Searching the library&hellip;</p>}
+      {found && found.length === 0 && <p className="card__meta">Nothing in the library matched. Add documents below instead.</p>}
+      {[...groups.entries()].map(([doc, list]) => (
+        <div key={doc} className="ref-picker__group">
+          <div className="ref-picker__doc">
+            {doc} <span className="pill pill--locked">{KIND_LABEL[list[0].kind]}</span>
+          </div>
+          <ul>
+            {list.map((r) => (
+              <li key={r.id}>
+                <label className="be-check">
+                  <input type="checkbox" checked={chosen.includes(r.id)} disabled={disabled} onChange={() => toggle(r.id)} />
+                  <span>{r.label}</span>
+                </label>
+                <button type="button" className="text-action" onClick={() => setOpen(open === r.id ? null : r.id)} aria-expanded={open === r.id}>
+                  {open === r.id ? "Hide" : "Preview"}
+                </button>
+                {open === r.id && <p className="ref-picker__preview">{r.preview}&hellip;</p>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
     </section>
   );
 }

@@ -1,6 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { flattenScreens, normalizeCredit, normalizeModuleContent, type ModuleContent, type ModuleCover } from "@/lib/training/content";
 
+import { normalizeFactCheck } from "@/lib/training/library";
+
 export { moduleStatuses, type ModuleStatus } from "@/lib/training/progress";
 
 /**
@@ -193,7 +195,7 @@ export async function getModuleDraft(moduleId: string) {
       )
       .eq("id", moduleId)
       .maybeSingle(),
-    supabase.from("training_module_drafts").select("content, updated_at, ready_for_review_at").eq("module_id", moduleId).maybeSingle(),
+    supabase.from("training_module_drafts").select("content, updated_at, ready_for_review_at, fact_check").eq("module_id", moduleId).maybeSingle(),
   ]);
   if (!mod || !draft) return null;
   const track = (Array.isArray(mod.track) ? mod.track[0] : mod.track) as { id: string; code: string; title: string };
@@ -208,6 +210,8 @@ export async function getModuleDraft(moduleId: string) {
     content: normalizeModuleContent(draft.content),
     draftUpdatedAt: draft.updated_at as string,
     readyForReviewAt: (draft.ready_for_review_at as string | null) ?? null,
+    /** The latest check against the Legislation Library (0037). */
+    factCheck: normalizeFactCheck(draft.fact_check),
     /** Drafted by the AI module builder; the title of its source document when the reader may see it. */
     aiDraftedFrom: mod.ai_drafted
       ? ((Array.isArray(mod.source) ? mod.source[0] : mod.source) as { title: string } | null)?.title ?? "a document"

@@ -5,7 +5,7 @@ import { askClaudeJson } from "@/lib/ai/claude";
 import { extractDocumentText } from "@/lib/kb/extract";
 import { stripForLibrary } from "@/lib/kb/privacy";
 import { titleFromFileName } from "@/lib/legislation";
-import { inngest, TRAINING_IMPORT_BUILD_EVENT, TRAINING_IMPORT_PLAN_EVENT } from "@/lib/inngest/client";
+import { inngest, TRAINING_FACT_CHECK_EVENT, TRAINING_IMPORT_BUILD_EVENT, TRAINING_IMPORT_PLAN_EVENT } from "@/lib/inngest/client";
 import {
   assembleModule,
   BUILDER_SYSTEM,
@@ -26,6 +26,8 @@ import {
   type PlannedModule,
 } from "@/lib/training/ai";
 import { normalizeModuleContent, type Screen } from "@/lib/training/content";
+import { passagesAsSources } from "@/lib/training/library";
+import { loadPassages } from "@/lib/training/library-server";
 
 import { TRAINING_IMPORT_BUCKET } from "@/lib/training/ai";
 
@@ -56,12 +58,13 @@ export const planTrainingImport = inngest.createFunction(
 
     const read = await step.run("read", async () => {
       const admin = createAdminClient();
-      const { data: imp } = await admin.from("training_imports").select("id, sources").eq("id", id).maybeSingle();
+      const { data: imp } = await admin.from("training_imports").select("id, sources, reference_chunk_ids").eq("id", id).maybeSingle();
       if (!imp) return { status: "gone" as const };
       await setStatus(id, "reading");
 
       const sources = parseSources(imp.sources);
-      if (!sources.length) {
+      const referenceIds = (imp.reference_chunk_ids as string[] | null) ?? [];
+      if (!sources.length && !referenceIds.length) {
         await setStatus(id, "not_readable", "No documents were attached.");
         return { status: "stopped" as const };
       }
@@ -69,6 +72,7 @@ export const planTrainingImport = inngest.createFunction(
       for (const src of sources) {
         let title = "";
         let text = "";
+        let kind = "guidance";
         if (src.kind === "library") {
           const { data: doc } = await admin
             .from("legislation_documents")
@@ -80,6 +84,7 @@ export const planTrainingImport = inngest.createFunction(
             return { status: "stopped" as const };
           }
           title = doc.title;
+          kind = doc.kind;
           // Acts and regulations are public law and go as written; guidance is stripped (stripForLibrary).
           text = doc.kind === "guidance" ? stripForLibrary(doc.document_text) : doc.document_text;
         } else {
@@ -97,7 +102,16 @@ export const planTrainingImport = inngest.createFunction(
           title = titleFromFileName(src.fileName);
           text = stripForLibrary(result.text);
         }
-        if (text.trim()) parts.push(`<source_document title="${title.replace(/"/g, "'")}">\n${text}\n</source_document>`);
+        if (text.trim()) parts.push(`<source_document title="${title.replace(/"/g, "'")}" kind="${kind}">\n${text}\n</source_document>`);
+      }
+      // Library passages (0037): Act and Regulation sections as written; guidance was stripped when it was indexed.
+      if (referenceIds.length) {
+        const passages = await loadPassages(referenceIds);
+        if (!passages.length && !parts.length) {
+          await setStatus(id, "not_readable", "The library passages chosen for this build are no longer in the library.");
+          return { status: "stopped" as const };
+        }
+        if (passages.length) parts.unshift(passagesAsSources(passages));
       }
       const combined = parts.join("\n\n");
       if (!combined.trim()) {
@@ -240,10 +254,16 @@ export const buildTrainingImport = inngest.createFunction(
       });
     }
 
-    return step.run("finish", async () => {
+    const built = await step.run("finish", async () => {
       await setStatus(id, "built");
-      return { status: "built", modules: start.modules.length };
+      const imp = await loadImport(id);
+      return normalizePlan(imp.plan)
+        .modules.filter((m) => start.modules.includes(m.key) && m.status === "done" && m.moduleId)
+        .map((m) => m.moduleId as string);
     });
+    // Check every module just written against the Legislation Library (0037).
+    if (built.length) await step.sendEvent("fact-check", built.map((moduleId) => ({ name: TRAINING_FACT_CHECK_EVENT, data: { moduleId } })));
+    return { status: "built", modules: built.length };
   }
 );
 

@@ -106,3 +106,14 @@ select pg_temp.expect('a strata admin sees no imports', (select count(*) from tr
 select pg_temp.expect('and can''t start one', pg_temp.fails($$insert into training_imports (title) values ('x')$$));
 set test.uid = '00000000-0000-0000-0000-00000000000c';
 select pg_temp.expect('an author sees no imports', (select count(*) from training_imports) = 0);
+
+-- The library search for the AI builder (0037) is server only.
+select pg_temp.expect('learners can''t search the library for training',
+  pg_temp.fails($$select * from match_library_for_training(array_fill(0.1, array[1024])::text::extensions.vector, 5, 0.1)$$));
+reset role;
+select pg_temp.expect('the server can',
+  has_function_privilege('service_role', 'public.match_library_for_training(extensions.vector, integer, double precision)', 'execute')
+  and not has_function_privilege('authenticated', 'public.match_library_for_training(extensions.vector, integer, double precision)', 'execute'));
+select pg_temp.expect('fact checks live on the draft, where only staff and authors can read them',
+  exists (select 1 from information_schema.columns where table_name = 'training_module_drafts' and column_name = 'fact_check')
+  and not exists (select 1 from information_schema.columns where table_name = 'training_modules' and column_name = 'fact_check'));
