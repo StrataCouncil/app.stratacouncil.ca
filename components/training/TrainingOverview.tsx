@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { PhotoCreditLine } from "@/components/training/PhotoPicker";
 import type { TrainingTrack } from "@/lib/data/training";
-import type { ModuleCover } from "@/lib/training/content";
+import type { ModuleCover } from "@/lib/training/slides";
 import { formatMinutes, lockedBehind, minutesLeft, nextModule, trackStatus, type TrackStatus } from "@/lib/training/progress";
 
 /**

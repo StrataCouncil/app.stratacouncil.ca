@@ -8263,3 +8263,274 @@ a.track-card:focus-visible {
 .recover-narration__list audio {
   height: 2rem;
 }
+
+/* ── Council Training slides (0041) ─────────────────────────────────── */
+.player__screen:has(> .slide) {
+  padding: 0;
+  display: block;
+  overflow: hidden;
+}
+.slide {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-height: 420px;
+}
+.slide__content {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+  padding: 1.75rem;
+  min-width: 0;
+}
+.slide__text {
+  font-size: 1.15rem;
+  line-height: 1.6;
+}
+.slide__text p,
+.slide__text ul {
+  margin: 0 0 0.75rem;
+}
+.slide__text ul {
+  padding-left: 1.2rem;
+}
+.slide__text li + li {
+  margin-top: 0.35rem;
+}
+.player[data-large-text="true"] .slide__text {
+  font-size: 1.35rem;
+}
+.slide__sources {
+  margin: auto 0 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.slide__sources span {
+  font-weight: 600;
+}
+.slide__visual {
+  position: relative;
+  min-height: 280px;
+  background: var(--paper);
+}
+.slide__visual img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.slide__visual .photo-credit,
+.slide__credit .photo-credit {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  margin: 0;
+  padding: 0.35rem 0.75rem;
+  color: #fff;
+  background: linear-gradient(to left, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0));
+}
+.slide__visual .photo-credit a,
+.slide__credit .photo-credit a {
+  color: #fff;
+}
+.slide__video {
+  position: relative;
+  padding-top: 56.25%;
+}
+.slide__video iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+.slide__video-file {
+  width: 100%;
+  display: block;
+}
+.slide:has(.slide__video, .slide__video-file) .slide__visual {
+  min-height: 0;
+  align-self: center;
+}
+.slide[data-layout="left"],
+.slide[data-layout="right"] {
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+}
+.slide[data-layout="left"] .slide__visual {
+  order: -1;
+}
+/* The picture fills the slide; the text sits on a panel over it. */
+.slide[data-layout="photo"] {
+  position: relative;
+  background-size: cover;
+  background-position: center;
+  min-height: 460px;
+  align-items: end;
+  padding: 1.5rem;
+}
+.slide[data-layout="photo"] .slide__content {
+  max-width: 34rem;
+  background: rgba(255, 255, 255, 0.94);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 6px 24px rgba(27, 42, 65, 0.18);
+}
+.slide__credit {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+}
+@media (max-width: 899px) {
+  .slide[data-layout="left"],
+  .slide[data-layout="right"] {
+    grid-template-columns: 1fr;
+  }
+  .slide[data-layout="left"] .slide__visual,
+  .slide[data-layout="right"] .slide__visual {
+    order: -1;
+    min-height: 200px;
+  }
+  .slide[data-layout="photo"] {
+    padding: 0;
+    padding-top: 220px;
+    background-size: 100% auto;
+    background-repeat: no-repeat;
+    background-position: top center;
+  }
+  .slide[data-layout="photo"] .slide__content {
+    max-width: none;
+    border-radius: 0;
+    box-shadow: none;
+  }
+  .slide[data-layout="photo"] .slide__credit {
+    top: 0;
+    bottom: auto;
+  }
+  .slide__content {
+    padding: 1.25rem 1rem;
+  }
+}
+
+/* ── Slide builder ── */
+.builder__checkout {
+  margin: 0;
+  padding: 0.65rem 1.25rem;
+  background: var(--paper);
+  border-bottom: 1px solid var(--line);
+  font-size: 0.9rem;
+}
+.builder__fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+.builder__fieldset:disabled .builder__canvas {
+  opacity: 0.85;
+}
+.be-label {
+  display: block;
+  font-weight: 600;
+  font-size: 0.85rem;
+  margin-bottom: 0.25rem;
+}
+.builder__layouts {
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+.builder__flag {
+  margin-left: auto;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  background: var(--danger-bg);
+  color: var(--danger);
+  font-size: 0.72rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.builder__citations,
+.builder__hits,
+.builder__earlier ul {
+  list-style: none;
+  margin: 0.5rem 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.builder__citations li,
+.builder__hits li,
+.builder__earlier li {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+.builder__hits li > div {
+  flex: 1 1 18rem;
+  min-width: 0;
+}
+.builder__hits p {
+  margin: 0.2rem 0 0;
+}
+.builder__citations li span {
+  flex: 1;
+}
+.builder__earlier {
+  padding: 0.75rem;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-sm);
+}
+.builder__empty-note {
+  margin: 0.75rem 0.5rem;
+}
+.builder__block .be-stack input:not([type]),
+.builder__block .be-stack input[type="text"],
+.builder__block .be-stack textarea,
+.builder__block .be-stack select,
+.builder__block .be-row select {
+  font: inherit;
+  font-size: 0.92rem;
+  padding: 0.5em 0.75em;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--paper);
+  color: var(--ink);
+}
+.builder__block .be-stack label > input:not([type]),
+.builder__block .be-stack label > textarea,
+.builder__block .be-item > input,
+.builder__block .be-item > textarea {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+}
+.builder__block .be-stack textarea {
+  resize: vertical;
+  line-height: 1.5;
+}
+.builder__block .be-stack label > .card__meta {
+  display: block;
+  margin-top: 0.25rem;
+}
+.builder__block .be-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.slide__credit .photo-credit,
+.slide__visual .photo-credit {
+  white-space: nowrap;
+}
+.slide__credit .photo-credit {
+  position: static;
+  display: block;
+}

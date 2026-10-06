@@ -5,8 +5,8 @@ import { mergeHits, type LibraryPassage } from "@/lib/training/library";
 /**
  * Searching the Legislation Library for Council Training (0037). Server
  * only, with the service role: the search function isn't open to learners
- * or councils. Queries are the module's own title and objectives (no
- * personal information) and go to Voyage to be embedded.
+ * or councils. Queries are an author's search for a section to cite (course
+ * wording, no personal information) and go to Voyage to be embedded.
  */
 
 type Row = { id: string; legislation_document_id: string; title: string | null; chunk_text: string; chunk_index: number; similarity: number };
@@ -52,18 +52,6 @@ export async function searchLibrary(queries: string[], { perQuery = 10, threshol
     })
   );
   return mergeHits(lists).slice(0, limit);
-}
-
-/** Chosen passages by id (for a build), in no particular order. */
-export async function loadPassages(ids: string[]): Promise<LibraryPassage[]> {
-  if (!ids.length) return [];
-  const { data, error } = await createAdminClient()
-    .from("knowledge_chunks")
-    .select("id, legislation_document_id, title, chunk_text, chunk_index")
-    .in("id", ids.slice(0, 200))
-    .eq("scope", "legislation");
-  if (error) throw new Error(`Couldn't read the library passages: ${error.message}`);
-  return withDocuments((data ?? []).map((r) => ({ ...(r as Omit<Row, "similarity">), similarity: 1 })));
 }
 
 /**

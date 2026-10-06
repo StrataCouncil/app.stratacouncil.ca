@@ -3,30 +3,29 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { completeSection } from "@/app/training/actions";
-import { BlockView, Transcript } from "@/components/training/BlockView";
-import { PhotoCreditLine } from "@/components/training/PhotoPicker";
+import { SlideView, Transcript } from "@/components/training/SlideView";
 import { DemoFeedback } from "@/components/training/DemoFeedback";
-import { isReadingUrl, screenRequirements, type FurtherReading, type ModuleContent, type Screen } from "@/lib/training/content";
+import { slideRequirements, type FurtherReading, type Objective, type PlayerContent, type PlayerSlide } from "@/lib/training/slides";
 
 type Page =
   | { key: string; kind: "intro"; sectionIndex: number; title: string }
   | { key: string; kind: "recap"; sectionIndex: number; title: string }
-  | { key: string; kind: "screen"; sectionIndex: number; title: string; screen: Screen };
+  | { key: string; kind: "screen"; sectionIndex: number; title: string; screen: PlayerSlide };
 
 type Settings = { largeText: boolean; autoplay: boolean; shortcuts: boolean };
 const SETTINGS_KEY = "sc-training-player";
 const defaultSettings: Settings = { largeText: false, autoplay: true, shortcuts: true };
 
 /**
- * The learner's module player, one screen at a time: sections down the
- * side (ticked when done, locked until reached), a title bar with a
- * counter, and Prev / Next underneath. Next waits until the screen is
- * finished: narration heard to the end, questions answered, every
- * click-to-reveal item opened. Nothing is graded. Progress saves as each
- * section is finished.
+ * The learner's module player, one slide at a time: the module's topics
+ * down the side (ticked when done, locked until reached), a title bar with
+ * a counter, and Prev / Next underneath. Next waits until the slide is
+ * finished: narration heard to the end, the question answered, every
+ * section or card opened. Nothing is graded. Progress saves as each topic
+ * is finished.
  *
- * `preview` (the builder) never saves and every section can be opened, but
- * each screen still waits like it does for learners unless the author
+ * `preview` (the builder) never saves and every topic can be opened, but
+ * each slide still waits like it does for learners unless the author
  * turns on `skipWaits`.
  */
 export function ModulePlayer({
@@ -46,7 +45,7 @@ export function ModulePlayer({
   moduleId: string;
   moduleTitle: string;
   version: number;
-  content: ModuleContent;
+  content: PlayerContent;
   completedSectionIds: string[];
   track: { title: string; slug: string };
   nextModule: { id: string; title: string } | null;
@@ -56,10 +55,10 @@ export function ModulePlayer({
   startScreenId?: string;
   /** Where track and module links point ("/training", or a demo link's "/demo/<token>"). */
   hrefBase?: string;
-  /** A demo link (0040): nothing is saved, and each screen can take a comment. */
+  /** A demo link (0040): nothing is saved, and each slide can take a comment. */
   demo?: { token: string };
 }) {
-  const sections = content.sections;
+  const sections = content.topics;
   const pages = useMemo(() => buildPages(content), [content]);
   const [done, setDone] = useState<Set<string>>(() => new Set(completedSectionIds.filter((id) => sections.some((s) => s.id === id))));
   const allDone = sections.length > 0 && sections.every((s) => done.has(s.id));
@@ -103,7 +102,7 @@ export function ModulePlayer({
 
   const page = pages[Math.min(index, pages.length - 1)];
   const screen = page?.kind === "screen" ? page.screen : null;
-  const required = useMemo(() => (screen ? screenRequirements(screen) : []), [screen]);
+  const required = useMemo(() => (screen ? slideRequirements(screen) : []), [screen]);
   // What's been finished on the current screen; tied to the screen so moving on starts fresh.
   const [sat, setSat] = useState<{ at: number; ids: Set<string> }>({ at: index, ids: new Set() });
   const satisfied = sat.at === index ? sat.ids : new Set<string>();
@@ -128,7 +127,7 @@ export function ModulePlayer({
   const interacted = useRef(false);
   const [playing, setPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
-  const narration = screen?.narration.src ? screen.narration : null;
+  const narration = screen?.narration ?? null;
   useEffect(() => {
     setPlaying(false);
     setProgress(0);
@@ -138,7 +137,7 @@ export function ModulePlayer({
   // Fetch the next screen's narration while this one plays, so it's ready when the learner moves on.
   const nextNarration = (() => {
     const n = pages[index + 1];
-    return n?.kind === "screen" ? n.screen.narration.src : "";
+    return n?.kind === "screen" ? (n.screen.narration?.url ?? "") : "";
   })();
   useEffect(() => {
     if (!nextNarration) return;
@@ -224,7 +223,7 @@ export function ModulePlayer({
   if (pages.length === 0 || !page) {
     return (
       <div className="wrap page">
-        <p className="lesson-missing">This module has no screens yet.</p>
+        <p className="lesson-missing">This module has no slides yet.</p>
       </div>
     );
   }
@@ -233,12 +232,12 @@ export function ModulePlayer({
   const waitingOn = !ready
     ? required.includes("narration") && !satisfied.has("narration")
       ? "Next unlocks when the narration finishes."
-      : "Finish the activity on this screen to continue."
+      : "Finish the activity on this slide to continue."
     : null;
 
   return (
     <div className="player" data-large-text={settings.largeText}>
-      <nav className="player__menu" data-open={menuOpen} aria-label="Sections">
+      <nav className="player__menu" data-open={menuOpen} aria-label="Topics">
         <Link href={preview ? "#" : `${hrefBase}/${track.slug}`} className="player__back">
           &larr; {track.title}
         </Link>
@@ -247,7 +246,7 @@ export function ModulePlayer({
           <div className="progress-track__fill" style={{ width: `${Math.round((done.size / Math.max(1, sections.length)) * 100)}%` }} />
         </div>
         <span className="card__meta">
-          {done.size} of {sections.length} sections complete
+          {done.size} of {sections.length} topics complete
         </span>
         <ol className="player__sections">
           {sections.map((s, si) => {
@@ -279,7 +278,7 @@ export function ModulePlayer({
       <main className="player__main">
         <div className="player__top">
           <button type="button" className="player__menu-toggle" aria-expanded={menuOpen} onClick={() => setMenuOpen((o) => !o)}>
-            <MenuIcon /> Sections
+            <MenuIcon /> Topics
           </button>
           <span className="player__top-title">{moduleTitle}</span>
         </div>
@@ -287,7 +286,7 @@ export function ModulePlayer({
         {finished ? (
           <section className="player__complete">
             <h2>{allDone ? "Module complete" : "Almost there"}</h2>
-            <p>{allDone ? `You've finished "${moduleTitle}".` : "Some sections still need finishing. Pick one from the menu."}</p>
+            <p>{allDone ? `You've finished "${moduleTitle}".` : "Some topics still need finishing. Pick one from the menu."}</p>
             {demo && (
               <>
                 <p className="card__meta">This is a preview, so nothing was saved. Tell us what you thought of the module as a whole:</p>
@@ -317,33 +316,20 @@ export function ModulePlayer({
           <>
             <div className="player__bar">
               <h2>{page.title}</h2>
-              <span aria-label={`Screen ${index + 1} of ${pages.length}`}>
+              <span aria-label={`Slide ${index + 1} of ${pages.length}`}>
                 {index + 1}/{pages.length}
               </span>
             </div>
 
-            <div className="player__screen" data-layout={screen?.layout ?? "full"} data-side={screen?.imageSide ?? "right"} key={page.key}>
-              <div className="player__blocks">
-                {page.kind === "intro" && <Intro objectives={content.objectives} />}
-                {page.kind === "recap" && <Recap moduleTitle={moduleTitle} objectives={content.objectives} reading={content.furtherReading ?? []} />}
-                {screen?.blocks.map((b) => (
-                  <div key={b.id} className="lesson__block" data-type={b.type}>
-                    <BlockView block={b} onDone={() => satisfy(b.id)} />
-                  </div>
-                ))}
-              </div>
-              {screen?.layout === "split" && screen.image.src && (
-                <div className="player__aside">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={screen.image.src} alt={screen.image.alt} />
-                  <PhotoCreditLine credit={screen.image.credit} />
-                </div>
-              )}
+            <div className="player__screen" key={page.key}>
+              {page.kind === "intro" && <Intro objectives={content.objectives} />}
+              {page.kind === "recap" && <Recap moduleTitle={moduleTitle} objectives={content.objectives} reading={content.furtherReading} />}
+              {screen && <SlideView slide={screen} onDone={() => satisfy("element")} />}
             </div>
 
             {captions && narration && (
               <div className="player__captions">
-                <Transcript text={narration.transcript || "No transcript for this screen."} label="Captions" />
+                <Transcript text={narration.script || "No transcript for this slide."} label="Captions" />
               </div>
             )}
 
@@ -359,7 +345,7 @@ export function ModulePlayer({
                   <audio
                     ref={audio}
                     key={page.key}
-                    src={narration.src}
+                    src={narration.url}
                     preload="auto"
                     onPlay={() => setPlaying(true)}
                     onPause={() => setPlaying(false)}
@@ -443,46 +429,46 @@ export function ModulePlayer({
   );
 }
 
-/** Sections' screens in order, with an opening objectives screen and a closing recap when the module has objectives. */
-function buildPages(content: ModuleContent): Page[] {
+/** Topics' slides in order, with an opening objectives page and a closing recap when the module has objectives. */
+function buildPages(content: PlayerContent): Page[] {
   const pages: Page[] = [];
-  const last = content.sections.length - 1;
-  content.sections.forEach((section, si) => {
+  const last = content.topics.length - 1;
+  content.topics.forEach((topic, si) => {
     if (si === 0 && content.objectives.length) pages.push({ key: "intro", kind: "intro", sectionIndex: 0, title: "Module introduction" });
-    for (const screen of section.screens) pages.push({ key: screen.id, kind: "screen", sectionIndex: si, title: screen.title, screen });
+    for (const slide of topic.slides) pages.push({ key: slide.id, kind: "screen", sectionIndex: si, title: slide.title, screen: slide });
     if (si === last && content.objectives.length) pages.push({ key: "recap", kind: "recap", sectionIndex: last, title: "Summary" });
   });
   return pages;
 }
 
-function Intro({ objectives }: { objectives: string[] }) {
+function Intro({ objectives }: { objectives: Objective[] }) {
   return (
     <div className="player__intro">
       <h3>Learning objectives</h3>
       <p>By the end of this module, you&rsquo;ll be able to:</p>
       <ul className="player__objectives">
         {objectives.map((o) => (
-          <li key={o}>{o}</li>
+          <li key={o.text}>{o.text}</li>
         ))}
       </ul>
       <aside className="player__howto">
-        <strong>How this works.</strong> Move through the screens with Next. When a screen has narration, a question or
+        <strong>How this works.</strong> Move through the slides with Next. When a slide has narration, a question or
         something to select, Next unlocks once you&rsquo;ve finished it. There&rsquo;s no pass or fail. Your progress saves at
-        the end of each section, so you can stop and pick up later.
+        the end of each topic, so you can stop and pick up later.
       </aside>
     </div>
   );
 }
 
-function Recap({ moduleTitle, objectives, reading }: { moduleTitle: string; objectives: string[]; reading: FurtherReading[] }) {
-  const links = reading.filter((r) => r.title.trim() && isReadingUrl(r.url));
+function Recap({ moduleTitle, objectives, reading }: { moduleTitle: string; objectives: Objective[]; reading: FurtherReading[] }) {
+  const links = reading;
   return (
     <div className="player__intro">
       <h3>This concludes {moduleTitle}</h3>
       <p>You should now be able to:</p>
       <ul className="player__objectives">
         {objectives.map((o) => (
-          <li key={o}>{o}</li>
+          <li key={o.text}>{o.text}</li>
         ))}
       </ul>
       {links.length > 0 && (
@@ -491,7 +477,7 @@ function Recap({ moduleTitle, objectives, reading }: { moduleTitle: string; obje
           <p>Optional, for anyone who wants to go deeper.</p>
           <ul>
             {links.map((r) => (
-              <li key={r.id}>
+              <li key={r.url}>
                 <a href={r.url} target="_blank" rel="noreferrer">
                   {r.title}
                 </a>

@@ -1,13 +1,24 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import { flattenScreens, moduleCover, normalizeModuleContent, type ModuleContent } from "@/lib/training/content";
+import {
+  buildPlayerContent,
+  coverOf,
+  normalizeFurtherReading,
+  normalizeObjectives,
+  normalizePlayerContent,
+  toSlides,
+  type MediaRow,
+  type PlayerContent,
+  type SlideRow,
+} from "@/lib/training/slides";
 import { toCover, trackSlug, type TrainingTrack } from "@/lib/data/training";
 
 /**
  * Council Training through a demo link (0040): no sign-in, no progress
  * kept. Everything is read on the server with the service role, and only
  * after the link's token checks out. Every module is open (reviewers jump
- * around); a link with include_drafts shows modules' latest drafts.
+ * around); a link with include_drafts shows modules' slides as they are
+ * now, published or not.
  */
 
 export interface DemoLink {
@@ -37,22 +48,29 @@ export async function getDemoLink(token: string): Promise<DemoLink | null> {
 
 async function readAll(link: DemoLink) {
   const admin = createAdminClient();
-  const [{ data: tracks }, { data: modules }, { data: drafts }] = await Promise.all([
+  const [{ data: tracks }, { data: modules }, { data: slides }, { data: media }] = await Promise.all([
     admin.from("training_tracks").select("id, code, title, description, order_index, stage").order("order_index"),
     admin
       .from("training_modules")
-      .select("id, track_id, order_index, title, summary, estimated_minutes, published_version, published_at, cover")
+      .select("id, track_id, order_index, title, summary, estimated_minutes, published_version, published_at, cover, objectives, further_reading")
       .order("order_index"),
-    link.includeDrafts ? admin.from("training_module_drafts").select("module_id, content") : Promise.resolve({ data: [] }),
+    link.includeDrafts
+      ? admin.from("training_slides").select("id, module_id, position, topic, title, body, layout, narration_script, narration_voiced, element, citations")
+      : Promise.resolve({ data: [] }),
+    link.includeDrafts ? admin.from("training_media").select("id, slide_id, module_id, role, kind, source, url, alt, credit") : Promise.resolve({ data: [] }),
   ]);
-  const draftBy = new Map((drafts ?? []).map((d) => [d.module_id as string, normalizeModuleContent(d.content)]));
+  const draftBy = new Map<string, PlayerContent>();
+  for (const m of modules ?? []) {
+    const rows = (slides ?? []).filter((s) => s.module_id === m.id) as unknown as SlideRow[];
+    if (!rows.length) continue;
+    const files = (media ?? []).filter((x) => x.module_id === m.id) as unknown as MediaRow[];
+    const content = buildPlayerContent(
+      { title: m.title, objectives: normalizeObjectives(m.objectives), furtherReading: normalizeFurtherReading(m.further_reading) },
+      toSlides(rows, files)
+    );
+    draftBy.set(m.id as string, content);
+  }
   return { tracks: tracks ?? [], modules: modules ?? [], draftBy };
-}
-
-/** Whether a module has anything to show through this link. */
-function usableDraft(draftBy: Map<string, ModuleContent>, moduleId: string) {
-  const d = draftBy.get(moduleId);
-  return d && flattenScreens(d).length > 0 ? d : null;
 }
 
 export async function getDemoTracks(link: DemoLink): Promise<TrainingTrack[]> {
@@ -70,7 +88,7 @@ export async function getDemoTracks(link: DemoLink): Promise<TrainingTrack[]> {
     modules: modules
       .filter((m) => m.track_id === t.id)
       .map((m) => {
-        const draft = usableDraft(draftBy, m.id);
+        const draft = draftBy.get(m.id) ?? null;
         return {
           id: m.id,
           trackId: m.track_id,
@@ -82,7 +100,7 @@ export async function getDemoTracks(link: DemoLink): Promise<TrainingTrack[]> {
           publishedAt: m.published_at,
           completedSections: 0,
           completed: false,
-          cover: draft ? moduleCover(draft) : toCover(m.cover),
+          cover: draft ? coverOf(draft) : toCover(m.cover),
         };
       }),
   }));
@@ -94,14 +112,10 @@ export async function getDemoModule(link: DemoLink, moduleId: string) {
   const track = tracks.find((t) => t.modules.some((m) => m.id === moduleId));
   const mod = track?.modules.find((m) => m.id === moduleId);
   if (!track || !mod || mod.publishedVersion === 0) return null;
-  const admin = createAdminClient();
-  let content: ModuleContent | null = null;
-  if (link.includeDrafts) {
-    const { data } = await admin.from("training_module_drafts").select("content").eq("module_id", moduleId).maybeSingle();
-    const draft = data ? normalizeModuleContent(data.content) : null;
-    if (draft && flattenScreens(draft).length) content = draft;
-  }
+  let content: PlayerContent | null = null;
+  if (link.includeDrafts) content = (await readAll(link)).draftBy.get(moduleId) ?? null;
   if (!content) {
+    const admin = createAdminClient();
     const { data: published } = await admin.from("training_modules").select("published_version").eq("id", moduleId).maybeSingle();
     if (!published?.published_version) return null;
     const { data } = await admin
@@ -110,8 +124,8 @@ export async function getDemoModule(link: DemoLink, moduleId: string) {
       .eq("module_id", moduleId)
       .eq("version", published.published_version)
       .maybeSingle();
-    if (!data) return null;
-    content = normalizeModuleContent(data.content);
+    content = normalizePlayerContent(data?.content);
+    if (!content) return null;
   }
   const ordered = [...track.modules].sort((a, b) => a.orderIndex - b.orderIndex);
   const next = ordered.find((m) => m.orderIndex > mod.orderIndex && m.publishedVersion > 0) ?? null;

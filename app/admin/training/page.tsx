@@ -2,7 +2,6 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { AdminTrainingList } from "@/components/training/AdminTrainingList";
-import { MediaCleanup } from "@/components/training/MediaCleanup";
 import { DemoLinks } from "@/components/training/DemoLinks";
 import { getDemoAdmin } from "@/lib/data/training-demo";
 import { getCurrentProfile } from "@/lib/data/profile";
@@ -24,13 +23,8 @@ export default async function AdminTrainingPage() {
         <div className="page-header">
           <h1>Council Training</h1>
           <p>
-            Build modules from sections and screens, preview them as a learner, and publish. Learners only ever see published
-            versions; your drafts autosave.
-          </p>
-          <p>
-            <Link href="/admin/training/ai" className="button button-primary" data-testid="admin-training-ai">
-              Build modules from documents
-            </Link>
+            Each track has modules, and each module has slides. Open a module and press Edit module to check it out: no one else
+            can change it until you press Finished editing. Changes save as you go. Learners only ever see published versions.
           </p>
         </div>
         {review.length > 0 && (
@@ -40,7 +34,6 @@ export default async function AdminTrainingPage() {
         )}
         <AdminTrainingList tracks={tracks} authors={authors} />
         <DemoLinks links={demo.links} feedback={demo.feedback} />
-        <MediaCleanup />
       </div>
     </AppShell>
   );
