@@ -41,22 +41,56 @@ function refresh(moduleId?: string) {
 }
 
 /** Autosave: the whole module's sections, screens and blocks, cleaned up first. */
-export async function saveModuleDraft(moduleId: string, content: unknown): Promise<Result<{ savedAt: string }>> {
+/**
+ * Save the whole draft, but only over the version this editor last loaded or
+ * saved (`base`, the draft's updated_at). If the draft changed since (an AI
+ * build, another tab, an old copy of the page), nothing is overwritten and
+ * the editor is told to reload.
+ */
+export async function saveModuleDraft(
+  moduleId: string,
+  content: unknown,
+  base: string | null
+): Promise<Result<{ savedAt: string }> | { ok: false; error: string; conflict: true }> {
   const me = await getCurrentProfile();
   if (!me || !(await canAuthor(moduleId))) return { ok: false, error: "You can't edit this module." };
   const clean = normalizeModuleContent(content);
   const savedAt = new Date().toISOString();
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("training_module_drafts")
-    .update({ content: clean, updated_at: savedAt, updated_by: me.id })
-    .eq("module_id", moduleId)
-    .select("module_id");
-  if (error || !data?.length) {
-    if (error) console.error("[saveModuleDraft]", error.message);
+  let query = supabase.from("training_module_drafts").update({ content: clean, updated_at: savedAt, updated_by: me.id }).eq("module_id", moduleId);
+  if (base) query = query.eq("updated_at", base);
+  const { data, error } = await query.select("module_id");
+  if (error) {
+    console.error("[saveModuleDraft]", error.message);
+    return { ok: false, error: "Couldn't save. Your changes are still here; they'll save with your next edit." };
+  }
+  if (!data?.length) {
+    const { data: exists } = await supabase.from("training_module_drafts").select("updated_at").eq("module_id", moduleId).maybeSingle();
+    // Same version after all (the timestamp just didn't compare as written): save.
+    if (exists && base && exists.updated_at === base) {
+      const { error: again } = await supabase
+        .from("training_module_drafts")
+        .update({ content: clean, updated_at: savedAt, updated_by: me.id })
+        .eq("module_id", moduleId);
+      if (!again) return { ok: true, savedAt };
+    }
+    if (exists && base)
+      return {
+        ok: false,
+        conflict: true,
+        error: "This module was changed somewhere else (another tab, an AI build, or an older copy of this page). Reload to get the latest version; edits made here since then can't be saved.",
+      };
     return { ok: false, error: "Couldn't save. Your changes are still here; they'll save with your next edit." };
   }
   return { ok: true, savedAt };
+}
+
+/** When the saved draft last changed: the builder compares it with what it has open. */
+export async function getDraftStamp(moduleId: string): Promise<Result<{ updatedAt: string | null }>> {
+  if (!(await canAuthor(moduleId))) return { ok: false, error: "You can't see this module." };
+  const supabase = await createClient();
+  const { data } = await supabase.from("training_module_drafts").select("updated_at").eq("module_id", moduleId).maybeSingle();
+  return { ok: true, updatedAt: (data?.updated_at as string | null) ?? null };
 }
 
 export async function publishModule(moduleId: string): Promise<Result<{ version: number }>> {

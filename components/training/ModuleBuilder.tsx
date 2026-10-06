@@ -25,6 +25,7 @@ import {
   generateNarration,
   getNarrationVoices,
   markReadyForReview,
+  getDraftStamp,
   getFactCheck,
   markFactIssue,
   publishModule,
@@ -122,16 +123,28 @@ export function ModuleBuilder({
   latest.current = content;
   // An edit waiting for its save (the save waits for a pause in typing).
   const pending = useRef(false);
+  const inFlight = useRef(false);
+  // The saved version this editor is working from; a save only goes over that version.
+  const base = useRef<string | null>(module.draftUpdatedAt);
+  // The draft changed somewhere else: stop saving and ask for a reload, rather than overwrite it.
+  const [stale, setStale] = useState(false);
+  const staleRef = useRef(false);
+  staleRef.current = stale;
   useEffect(() => {
     if (first.current) {
       first.current = false;
       return;
     }
+    if (staleRef.current) return;
     pending.current = true;
     setSave((s) => ({ ...s, state: "saving" }));
     const t = setTimeout(async () => {
       pending.current = false;
-      const r = await saveModuleDraft(module.id, latest.current).catch(() => ({ ok: false as const, error: "Couldn't save. Check your connection." }));
+      inFlight.current = true;
+      const r = await saveModuleDraft(module.id, latest.current, base.current).catch(() => ({ ok: false as const, error: "Couldn't save. Check your connection." }));
+      inFlight.current = false;
+      if (r.ok) base.current = r.savedAt;
+      else if ("conflict" in r) setStale(true);
       setSave(r.ok ? { state: "saved", at: r.savedAt } : { state: "error", at: null, error: r.error });
     }, 800);
     return () => clearTimeout(t);
@@ -139,10 +152,24 @@ export function ModuleBuilder({
   // Leaving the builder (its back link, or any other link) mustn't drop an edit still waiting to save.
   useEffect(
     () => () => {
-      if (pending.current) void saveModuleDraft(module.id, latest.current).catch(() => undefined);
+      if (pending.current && !staleRef.current) void saveModuleDraft(module.id, latest.current, base.current).catch(() => undefined);
     },
     [module.id]
   );
+  // An old copy of the page (the browser's Back button, a second tab) may be behind what's saved:
+  // check on opening and whenever the tab comes back into view.
+  useEffect(() => {
+    async function check() {
+      if (pending.current || inFlight.current || staleRef.current) return;
+      const r = await getDraftStamp(module.id).catch(() => null);
+      if (inFlight.current || pending.current) return;
+      if (r?.ok && r.updatedAt && base.current && r.updatedAt !== base.current && Date.parse(r.updatedAt) !== Date.parse(base.current)) setStale(true);
+    }
+    void check();
+    const onVisible = () => document.visibilityState === "visible" && void check();
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [module.id]);
   useEffect(() => {
     const warn = (e: BeforeUnloadEvent) => {
       if (save.state !== "saved") e.preventDefault();
@@ -271,10 +298,20 @@ export function ModuleBuilder({
           the source before publishing, then add photos and narration (Module settings can voice every screen at once).
         </p>
       )}
-      {save.state === "error" && (
-        <p className="builder__alert" role="alert">
-          {save.error}
+      {stale ? (
+        <p className="builder__alert" role="alert" data-testid="builder-stale">
+          <strong>There&rsquo;s a newer version of this module</strong> (from another tab, an AI build, or an older copy of this
+          page). Nothing here will be saved over it.{" "}
+          <button type="button" className="button button-primary button-small" onClick={() => window.location.reload()}>
+            Reload the latest version
+          </button>
         </p>
+      ) : (
+        save.state === "error" && (
+          <p className="builder__alert" role="alert">
+            {save.error}
+          </p>
+        )
       )}
       {notice && (
         <p className="builder__notice" role="status">
