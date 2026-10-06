@@ -23,7 +23,7 @@ import {
 
 type Fail = { ok: false; error: string };
 type Done = { ok: true } | Fail;
-const notAllowed: Fail = { ok: false, error: "Only Super Admins can manage the legislation library." };
+const notAllowed: Fail = { ok: false, error: "Only Super Admins can manage the Legislation Library." };
 
 function extensionOf(name: string) {
   const dot = name.lastIndexOf(".");

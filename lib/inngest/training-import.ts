@@ -10,6 +10,7 @@ import {
   assembleModule,
   BUILDER_SYSTEM,
   curriculumPlanRequest,
+  GROUNDING_CHECK_INSTRUCTIONS,
   MAX_SOURCE_CHARS,
   normalizePlan,
   parseSources,
@@ -26,7 +27,7 @@ import {
   type PlannedModule,
 } from "@/lib/training/ai";
 import { normalizeModuleContent, type Screen } from "@/lib/training/content";
-import { passagesAsSources } from "@/lib/training/library";
+import { factCheckSchema, normalizeIssues, passagesAsSources, screenFactText } from "@/lib/training/library";
 import { loadPassages } from "@/lib/training/library-server";
 
 import { TRAINING_IMPORT_BUCKET } from "@/lib/training/ai";
@@ -80,7 +81,7 @@ export const planTrainingImport = inngest.createFunction(
             .eq("id", src.legislationId)
             .maybeSingle();
           if (!doc?.document_text) {
-            await setStatus(id, "needs_text", `"${src.title}" has no text yet. Index it in the Legislation library first, then try again.`);
+            await setStatus(id, "needs_text", `"${src.title}" has no text yet. Index it in the Legislation Library first, then try again.`);
             return { status: "stopped" as const };
           }
           title = doc.title;
@@ -184,7 +185,7 @@ export const buildTrainingImport = inngest.createFunction(
 
       const sectionScreens: Screen[][] = [];
       for (let i = 0; i < planned.sections.length; i++) {
-        const screens = await step.run(`write-${key}-${i}`, async () => {
+        const first = (await step.run(`write-${key}-${i}`, async () => {
           const imp = await loadImport(id);
           const raw = await askClaudeJson<unknown>({
             system: systemFor(imp),
@@ -194,8 +195,46 @@ export const buildTrainingImport = inngest.createFunction(
             maxTokens: 32000,
           });
           return toScreens(raw);
+        })) as Screen[];
+
+        // Check the section against the build's own sources; anything they don't support is rewritten before saving.
+        const problems = await step.run(`verify-${key}-${i}`, async () => {
+          const imp = await loadImport(id);
+          const raw = await askClaudeJson<unknown>({
+            system: systemFor(imp),
+            messages: [
+              {
+                role: "user",
+                content: `${GROUNDING_CHECK_INSTRUCTIONS}\n\n${first.map((sc) => `<screen id="${sc.id}">\n${screenFactText(sc)}\n</screen>`).join("\n\n")}`,
+              },
+            ],
+            schema: factCheckSchema,
+            effort: "medium",
+            maxTokens: 16000,
+          });
+          return normalizeIssues(raw, new Set(first.map((sc) => sc.id)));
         });
-        sectionScreens.push(screens as Screen[]);
+
+        let screens = first;
+        if (problems.length) {
+          screens = (await step.run(`rewrite-${key}-${i}`, async () => {
+            const imp = await loadImport(id);
+            const titles = new Map(first.map((sc) => [sc.id, sc.title]));
+            const feedback = problems
+              .map((p) => `- Screen "${titles.get(p.screenId) ?? ""}": ${p.quote ? `"${p.quote}" ` : ""}${p.note}${p.library ? ` (The sources say: ${p.library})` : ""}`)
+              .join("\n");
+            const raw = await askClaudeJson<unknown>({
+              system: systemFor(imp),
+              messages: [{ role: "user", content: sectionRequest(planned, i, sectionScreens, imp.instructions, feedback) }],
+              schema: sectionSchema,
+              effort: "medium",
+              maxTokens: 32000,
+            });
+            const rewritten = toScreens(raw);
+            return rewritten.length ? rewritten : first;
+          })) as Screen[];
+        }
+        sectionScreens.push(screens);
       }
 
       await step.run(`save-${key}`, async () => {
@@ -331,7 +370,7 @@ function systemFor(imp: { sourceText: string }): Anthropic.Beta.BetaTextBlockPar
   ];
 }
 
-function sectionRequest(m: PlannedModule, index: number, earlier: Screen[][], instructions: string) {
+function sectionRequest(m: PlannedModule, index: number, earlier: Screen[][], instructions: string, problems = "") {
   const outline = m.sections
     .map((s, i) => `${i + 1}. ${s.title}${i === index ? "  <- write this one" : ""}\n${s.keyPoints.map((p) => `   - ${p}`).join("\n")}`)
     .join("\n");
@@ -345,6 +384,9 @@ function sectionRequest(m: PlannedModule, index: number, earlier: Screen[][], in
     done ? `${done}\nDon't repeat what those screens cover.` : "",
     index === m.sections.length - 1 ? "This is the module's last section." : "",
     instructions ? `Notes from the author:\n${instructions}` : "",
+    problems
+      ? `A first draft of this section had statements the source documents don't support. Write the section again without these problems: leave each statement out or correct it from the sources, and don't replace it with anything else the sources don't state.\n${problems}`
+      : "",
     `Write section ${index + 1}, "${m.sections[index].title}".`,
   ]
     .filter(Boolean)

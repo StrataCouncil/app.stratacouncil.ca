@@ -55,31 +55,27 @@ export async function saveModuleDraft(
   const me = await getCurrentProfile();
   if (!me || !(await canAuthor(moduleId))) return { ok: false, error: "You can't edit this module." };
   const clean = normalizeModuleContent(content);
-  const savedAt = new Date().toISOString();
   const supabase = await createClient();
-  let query = supabase.from("training_module_drafts").update({ content: clean, updated_at: savedAt, updated_by: me.id }).eq("module_id", moduleId);
-  if (base) query = query.eq("updated_at", base);
-  const { data, error } = await query.select("module_id");
-  if (error) {
-    console.error("[saveModuleDraft]", error.message);
+  const { data: current, error: readError } = await supabase.from("training_module_drafts").select("updated_at").eq("module_id", moduleId).maybeSingle();
+  if (readError || !current) {
+    if (readError) console.error("[saveModuleDraft]", readError.message);
     return { ok: false, error: "Couldn't save. Your changes are still here; they'll save with your next edit." };
   }
-  if (!data?.length) {
-    const { data: exists } = await supabase.from("training_module_drafts").select("updated_at").eq("module_id", moduleId).maybeSingle();
-    // Same version after all (the timestamp just didn't compare as written): save.
-    if (exists && base && exists.updated_at === base) {
-      const { error: again } = await supabase
-        .from("training_module_drafts")
-        .update({ content: clean, updated_at: savedAt, updated_by: me.id })
-        .eq("module_id", moduleId);
-      if (!again) return { ok: true, savedAt };
-    }
-    if (exists && base)
-      return {
-        ok: false,
-        conflict: true,
-        error: "This module was changed somewhere else (another tab, an AI build, or an older copy of this page). Reload to get the latest version; edits made here since then can't be saved.",
-      };
+  // Compared as instants (to the millisecond), however the timestamp happens to be written.
+  if (base && current.updated_at && Date.parse(current.updated_at as string) !== Date.parse(base)) {
+    return {
+      ok: false,
+      conflict: true,
+      error: "This module was changed somewhere else (another tab, an AI build, or an older copy of this page). Reload to get the latest version.",
+    };
+  }
+  const savedAt = new Date().toISOString();
+  const { error } = await supabase
+    .from("training_module_drafts")
+    .update({ content: clean, updated_at: savedAt, updated_by: me.id })
+    .eq("module_id", moduleId);
+  if (error) {
+    console.error("[saveModuleDraft]", error.message);
     return { ok: false, error: "Couldn't save. Your changes are still here; they'll save with your next edit." };
   }
   return { ok: true, savedAt };

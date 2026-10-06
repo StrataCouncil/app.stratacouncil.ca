@@ -309,7 +309,7 @@ export function ModulePlayer({
               </span>
             </div>
 
-            <div className="player__screen" data-layout={screen?.layout ?? "full"} key={page.key}>
+            <div className="player__screen" data-layout={screen?.layout ?? "full"} data-side={screen?.imageSide ?? "right"} key={page.key}>
               <div className="player__blocks">
                 {page.kind === "intro" && <Intro objectives={content.objectives} />}
                 {page.kind === "recap" && <Recap moduleTitle={moduleTitle} objectives={content.objectives} reading={content.furtherReading ?? []} />}

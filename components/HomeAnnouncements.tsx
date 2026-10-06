@@ -8,7 +8,7 @@ import type { Announcement } from "@/lib/data/announcements";
 const HIDDEN_KEY = "sc-hidden-announcements";
 
 /**
- * News from StrataCouncil.ca, on the home page and every strata's Overview.
+ * News from StrataCouncil.ca, on the Council Training page and every strata's Overview.
  * Each can be hidden on this device; hiding it in one place hides it in both.
  */
 export function HomeAnnouncements({ announcements, heading }: { announcements: Announcement[]; heading?: string }) {

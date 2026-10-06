@@ -11,7 +11,7 @@ import { formatMinutes, lockedBehind, minutesLeft, nextModule, trackStatus, type
  * it. Completion shows as the filled circles on Council & Roles.
  */
 /** The overview itself, from the learner's tracks (also used by previews). */
-export function TrainingOverview({ tracks }: { tracks: TrainingTrack[] }) {
+export function TrainingOverview({ tracks, news }: { tracks: TrainingTrack[]; news?: React.ReactNode }) {
   const core = tracks.filter((t) => t.stage === "core");
   const specialty = tracks.filter((t) => t.stage === "specialty");
   const next = nextModule(tracks);
@@ -29,6 +29,8 @@ export function TrainingOverview({ tracks }: { tracks: TrainingTrack[] }) {
           track. Your progress stays with your account, even if your role on council changes.
         </p>
       </div>
+
+      {news}
 
       <div className="training-overview">
         <div className="training-overview__main">

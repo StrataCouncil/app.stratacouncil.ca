@@ -84,7 +84,7 @@ export function AnnouncementForm({ announcement, onDone }: { announcement?: Anno
         <span>Where it shows</span>
         <label className="checkbox-row">
           <input type="checkbox" name="show_on_home" defaultChecked={a ? a.showOnHome : true} data-testid="announcement-home" />
-          Home page
+          Council Training page
         </label>
         <label className="checkbox-row">
           <input type="checkbox" name="show_on_overview" defaultChecked={a ? a.showOnOverview : true} data-testid="announcement-overview" />
