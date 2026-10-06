@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProfile } from "@/lib/data/profile";
 import { getBuilderModule, type BuilderModule } from "@/lib/data/training";
+import { canAuthor, editing, labelFor, readSlide, SLIDE_COLUMNS, staff, verifiedCitations, type AdminClient } from "@/lib/training/builder-server";
 import {
   buildPlayerContent,
   coverOf,
@@ -51,41 +52,12 @@ import { PhotoError, searchPhotos, trackPhotoUse, type StockPhoto } from "@/lib/
  */
 
 type Result<T = object> = ({ ok: true } & T) | { ok: false; error: string };
-type AdminClient = ReturnType<typeof createAdminClient>;
-
-async function staff() {
-  const profile = await getCurrentProfile();
-  return profile?.isSuperAdmin ? profile : null;
-}
-
-async function canAuthor(moduleId: string) {
-  if (!/^[0-9a-f-]{36}$/i.test(moduleId)) return false;
-  const supabase = await createClient();
-  const { data } = await supabase.rpc("can_author_training_module", { p_module_id: moduleId });
-  return data === true;
-}
 
 function refresh(moduleId?: string) {
   revalidatePath("/admin/training");
   revalidatePath("/build", "layout");
   revalidatePath("/training", "layout");
   if (moduleId) revalidatePath(`/admin/training/${moduleId}`);
-}
-
-const NOT_YOURS = "You're not editing this module any more: it was checked in from another window, or released by a Super Admin. Reload to see the latest.";
-
-/**
- * The module, if it's checked out to the signed-in person in this window.
- * Every change goes through here first.
- */
-async function editing(moduleId: string, token: string): Promise<{ ok: true; userId: string; trackId: string; admin: AdminClient } | { ok: false; error: string }> {
-  const profile = await getCurrentProfile();
-  if (!profile || !(await canAuthor(moduleId))) return { ok: false, error: "You can't edit this module." };
-  const admin = createAdminClient();
-  const { data } = await admin.from("training_modules").select("track_id, checked_out_by, checkout_token").eq("id", moduleId).maybeSingle();
-  if (!data) return { ok: false, error: "Module not found." };
-  if (data.checked_out_by !== profile.id || data.checkout_token !== token) return { ok: false, error: NOT_YOURS };
-  return { ok: true, userId: profile.id, trackId: data.track_id as string, admin };
 }
 
 // ── Checking out and in ────────────────────────────────────────────────
@@ -369,16 +341,6 @@ export async function deleteModule(moduleId: string): Promise<Result> {
 }
 
 // ── Slides ─────────────────────────────────────────────────────────────
-
-const SLIDE_COLUMNS = "id, position, topic, title, body, layout, narration_script, narration_voiced, element, citations";
-
-async function readSlide(admin: AdminClient, moduleId: string, slideId: string): Promise<Slide | null> {
-  const [{ data: row }, { data: media }] = await Promise.all([
-    admin.from("training_slides").select(SLIDE_COLUMNS).eq("id", slideId).eq("module_id", moduleId).maybeSingle(),
-    admin.from("training_media").select("id, slide_id, role, kind, source, url, alt, credit").eq("slide_id", slideId),
-  ]);
-  return row ? toSlides([row as SlideRow], (media ?? []) as MediaRow[])[0] : null;
-}
 
 async function renumber(admin: AdminClient, moduleId: string, ids: string[]) {
   await Promise.all(ids.map((id, i) => admin.from("training_slides").update({ position: i + 1 }).eq("id", id).eq("module_id", moduleId)));
@@ -810,10 +772,6 @@ export interface LibraryHit extends Citation {
   snippet: string;
 }
 
-function labelFor(documentTitle: string, label: string) {
-  return label && label !== documentTitle ? `${documentTitle}, ${label}` : documentTitle;
-}
-
 /**
  * Find library sections to cite: "45" or "s. 45" looks the section up by
  * number; anything else searches by meaning. Only module text goes to the
@@ -834,22 +792,6 @@ export async function searchCitations(moduleId: string, query: string): Promise<
     console.error("[searchCitations]", e instanceof Error ? e.message : e);
     return { ok: false, error: "The library search didn't work. Try again." };
   }
-}
-
-/** Only sections that exist in the library, labelled the library's way. */
-async function verifiedCitations(chunkIds: string[]): Promise<Citation[]> {
-  const ids = [...new Set(chunkIds)].slice(0, 8);
-  if (!ids.length) return [];
-  const admin = createAdminClient();
-  const { data: chunks } = await admin.from("knowledge_chunks").select("id, title, legislation_document_id").in("id", ids).eq("scope", "legislation");
-  const docIds = [...new Set((chunks ?? []).map((c) => c.legislation_document_id as string))];
-  const { data: docs } = docIds.length ? await admin.from("legislation_documents").select("id, title").in("id", docIds) : { data: [] };
-  const docBy = new Map((docs ?? []).map((d) => [d.id as string, d.title as string]));
-  return ids.flatMap((id) => {
-    const c = (chunks ?? []).find((x) => x.id === id);
-    const doc = c ? docBy.get(c.legislation_document_id as string) : undefined;
-    return c && doc ? [{ chunkId: id, label: labelFor(doc, (c.title as string | null) ?? "") }] : [];
-  });
 }
 
 // ── Review and publishing ──────────────────────────────────────────────

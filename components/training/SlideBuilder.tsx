@@ -34,6 +34,7 @@ import {
   type LibraryHit,
 } from "@/app/admin/training/actions";
 import { ModulePlayer } from "@/components/training/ModulePlayer";
+import { DraftWithAI } from "@/components/training/DraftWithAI";
 import { PhotoCreditLine, PhotoPicker } from "@/components/training/PhotoPicker";
 import type { BuilderModule, Checkout } from "@/lib/data/training";
 import type { Voice } from "@/lib/media/elevenlabs";
@@ -581,6 +582,17 @@ export function SlideBuilder({
                 beforeFiles={flush}
               />
             </fieldset>
+          )}
+          {/* Kept mounted while you look at the slides it's writing, so the outline and progress aren't lost. */}
+          {editing && token && (
+            <div className="builder__canvas" hidden={!(mode === "edit" && (selected === "settings" || !slide))}>
+              <DraftWithAI
+                moduleId={initial.id}
+                token={token}
+                hasObjectives={objectives.some((o) => o.text.trim())}
+                onSlide={(s) => setSlides((ss) => [...ss, s].sort((a, b) => a.position - b.position))}
+              />
+            </div>
           )}
         </main>
       </div>

@@ -54,6 +54,18 @@ export async function searchLibrary(queries: string[], { perQuery = 10, threshol
   return mergeHits(lists).slice(0, limit);
 }
 
+/** Passages by id (the sections approved for an AI draft), in no particular order. */
+export async function loadPassages(ids: string[]): Promise<LibraryPassage[]> {
+  if (!ids.length) return [];
+  const { data, error } = await createAdminClient()
+    .from("knowledge_chunks")
+    .select("id, legislation_document_id, title, chunk_text, chunk_index")
+    .in("id", ids.slice(0, 200))
+    .eq("scope", "legislation");
+  if (error) throw new Error(`Couldn't read the library passages: ${error.message}`);
+  return withDocuments((data ?? []).map((r) => ({ ...(r as Omit<Row, "similarity">), similarity: 1 })));
+}
+
 /**
  * The passages a reference names ("Strata Property Act, s. 45",
  * "Standard Bylaw 23"), looked up by their labels rather than by meaning.
