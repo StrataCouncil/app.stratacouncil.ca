@@ -8073,3 +8073,17 @@ a.track-card:focus-visible {
   font-size: 0.85rem;
   white-space: pre-line;
 }
+.fact-handled {
+  margin: 0 0 0.75rem;
+  font-size: 0.88rem;
+}
+.fact-handled summary {
+  cursor: pointer;
+  color: var(--muted);
+}
+.tighten-report {
+  margin: 0.5rem 0 0;
+  padding-left: 1.1rem;
+  font-size: 0.88rem;
+  color: var(--muted);
+}

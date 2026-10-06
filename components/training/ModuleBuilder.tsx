@@ -25,7 +25,9 @@ import {
   generateNarration,
   getNarrationVoices,
   markReadyForReview,
+  getDraftStamp,
   getFactCheck,
+  markFactIssue,
   publishModule,
   saveModuleDraft,
   startFactCheck,
@@ -101,26 +103,73 @@ export function ModuleBuilder({
     }, 5000);
     return () => clearInterval(t);
   }, [checking, module.id]);
-  const issuesBy = new Map<string, FactIssue[]>();
-  if (factCheck && factCheck.status !== "failed") for (const i of factCheck.issues) issuesBy.set(i.screenId, [...(issuesBy.get(i.screenId) ?? []), i]);
+  // Open notes by screen, each with its place in the full list (for "Checked by hand").
+  const issuesBy = new Map<string, IndexedIssue[]>();
+  if (factCheck && factCheck.status !== "failed")
+    factCheck.issues.forEach((issue, index) => {
+      if (!issue.checkedByHand) issuesBy.set(issue.screenId, [...(issuesBy.get(issue.screenId) ?? []), { issue, index }]);
+    });
+  const openIssues = [...issuesBy.values()].reduce((n, list) => n + list.length, 0);
+  async function markIssue(index: number, checked: boolean) {
+    const r = await markFactIssue(module.id, index, checked);
+    if (!r.ok) return setNotice(r.error);
+    setFactCheck(r.check);
+  }
   const checkOutOfDate = Boolean(factCheck?.status === "done" && factCheck.draftUpdatedAt && save.at && save.at > factCheck.draftUpdatedAt);
 
   // ── Autosave ──
   const first = useRef(true);
   const latest = useRef(content);
   latest.current = content;
+  // An edit waiting for its save (the save waits for a pause in typing).
+  const pending = useRef(false);
+  const inFlight = useRef(false);
+  // The saved version this editor is working from; a save only goes over that version.
+  const base = useRef<string | null>(module.draftUpdatedAt);
+  // The draft changed somewhere else: stop saving and ask for a reload, rather than overwrite it.
+  const [stale, setStale] = useState(false);
+  const staleRef = useRef(false);
+  staleRef.current = stale;
   useEffect(() => {
     if (first.current) {
       first.current = false;
       return;
     }
+    if (staleRef.current) return;
+    pending.current = true;
     setSave((s) => ({ ...s, state: "saving" }));
     const t = setTimeout(async () => {
-      const r = await saveModuleDraft(module.id, latest.current).catch(() => ({ ok: false as const, error: "Couldn't save. Check your connection." }));
+      pending.current = false;
+      inFlight.current = true;
+      const r = await saveModuleDraft(module.id, latest.current, base.current).catch(() => ({ ok: false as const, error: "Couldn't save. Check your connection." }));
+      inFlight.current = false;
+      if (r.ok) base.current = r.savedAt;
+      else if ("conflict" in r) setStale(true);
       setSave(r.ok ? { state: "saved", at: r.savedAt } : { state: "error", at: null, error: r.error });
     }, 800);
     return () => clearTimeout(t);
   }, [content, module.id]);
+  // Leaving the builder (its back link, or any other link) mustn't drop an edit still waiting to save.
+  useEffect(
+    () => () => {
+      if (pending.current && !staleRef.current) void saveModuleDraft(module.id, latest.current, base.current).catch(() => undefined);
+    },
+    [module.id]
+  );
+  // An old copy of the page (the browser's Back button, a second tab) may be behind what's saved:
+  // check on opening and whenever the tab comes back into view.
+  useEffect(() => {
+    async function check() {
+      if (pending.current || inFlight.current || staleRef.current) return;
+      const r = await getDraftStamp(module.id).catch(() => null);
+      if (inFlight.current || pending.current) return;
+      if (r?.ok && r.updatedAt && base.current && r.updatedAt !== base.current && Date.parse(r.updatedAt) !== Date.parse(base.current)) setStale(true);
+    }
+    void check();
+    const onVisible = () => document.visibilityState === "visible" && void check();
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [module.id]);
   useEffect(() => {
     const warn = (e: BeforeUnloadEvent) => {
       if (save.state !== "saved") e.preventDefault();
@@ -249,10 +298,20 @@ export function ModuleBuilder({
           the source before publishing, then add photos and narration (Module settings can voice every screen at once).
         </p>
       )}
-      {save.state === "error" && (
-        <p className="builder__alert" role="alert">
-          {save.error}
+      {stale ? (
+        <p className="builder__alert" role="alert" data-testid="builder-stale">
+          <strong>There&rsquo;s a newer version of this module</strong> (from another tab, an AI build, or an older copy of this
+          page). Nothing here will be saved over it.{" "}
+          <button type="button" className="button button-primary button-small" onClick={() => window.location.reload()}>
+            Reload the latest version
+          </button>
         </p>
+      ) : (
+        save.state === "error" && (
+          <p className="builder__alert" role="alert">
+            {save.error}
+          </p>
+        )
       )}
       {notice && (
         <p className="builder__notice" role="status">
@@ -406,6 +465,7 @@ export function ModuleBuilder({
                   const latest = await getFactCheck(module.id);
                   if (latest.ok) setFactCheck(latest.check);
                 }}
+                onMark={markIssue}
                 screenTitle={(id) => {
                   const f = flattenScreens(content).find((x) => x.screen.id === id);
                   return f ? `${f.sectionIndex + 1}.${f.indexInSection + 1} ${f.screen.title}` : "A screen since removed";
@@ -444,7 +504,7 @@ export function ModuleBuilder({
                   Duplicate screen
                 </button>
               </div>
-              {issuesBy.has(screen.id) && <ScreenFactNotes issues={issuesBy.get(screen.id)!} outOfDate={checkOutOfDate} />}
+              {issuesBy.has(screen.id) && <ScreenFactNotes issues={issuesBy.get(screen.id)!} outOfDate={checkOutOfDate} onMark={markIssue} />}
               <TightenScreen moduleId={module.id} screen={screen} onChange={(s) => updateScreen(screen.id, () => s)} />
 
               <ScreenSettings moduleId={module.id} screen={screen} voice={content.voice ?? null} onChange={(s) => updateScreen(screen.id, () => s)} />
@@ -534,10 +594,10 @@ export function ModuleBuilder({
             </ul>
           ) : (
             <p>
-              {factCheck?.status === "done" && factCheck.issues.length > 0 && (
+              {factCheck?.status === "done" && openIssues > 0 && (
                 <>
                   <strong>
-                    The fact check has {factCheck.issues.length} {factCheck.issues.length === 1 ? "note" : "notes"}
+                    The fact check has {openIssues} open {openIssues === 1 ? "note" : "notes"}
                     {checkOutOfDate ? " (from before your latest edits)" : ""}.
                   </strong>{" "}
                   Make sure each one is dealt with.{" "}
@@ -671,6 +731,8 @@ function ModuleSettings({
 
 const ISSUE_LABEL = { contradicted: "Doesn't match the law", wrong_reference: "Wrong reference", unsupported: "Couldn't confirm" } as const;
 
+type IndexedIssue = { issue: FactIssue; index: number };
+
 /** The module's last check against the Legislation Library, and running a new one. */
 function FactCheckPanel({
   check,
@@ -678,6 +740,7 @@ function FactCheckPanel({
   canRun,
   saved,
   onStart,
+  onMark,
   screenTitle,
   onOpen,
 }: {
@@ -686,20 +749,25 @@ function FactCheckPanel({
   canRun: boolean;
   saved: boolean;
   onStart: () => Promise<void>;
+  onMark: (index: number, checked: boolean) => Promise<void>;
   screenTitle: (id: string) => string;
   onOpen: (screenId: string) => void;
 }) {
   const [busy, setBusy] = useState(false);
   const checking = check?.status === "checking";
+  const all = (check?.issues ?? []).map((issue, index) => ({ issue, index }));
+  const open = all.filter((x) => !x.issue.checkedByHand);
+  const handled = all.filter((x) => x.issue.checkedByHand);
   return (
     <section className="builder__block" data-testid="fact-check">
       <div className="builder__block-head">
         <span className="builder__block-type">Fact check</span>
       </div>
       <p className="card__meta">
-        Checks every fact, number, deadline and reference on every screen against the Legislation Library, and lists anything
-        the law contradicts or doesn&rsquo;t cover. It changes nothing; you decide what to fix. It runs by itself after an AI
-        build.
+        Checks every fact, number, deadline and reference on every screen against the Legislation Library (not further reading
+        or other links), and lists anything the law contradicts or doesn&rsquo;t cover. It changes nothing; you decide what to
+        fix. It runs by itself after an AI build. &ldquo;Couldn&rsquo;t confirm&rdquo; means the library doesn&rsquo;t cover
+        it: check it yourself, or add the source to the Legislation Library.
       </p>
       {check?.status === "checking" && (
         <p role="status">
@@ -715,17 +783,21 @@ function FactCheckPanel({
         <>
           <p>
             <strong>
-              {check.issues.length === 0 ? "No problems found." : `${check.issues.length} ${check.issues.length === 1 ? "note" : "notes"} to look at.`}
+              {open.length === 0
+                ? handled.length
+                  ? "Every note has been checked by hand."
+                  : "No problems found."
+                : `${open.length} ${open.length === 1 ? "note" : "notes"} to look at.`}
             </strong>{" "}
             <span className="card__meta">
               Checked {new Date(check.checkedAt).toLocaleString("en-CA", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
-              {outOfDate ? ". The module has changed since; run it again to check your edits." : "."}
+              {outOfDate ? " · The module has changed since; check again to include your edits." : ""}
             </span>
           </p>
-          {check.issues.length > 0 && (
+          {open.length > 0 && (
             <ul className="fact-list">
-              {check.issues.map((i, n) => (
-                <li key={n}>
+              {open.map(({ issue: i, index }) => (
+                <li key={index}>
                   <button type="button" className="text-action" onClick={() => onOpen(i.screenId)}>
                     {screenTitle(i.screenId)}
                   </button>{" "}
@@ -733,9 +805,29 @@ function FactCheckPanel({
                     {ISSUE_LABEL[i.kind]}
                   </span>
                   <div>{i.note}</div>
+                  <button type="button" className="text-action" onClick={() => onMark(index, true)}>
+                    Checked by hand
+                  </button>
                 </li>
               ))}
             </ul>
+          )}
+          {handled.length > 0 && (
+            <details className="fact-handled">
+              <summary>
+                {handled.length} checked by hand
+              </summary>
+              <ul className="fact-list">
+                {handled.map(({ issue: i, index }) => (
+                  <li key={index}>
+                    <span className="card__meta">{screenTitle(i.screenId)}:</span> {i.note}{" "}
+                    <button type="button" className="text-action" onClick={() => onMark(index, false)}>
+                      Undo
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </details>
           )}
         </>
       )}
@@ -760,18 +852,23 @@ function FactCheckPanel({
 }
 
 /** What the fact check said about the screen being edited. */
-function ScreenFactNotes({ issues, outOfDate }: { issues: FactIssue[]; outOfDate: boolean }) {
+function ScreenFactNotes({ issues, outOfDate, onMark }: { issues: IndexedIssue[]; outOfDate: boolean; onMark: (index: number, checked: boolean) => Promise<void> }) {
   return (
     <div className="fact-notes" role="note">
       <strong>Fact check{outOfDate ? " (before your latest edits)" : ""}</strong>
       <ul>
-        {issues.map((i, n) => (
-          <li key={n}>
+        {issues.map(({ issue: i, index }) => (
+          <li key={index}>
             <span className="fact-kind" data-kind={i.kind}>
               {ISSUE_LABEL[i.kind]}
             </span>{" "}
             {i.quote && <q>{i.quote}</q>} {i.note}
             {i.library && <div className="fact-notes__law">{i.library}</div>}
+            <div>
+              <button type="button" className="text-action" onClick={() => onMark(index, true)}>
+                Checked by hand
+              </button>
+            </div>
           </li>
         ))}
       </ul>
@@ -957,21 +1054,26 @@ function TightenScreen({ moduleId, screen, onChange }: { moduleId: string; scree
   const [busy, setBusy] = useState(false);
   const [undo, setUndo] = useState<Screen | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<string | null>(null);
   const words = onScreenWords(screen);
   useEffect(() => {
     setUndo(null);
     setError(null);
+    setResult(null);
   }, [screen.id]);
 
   async function tighten() {
     setBusy(true);
     setError(null);
     const before = screen;
+    setResult(null);
     const r = await tightenScreen(moduleId, screen);
     setBusy(false);
     if (!r.ok) return setError(r.error);
+    if (r.after >= r.before) return setResult("The AI couldn't make this shorter without losing something. Edit it by hand.");
     setUndo(before);
     onChange({ ...r.screen, id: screen.id });
+    setResult(`${r.before} → ${r.after} words.${r.after > WORD_TARGET ? " Still long: trim the rest by hand." : ""}`);
   }
 
   if (words === 0 && !undo) return null;
@@ -997,6 +1099,7 @@ function TightenScreen({ moduleId, screen, onChange }: { moduleId: string; scree
           Undo
         </button>
       )}
+      {result && !busy && <span role="status">{result}</span>}
       {error && (
         <span className="form-alert" role="alert">
           {error}
@@ -1010,26 +1113,40 @@ function TightenScreen({ moduleId, screen, onChange }: { moduleId: string; scree
 function TightenAll({ moduleId, content, onTightened }: { moduleId: string; content: ModuleContent; onTightened: (s: Screen) => void }) {
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [report, setReport] = useState<string[] | null>(null);
+  // Screens the AI has already had a go at this visit: offering them again just repeats it.
+  const [tried, setTried] = useState<Set<string>>(new Set());
   const stopRef = useRef(false);
-  const crowded = flattenScreens(content)
+  const over = flattenScreens(content)
     .map((f) => f.screen)
     .filter((s) => onScreenWords(s) > WORD_TARGET);
+  const crowded = over.filter((s) => !tried.has(s.id));
 
   async function run() {
     stopRef.current = false;
     setError(null);
+    setReport(null);
+    const lines: string[] = [];
     setProgress({ done: 0, total: crowded.length });
     for (let i = 0; i < crowded.length; i++) {
       if (stopRef.current) break;
-      const r = await tightenScreen(moduleId, crowded[i]);
+      const s = crowded[i];
+      const r = await tightenScreen(moduleId, s);
       if (!r.ok) {
-        setError(`Stopped at "${crowded[i].title}": ${r.error}`);
+        setError(`Stopped at "${s.title}": ${r.error}`);
         break;
       }
-      onTightened({ ...r.screen, id: crowded[i].id });
+      setTried((t) => new Set(t).add(s.id));
+      if (r.after < r.before) onTightened({ ...r.screen, id: s.id });
+      lines.push(
+        r.after < r.before
+          ? `"${s.title}": ${r.before} → ${r.after} words${r.after > WORD_TARGET ? " (still long: trim by hand)" : ""}`
+          : `"${s.title}": couldn't be shortened without losing something; edit by hand`
+      );
       setProgress({ done: i + 1, total: crowded.length });
     }
     setProgress(null);
+    setReport(lines);
   }
 
   return (
@@ -1055,10 +1172,21 @@ function TightenAll({ moduleId, content, onTightened }: { moduleId: string; cont
             </>
           ) : (
             <button type="button" className="button button-primary button-small" disabled={crowded.length === 0} onClick={run}>
-              {crowded.length ? `Tighten ${crowded.length} crowded ${crowded.length === 1 ? "screen" : "screens"}` : "Every screen is within the word target"}
+              {crowded.length
+                ? `Tighten ${crowded.length} crowded ${crowded.length === 1 ? "screen" : "screens"}`
+                : over.length
+                  ? `${over.length} ${over.length === 1 ? "screen is" : "screens are"} still long: edit by hand`
+                  : "Every screen is within the word target"}
             </button>
           )}
         </div>
+        {report && report.length > 0 && (
+          <ul className="tighten-report" role="status">
+            {report.map((l) => (
+              <li key={l}>{l}</li>
+            ))}
+          </ul>
+        )}
         {error && (
           <p className="form-alert" role="alert">
             {error}

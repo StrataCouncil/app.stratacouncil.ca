@@ -78,16 +78,17 @@ export async function passagesForCitations(references: string[]): Promise<Librar
   }
   if (!labels.size) return [];
   const admin = createAdminClient();
+  const columns = "id, legislation_document_id, title, chunk_text, chunk_index";
   const rows = (
     await Promise.all(
       [...labels].slice(0, 30).map(async (label) => {
-        const { data } = await admin
-          .from("knowledge_chunks")
-          .select("id, legislation_document_id, title, chunk_text, chunk_index")
-          .eq("scope", "legislation")
-          .or(`title.eq."${label}",title.like."${label} *"`)
-          .limit(4);
-        return data ?? [];
+        // "s. 45" alone, or "s. 45 Notice of general meetings" (never "s. 450").
+        const [exact, headed] = await Promise.all([
+          admin.from("knowledge_chunks").select(columns).eq("scope", "legislation").eq("title", label).limit(4),
+          admin.from("knowledge_chunks").select(columns).eq("scope", "legislation").like("title", `${label} %`).limit(4),
+        ]);
+        for (const r of [exact, headed]) if (r.error) console.error("[passagesForCitations]", label, r.error.message);
+        return [...(exact.data ?? []), ...(headed.data ?? [])];
       })
     )
   ).flat();
