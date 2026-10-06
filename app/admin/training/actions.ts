@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProfile } from "@/lib/data/profile";
-import { normalizeModuleContent, publishProblems, type Screen } from "@/lib/training/content";
+import { moduleCover, normalizeModuleContent, publishProblems, type Screen } from "@/lib/training/content";
 import { applyTightened, screenForTightening, TIGHTEN_INSTRUCTIONS, tightenSchema } from "@/lib/training/ai";
 import { askClaudeJson } from "@/lib/ai/claude";
 import { listVoices, NarrationError, speak, type Voice } from "@/lib/media/elevenlabs";
@@ -61,13 +61,17 @@ export async function publishModule(moduleId: string): Promise<Result<{ version:
   if (!(await staff())) return { ok: false, error: "Only platform staff can publish training." };
   const supabase = await createClient();
   const { data: draft } = await supabase.from("training_module_drafts").select("content").eq("module_id", moduleId).maybeSingle();
-  const problems = publishProblems(normalizeModuleContent(draft?.content));
+  const content = normalizeModuleContent(draft?.content);
+  const problems = publishProblems(content);
   if (problems.length) return { ok: false, error: problems.join(" ") };
   const { data, error } = await supabase.rpc("publish_training_module", { p_module_id: moduleId });
   if (error) {
     console.error("[publishModule]", error.message);
     return { ok: false, error: error.code === "P0001" ? error.message : "Couldn't publish." };
   }
+  // The card photo on the training pages follows the published first screen.
+  const { error: coverError } = await supabase.from("training_modules").update({ cover: moduleCover(content) }).eq("id", moduleId);
+  if (coverError) console.error("[publishModule] cover", coverError.message);
   refresh(moduleId);
   return { ok: true, version: data as number };
 }

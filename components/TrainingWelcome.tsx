@@ -41,20 +41,20 @@ export function TrainingWelcome() {
       </div>
       <ol className="home-welcome__steps">
         <li>
-          <strong>Start with General Council.</strong> It covers what every council member needs: what council decides,
-          how meetings and votes work, and your bylaws.
+          <strong>Start with the core.</strong> Strata Basics, then Council Ready: about two hours in all, covering what
+          makes an effective council member.
         </li>
         <li>
-          <strong>Add your office&rsquo;s track.</strong> President, Vice President, Treasurer and Secretary each have
-          their own. Take them in any order.
+          <strong>Add your office&rsquo;s track.</strong> Treasurers and secretaries each have a short track of their
+          own, which opens once you&rsquo;re Council Ready.
         </li>
         <li>
-          <strong>Go at your own pace.</strong> Modules open in order and take about 10 to 15 minutes each. Your progress
-          saves as you finish each section, so you can stop and pick up later. There&rsquo;s no pass or fail.
+          <strong>Go at your own pace.</strong> Modules take about 10 to 15 minutes each. Your progress saves as you
+          finish each section, so you can stop and pick up later. There&rsquo;s no pass or fail.
         </li>
         <li>
-          <strong>Earn credentials that stay with you.</strong> They&rsquo;re yours, not your strata&rsquo;s, and show
-          on your training page and your council&rsquo;s roster.
+          <strong>Your progress stays with you.</strong> It&rsquo;s yours, not your strata&rsquo;s. Completed tracks
+          show as filled circles on your training page and your council&rsquo;s roster.
         </li>
       </ol>
       <Link href="/training" className="button button-primary button-small" style={{ alignSelf: "flex-start" }}>

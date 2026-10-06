@@ -5,15 +5,21 @@ create function pg_temp.fails(sql text) returns boolean language plpgsql as $$
 begin execute sql; return false; exception when others then return true; end $$;
 grant execute on function pg_temp.expect(text,boolean), pg_temp.fails(text) to authenticated;
 
-select pg_temp.expect('five tracks seeded, no modules', (select count(*) from training_tracks) = 5 and (select count(*) from training_modules) = 0);
+select pg_temp.expect('four tracks, no modules', (select count(*) from training_tracks) = 4 and (select count(*) from training_modules) = 0);
+select pg_temp.expect('tracks in curriculum order',
+  (select array_agg(code order by order_index) from training_tracks) = array['strata_basics','council_ready','treasurer','secretary']);
+select pg_temp.expect('Council Ready needs Strata Basics; the specialty tracks need Council Ready',
+  (select count(*) from training_tracks t join training_tracks r on r.id = t.requires_track_id
+   where (t.code = 'council_ready' and r.code = 'strata_basics')
+      or (t.code in ('treasurer','secretary') and r.code = 'council_ready' and t.stage = 'specialty')) = 3);
 
--- Super Admin builds a two-section module in the General Council track, and a second, empty one.
+-- Super Admin builds a two-section module in the Council Ready track, and a second, empty one.
 set role authenticated;
 set test.uid = '00000000-0000-0000-0000-00000000000d';  -- Sam, Super Admin
 insert into training_modules (id, track_id, order_index, title)
-  select '10000000-0000-0000-0000-000000000001', id, 1, 'What council does' from training_tracks where code = 'mal';
+  select '10000000-0000-0000-0000-000000000001', id, 1, 'What council does' from training_tracks where code = 'council_ready';
 insert into training_modules (id, track_id, order_index, title)
-  select '10000000-0000-0000-0000-000000000002', id, 2, 'Meetings' from training_tracks where code = 'mal';
+  select '10000000-0000-0000-0000-000000000002', id, 2, 'Meetings' from training_tracks where code = 'council_ready';
 insert into training_module_drafts (module_id, content) values
   ('10000000-0000-0000-0000-000000000001', '{"sections":[{"id":"l1","title":"One","screens":[]},{"id":"l2","title":"Two","screens":[]}]}'),
   ('10000000-0000-0000-0000-000000000002', '{"sections":[]}');
@@ -74,7 +80,7 @@ select pg_temp.expect('a strata-mate sees the credential', (select count(*) from
 select pg_temp.expect('a strata-mate never sees progress', (select count(*) from training_progress) = 0);
 set test.uid = '00000000-0000-0000-0000-00000000000e';
 select pg_temp.expect('an outsider sees no one''s credential', (select count(*) from training_credentials) = 0);
-select pg_temp.expect('learners can''t edit tracks', pg_temp.fails($$delete from training_tracks$$) or (select count(*) from training_tracks) = 5);
+select pg_temp.expect('learners can''t edit tracks', pg_temp.fails($$delete from training_tracks$$) or (select count(*) from training_tracks) = 4);
 set test.uid = '00000000-0000-0000-0000-00000000000d';
 select pg_temp.expect('Super Admin sees every credential', (select count(*) from training_credentials) = 1);
 
