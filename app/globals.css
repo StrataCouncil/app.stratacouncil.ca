@@ -8560,3 +8560,44 @@ a.track-card:focus-visible {
   background: var(--paper);
   color: var(--ink);
 }
+.builder__steps {
+  list-style: none;
+  margin: 0.25rem 0 0.75rem;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.25rem;
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+.builder__steps li {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+.builder__step-num {
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 999px;
+  border: 1.5px solid var(--line);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.78rem;
+  background: var(--surface);
+}
+.builder__steps li[data-state="current"] {
+  color: var(--ink);
+  font-weight: 600;
+}
+.builder__steps li[data-state="current"] .builder__step-num {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.builder__steps li[data-state="done"] .builder__step-num {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #fff;
+}

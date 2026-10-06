@@ -6,10 +6,14 @@ import { draftOutline, suggestSources, writeSlide, type SourceHit } from "@/app/
 import { ELEMENT_TYPES, type OutlineElement, type OutlineSlide } from "@/lib/training/drafting";
 import { elementLabels, newId, type Slide } from "@/lib/training/slides";
 
+const STEPS = ["Choose sources", "Review the outline", "Write the slides"];
+const stepNumber = (s: string) => (s === "sources" ? 1 : s === "outline" ? 2 : s === "writing" ? 3 : s === "done" ? 4 : 0);
+
 const elementName = (e: OutlineElement) => (e === "none" ? "Nothing" : elementLabels[e]);
 
 /**
- * Draft slides with AI, in three steps the author controls:
+ * Create slides with AI, in three steps the author controls (shown as a
+ * step tracker, so it's always clear what comes next):
  * 1. choose the Legislation Library sections to work from;
  * 2. get an outline, and edit it;
  * 3. write the slides, one at a time, each added after the existing slides
@@ -133,8 +137,19 @@ export function DraftWithAI({
   return (
     <section className="builder__block" data-testid="draft-with-ai">
       <div className="builder__block-head">
-        <span className="builder__block-type">Draft slides with AI</span>
+        <span className="builder__block-type">Create slides</span>
       </div>
+      <ol className="builder__steps" aria-label="Creating slides">
+        {STEPS.map((label, i) => {
+          const at = stepNumber(step);
+          return (
+            <li key={label} data-state={at > i + 1 ? "done" : at === i + 1 ? "current" : "todo"} aria-current={at === i + 1 ? "step" : undefined}>
+              <span className="builder__step-num">{i + 1}</span>
+              {label}
+            </li>
+          );
+        })}
+      </ol>
       <p className="card__meta">
         The AI follows the blueprint above, step by step, and teaches nothing outside it. It works only from Legislation Library
         sections you approve, and only adds new slides after the ones already here; it never changes a slide that exists. Check every
@@ -149,7 +164,7 @@ export function DraftWithAI({
       {step === "start" && (
         <div className="be-row">
           <button type="button" className="button button-primary button-small" disabled={!hasObjectives || !hasBlueprint || Boolean(busy)} onClick={findSources}>
-            {busy ?? (!hasObjectives ? "Add objectives first" : !hasBlueprint ? "Fill in the blueprint first" : "Choose sources")}
+            {busy ?? (!hasObjectives ? "Add objectives first" : !hasBlueprint ? "Fill in the blueprint first" : "Create slides")}
           </button>
           {slideCount > 0 && (
             <button type="button" className="text-action" disabled={Boolean(busy)} onClick={clearAll}>
@@ -162,7 +177,8 @@ export function DraftWithAI({
       {step === "sources" && (
         <div className="be-stack">
           <p className="card__meta">
-            Step 1 of 3: the sections to work from. Untick anything off-topic, or search for more. {chosen.size} chosen.
+            <strong>Step 1 of 3: choose sources.</strong> The Legislation Library sections to work from. Untick anything off-topic, or
+            search for more. {chosen.size} chosen.
           </p>
           <ul className="builder__hits">
             {hits.map((h) => (
@@ -202,7 +218,7 @@ export function DraftWithAI({
           </form>
           <div className="be-row">
             <button type="button" className="button button-primary button-small" disabled={!chosen.size || Boolean(busy)} onClick={plan}>
-              {busy ?? "Draft an outline"}
+              {busy ?? "Next: draft the outline"}
             </button>
           </div>
         </div>
@@ -211,7 +227,8 @@ export function DraftWithAI({
       {(step === "outline" || step === "writing") && (
         <div className="be-stack">
           <p className="card__meta">
-            Step 2 of 3: the blueprint as slides. Edit, reorder or remove slides; nothing is created until you press Write.
+            <strong>Step 2 of 3: review the outline.</strong> The blueprint as a list of slides. Edit, reorder or remove them; nothing is
+            created until you press Write.
           </p>
           <ol className="builder__outline-edit">
             {outline.map((o, i) => (
@@ -266,7 +283,7 @@ export function DraftWithAI({
                   disabled={next >= outline.length || outline.slice(next).some((o) => !o.title.trim())}
                   onClick={() => write(next)}
                 >
-                  {next > 0 ? `Write the remaining ${outline.length - next} slides` : `Step 3: write ${outline.length} slides`}
+                  {next > 0 ? `Write the remaining ${outline.length - next} slides` : `Next: write ${outline.length} slides`}
                 </button>
                 <button type="button" className="text-action" onClick={() => setStep("sources")}>
                   Back to sources
