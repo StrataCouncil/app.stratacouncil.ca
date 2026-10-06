@@ -143,17 +143,47 @@ export function SlideBuilder({
     }
   }, [initial, load]);
 
-  // A reload of this window carries on editing, if the checkout is still this window's.
+  // The window that's editing answers when another window asks who has the checkout.
+  useEffect(() => {
+    if (!token || typeof BroadcastChannel === "undefined") return;
+    const ch = new BroadcastChannel(storeKey);
+    ch.onmessage = (e) => {
+      if (e.data?.type === "who" && e.data.token === token) ch.postMessage({ type: "me", token });
+    };
+    return () => ch.close();
+  }, [token, storeKey]);
+
+  // A reload of this window carries on editing, if the checkout is still this
+  // window's. A copy of the window (a duplicated tab carries the same
+  // memory) doesn't: if the original answers, the copy stays read-only.
   useEffect(() => {
     let saved: string | null = null;
     try {
       saved = sessionStorage.getItem(storeKey);
     } catch {}
     if (!saved || initial.checkout?.userId !== me) return;
-    void checkoutStillMine(initial.id, saved).then((ok) => {
-      if (ok) setToken(saved);
-      else remember(null);
-    });
+    const token = saved;
+    let answered = false;
+    let ch: BroadcastChannel | null = null;
+    if (typeof BroadcastChannel !== "undefined") {
+      ch = new BroadcastChannel(storeKey);
+      ch.onmessage = (e) => {
+        if (e.data?.type === "me" && e.data.token === token) answered = true;
+      };
+      ch.postMessage({ type: "who", token });
+    }
+    const t = setTimeout(() => {
+      ch?.close();
+      if (answered) return remember(null);
+      void checkoutStillMine(initial.id, token).then((ok) => {
+        if (ok) setToken(token);
+        else remember(null);
+      });
+    }, 400);
+    return () => {
+      clearTimeout(t);
+      ch?.close();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -282,7 +312,11 @@ export function SlideBuilder({
   }
 
   async function release() {
-    if (!window.confirm(`Release the module from ${checkout?.name}? Anything they haven't saved yet won't be saved.`)) return;
+    const mine = checkout?.userId === me;
+    const ask = mine
+      ? "Check the module back in from here? Do this only if the window you were editing in is closed: if it's still open, it stops saving. Everything you changed there is already saved."
+      : `Release the module from ${checkout?.name}? Their changes are already saved, but if they're still editing, their window stops saving.`;
+    if (!window.confirm(ask)) return;
     const r = await releaseCheckout(initial.id);
     if (!r.ok) return setAlert(r.error);
     setCheckout(null);
@@ -401,8 +435,8 @@ export function SlideBuilder({
             Finished editing
           </button>
         ) : (
-          <button type="button" className="button button-primary button-small" onClick={startEditing} disabled={busy || Boolean(heldByOther)} data-testid="builder-check-out">
-            {heldByMeElsewhere ? "Edit here" : "Edit module"}
+          <button type="button" className="button button-primary button-small" onClick={startEditing} disabled={busy || Boolean(heldByOther) || Boolean(heldByMeElsewhere)} data-testid="builder-check-out">
+            Edit module
           </button>
         )}
         {canPublish ? (
@@ -430,8 +464,12 @@ export function SlideBuilder({
             </>
           ) : heldByMeElsewhere ? (
             <>
-              <strong>You have this module checked out</strong> in another window or an earlier visit (since {when(checkout!.at)}). Press
-              Edit here to carry on editing in this window; the other window will stop saving.
+              <strong>You&rsquo;re already editing this module in another window</strong> (since {when(checkout!.at)}). Carry on
+              there, and press Finished editing when you&rsquo;re done. If that window is closed,{" "}
+              <button type="button" className="text-action" onClick={release}>
+                check the module back in from here
+              </button>
+              .
             </>
           ) : (
             <>Read-only. Press Edit module to make changes; no one else can edit it until you press Finished editing.</>
