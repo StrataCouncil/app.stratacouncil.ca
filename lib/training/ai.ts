@@ -457,6 +457,7 @@ export const BLOOM_LEVELS: Record<TrackCode, { levels: string; verbs: string }> 
 export const TEACHING_APPROACH = `How modules teach:
 
 Always:
+- Plan backwards (Understanding by Design): start from the objectives, decide how the learner will show each one (the knowledge check or situation that proves it), then plan only the screens that get them there.
 - Start from the learner: before any facts, show why the topic matters to them, with a question (rhetorical is fine), a short situation or a problem from strata life that links to what they already know as an owner.
 - One to three objectives the learner can do by the end, each checkable, each starting with a verb at the track's Bloom levels (given with the module). Questions and activities test at those levels; never go deeper than the track calls for.
 - Known to unknown, concrete to abstract, simple to complex, big picture before detail.
@@ -467,11 +468,13 @@ Always:
 - Use only the numbers, deadlines and thresholds a volunteer will act on.
 - The learner does something on about half the screens (opens, chooses, works through a situation), and each section ends with a knowledge check on one of the objectives.
 - Close the module by pulling the key points together, back to the objectives, and saying how the learner will use them on council.
+- Show each key idea in more than one way (Universal Design for Learning): the words on screen, the narration, and a picture, table, cards or example.
 
 Then choose the technique that fits each section's material. Vary them; don't force one model onto everything:
 - Concepts and definitions (concept attainment): start from something familiar (an everyday strata example or analogy), then name the idea, then contrast what it is with what it isn't (flip cards work well).
 - Structures and hierarchies (advance organizer): show the whole first, then open each part in turn.
-- Procedures (worked example, then practice): walk through one real example step by step, let the learner try the next step or a similar case, and leave a checklist to keep.
+- Procedures (gradual release: I do, we do, you do): walk through one real example step by step, work through a second one together (the learner opens each step or picks the next one), then the learner does one alone, and leave a checklist to keep.
+- Ideas the learner can discover (5E: engage, explore, explain, elaborate, evaluate): hook them, let them explore first (open cards, sort, guess), explain the idea, stretch it to a new situation, then check it.
 - Judgment calls (case-based, experiential cycle): a realistic situation first, then the principle behind the right call, then a second situation to apply it.
 - Common misconceptions (predict, then explain): ask what the learner would expect, then show what the law actually says and why.
 - Retrieval practice: questions that make the learner recall something from an earlier section, not just the screen in front of them.
