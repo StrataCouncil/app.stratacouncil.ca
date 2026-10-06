@@ -120,6 +120,30 @@ export interface Slide {
 
 export type FurtherReading = { title: string; url: string; note: string };
 
+/**
+ * A module's blueprint: the steps it teaches, in order, and what each one
+ * covers (the progression of knowledge, adapted from established director
+ * training to BC). AI drafting turns the blueprint into slides and teaches
+ * nothing outside it.
+ */
+export const ACTIVITIES = ["none", "knowledge_check", "accordion", "flip_cards"] as const;
+export type Activity = (typeof ACTIVITIES)[number];
+export type BlueprintStep = { topic: string; teach: string; activity: Activity };
+
+export function normalizeBlueprint(raw: unknown): BlueprintStep[] {
+  return (Array.isArray(raw) ? raw : [])
+    .slice(0, 30)
+    .map((x) => {
+      const o = (x ?? {}) as Record<string, unknown>;
+      return {
+        topic: typeof o.topic === "string" ? o.topic.slice(0, 200) : "",
+        teach: typeof o.teach === "string" ? o.teach.slice(0, 1500) : "",
+        activity: ACTIVITIES.includes(o.activity as Activity) ? (o.activity as Activity) : "none",
+      };
+    })
+    .filter((b) => b.topic.trim() || b.teach.trim());
+}
+
 // ── Text ───────────────────────────────────────────────────────────────
 
 export function countWords(text: string): number {

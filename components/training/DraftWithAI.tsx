@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { searchCitations } from "@/app/admin/training/actions";
+import { deleteAllSlides, searchCitations } from "@/app/admin/training/actions";
 import { draftOutline, suggestSources, writeSlide, type SourceHit } from "@/app/admin/training/drafting-actions";
 import { ELEMENT_TYPES, type OutlineElement, type OutlineSlide } from "@/lib/training/drafting";
 import { elementLabels, newId, type Slide } from "@/lib/training/slides";
@@ -19,11 +19,20 @@ export function DraftWithAI({
   moduleId,
   token,
   hasObjectives,
+  hasBlueprint,
+  beforeDraft,
+  slideCount,
+  onCleared,
   onSlide,
 }: {
   moduleId: string;
   token: string;
   hasObjectives: boolean;
+  hasBlueprint: boolean;
+  /** Saves any settings still waiting (the blueprint), so the AI reads the latest. */
+  beforeDraft: () => Promise<boolean>;
+  slideCount: number;
+  onCleared: () => void;
   onSlide: (s: Slide) => void;
 }) {
   const [step, setStep] = useState<"start" | "sources" | "outline" | "writing" | "done">("start");
@@ -38,9 +47,20 @@ export function DraftWithAI({
   const stop = useRef(false);
   const chunkIds = hits.filter((h) => chosen.has(h.chunkId)).map((h) => h.chunkId);
 
+  async function clearAll() {
+    if (!window.confirm(`Delete all ${slideCount} slides in this module, with their pictures and narration? This can't be undone. Learners' published version isn't affected.`)) return;
+    setBusy("Deleting…");
+    await beforeDraft();
+    const r = await deleteAllSlides(moduleId, token);
+    setBusy(null);
+    if (!r.ok) return setError(r.error);
+    onCleared();
+  }
+
   async function findSources() {
     setBusy("Searching the Legislation Library…");
     setError(null);
+    await beforeDraft();
     const r = await suggestSources(moduleId);
     setBusy(null);
     if (!r.ok) return setError(r.error);
@@ -63,6 +83,7 @@ export function DraftWithAI({
   async function plan() {
     setBusy("Planning the slides… (this can take a minute)");
     setError(null);
+    await beforeDraft();
     const r = await draftOutline(moduleId, token, chunkIds);
     setBusy(null);
     if (!r.ok) return setError(r.error);
@@ -115,8 +136,9 @@ export function DraftWithAI({
         <span className="builder__block-type">Draft slides with AI</span>
       </div>
       <p className="card__meta">
-        The AI works only from Legislation Library sections you approve, and only adds new slides after the ones already here. It never
-        changes a slide that exists. Check every slide before publishing.
+        The AI follows the blueprint above, step by step, and teaches nothing outside it. It works only from Legislation Library
+        sections you approve, and only adds new slides after the ones already here; it never changes a slide that exists. Check every
+        slide before publishing.
       </p>
       {error && (
         <p className="form-error" role="alert">
@@ -125,9 +147,16 @@ export function DraftWithAI({
       )}
 
       {step === "start" && (
-        <button type="button" className="button button-primary button-small" disabled={!hasObjectives || Boolean(busy)} onClick={findSources}>
-          {busy ?? (hasObjectives ? "Choose sources" : "Add objectives first")}
-        </button>
+        <div className="be-row">
+          <button type="button" className="button button-primary button-small" disabled={!hasObjectives || !hasBlueprint || Boolean(busy)} onClick={findSources}>
+            {busy ?? (!hasObjectives ? "Add objectives first" : !hasBlueprint ? "Fill in the blueprint first" : "Choose sources")}
+          </button>
+          {slideCount > 0 && (
+            <button type="button" className="text-action" disabled={Boolean(busy)} onClick={clearAll}>
+              Start over: delete all {slideCount} slides
+            </button>
+          )}
+        </div>
       )}
 
       {step === "sources" && (
@@ -182,7 +211,7 @@ export function DraftWithAI({
       {(step === "outline" || step === "writing") && (
         <div className="be-stack">
           <p className="card__meta">
-            Step 2 of 3: the outline. Edit, reorder or remove slides; nothing is created until you press Write.
+            Step 2 of 3: the blueprint as slides. Edit, reorder or remove slides; nothing is created until you press Write.
           </p>
           <ol className="builder__outline-edit">
             {outline.map((o, i) => (

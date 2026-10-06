@@ -12,6 +12,7 @@ import {
   coverOf,
   MEDIA_BUCKET,
   moduleFolder,
+  normalizeBlueprint,
   normalizeCredit,
   normalizeFurtherReading,
   normalizeObjectives,
@@ -23,6 +24,7 @@ import {
   toMedia,
   toSlides,
   videoSource,
+  type BlueprintStep,
   type Citation,
   type FurtherReading,
   type Media,
@@ -150,11 +152,11 @@ async function heldByOther(moduleId: string, userId: string) {
 
 // ── Module settings ────────────────────────────────────────────────────
 
-/** Objectives (with Bloom levels), further reading and the narration voice. */
+/** Objectives (with Bloom levels), the blueprint, further reading and the narration voice. */
 export async function saveModuleSettings(
   moduleId: string,
   token: string,
-  input: { objectives: Objective[]; furtherReading: FurtherReading[]; voice: { id: string; name: string } | null }
+  input: { objectives: Objective[]; blueprint: BlueprintStep[]; furtherReading: FurtherReading[]; voice: { id: string; name: string } | null }
 ): Promise<Result> {
   const e = await editing(moduleId, token);
   if (!e.ok) return e;
@@ -162,7 +164,7 @@ export async function saveModuleSettings(
   const furtherReading = normalizeFurtherReading(input.furtherReading);
   const { error } = await e.admin
     .from("training_modules")
-    .update({ objectives, further_reading: furtherReading, voice: normalizeVoice(input.voice) })
+    .update({ objectives, blueprint: normalizeBlueprint(input.blueprint), further_reading: furtherReading, voice: normalizeVoice(input.voice) })
     .eq("id", moduleId);
   if (error) {
     console.error("[saveModuleSettings]", error.message);
@@ -414,6 +416,16 @@ export async function deleteSlide(moduleId: string, token: string, slideId: stri
   if (error) return { ok: false, error: "Couldn't delete the slide." };
   const { data: rows } = await e.admin.from("training_slides").select("id").eq("module_id", moduleId).order("position");
   await renumber(e.admin, moduleId, (rows ?? []).map((r) => r.id as string));
+  await tidyModuleFolder(e.admin, e.trackId, moduleId);
+  return { ok: true };
+}
+
+/** Start the module over: every slide and its files go (learners' published copy is untouched). */
+export async function deleteAllSlides(moduleId: string, token: string): Promise<Result> {
+  const e = await editing(moduleId, token);
+  if (!e.ok) return e;
+  const { error } = await e.admin.from("training_slides").delete().eq("module_id", moduleId);
+  if (error) return { ok: false, error: "Couldn't delete the slides." };
   await tidyModuleFolder(e.admin, e.trackId, moduleId);
   return { ok: true };
 }

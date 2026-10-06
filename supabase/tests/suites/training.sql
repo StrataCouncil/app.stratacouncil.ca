@@ -36,6 +36,14 @@ select pg_temp.expect('0042 leaves edited modules and a changed order alone, and
   and (select objectives ->> 0 from training_modules where curriculum_key = 'cr5') like '%Mine%'
   and (select order_index from training_modules where curriculum_key = 'cr1') = 9
   and (select count(*) from training_modules where curriculum_key = 's5') = 1);
+select pg_temp.expect('0043: every curriculum module has a blueprint; Strata Basics 1 follows the strata plan, lots and types in order',
+  not exists (select 1 from training_modules where curriculum_key is not null and jsonb_array_length(blueprint) < 4)
+  and (select array_agg(distinct b ->> 'topic') from training_modules, jsonb_array_elements(blueprint) b where curriculum_key = 'sb1')
+      @> array['What a strata is','How a strata is created','Strata lots and common property','Who owns what','Types of strata in BC']
+  and not exists (select 1 from training_modules, jsonb_array_elements(blueprint) b where curriculum_key = 'sb1' and b ->> 'teach' ilike '%sue%'));
+update training_modules set blueprint = '[{"topic": "Mine", "teach": "x", "activity": "none"}]' where curriculum_key = 'sb1';
+\i supabase/migrations/0043_training_blueprints.sql
+select pg_temp.expect('0043 leaves an edited blueprint alone', (select blueprint -> 0 ->> 'topic' from training_modules where curriculum_key = 'sb1') = 'Mine');
 select pg_temp.expect('tracks have a card picture column', exists (select 1 from information_schema.columns where table_name = 'training_tracks' and column_name = 'cover'));
 select pg_temp.expect('every further reading link is https',
   not exists (select 1 from training_module_drafts d, jsonb_array_elements(d.content -> 'furtherReading') r where r ->> 'url' not like 'https://%'));
