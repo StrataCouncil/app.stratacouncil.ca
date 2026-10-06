@@ -30,7 +30,9 @@ export function Modal({
     // Focus the dialog when it opens, unless something inside already has focus (autoFocus).
     if (!ref.current?.contains(document.activeElement)) ref.current?.focus();
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") close.current();
+      // With a dialog open on top of this one (a photo picker), Escape closes only the top one.
+      const open = document.querySelectorAll(".modal");
+      if (e.key === "Escape" && open[open.length - 1] === ref.current) close.current();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);

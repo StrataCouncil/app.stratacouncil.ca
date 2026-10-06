@@ -136,6 +136,14 @@ export function AdminTrainingList({ tracks, authors }: { tracks: AdminTrack[]; a
 
       {trackEdit && (
         <Modal title={`Edit ${trackEdit.title}`} onClose={() => setTrackEdit(null)}>
+          {/* Outside the form: the picture saves by itself, and the photo search has its own form. */}
+          <TrackPicture
+            track={trackEdit}
+            onChanged={(cover) => {
+              setTrackEdit((t) => (t ? { ...t, cover } : t));
+              router.refresh();
+            }}
+          />
           <form
             className="be-stack"
             onSubmit={(e) => {
@@ -156,13 +164,6 @@ export function AdminTrainingList({ tracks, authors }: { tracks: AdminTrack[]; a
               <span>Description</span>
               <textarea name="description" rows={3} defaultValue={trackEdit.description} maxLength={1000} />
             </label>
-            <TrackPicture
-              track={trackEdit}
-              onChanged={(cover) => {
-                setTrackEdit((t) => (t ? { ...t, cover } : t));
-                router.refresh();
-              }}
-            />
             <div className="role-editor__actions">
               <button type="button" className="button button-secondary" onClick={() => setTrackEdit(null)}>
                 Cancel

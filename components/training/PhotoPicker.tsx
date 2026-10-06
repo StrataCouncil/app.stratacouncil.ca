@@ -73,6 +73,8 @@ export function PhotoPicker({
         className="photo-picker__search"
         onSubmit={(e) => {
           e.preventDefault();
+          // The picker can open inside another form's dialog: don't submit that one too.
+          e.stopPropagation();
           void search(query, 1);
         }}
       >
