@@ -8365,11 +8365,14 @@ a.track-card:focus-visible {
   background-size: cover;
   background-position: center;
   min-height: 460px;
-  align-items: end;
-  padding: 1.5rem;
+  /* The text panel sits in the middle of the picture. */
+  align-items: center;
+  justify-items: center;
+  padding: 2rem 1.5rem 2.5rem;
 }
 .slide[data-layout="photo"] .slide__content {
-  max-width: 34rem;
+  width: 100%;
+  max-width: 38rem;
   background: rgba(255, 255, 255, 0.94);
   border-radius: var(--radius-lg);
   box-shadow: 0 6px 24px rgba(27, 42, 65, 0.18);
@@ -8390,6 +8393,8 @@ a.track-card:focus-visible {
     min-height: 200px;
   }
   .slide[data-layout="photo"] {
+    justify-items: stretch;
+    align-items: start;
     padding: 0;
     padding-top: 220px;
     background-size: 100% auto;
