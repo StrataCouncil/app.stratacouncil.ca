@@ -7953,3 +7953,123 @@ a.track-card:focus-visible {
 .import-form__objectives li::marker {
   color: var(--accent);
 }
+
+/* AI module builder: library passages for a curriculum module (0037) */
+.import-form__subhead {
+  font-size: 1rem;
+  margin: 0.5rem 0 0.25rem;
+}
+.ref-picker {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 1rem 1.1rem;
+  background: var(--paper);
+}
+.ref-picker__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.ref-picker__count {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.ref-picker__group {
+  margin-top: 0.85rem;
+}
+.ref-picker__doc {
+  font-weight: 600;
+  font-size: 0.92rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+}
+.ref-picker ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.ref-picker li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.75rem;
+  font-size: 0.9rem;
+}
+.ref-picker__preview {
+  flex-basis: 100%;
+  margin: 0 0 0.35rem 1.6rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+/* Module builder: fact check against the Legislation Library (0037) */
+.fact-flag {
+  margin-left: auto;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  background: var(--danger-bg);
+  color: var(--danger);
+  font-size: 0.72rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.fact-list {
+  list-style: none;
+  margin: 0.25rem 0 0.75rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  font-size: 0.9rem;
+}
+.fact-kind {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0.15em 0.55em;
+  border-radius: 999px;
+  background: var(--locked-bg);
+  color: var(--muted);
+}
+.fact-kind[data-kind="contradicted"],
+.fact-kind[data-kind="wrong_reference"] {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+.fact-notes {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--danger);
+  border-radius: var(--radius-sm);
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+}
+.fact-notes ul {
+  margin: 0.4rem 0 0;
+  padding-left: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.fact-notes__law {
+  margin-top: 0.3rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+  white-space: pre-line;
+}

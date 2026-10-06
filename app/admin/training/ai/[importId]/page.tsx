@@ -26,6 +26,7 @@ export default async function TrainingImportPage({ params }: { params: Promise<{
           <h1>{imp.title}</h1>
           <p className="card__meta">
             From{" "}
+            {imp.referenceCount > 0 && `${imp.referenceCount} Legislation Library passage${imp.referenceCount === 1 ? "" : "s"}${imp.sources.length ? ", " : ""}`}
             {imp.sources.map((s, i) => (
               <span key={i}>
                 {i > 0 && ", "}

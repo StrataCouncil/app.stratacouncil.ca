@@ -25,10 +25,13 @@ import {
   generateNarration,
   getNarrationVoices,
   markReadyForReview,
+  getFactCheck,
   publishModule,
   saveModuleDraft,
+  startFactCheck,
   tightenScreen,
 } from "@/app/admin/training/actions";
+import type { FactCheck, FactIssue } from "@/lib/training/library";
 import { onScreenWords } from "@/lib/training/ai";
 import { PhotoCreditLine, PhotoPicker } from "@/components/training/PhotoPicker";
 import type { Voice } from "@/lib/media/elevenlabs";
@@ -46,6 +49,8 @@ export interface BuilderModule {
   readyForReviewAt: string | null;
   /** Set when the AI module builder wrote the first draft (the source document's title). */
   aiDraftedFrom?: string | null;
+  /** The latest check against the Legislation Library (0037). */
+  factCheck?: FactCheck | null;
 }
 
 type Selection = { kind: "settings" } | { kind: "screen"; screenId: string };
@@ -84,6 +89,21 @@ export function ModuleBuilder({
   const [publishing, setPublishing] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [readyAt, setReadyAt] = useState(module.readyForReviewAt);
+
+  // ── Fact check (0037): poll while it runs ──
+  const [factCheck, setFactCheck] = useState<FactCheck | null>(module.factCheck ?? null);
+  const checking = factCheck?.status === "checking";
+  useEffect(() => {
+    if (!checking) return;
+    const t = setInterval(async () => {
+      const r = await getFactCheck(module.id).catch(() => null);
+      if (r?.ok) setFactCheck(r.check);
+    }, 5000);
+    return () => clearInterval(t);
+  }, [checking, module.id]);
+  const issuesBy = new Map<string, FactIssue[]>();
+  if (factCheck && factCheck.status !== "failed") for (const i of factCheck.issues) issuesBy.set(i.screenId, [...(issuesBy.get(i.screenId) ?? []), i]);
+  const checkOutOfDate = Boolean(factCheck?.status === "done" && factCheck.draftUpdatedAt && save.at && save.at > factCheck.draftUpdatedAt);
 
   // ── Autosave ──
   const first = useRef(true);
@@ -310,6 +330,11 @@ export function ModuleBuilder({
                         {si + 1}.{i + 1}
                       </span>
                       <span>{s.title}</span>
+                      {issuesBy.has(s.id) && (
+                        <span className="fact-flag" title={`${issuesBy.get(s.id)!.length} fact check ${issuesBy.get(s.id)!.length === 1 ? "note" : "notes"}`}>
+                          {issuesBy.get(s.id)!.length}
+                        </span>
+                      )}
                     </button>
                     <ItemTools
                       index={i}
@@ -370,6 +395,23 @@ export function ModuleBuilder({
                 onAddSection={content.sections.length === 0 ? addSection : undefined}
                 aiBuildHref={canPublish ? `/admin/training/ai?module=${module.id}` : null}
               />
+              <FactCheckPanel
+                check={factCheck}
+                outOfDate={checkOutOfDate}
+                canRun={canPublish && content.sections.length > 0}
+                saved={save.state === "saved"}
+                onStart={async () => {
+                  const r = await startFactCheck(module.id);
+                  if (!r.ok) return setNotice(r.error);
+                  const latest = await getFactCheck(module.id);
+                  if (latest.ok) setFactCheck(latest.check);
+                }}
+                screenTitle={(id) => {
+                  const f = flattenScreens(content).find((x) => x.screen.id === id);
+                  return f ? `${f.sectionIndex + 1}.${f.indexInSection + 1} ${f.screen.title}` : "A screen since removed";
+                }}
+                onOpen={(id) => setSelected({ kind: "screen", screenId: id })}
+              />
               <TightenAll moduleId={module.id} content={content} onTightened={(s) => updateScreen(s.id, () => s)} />
               <NarrationSettings
                 moduleId={module.id}
@@ -402,6 +444,7 @@ export function ModuleBuilder({
                   Duplicate screen
                 </button>
               </div>
+              {issuesBy.has(screen.id) && <ScreenFactNotes issues={issuesBy.get(screen.id)!} outOfDate={checkOutOfDate} />}
               <TightenScreen moduleId={module.id} screen={screen} onChange={(s) => updateScreen(screen.id, () => s)} />
 
               <ScreenSettings moduleId={module.id} screen={screen} voice={content.voice ?? null} onChange={(s) => updateScreen(screen.id, () => s)} />
@@ -491,6 +534,15 @@ export function ModuleBuilder({
             </ul>
           ) : (
             <p>
+              {factCheck?.status === "done" && factCheck.issues.length > 0 && (
+                <>
+                  <strong>
+                    The fact check has {factCheck.issues.length} {factCheck.issues.length === 1 ? "note" : "notes"}
+                    {checkOutOfDate ? " (from before your latest edits)" : ""}.
+                  </strong>{" "}
+                  Make sure each one is dealt with.{" "}
+                </>
+              )}
               {missingAudio > 0 && (
                 <>
                   <strong>
@@ -613,6 +665,116 @@ function ModuleSettings({
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+const ISSUE_LABEL = { contradicted: "Doesn't match the law", wrong_reference: "Wrong reference", unsupported: "Couldn't confirm" } as const;
+
+/** The module's last check against the Legislation Library, and running a new one. */
+function FactCheckPanel({
+  check,
+  outOfDate,
+  canRun,
+  saved,
+  onStart,
+  screenTitle,
+  onOpen,
+}: {
+  check: FactCheck | null;
+  outOfDate: boolean;
+  canRun: boolean;
+  saved: boolean;
+  onStart: () => Promise<void>;
+  screenTitle: (id: string) => string;
+  onOpen: (screenId: string) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const checking = check?.status === "checking";
+  return (
+    <section className="builder__block" data-testid="fact-check">
+      <div className="builder__block-head">
+        <span className="builder__block-type">Fact check</span>
+      </div>
+      <p className="card__meta">
+        Checks every fact, number, deadline and reference on every screen against the Legislation Library, and lists anything
+        the law contradicts or doesn&rsquo;t cover. It changes nothing; you decide what to fix. It runs by itself after an AI
+        build.
+      </p>
+      {check?.status === "checking" && (
+        <p role="status">
+          Checking{check.sectionsTotal ? ` section ${Math.min(check.sectionsDone + 1, check.sectionsTotal)} of ${check.sectionsTotal}` : ""}&hellip;
+        </p>
+      )}
+      {check?.status === "failed" && (
+        <p className="form-alert" role="alert">
+          The last check didn&rsquo;t finish{check.error ? `: ${check.error}` : "."}
+        </p>
+      )}
+      {check?.status === "done" && (
+        <>
+          <p>
+            <strong>
+              {check.issues.length === 0 ? "No problems found." : `${check.issues.length} ${check.issues.length === 1 ? "note" : "notes"} to look at.`}
+            </strong>{" "}
+            <span className="card__meta">
+              Checked {new Date(check.checkedAt).toLocaleString("en-CA", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+              {outOfDate ? ". The module has changed since; run it again to check your edits." : "."}
+            </span>
+          </p>
+          {check.issues.length > 0 && (
+            <ul className="fact-list">
+              {check.issues.map((i, n) => (
+                <li key={n}>
+                  <button type="button" className="text-action" onClick={() => onOpen(i.screenId)}>
+                    {screenTitle(i.screenId)}
+                  </button>{" "}
+                  <span className="fact-kind" data-kind={i.kind}>
+                    {ISSUE_LABEL[i.kind]}
+                  </span>
+                  <div>{i.note}</div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+      {canRun && (
+        <div>
+          <button
+            type="button"
+            className={`button ${check?.status === "done" && !outOfDate ? "button-secondary" : "button-primary"} button-small`}
+            disabled={busy || checking || !saved}
+            onClick={async () => {
+              setBusy(true);
+              await onStart();
+              setBusy(false);
+            }}
+          >
+            {checking ? "Checking…" : !saved ? "Saving…" : check ? "Check again" : "Check facts"}
+          </button>
+        </div>
+      )}
+    </section>
+  );
+}
+
+/** What the fact check said about the screen being edited. */
+function ScreenFactNotes({ issues, outOfDate }: { issues: FactIssue[]; outOfDate: boolean }) {
+  return (
+    <div className="fact-notes" role="note">
+      <strong>Fact check{outOfDate ? " (before your latest edits)" : ""}</strong>
+      <ul>
+        {issues.map((i, n) => (
+          <li key={n}>
+            <span className="fact-kind" data-kind={i.kind}>
+              {ISSUE_LABEL[i.kind]}
+            </span>{" "}
+            {i.quote && <q>{i.quote}</q>} {i.note}
+            {i.library && <div className="fact-notes__law">{i.library}</div>}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

@@ -8,6 +8,8 @@ import { getCurrentProfile } from "@/lib/data/profile";
 import { moduleCover, normalizeModuleContent, publishProblems, type Screen } from "@/lib/training/content";
 import { applyTightened, screenForTightening, TIGHTEN_INSTRUCTIONS, tightenSchema } from "@/lib/training/ai";
 import { askClaudeJson } from "@/lib/ai/claude";
+import { inngest, TRAINING_FACT_CHECK_EVENT } from "@/lib/inngest/client";
+import { normalizeFactCheck, type FactCheck } from "@/lib/training/library";
 import { listVoices, NarrationError, speak, type Voice } from "@/lib/media/elevenlabs";
 import { PhotoError, searchPhotos, trackPhotoUse, type StockPhoto } from "@/lib/media/unsplash";
 
@@ -359,4 +361,37 @@ export async function tightenScreen(moduleId: string, raw: unknown): Promise<Res
     console.error("[tightenScreen]", e instanceof Error ? e.message : e);
     return { ok: false, error: "The AI couldn't tighten this screen. Try again." };
   }
+}
+
+/**
+ * Check the module's saved draft against the Legislation Library (0037).
+ * Runs in the background; getFactCheck reports progress and the result.
+ */
+export async function startFactCheck(moduleId: string): Promise<Result> {
+  if (!(await staff())) return { ok: false, error: "Only platform staff can run a fact check." };
+  const admin = createAdminClient();
+  const { data: mod } = await admin.from("training_module_drafts").select("fact_check").eq("module_id", moduleId).maybeSingle();
+  if (!mod) return { ok: false, error: "That module wasn't found." };
+  const current = normalizeFactCheck(mod.fact_check);
+  if (current?.status === "checking" && Date.now() - Date.parse(current.checkedAt) < 15 * 60_000)
+    return { ok: false, error: "A check is already running." };
+  // Show it as started right away (before queuing, so the job's own progress isn't overwritten).
+  await admin
+    .from("training_module_drafts")
+    .update({ fact_check: { status: "checking", checkedAt: new Date().toISOString(), draftUpdatedAt: null, sectionsDone: 0, sectionsTotal: 0, issues: [] } })
+    .eq("module_id", moduleId);
+  try {
+    await inngest.send({ name: TRAINING_FACT_CHECK_EVENT, data: { moduleId } });
+  } catch (err) {
+    console.error("[startFactCheck]", err instanceof Error ? err.message : err);
+    await admin.from("training_module_drafts").update({ fact_check: mod.fact_check }).eq("module_id", moduleId);
+    return { ok: false, error: "Couldn't start the check. Try again." };
+  }
+  return { ok: true };
+}
+
+export async function getFactCheck(moduleId: string): Promise<Result<{ check: FactCheck | null }>> {
+  if (!(await canAuthor(moduleId))) return { ok: false, error: "You can't see this module." };
+  const { data } = await createAdminClient().from("training_module_drafts").select("fact_check").eq("module_id", moduleId).maybeSingle();
+  return { ok: true, check: normalizeFactCheck(data?.fact_check) };
 }

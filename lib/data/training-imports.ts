@@ -13,6 +13,8 @@ export interface TrainingImport {
   trackId: string | null;
   /** The curriculum module this build writes (0036), if any. */
   moduleId: string | null;
+  /** Legislation Library passages chosen for the build (0037). */
+  referenceCount: number;
   instructions: string;
   status: ImportStatus;
   plan: ImportPlan | null;
@@ -21,7 +23,7 @@ export interface TrainingImport {
   updatedAt: string;
 }
 
-const COLUMNS = "id, title, sources, track_id, module_id, instructions, status, plan, error, created_at, updated_at";
+const COLUMNS = "id, title, sources, track_id, module_id, reference_chunk_ids, instructions, status, plan, error, created_at, updated_at";
 
 function toImport(r: Record<string, unknown>): TrainingImport {
   return {
@@ -30,6 +32,7 @@ function toImport(r: Record<string, unknown>): TrainingImport {
     sources: parseSources(r.sources),
     trackId: (r.track_id as string | null) ?? null,
     moduleId: (r.module_id as string | null) ?? null,
+    referenceCount: ((r.reference_chunk_ids as string[] | null) ?? []).length,
     instructions: (r.instructions as string) ?? "",
     status: r.status as ImportStatus,
     plan: r.plan ? normalizePlan(r.plan) : null,

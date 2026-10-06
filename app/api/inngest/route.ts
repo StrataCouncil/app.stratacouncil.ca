@@ -3,8 +3,9 @@ import { inngest } from "@/lib/inngest/client";
 import { indexDocument } from "@/lib/inngest/index-document";
 import { indexLegislation } from "@/lib/inngest/index-legislation";
 import { buildTrainingImport, planTrainingImport } from "@/lib/inngest/training-import";
+import { factCheckTrainingModule } from "@/lib/inngest/training-fact-check";
 
 /** Inngest calls back here to run background jobs (doc04 §4). */
 export const maxDuration = 300;
 
-export const { GET, POST, PUT } = serve({ client: inngest, functions: [indexDocument, indexLegislation, planTrainingImport, buildTrainingImport] });
+export const { GET, POST, PUT } = serve({ client: inngest, functions: [indexDocument, indexLegislation, planTrainingImport, buildTrainingImport, factCheckTrainingModule] });
