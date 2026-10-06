@@ -5,7 +5,18 @@ create function pg_temp.fails(sql text) returns boolean language plpgsql as $$
 begin execute sql; return false; exception when others then return true; end $$;
 grant execute on function pg_temp.expect(text,boolean), pg_temp.fails(text) to authenticated;
 
-select pg_temp.expect('four tracks, no modules', (select count(*) from training_tracks) = 4 and (select count(*) from training_modules) = 0);
+select pg_temp.expect('four tracks', (select count(*) from training_tracks) = 4);
+select pg_temp.expect('the curriculum: 17 unpublished modules, each with a draft, objectives and further reading',
+  (select count(*) from training_modules where curriculum_key is not null and published_version = 0) = 17
+  and (select count(*) from training_module_drafts d join training_modules m on m.id = d.module_id
+       where jsonb_array_length(d.content -> 'objectives') >= 3 and jsonb_array_length(d.content -> 'furtherReading') >= 2) = 17);
+select pg_temp.expect('3 + 6 + 4 + 4 modules by track',
+  (select array_agg(n order by o) from (select t.order_index o, count(*) n from training_modules m join training_tracks t on t.id = m.track_id group by t.order_index) x)
+  = array[3, 6, 4, 4]::bigint[]);
+select pg_temp.expect('every further reading link is https',
+  not exists (select 1 from training_module_drafts d, jsonb_array_elements(d.content -> 'furtherReading') r where r ->> 'url' not like 'https://%'));
+-- The checks below build their own modules from scratch.
+delete from training_modules;
 select pg_temp.expect('tracks in curriculum order',
   (select array_agg(code order by order_index) from training_tracks) = array['strata_basics','council_ready','treasurer','secretary']);
 select pg_temp.expect('Council Ready needs Strata Basics; the specialty tracks need Council Ready',

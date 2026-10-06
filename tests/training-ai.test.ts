@@ -134,3 +134,34 @@ test("Tighten with AI rewrites only the text blocks and keeps narration, questio
   // A reply with nothing usable leaves the screen alone.
   assert.equal(applyTightened(screen, { blocks: [] }), screen);
 });
+
+test("curriculum builds keep the module's title, track and objectives", async () => {
+  const { curriculumPlanRequest, pinToCurriculum, normalizePlan } = await import("../lib/training/ai.ts");
+  const target = {
+    title: "What a strata is",
+    trackCode: "strata_basics" as const,
+    summary: "Strata lots and common property.",
+    estimatedMinutes: 12,
+    objectives: ["Explain common property"],
+  };
+  const request = curriculumPlanRequest(target, [{ title: "Who decides what", track: "Strata Basics", summary: "" }], "Keep it short.");
+  assert.match(request, /Module: What a strata is/);
+  assert.match(request, /- Explain common property/);
+  assert.match(request, /Strata Basics: Who decides what/);
+  assert.match(request, /Keep it short\./);
+
+  const plan = normalizePlan({
+    summary: "s",
+    modules: [
+      { title: "Something else", trackCode: "treasurer", objectives: ["Other"], sections: [1, 2, 3, 4, 5].map((n) => ({ title: `S${n}`, keyPoints: [] })) },
+      { title: "Extra module" },
+    ],
+  });
+  const pinned = pinToCurriculum(plan, target);
+  assert.equal(pinned.modules.length, 1);
+  assert.equal(pinned.modules[0].title, "What a strata is");
+  assert.equal(pinned.modules[0].trackCode, "strata_basics");
+  assert.deepEqual(pinned.modules[0].objectives, ["Explain common property"]);
+  assert.equal(pinned.modules[0].sections.length, 4);
+  assert.equal(pinned.modules[0].estimatedMinutes, 12);
+});

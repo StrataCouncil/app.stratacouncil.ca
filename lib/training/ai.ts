@@ -445,6 +445,62 @@ ${TRACK_CODES.map((c) => `  - ${c}: ${TRACK_DESCRIPTIONS[c]}`).join("\n")}
 - Order the modules the way a new council member should take them.
 - "summary" describes the documents and how you've divided them, in two or three sentences.`;
 
+/** One module from the curriculum map, to be written from the documents (0036). */
+export interface CurriculumTarget {
+  title: string;
+  trackCode: TrackCode;
+  summary: string;
+  estimatedMinutes: number | null;
+  objectives: string[];
+}
+
+/**
+ * Curriculum first: the module's title, scope and objectives are fixed by
+ * the curriculum map; the documents supply the facts. The rest of the map
+ * is listed so the AI leaves other modules' material to them.
+ */
+export function curriculumPlanRequest(target: CurriculumTarget, others: { title: string; track: string; summary: string }[], notes: string) {
+  return [
+    `Plan one Council Training module from the source documents. The module is part of a fixed curriculum, so its title, scope and learning objectives are already decided:
+
+Module: ${target.title}
+Track: ${target.trackCode} (${TRACK_DESCRIPTIONS[target.trackCode]})
+Scope: ${target.summary || "(see the objectives)"}
+Length: ${target.estimatedMinutes ?? 12} minutes, at most about 18 screens
+Learning objectives:
+${target.objectives.map((o) => `- ${o}`).join("\n") || "- (none yet: propose 3 to 5)"}`,
+    `- Return exactly one module with that title and track. Keep the objectives as given${target.objectives.length ? "" : " (propose 3 to 5, each starting with a verb)"}.
+- Choose 3 or 4 sections that together meet every objective. Each section's key points come from the documents.
+- Teach only what this module's scope and objectives need. Leave out anything the other modules below cover, and anything a volunteer council member won't use.
+- If the documents don't support an objective, say so in "summary" so the author can add a source; don't fill the gap from general knowledge.
+- "summary" (top level) tells the author how you've used the documents and anything missing. The module's own "summary" is one or two sentences for learners.`,
+    others.length ? `The rest of the curriculum (don't teach these modules' material):\n${others.map((o) => `- ${o.track}: ${o.title}${o.summary ? ` (${o.summary})` : ""}`).join("\n")}` : "",
+    notes ? `Notes from the author:\n${notes}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+/** Keep the curriculum's title, track and objectives whatever the AI returned. */
+export function pinToCurriculum(plan: ImportPlan, target: CurriculumTarget): ImportPlan {
+  const first = plan.modules[0];
+  if (!first) return plan;
+  return {
+    ...plan,
+    modules: [
+      {
+        ...first,
+        include: true,
+        title: target.title,
+        trackCode: target.trackCode,
+        estimatedMinutes: target.estimatedMinutes ?? first.estimatedMinutes,
+        objectives: target.objectives.length ? target.objectives : first.objectives,
+        sections: first.sections.slice(0, 4),
+      },
+    ],
+  };
+}
+
 export const SECTION_INSTRUCTIONS = `Write one section of a module as screens. The learner sees one screen at a time, with a title bar and Next.
 
 Screens:

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { completeSection } from "@/app/training/actions";
 import { BlockView, Transcript } from "@/components/training/BlockView";
 import { PhotoCreditLine } from "@/components/training/PhotoPicker";
-import { screenRequirements, type ModuleContent, type Screen } from "@/lib/training/content";
+import { isReadingUrl, screenRequirements, type FurtherReading, type ModuleContent, type Screen } from "@/lib/training/content";
 
 type Page =
   | { key: string; kind: "intro"; sectionIndex: number; title: string }
@@ -312,7 +312,7 @@ export function ModulePlayer({
             <div className="player__screen" data-layout={screen?.layout ?? "full"} key={page.key}>
               <div className="player__blocks">
                 {page.kind === "intro" && <Intro objectives={content.objectives} />}
-                {page.kind === "recap" && <Recap moduleTitle={moduleTitle} objectives={content.objectives} />}
+                {page.kind === "recap" && <Recap moduleTitle={moduleTitle} objectives={content.objectives} reading={content.furtherReading ?? []} />}
                 {screen?.blocks.map((b) => (
                   <div key={b.id} className="lesson__block" data-type={b.type}>
                     <BlockView block={b} onDone={() => satisfy(b.id)} />
@@ -452,7 +452,8 @@ function Intro({ objectives }: { objectives: string[] }) {
   );
 }
 
-function Recap({ moduleTitle, objectives }: { moduleTitle: string; objectives: string[] }) {
+function Recap({ moduleTitle, objectives, reading }: { moduleTitle: string; objectives: string[]; reading: FurtherReading[] }) {
+  const links = reading.filter((r) => r.title.trim() && isReadingUrl(r.url));
   return (
     <div className="player__intro">
       <h3>This concludes {moduleTitle}</h3>
@@ -462,6 +463,22 @@ function Recap({ moduleTitle, objectives }: { moduleTitle: string; objectives: s
           <li key={o}>{o}</li>
         ))}
       </ul>
+      {links.length > 0 && (
+        <div className="player__reading" data-testid="further-reading">
+          <h4>Further reading</h4>
+          <p>Optional, for anyone who wants to go deeper.</p>
+          <ul>
+            {links.map((r) => (
+              <li key={r.id}>
+                <a href={r.url} target="_blank" rel="noreferrer">
+                  {r.title}
+                </a>
+                {r.note && <span> &middot; {r.note}</span>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

@@ -159,7 +159,12 @@ export type ModuleContent = {
   /** "After this module you can…": shown on the opening screen and again in the recap. */
   objectives: string[];
   sections: Section[];
+  /** Optional links for keen learners, shown at the end of the module. */
+  furtherReading?: FurtherReading[];
 };
+
+/** A public source to read more: title, an https link, and a line on why it's worth reading. */
+export type FurtherReading = { id: string; title: string; url: string; note: string };
 
 /** The block menu, in the order the builder offers them. */
 export const blockCatalog: { type: BlockType; label: string; description: string }[] = [
@@ -538,7 +543,30 @@ export function normalizeModuleContent(raw: unknown): ModuleContent {
       voice && typeof voice.id === "string" && /^[\w-]{1,64}$/.test(voice.id) ? { id: voice.id, name: str(voice.name, 100) || "Voice" } : null,
     objectives: list(r.objectives, 12).map((o) => str(o, 300)).filter((o) => o.trim()),
     sections,
+    furtherReading: normalizeFurtherReading(r.furtherReading),
   };
+}
+
+export function normalizeFurtherReading(raw: unknown): FurtherReading[] {
+  const seen = new Set<string>();
+  return list(raw, 10)
+    .map((item) => {
+      const x = (item ?? {}) as Record<string, unknown>;
+      let id = idOf(x.id, "fr");
+      if (seen.has(id)) id = newId("fr");
+      seen.add(id);
+      return { id, title: str(x.title, 200).trim(), url: str(x.url, 1000).trim(), note: str(x.note, 300) };
+    })
+    .filter((r) => r.title || r.url);
+}
+
+/** Only https links go to learners. */
+export function isReadingUrl(url: string): boolean {
+  try {
+    return new URL(url).protocol === "https:";
+  } catch {
+    return false;
+  }
 }
 
 /** Every screen in order, with where it sits (the player's counter is position + 1). */
@@ -584,6 +612,9 @@ export function publishProblems(content: ModuleContent): string[] {
   const problems: string[] = [];
   if (content.sections.length === 0) problems.push("Add at least one section.");
   if (content.objectives.length === 0) problems.push("Add the module's learning objectives (Module settings).");
+  (content.furtherReading ?? []).forEach((r, i) => {
+    if (!r.title.trim() || !isReadingUrl(r.url)) problems.push(`Further reading ${i + 1} needs a title and an https:// link.`);
+  });
   content.sections.forEach((sec, si) => {
     const inSection = `Section ${si + 1} ("${sec.title}")`;
     if (sec.screens.length === 0) problems.push(`${inSection} has no screens.`);

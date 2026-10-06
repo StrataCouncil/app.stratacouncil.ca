@@ -16,11 +16,14 @@ export function PlanReview({
   initialPlan,
   status,
   trackTitles,
+  pinned = false,
 }: {
   importId: string;
   initialPlan: ImportPlan | null;
   status: string;
   trackTitles: Record<string, string>;
+  /** A curriculum module's build: one module, its track fixed. */
+  pinned?: boolean;
 }) {
   const router = useRouter();
   const [plan, setPlan] = useState<ImportPlan | null>(initialPlan);
@@ -61,7 +64,7 @@ export function PlanReview({
                   <input
                     type="checkbox"
                     checked={m.include}
-                    disabled={!editable || m.status === "done"}
+                    disabled={!editable || m.status === "done" || pinned}
                     onChange={(e) => update(m.key, { include: e.target.checked })}
                   />
                   <span>Module {i + 1}</span>
@@ -81,13 +84,13 @@ export function PlanReview({
               <div className="be-row">
                 <label className="field be-grow">
                   <span>Title</span>
-                  <input value={m.title} maxLength={200} disabled={!editable || m.status === "done"} onChange={(e) => update(m.key, { title: e.target.value })} />
+                  <input value={m.title} maxLength={200} disabled={!editable || m.status === "done" || pinned} onChange={(e) => update(m.key, { title: e.target.value })} />
                 </label>
                 <label className="field">
                   <span>Track</span>
                   <select
                     value={m.trackCode}
-                    disabled={!editable || m.status === "done"}
+                    disabled={!editable || m.status === "done" || pinned}
                     onChange={(e) => update(m.key, { trackCode: e.target.value as TrackCode })}
                   >
                     {TRACK_CODES.map((c) => (

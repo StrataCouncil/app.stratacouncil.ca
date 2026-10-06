@@ -59,6 +59,8 @@ export async function startImport(input: {
   title: string;
   trackId: string | null;
   instructions: string;
+  /** Write this curriculum module (0036) instead of proposing new ones. */
+  moduleId?: string | null;
 }): Promise<{ ok: true; id: string } | Fail> {
   const auth = await requireSuperAdmin();
   if (!auth) return notAllowed;
@@ -80,15 +82,22 @@ export async function startImport(input: {
       sources.push({ kind: "library", legislationId: doc.id, title: doc.title });
     }
   }
+  let target: { id: string; title: string; trackId: string } | null = null;
+  if (input.moduleId) {
+    const { data: mod } = await auth.supabase.from("training_modules").select("id, title, track_id").eq("id", input.moduleId).maybeSingle();
+    if (!mod) return { ok: false, error: "That module wasn't found." };
+    target = { id: mod.id, title: mod.title, trackId: mod.track_id };
+  }
   const first = sources[0];
-  const fallbackTitle = first.kind === "upload" ? titleFromFileName(first.fileName) : first.title;
+  const fallbackTitle = target?.title ?? (first.kind === "upload" ? titleFromFileName(first.fileName) : first.title);
 
   const { data, error } = await auth.supabase
     .from("training_imports")
     .insert({
       title: (input.title.trim() || fallbackTitle).slice(0, 200),
       sources,
-      track_id: input.trackId || null,
+      track_id: target?.trackId ?? (input.trackId || null),
+      module_id: target?.id ?? null,
       instructions: input.instructions.trim().slice(0, 2000),
       created_by: auth.user.id,
     })
