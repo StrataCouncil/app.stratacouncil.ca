@@ -114,3 +114,26 @@ async function explain(res: Response) {
   if (res.status === 429) return "ElevenLabs is busy (too many requests at once). Wait a minute and try again.";
   return `ElevenLabs couldn't make the audio (error ${res.status}${detail.trim() ? `: ${detail.trim().slice(0, 120)}` : ""}). Try again.`;
 }
+
+/**
+ * Background music from a description (ElevenLabs Music, POST /v1/music),
+ * always instrumental. Only the description goes to ElevenLabs.
+ */
+export async function composeMusic(prompt: string, seconds: number): Promise<ArrayBuffer> {
+  const length = Math.max(10, Math.min(120, Math.round(seconds))) * 1000;
+  let res: Response;
+  try {
+    res = await fetch(`${API}/music?output_format=mp3_44100_128`, {
+      method: "POST",
+      headers: { "xi-api-key": key(), "Content-Type": "application/json", Accept: "audio/mpeg" },
+      body: JSON.stringify({ prompt: prompt.slice(0, 2000), music_length_ms: length, force_instrumental: true }),
+      cache: "no-store",
+      signal: AbortSignal.timeout(240_000),
+    });
+  } catch (e) {
+    console.error("[elevenlabs] music request failed", e instanceof Error ? e.message : e);
+    throw new NarrationError("ElevenLabs didn't finish the music in time. Try a shorter track.");
+  }
+  if (!res.ok) throw new NarrationError(await explain(res));
+  return res.arrayBuffer();
+}

@@ -91,12 +91,12 @@ export type Citation = { chunkId: string; label: string };
 /** Who took a stock photo, linked as Unsplash requires. */
 export type PhotoCredit = { source: "unsplash"; name: string; profileUrl: string; photoUrl: string };
 
-export type MediaRole = "visual" | "narration";
+export type MediaRole = "visual" | "narration" | "music";
 export type Media = {
   id: string;
   role: MediaRole;
   kind: "image" | "video" | "audio";
-  source: "upload" | "unsplash" | "link";
+  source: "upload" | "unsplash" | "link" | "library";
   url: string;
   alt: string;
   credit: PhotoCredit | null;
@@ -116,6 +116,8 @@ export interface Slide {
   citations: Citation[];
   visual: Media | null;
   narration: Media | null;
+  /** Background music from the library (none by default). */
+  music: Media | null;
 }
 
 export type FurtherReading = { title: string; url: string; note: string };
@@ -399,9 +401,9 @@ export type MediaRow = {
 export function toMedia(r: MediaRow): Media {
   return {
     id: r.id,
-    role: r.role === "narration" ? "narration" : "visual",
+    role: r.role === "narration" ? "narration" : r.role === "music" ? "music" : "visual",
     kind: r.kind === "video" ? "video" : r.kind === "audio" ? "audio" : "image",
-    source: r.source === "unsplash" ? "unsplash" : r.source === "link" ? "link" : "upload",
+    source: r.source === "unsplash" ? "unsplash" : r.source === "link" ? "link" : r.source === "library" ? "library" : "upload",
     url: safeMediaUrl(r.url),
     alt: str(r.alt, 500),
     credit: normalizeCredit(r.credit),
@@ -426,6 +428,7 @@ export function toSlides(rows: SlideRow[], media: MediaRow[]): Slide[] {
         citations: normalizeCitations(r.citations),
         visual: mine.find((m) => m.role === "visual") ?? null,
         narration: mine.find((m) => m.role === "narration") ?? null,
+        music: mine.find((m) => m.role === "music") ?? null,
       };
     });
 }
@@ -507,6 +510,8 @@ export type PlayerSlide = {
   layout: SlideLayout;
   visual: { kind: "image" | "video"; url: string; alt: string; credit: PhotoCredit | null } | null;
   narration: { url: string; script: string } | null;
+  /** Background music: fades in when the slide opens and out when the learner leaves it. */
+  music: { url: string } | null;
   element: SlideElement | null;
   citations: string[];
 };
@@ -538,6 +543,7 @@ export function buildPlayerContent(m: ModuleForPublishing, slides: Slide[]): Pla
       layout: visual ? s.layout : "text",
       visual: visual ? { kind: visual.kind as "image" | "video", url: visual.url, alt: visual.alt, credit: visual.credit } : null,
       narration: s.narration ? { url: s.narration.url, script: s.narrationScript.trim() } : null,
+      music: s.music?.url ? { url: s.music.url } : null,
       element: s.element,
       citations: s.citations.map((c) => c.label),
     });
@@ -573,6 +579,7 @@ export function normalizePlayerContent(raw: unknown): PlayerContent | null {
           layout: vUrl ? layout : "text",
           visual: vUrl ? { kind: v!.kind === "video" ? ("video" as const) : ("image" as const), url: vUrl, alt: str(v!.alt, 500), credit: normalizeCredit(v!.credit) } : null,
           narration: nUrl ? { url: nUrl, script: str(n!.script, 5000) } : null,
+          music: safeMediaUrl((y.music as { url?: unknown } | null)?.url) ? { url: safeMediaUrl((y.music as { url?: unknown }).url) } : null,
           element: normalizeElement(y.element),
           citations: list(y.citations, 8).map((c) => str(c, 300)).filter(Boolean),
         };

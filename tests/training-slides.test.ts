@@ -32,6 +32,7 @@ const slide = (over: Partial<Slide> = {}): Slide => ({
   citations: [],
   visual: null,
   narration: null,
+  music: null,
   ...over,
 });
 const picture = { id: "m1", role: "visual" as const, kind: "image" as const, source: "upload" as const, url: "https://x.test/p.jpg", alt: "A hallway", credit: null };
@@ -114,7 +115,7 @@ test("publishing needs objectives and slides, and names each problem", () => {
 test("slides group into topics; a slide with no topic joins the one before", () => {
   const content = buildPlayerContent(info, [
     slide({ id: "a", position: 1, topic: "" }),
-    slide({ id: "b", position: 2, topic: "Units", layout: "photo", visual: picture, narration: audio, narrationScript: " Hi " }),
+    slide({ id: "b", position: 2, topic: "Units", layout: "photo", visual: picture, narration: audio, narrationScript: " Hi ", music: { ...audio, id: "m3", role: "music", source: "library", url: "https://x.test/music.mp3" } }),
     slide({ id: "c", position: 3, topic: "" }),
     slide({ id: "d", position: 4, topic: "Common property" }),
   ]);
@@ -127,6 +128,8 @@ test("slides group into topics; a slide with no topic joins the one before", () 
     ]
   );
   assert.deepEqual(content.topics[1].slides[0].narration, { url: audio.url, script: "Hi" });
+  assert.deepEqual(content.topics[1].slides[0].music, { url: "https://x.test/music.mp3" });
+  assert.equal(content.topics[1].slides[1].music, null, "music is none unless chosen");
   assert.deepEqual(coverOf(content), { src: picture.url, alt: "A hallway", credit: null });
   // What's published reads back the same.
   assert.deepEqual(normalizePlayerContent(JSON.parse(JSON.stringify(content))), content);

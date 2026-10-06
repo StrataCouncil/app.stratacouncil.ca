@@ -232,3 +232,27 @@ set test.uid = '00000000-0000-0000-0000-00000000000d';
 select pg_temp.expect('a Super Admin sees them',
   (select count(*) from training_demo_links) = 1 and (select count(*) from training_feedback) = 1);
 reset role;
+
+-- Background music library (0044).
+reset role;
+insert into training_modules (id, track_id, order_index, title)
+  select '10000000-0000-0000-0000-000000000009', id, 9, 'Music test' from training_tracks where code = 'strata_basics';
+insert into training_slides (id, module_id, position, title) values ('30000000-0000-0000-0000-000000000009', '10000000-0000-0000-0000-000000000009', 1, 'With music');
+insert into training_music (id, title, source, path, url) values ('40000000-0000-0000-0000-000000000001', 'Calm intro', 'elevenlabs', 'music/a.mp3', 'https://example.test/a.mp3');
+insert into training_media (slide_id, module_id, role, kind, source, url, music_id) values
+  ('30000000-0000-0000-0000-000000000009', '10000000-0000-0000-0000-000000000009', 'music', 'audio', 'library', 'https://example.test/a.mp3', '40000000-0000-0000-0000-000000000001');
+set role authenticated;
+set test.uid = '00000000-0000-0000-0000-00000000000e';
+select pg_temp.expect('learners don''t see the music library', (select count(*) from training_music) = 0);
+set test.uid = '00000000-0000-0000-0000-00000000000d';
+select pg_temp.expect('a Super Admin does, and can''t write it directly',
+  (select count(*) from training_music) = 1 and pg_temp.fails($$delete from training_music$$) or (select count(*) from training_music) = 1);
+reset role;
+delete from training_slides where id = '30000000-0000-0000-0000-000000000009';
+select pg_temp.expect('deleting a slide keeps its music in the library', (select count(*) from training_music) = 1);
+insert into training_slides (id, module_id, position, title) values ('30000000-0000-0000-0000-000000000009', '10000000-0000-0000-0000-000000000009', 1, 'With music');
+insert into training_media (slide_id, module_id, role, kind, source, url, music_id) values
+  ('30000000-0000-0000-0000-000000000009', '10000000-0000-0000-0000-000000000009', 'music', 'audio', 'library', 'https://example.test/a.mp3', '40000000-0000-0000-0000-000000000001');
+delete from training_music where id = '40000000-0000-0000-0000-000000000001';
+select pg_temp.expect('removing a track from the library takes it off its slides',
+  not exists (select 1 from training_media where role = 'music'));

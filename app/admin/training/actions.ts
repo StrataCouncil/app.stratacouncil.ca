@@ -34,7 +34,7 @@ import {
   type SlideRow,
 } from "@/lib/training/slides";
 import { searchLibrary, passagesForCitations } from "@/lib/training/library-server";
-import { getVoice, listVoices, NarrationError, speak, type Voice } from "@/lib/media/elevenlabs";
+import { composeMusic, getVoice, listVoices, NarrationError, speak, type Voice } from "@/lib/media/elevenlabs";
 import { PhotoError, searchPhotos, trackPhotoUse, type StockPhoto } from "@/lib/media/unsplash";
 
 /**
@@ -690,6 +690,159 @@ export async function generateNarration(
     console.error("[generateNarration]", slideId, err instanceof Error ? err.message : err);
     return { ok: false, error: "The audio was made but couldn't be put on the slide. Try again." };
   }
+}
+
+// ── Background music (0044): a shared library in training-media/music/ ─
+
+export interface MusicTrack {
+  id: string;
+  title: string;
+  description: string;
+  source: "elevenlabs" | "upload";
+  url: string;
+  durationSeconds: number | null;
+  /** How many slides use it. */
+  uses: number;
+}
+
+/** The music library, newest first. */
+export async function listMusic(moduleId: string): Promise<Result<{ tracks: MusicTrack[] }>> {
+  if (!(await canAuthor(moduleId))) return { ok: false, error: "You can't edit this module." };
+  const admin = createAdminClient();
+  const [{ data, error }, { data: uses }] = await Promise.all([
+    admin.from("training_music").select("id, title, description, source, url, duration_seconds").order("created_at", { ascending: false }),
+    admin.from("training_media").select("music_id").eq("role", "music"),
+  ]);
+  if (error) return { ok: false, error: "Couldn't load the music library." };
+  const count = new Map<string, number>();
+  for (const u of uses ?? []) if (u.music_id) count.set(u.music_id as string, (count.get(u.music_id as string) ?? 0) + 1);
+  return {
+    ok: true,
+    tracks: (data ?? []).map((t) => ({
+      id: t.id as string,
+      title: t.title as string,
+      description: (t.description as string) ?? "",
+      source: t.source === "upload" ? "upload" : "elevenlabs",
+      url: t.url as string,
+      durationSeconds: (t.duration_seconds as number | null) ?? null,
+      uses: count.get(t.id as string) ?? 0,
+    })),
+  };
+}
+
+/** Put a library track on a slide (or none). The library file itself is never touched. */
+export async function setSlideMusic(moduleId: string, token: string, slideId: string, musicId: string | null): Promise<Result<{ media: Media | null }>> {
+  const e = await editing(moduleId, token);
+  if (!e.ok) return e;
+  if (!(await slideBelongs(e.admin, moduleId, slideId))) return { ok: false, error: "That slide no longer exists." };
+  if (!musicId) {
+    await e.admin.from("training_media").delete().eq("slide_id", slideId).eq("role", "music");
+    return { ok: true, media: null };
+  }
+  const { data: track } = await e.admin.from("training_music").select("id, title, path, url").eq("id", musicId).maybeSingle();
+  if (!track) return { ok: false, error: "That track isn't in the library any more." };
+  await e.admin.from("training_media").delete().eq("slide_id", slideId).eq("role", "music");
+  const { data, error } = await e.admin
+    .from("training_media")
+    .insert({ slide_id: slideId, module_id: moduleId, role: "music", kind: "audio", source: "library", path: null, url: track.url, alt: track.title, music_id: track.id })
+    .select("id, slide_id, role, kind, source, url, alt, credit")
+    .single();
+  if (error || !data) {
+    console.error("[setSlideMusic]", error?.message);
+    return { ok: false, error: "Couldn't add the music." };
+  }
+  return { ok: true, media: toMedia(data as MediaRow) };
+}
+
+/**
+ * Create a track with ElevenLabs from a description, add it to the
+ * library, and put it on the slide. Uses ElevenLabs credits.
+ */
+export async function createMusic(
+  moduleId: string,
+  token: string,
+  slideId: string,
+  input: { title: string; description: string; seconds: number }
+): Promise<Result<{ track: MusicTrack; media: Media | null }>> {
+  const e = await editing(moduleId, token);
+  if (!e.ok) return e;
+  const title = input.title.trim().slice(0, 120);
+  const description = input.description.trim().slice(0, 1000);
+  if (!title) return { ok: false, error: "Give the track a name, so you can find it in the library." };
+  if (!description) return { ok: false, error: "Describe the music you want." };
+  try {
+    const audio = await composeMusic(description, input.seconds);
+    const path = `music/${randomUUID()}.mp3`;
+    const { error } = await e.admin.storage.from(MEDIA_BUCKET).upload(path, audio, { contentType: "audio/mpeg" });
+    if (error) return { ok: false, error: "The music was made but couldn't be saved. Try again." };
+    const url = e.admin.storage.from(MEDIA_BUCKET).getPublicUrl(path).data.publicUrl;
+    const seconds = Math.max(10, Math.min(120, Math.round(input.seconds)));
+    const { data: row, error: insErr } = await e.admin
+      .from("training_music")
+      .insert({ title, description, source: "elevenlabs", path, url, duration_seconds: seconds, created_by: e.userId })
+      .select("id")
+      .single();
+    if (insErr || !row) return { ok: false, error: "The music was saved but couldn't be added to the library." };
+    const put = await setSlideMusic(moduleId, token, slideId, row.id as string);
+    return {
+      ok: true,
+      track: { id: row.id as string, title, description, source: "elevenlabs", url, durationSeconds: seconds, uses: put.ok ? 1 : 0 },
+      media: put.ok ? put.media : null,
+    };
+  } catch (err) {
+    if (err instanceof NarrationError) return { ok: false, error: err.message };
+    console.error("[createMusic]", err instanceof Error ? err.message : err);
+    return { ok: false, error: "Couldn't create the music. Try again." };
+  }
+}
+
+const MUSIC_TYPES: Record<string, string> = { "audio/mpeg": "mp3", "audio/mp4": "m4a", "audio/x-m4a": "m4a", "audio/wav": "wav", "audio/x-wav": "wav", "audio/ogg": "ogg" };
+
+/** A one-time upload URL for a track (e.g. one licensed from the ElevenLabs Music Marketplace). */
+export async function createMusicUpload(moduleId: string, token: string, file: { type: string; size: number }): Promise<Result<{ path: string; token: string }>> {
+  const e = await editing(moduleId, token);
+  if (!e.ok) return e;
+  const ext = MUSIC_TYPES[file.type];
+  if (!ext) return { ok: false, error: "Use an MP3, M4A, WAV or OGG file." };
+  if (file.size > 50 * 1024 * 1024) return { ok: false, error: "Music files can be up to 50 MB." };
+  const path = `music/${randomUUID()}.${ext}`;
+  const { data, error } = await e.admin.storage.from(MEDIA_BUCKET).createSignedUploadUrl(path);
+  if (error || !data) return { ok: false, error: "Couldn't start the upload." };
+  return { ok: true, path: data.path, token: data.token };
+}
+
+/** The upload finished: add it to the library and put it on the slide. */
+export async function addUploadedMusic(
+  moduleId: string,
+  token: string,
+  slideId: string,
+  input: { path: string; title: string }
+): Promise<Result<{ track: MusicTrack; media: Media | null }>> {
+  const e = await editing(moduleId, token);
+  if (!e.ok) return e;
+  if (!/^music\/[0-9a-f-]{36}\.(mp3|m4a|wav|ogg)$/.test(input.path)) return { ok: false, error: "That file isn't in the music library folder." };
+  const title = input.title.trim().slice(0, 120) || "Uploaded track";
+  const url = e.admin.storage.from(MEDIA_BUCKET).getPublicUrl(input.path).data.publicUrl;
+  const { data: row, error } = await e.admin
+    .from("training_music")
+    .insert({ title, description: "", source: "upload", path: input.path, url, created_by: e.userId })
+    .select("id")
+    .single();
+  if (error || !row) return { ok: false, error: "The file uploaded but couldn't be added to the library." };
+  const put = await setSlideMusic(moduleId, token, slideId, row.id as string);
+  return { ok: true, track: { id: row.id as string, title, description: "", source: "upload", url, durationSeconds: null, uses: put.ok ? 1 : 0 }, media: put.ok ? put.media : null };
+}
+
+/** Remove a track from the library: its file is deleted, and it comes off every slide using it. */
+export async function deleteMusic(moduleId: string, token: string, musicId: string): Promise<Result> {
+  const e = await editing(moduleId, token);
+  if (!e.ok) return e;
+  const { data: track } = await e.admin.from("training_music").select("path").eq("id", musicId).maybeSingle();
+  if (!track) return { ok: true };
+  const { error } = await e.admin.from("training_music").delete().eq("id", musicId);
+  if (error) return { ok: false, error: "Couldn't remove the track." };
+  await removeFiles(e.admin, [track.path as string]);
+  return { ok: true };
 }
 
 export interface EarlierNarration {
