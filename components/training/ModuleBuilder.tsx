@@ -120,18 +120,29 @@ export function ModuleBuilder({
   const first = useRef(true);
   const latest = useRef(content);
   latest.current = content;
+  // An edit waiting for its save (the save waits for a pause in typing).
+  const pending = useRef(false);
   useEffect(() => {
     if (first.current) {
       first.current = false;
       return;
     }
+    pending.current = true;
     setSave((s) => ({ ...s, state: "saving" }));
     const t = setTimeout(async () => {
+      pending.current = false;
       const r = await saveModuleDraft(module.id, latest.current).catch(() => ({ ok: false as const, error: "Couldn't save. Check your connection." }));
       setSave(r.ok ? { state: "saved", at: r.savedAt } : { state: "error", at: null, error: r.error });
     }, 800);
     return () => clearTimeout(t);
   }, [content, module.id]);
+  // Leaving the builder (its back link, or any other link) mustn't drop an edit still waiting to save.
+  useEffect(
+    () => () => {
+      if (pending.current) void saveModuleDraft(module.id, latest.current).catch(() => undefined);
+    },
+    [module.id]
+  );
   useEffect(() => {
     const warn = (e: BeforeUnloadEvent) => {
       if (save.state !== "saved") e.preventDefault();
