@@ -110,6 +110,8 @@ export type Block =
       explanation: string;
       studyTip: string;
       reference: string;
+      /** A warm-up asked before the teaching (BOPPPS pre-assessment): a wrong answer reads "coming up", not "incorrect". */
+      warmUp?: boolean;
     }
   | {
       id: string;
@@ -417,6 +419,7 @@ function normalizeBlock(raw: unknown): Block | null {
         explanation: str(b.explanation, 2000),
         studyTip: str(b.studyTip, 1000),
         reference: str(b.reference, 300),
+        ...(b.warmUp === true ? { warmUp: true } : {}),
       };
     }
     case "scenario":

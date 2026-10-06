@@ -446,6 +446,10 @@ export function BlockEditor({ moduleId, block, onChange }: { moduleId: string; b
     case "knowledge_check":
       return (
         <div className="be-stack">
+          <label className="be-check">
+            <input type="checkbox" checked={Boolean(block.warmUp)} onChange={(e) => onChange({ ...block, warmUp: e.target.checked || undefined })} />
+            <span>Warm-up: asked before the teaching, to see what the learner already knows (a wrong answer reads &ldquo;coming up&rdquo;, not &ldquo;incorrect&rdquo;)</span>
+          </label>
           <label className="field">
             <span>Question</span>
             <input value={block.question} maxLength={1000} onChange={(e) => onChange({ ...block, question: e.target.value })} />
