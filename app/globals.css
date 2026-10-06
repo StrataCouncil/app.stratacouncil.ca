@@ -8242,3 +8242,24 @@ a.track-card:focus-visible {
   color: var(--ink);
   white-space: pre-wrap;
 }
+.recover-narration {
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--line);
+}
+.recover-narration__list {
+  margin: 0.5rem 0 0.75rem;
+  padding-left: 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.recover-narration__list li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+  align-items: center;
+}
+.recover-narration__list audio {
+  height: 2rem;
+}

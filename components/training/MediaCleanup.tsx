@@ -7,7 +7,7 @@ const size = (bytes: number) => (bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024)
 
 /**
  * Training media no module uses any more (old narration, replaced photos,
- * rebuilt modules): find it, then delete it. Files from the last day are
+ * rebuilt modules): find it, then delete it. Files from the last 30 days are
  * left alone, and anything still in a draft or published version is kept.
  */
 export function MediaCleanup() {
@@ -37,7 +37,7 @@ export function MediaCleanup() {
       <h2>Unused media</h2>
       <p className="card__meta">
         Narration, pictures and video that no module uses any more, for example after a rebuild. Anything in a draft or a
-        published version is kept, and so is anything uploaded in the last day.
+        published version is kept, and so is anything from the last 30 days.
       </p>
       {found && (
         <p>

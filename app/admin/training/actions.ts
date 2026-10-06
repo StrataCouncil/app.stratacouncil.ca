@@ -234,8 +234,8 @@ async function listMedia(admin: AdminClient, prefix = ""): Promise<{ path: strin
 
 /**
  * Files in training-media that no module uses: not in any draft, published
- * version or card photo. Files from the last day are left alone (an upload
- * may not be saved into a draft yet).
+ * version or card photo. Files from the last 30 days are left alone (an
+ * upload or narration may not be attached to a screen yet).
  */
 async function unusedMedia(admin: AdminClient) {
   const [files, drafts, versions, modules] = await Promise.all([
@@ -257,8 +257,9 @@ async function unusedMedia(admin: AdminClient) {
       referenced.add(path);
     }
   }
-  const dayAgo = Date.now() - 24 * 60 * 60 * 1000;
-  return files.filter((f) => !referenced.has(f.path) && !(f.createdAt && Date.parse(f.createdAt) > dayAgo));
+  // Anything from the last 30 days stays: it may still be waiting to be attached (see findLooseNarration).
+  const graceStart = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  return files.filter((f) => !referenced.has(f.path) && !(f.createdAt && Date.parse(f.createdAt) > graceStart));
 }
 
 /** How many media files no module uses, and their size (Super Admin, Council Training admin page). */
@@ -431,7 +432,8 @@ export async function setDefaultVoice(voice: { id: string; name: string } | null
 export async function generateNarration(
   moduleId: string,
   text: string,
-  voiceId: string
+  voiceId: string,
+  screenId?: string
 ): Promise<Result<{ url: string; voicedText: string }>> {
   if (!(await canAuthor(moduleId))) return { ok: false, error: "You can't edit this module." };
   const script = text.trim();
@@ -446,9 +448,69 @@ export async function generateNarration(
       console.error("[generateNarration] upload", error.message);
       return { ok: false, error: "The audio was made but couldn't be saved. Try again." };
     }
-    return { ok: true, url: admin.storage.from(MEDIA_BUCKET).getPublicUrl(path).data.publicUrl, voicedText: script };
+    const url = admin.storage.from(MEDIA_BUCKET).getPublicUrl(path).data.publicUrl;
+    // Attach it to its screen in the saved draft straight away, so paid-for audio can't be lost with an open page.
+    if (screenId) await attachNarration(moduleId, [{ screenId, url, voicedText: script }]).catch((e) => console.error("[generateNarration] attach", e));
+    return { ok: true, url, voicedText: script };
   } catch (e) {
     return { ok: false, error: e instanceof NarrationError ? e.message : "Couldn't make the narration. Try again." };
+  }
+}
+
+/**
+ * Put narration on screens in the saved draft, without counting as an edit
+ * (updated_at stays), so an open builder's own saves aren't refused.
+ */
+async function attachNarration(moduleId: string, items: { screenId: string; url: string; voicedText: string }[]) {
+  const admin = createAdminClient();
+  const { data } = await admin.from("training_module_drafts").select("content").eq("module_id", moduleId).maybeSingle();
+  if (!data) return 0;
+  const content = data.content as { sections?: { screens?: { id?: string; narration?: Record<string, unknown> }[] }[] };
+  let changed = 0;
+  for (const section of content.sections ?? []) {
+    for (const screen of section.screens ?? []) {
+      const item = items.find((i) => i.screenId === screen.id);
+      if (!item) continue;
+      screen.narration = { ...(screen.narration ?? {}), src: item.url, voicedText: item.voicedText };
+      changed++;
+    }
+  }
+  if (changed) {
+    const { error } = await admin.from("training_module_drafts").update({ content }).eq("module_id", moduleId);
+    if (error) throw new Error(error.message);
+  }
+  return changed;
+}
+
+export interface LooseNarration {
+  url: string;
+  createdAt: string | null;
+  size: number;
+}
+
+/**
+ * Narration audio in the module's folder that no screen uses: made, paid
+ * for, but not attached (for example, lost with an open page). Oldest
+ * first, which is the order "Generate narration" makes them in.
+ */
+export async function findLooseNarration(moduleId: string): Promise<Result<{ files: LooseNarration[] }>> {
+  if (!(await canAuthor(moduleId))) return { ok: false, error: "You can't edit this module." };
+  try {
+    const admin = createAdminClient();
+    const [files, draft, versions] = await Promise.all([
+      listMedia(admin, `${moduleFolder(moduleId)}/narration`),
+      admin.from("training_module_drafts").select("content").eq("module_id", moduleId).maybeSingle(),
+      admin.from("training_module_versions").select("content").eq("module_id", moduleId),
+    ]);
+    const used = JSON.stringify([draft.data?.content, versions.data]);
+    const loose = files
+      .filter((f) => !used.includes(f.path))
+      .sort((a, b) => (a.createdAt ?? "").localeCompare(b.createdAt ?? ""))
+      .map((f) => ({ url: admin.storage.from(MEDIA_BUCKET).getPublicUrl(f.path).data.publicUrl, createdAt: f.createdAt, size: f.size }));
+    return { ok: true, files: loose };
+  } catch (e) {
+    console.error("[findLooseNarration]", e instanceof Error ? e.message : e);
+    return { ok: false, error: "Couldn't look for narration files. Try again." };
   }
 }
 

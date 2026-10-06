@@ -25,6 +25,7 @@ import {
   generateNarration,
   getNarrationVoices,
   markReadyForReview,
+  findLooseNarration,
   findVoice,
   getDraftStamp,
   getFactCheck,
@@ -36,6 +37,7 @@ import {
   tightenScreen,
 } from "@/app/admin/training/actions";
 import type { FactCheck, FactIssue } from "@/lib/training/library";
+import type { LooseNarration } from "@/app/admin/training/actions";
 import { onScreenWords } from "@/lib/training/ai";
 import { PhotoCreditLine, PhotoPicker } from "@/components/training/PhotoPicker";
 import type { Voice } from "@/lib/media/elevenlabs";
@@ -163,6 +165,15 @@ export function ModuleBuilder({
     },
     [module.id]
   );
+  // The author chose this page's version over the other saved one: save it without the version check.
+  async function keepMine() {
+    setSave((s) => ({ ...s, state: "saving" }));
+    const r = await saveModuleDraft(module.id, latest.current, null).catch(() => ({ ok: false as const, error: "Couldn't save. Check your connection." }));
+    if (!r.ok) return setSave({ state: "error", at: null, error: r.error });
+    base.current = r.savedAt;
+    setStale(false);
+    setSave({ state: "saved", at: r.savedAt });
+  }
   // An old copy of the page (the browser's Back button, a second tab) may be behind what's saved:
   // check on opening and whenever the tab comes back into view.
   useEffect(() => {
@@ -306,13 +317,26 @@ export function ModuleBuilder({
         </p>
       )}
       {stale ? (
-        <p className="builder__alert" role="alert" data-testid="builder-stale">
-          <strong>There&rsquo;s a newer version of this module</strong> (from another tab, an AI build, or an older copy of this
-          page). Nothing here will be saved over it.{" "}
-          <button type="button" className="button button-primary button-small" onClick={() => window.location.reload()}>
-            Reload the latest version
-          </button>
-        </p>
+        <div className="builder__alert" role="alert" data-testid="builder-stale">
+          <p>
+            <strong>This module was also saved somewhere else</strong> (another tab, an AI build, or an older copy of this
+            page). Your changes here haven&rsquo;t been saved over it. Choose which version to keep:
+          </p>
+          <div className="text-actions">
+            <button type="button" className="button button-primary button-small" onClick={keepMine} disabled={save.state === "saving"}>
+              Keep the version on this page
+            </button>
+            <button
+              type="button"
+              className="button button-secondary button-small"
+              onClick={() => {
+                if (window.confirm("Load the other saved version? Anything changed on this page since it was last saved will be lost.")) window.location.reload();
+              }}
+            >
+              Load the other version instead
+            </button>
+          </div>
+        </div>
       ) : (
         save.state === "error" && (
           <p className="builder__alert" role="alert">
@@ -1019,7 +1043,7 @@ function NarrationSettings({
     for (let i = 0; i < todo.length; i++) {
       if (stopRef.current) break;
       const s = todo[i];
-      const r = await generateNarration(moduleId, s.narration.transcript, voice.id);
+      const r = await generateNarration(moduleId, s.narration.transcript, voice.id, s.id);
       if (!r.ok) {
         setError(`Stopped at "${s.title}": ${r.error}`);
         break;
@@ -1135,7 +1159,110 @@ function NarrationSettings({
             {error}
           </p>
         )}
+        <RecoverNarration moduleId={moduleId} screens={screens} onAttach={onVoiced} />
       </section>
+    </div>
+  );
+}
+
+/**
+ * Narration that was made (and paid for) but isn't on any screen, e.g. lost
+ * with an open page. Files are listed oldest first, which is the order
+ * "Generate narration" makes them in, and matched to the screens without
+ * audio in module order; the author listens and adjusts before attaching.
+ */
+function RecoverNarration({
+  moduleId,
+  screens,
+  onAttach,
+}: {
+  moduleId: string;
+  screens: Screen[];
+  onAttach: (screenId: string, url: string, voicedText: string) => void;
+}) {
+  const [files, setFiles] = useState<LooseNarration[] | null>(null);
+  const [match, setMatch] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const needing = screens.filter((s) => s.narration.transcript.trim() && !s.narration.src);
+
+  async function look() {
+    setBusy(true);
+    setMessage(null);
+    const r = await findLooseNarration(moduleId);
+    setBusy(false);
+    if (!r.ok) return setMessage(r.error);
+    setFiles(r.files);
+    // Best guess: the nth loose file belongs to the nth screen without audio.
+    setMatch(Object.fromEntries(r.files.map((f, i) => [f.url, needing[i]?.id ?? ""])));
+    if (!r.files.length) setMessage("No unattached narration files for this module.");
+  }
+
+  function attach() {
+    let n = 0;
+    for (const f of files ?? []) {
+      const screen = screens.find((s) => s.id === match[f.url]);
+      if (!screen) continue;
+      onAttach(screen.id, f.url, screen.narration.transcript.trim());
+      n++;
+    }
+    setFiles(null);
+    setMessage(`Attached ${n} narration ${n === 1 ? "file" : "files"}. Play a few screens in Preview to check them.`);
+  }
+
+  return (
+    <div className="recover-narration">
+      {!files ? (
+        <p className="card__meta">
+          Audio missing after it was made?{" "}
+          <button type="button" className="text-action" onClick={look} disabled={busy}>
+            {busy ? "Looking…" : "Find narration that isn't attached to a screen"}
+          </button>
+        </p>
+      ) : (
+        files.length > 0 && (
+          <>
+            <p>
+              <strong>
+                {files.length} narration {files.length === 1 ? "file isn't" : "files aren't"} attached to a screen.
+              </strong>{" "}
+              Each is matched to a screen without audio, in the order they were made. Listen, change any that are wrong, then
+              attach them. They aren&rsquo;t charged again.
+            </p>
+            <ol className="recover-narration__list">
+              {files.map((f) => (
+                <li key={f.url}>
+                  <audio src={f.url} controls preload="none" />
+                  <select value={match[f.url] ?? ""} onChange={(e) => setMatch((m) => ({ ...m, [f.url]: e.target.value }))}>
+                    <option value="">Don&rsquo;t attach</option>
+                    {screens
+                      .filter((s) => s.narration.transcript.trim())
+                      .map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.title}
+                          {s.narration.src ? " (has audio)" : ""}
+                        </option>
+                      ))}
+                  </select>
+                </li>
+              ))}
+            </ol>
+            <div className="text-actions">
+              <button type="button" className="button button-primary button-small" onClick={attach}>
+                Attach these
+              </button>
+              <button type="button" className="text-action" onClick={() => setFiles(null)}>
+                Cancel
+              </button>
+            </div>
+          </>
+        )
+      )}
+      {message && (
+        <p className="card__meta" role="status">
+          {message}
+        </p>
+      )}
     </div>
   );
 }
@@ -1314,7 +1441,7 @@ function ScreenSettings({
     if (!voice) return setNarrationError("Choose a narration voice in Module settings first.");
     setVoicing(true);
     setNarrationError(null);
-    const r = await generateNarration(moduleId, screen.narration.transcript, voice.id);
+    const r = await generateNarration(moduleId, screen.narration.transcript, voice.id, screen.id);
     setVoicing(false);
     if (!r.ok) return setNarrationError(r.error);
     onChange({ ...screen, narration: { ...screen.narration, src: r.url, voicedText: r.voicedText } });
