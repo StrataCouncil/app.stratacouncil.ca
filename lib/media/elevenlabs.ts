@@ -104,15 +104,19 @@ async function explain(res: Response) {
     detail = typeof body.detail === "string" ? body.detail : `${body.detail?.status ?? ""} ${body.detail?.message ?? ""}`;
   } catch {}
   console.error("[elevenlabs]", res.status, detail.slice(0, 300));
+  const said = detail.trim() ? ` ElevenLabs says: "${detail.trim().slice(0, 240)}"` : "";
   // ElevenLabs answers 401 for running out of credits too, so read its reason before blaming the key.
-  if (/quota|credit|character_limit|limit_reached|usage/i.test(detail) || res.status === 402)
-    return "ElevenLabs is out of credits: either the plan's monthly allowance or the usage limit set on the API key is used up. Raise the limit or upgrade the plan, then generate the rest.";
+  // A limit on the API key itself (set when the key was made) is separate from the account's balance.
+  if (/api key quota|key quota|quota of/i.test(detail))
+    return `The ElevenLabs API key has its own credit limit, and it's used up (the account may still have credits). In ElevenLabs, open Developers, then API Keys, edit the key and raise or remove its credit limit.${said}`;
+  if (/quota_exceeded|quota|insufficient|not enough credits|credits remaining/i.test(detail) || res.status === 402)
+    return `ElevenLabs is out of credits for this request.${said}`;
   if (/unusual_activity|free_users_not_allowed|payment/i.test(detail))
-    return `ElevenLabs refused the request (${detail.trim().slice(0, 120)}). Check the account at elevenlabs.io.`;
+    return `ElevenLabs refused the request.${said}`;
   if (res.status === 401)
-    return `ElevenLabs didn't accept the key${detail.trim() ? ` (${detail.trim().slice(0, 120)})` : ""}. Check ELEVENLABS_API_KEY and its permissions.`;
+    return `ElevenLabs didn't accept the key. Check ELEVENLABS_API_KEY and its permissions.${said}`;
   if (res.status === 429) return "ElevenLabs is busy (too many requests at once). Wait a minute and try again.";
-  return `ElevenLabs couldn't make the audio (error ${res.status}${detail.trim() ? `: ${detail.trim().slice(0, 120)}` : ""}). Try again.`;
+  return `ElevenLabs couldn't make the audio (error ${res.status}). Try again.${said}`;
 }
 
 /**
