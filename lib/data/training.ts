@@ -1,14 +1,27 @@
 import { createClient } from "@/lib/supabase/server";
-import { flattenScreens, normalizeCredit, normalizeModuleContent, type ModuleContent, type ModuleCover } from "@/lib/training/content";
-
-import { normalizeFactCheck } from "@/lib/training/library";
+import {
+  normalizeCredit,
+  normalizeFurtherReading,
+  normalizeObjectives,
+  normalizePlayerContent,
+  normalizeVoice,
+  toSlides,
+  type FurtherReading,
+  type MediaRow,
+  type ModuleCover,
+  type Objective,
+  type PlayerContent,
+  type Slide,
+  type SlideRow,
+} from "@/lib/training/slides";
 
 export { moduleStatuses, type ModuleStatus } from "@/lib/training/progress";
 
 /**
- * Council Training reads (0033). Learners see tracks, module outlines and
- * published versions; their own progress; and credentials (theirs and
- * strata-mates', under RLS). Drafts are Super Admin only, also under RLS.
+ * Council Training reads (0033, 0041). Learners see tracks, module outlines
+ * and published versions; their own progress; and credentials (theirs and
+ * strata-mates', under RLS). Slides and their media are readable only by
+ * Super Admins and the module's Authors, also under RLS.
  */
 
 export interface TrainingModuleSummary {
@@ -23,7 +36,7 @@ export interface TrainingModuleSummary {
   /** The signed-in learner's progress, if any. */
   completedSections: number;
   completed: boolean;
-  /** The published first screen's photo, for cards. */
+  /** The published first slide's picture, for cards. */
   cover: ModuleCover | null;
 }
 
@@ -110,9 +123,9 @@ export interface PublishedModule {
   module: TrainingModuleSummary;
   track: { id: string; title: string; slug: string };
   version: number;
-  content: ModuleContent;
+  content: PlayerContent;
   completedSectionIds: string[];
-  /** Progress was made against an older version (section ids may not match). */
+  /** Progress was made against an older version (topic ids may not match). */
   progressVersion: number | null;
 }
 
@@ -142,64 +155,116 @@ export async function getPublishedModule(moduleId: string): Promise<PublishedMod
           .maybeSingle()
       : Promise.resolve({ data: null }),
   ]);
-  if (!version) return null;
+  const content = normalizePlayerContent(version?.content);
+  if (!content) return null;
   return {
     module: mod,
     track: { id: track.id, title: track.title, slug: track.slug },
     version: mod.publishedVersion,
-    content: normalizeModuleContent(version.content),
+    content,
     completedSectionIds: (progress?.completed_sections as string[] | undefined) ?? [],
     progressVersion: (progress?.version as number | undefined) ?? null,
   };
 }
 
-// ── Super Admin ────────────────────────────────────────────────────────
+// ── Builders (Super Admins, and Authors on their modules) ──────────────
+
+export interface Checkout {
+  userId: string;
+  name: string;
+  at: string;
+}
+
+type CheckoutRow = { checked_out_by: string | null; checked_out_at: string | null; holder?: unknown };
+function toCheckout(r: CheckoutRow): Checkout | null {
+  if (!r.checked_out_by) return null;
+  const p = (Array.isArray(r.holder) ? r.holder[0] : r.holder) as { full_name: string | null; email: string | null } | null;
+  return { userId: r.checked_out_by, name: p?.full_name || p?.email || "Someone", at: r.checked_out_at ?? "" };
+}
+const CHECKOUT_COLUMNS = "checked_out_by, checked_out_at, holder:profiles!training_modules_checked_out_by_fkey(full_name, email)";
 
 export interface AdminModule extends TrainingModuleSummary {
-  draftUpdatedAt: string | null;
   readyForReview: boolean;
-  /** The draft changed after the last publish. */
+  /** Slides changed after the last publish. */
   hasUnpublishedChanges: boolean;
-  screenCount: number;
+  slideCount: number;
+  checkout: Checkout | null;
+}
+
+/** Slide counts and last edits per module (under RLS: only modules the reader may build). */
+async function slideStats(moduleIds?: string[]) {
+  const supabase = await createClient();
+  let q = supabase.from("training_slides").select("module_id, updated_at");
+  if (moduleIds) q = q.in("module_id", moduleIds);
+  const { data } = await q;
+  const out = new Map<string, { count: number; updatedAt: string | null }>();
+  for (const r of data ?? []) {
+    const s = out.get(r.module_id as string) ?? { count: 0, updatedAt: null };
+    s.count++;
+    if (!s.updatedAt || (r.updated_at as string) > s.updatedAt) s.updatedAt = r.updated_at as string;
+    out.set(r.module_id as string, s);
+  }
+  return out;
 }
 
 export async function getAdminTraining() {
   const supabase = await createClient();
-  const tracks = await getTrainingTracks();
-  const { data: drafts } = await supabase.from("training_module_drafts").select("module_id, updated_at, content, ready_for_review_at");
-  const draftBy = new Map((drafts ?? []).map((d) => [d.module_id as string, d]));
+  const [tracks, stats, { data: rows }] = await Promise.all([
+    getTrainingTracks(),
+    slideStats(),
+    supabase.from("training_modules").select(`id, ready_for_review_at, ${CHECKOUT_COLUMNS}`),
+  ]);
+  const rowBy = new Map((rows ?? []).map((r) => [r.id as string, r]));
   return tracks.map((t) => ({
     ...t,
     modules: t.modules.map((m): AdminModule => {
-      const d = draftBy.get(m.id);
-      const screenCount = flattenScreens(normalizeModuleContent(d?.content)).length;
+      const s = stats.get(m.id);
+      const r = rowBy.get(m.id) as (CheckoutRow & { ready_for_review_at: string | null }) | undefined;
       return {
         ...m,
-        draftUpdatedAt: d?.updated_at ?? null,
-        readyForReview: Boolean(d?.ready_for_review_at),
-        screenCount,
-        hasUnpublishedChanges:
-          screenCount > 0 && (!m.publishedAt || (Boolean(d?.updated_at) && d!.updated_at > m.publishedAt)),
+        slideCount: s?.count ?? 0,
+        readyForReview: Boolean(r?.ready_for_review_at),
+        checkout: r ? toCheckout(r) : null,
+        hasUnpublishedChanges: Boolean(s?.updatedAt) && (!m.publishedAt || s!.updatedAt! > m.publishedAt),
       };
     }),
   }));
 }
 
-export async function getModuleDraft(moduleId: string) {
+export interface BuilderModule {
+  id: string;
+  title: string;
+  summary: string;
+  estimatedMinutes: number | null;
+  publishedVersion: number;
+  publishedAt: string | null;
+  readyForReviewAt: string | null;
+  track: { id: string; title: string; slug: string };
+  objectives: Objective[];
+  furtherReading: FurtherReading[];
+  voice: { id: string; name: string } | null;
+  checkout: Checkout | null;
+  slides: Slide[];
+}
+
+/** A module and its slides for the builder. RLS returns nothing unless the reader may build it. */
+export async function getBuilderModule(moduleId: string): Promise<BuilderModule | null> {
+  if (!/^[0-9a-f-]{36}$/i.test(moduleId)) return null;
   const supabase = await createClient();
-  const [{ data: mod, error: modError }, { data: draft }] = await Promise.all([
+  const [{ data: mod, error }, { data: slides }, { data: media }, { data: allowed }] = await Promise.all([
     supabase
       .from("training_modules")
       .select(
-        // Two links join modules and AI builds (source_import_id, and 0036's module_id): name the one meant.
-        "id, title, summary, estimated_minutes, published_version, published_at, ai_drafted, track:training_tracks(id, code, title), source:training_imports!training_modules_source_import_id_fkey(title)"
+        `id, title, summary, estimated_minutes, published_version, published_at, ready_for_review_at, objectives, further_reading, voice, ${CHECKOUT_COLUMNS}, track:training_tracks(id, code, title)`
       )
       .eq("id", moduleId)
       .maybeSingle(),
-    supabase.from("training_module_drafts").select("content, updated_at, ready_for_review_at, fact_check").eq("module_id", moduleId).maybeSingle(),
+    supabase.from("training_slides").select("id, position, topic, title, body, layout, narration_script, narration_voiced, element, citations").eq("module_id", moduleId),
+    supabase.from("training_media").select("id, slide_id, role, kind, source, url, alt, credit").eq("module_id", moduleId),
+    supabase.rpc("can_author_training_module", { p_module_id: moduleId }),
   ]);
-  if (modError) console.error("[getModuleDraft]", modError.message);
-  if (!mod || !draft) return null;
+  if (error) console.error("[getBuilderModule]", error.message);
+  if (!mod || allowed !== true) return null;
   const track = (Array.isArray(mod.track) ? mod.track[0] : mod.track) as { id: string; code: string; title: string };
   return {
     id: mod.id as string,
@@ -208,16 +273,13 @@ export async function getModuleDraft(moduleId: string) {
     estimatedMinutes: mod.estimated_minutes as number | null,
     publishedVersion: mod.published_version as number,
     publishedAt: mod.published_at as string | null,
+    readyForReviewAt: (mod.ready_for_review_at as string | null) ?? null,
     track: { id: track.id, title: track.title, slug: trackSlug(track.code) },
-    content: normalizeModuleContent(draft.content),
-    draftUpdatedAt: draft.updated_at as string,
-    readyForReviewAt: (draft.ready_for_review_at as string | null) ?? null,
-    /** The latest check against the Legislation Library (0037). */
-    factCheck: normalizeFactCheck(draft.fact_check),
-    /** Drafted by the AI module builder; the title of its source document when the reader may see it. */
-    aiDraftedFrom: mod.ai_drafted
-      ? ((Array.isArray(mod.source) ? mod.source[0] : mod.source) as { title: string } | null)?.title ?? "a document"
-      : null,
+    objectives: normalizeObjectives(mod.objectives),
+    furtherReading: normalizeFurtherReading(mod.further_reading),
+    voice: normalizeVoice(mod.voice),
+    checkout: toCheckout(mod as unknown as CheckoutRow),
+    slides: toSlides((slides ?? []) as SlideRow[], (media ?? []) as MediaRow[]),
   };
 }
 
@@ -262,14 +324,13 @@ export async function getMyAuthoredModules() {
   if (!ids.length) return [];
   const { data: mods } = await supabase
     .from("training_modules")
-    .select("id, title, published_version, track:training_tracks(title, order_index), order_index")
+    .select("id, title, published_version, ready_for_review_at, track:training_tracks(title, order_index), order_index")
     .in("id", ids);
-  const { data: drafts } = await supabase.from("training_module_drafts").select("module_id, updated_at, ready_for_review_at, content").in("module_id", ids);
-  const draftBy = new Map((drafts ?? []).map((d) => [d.module_id as string, d]));
+  const stats = await slideStats(ids);
   return (mods ?? [])
     .map((m) => {
       const t = (Array.isArray(m.track) ? m.track[0] : m.track) as { title: string; order_index: number };
-      const d = draftBy.get(m.id);
+      const st = stats.get(m.id as string);
       return {
         id: m.id as string,
         title: m.title as string,
@@ -277,9 +338,9 @@ export async function getMyAuthoredModules() {
         trackOrder: t?.order_index ?? 0,
         order: m.order_index as number,
         publishedVersion: m.published_version as number,
-        screenCount: flattenScreens(normalizeModuleContent(d?.content)).length,
-        updatedAt: (d?.updated_at as string | undefined) ?? null,
-        readyForReview: Boolean(d?.ready_for_review_at),
+        slideCount: st?.count ?? 0,
+        updatedAt: st?.updatedAt ?? null,
+        readyForReview: Boolean(m.ready_for_review_at),
       };
     })
     .sort((a, b) => a.trackOrder - b.trackOrder || a.order - b.order);

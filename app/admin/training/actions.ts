@@ -5,22 +5,52 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProfile } from "@/lib/data/profile";
-import { moduleCover, normalizeModuleContent, publishProblems, type Screen } from "@/lib/training/content";
-import { applyTightened, onScreenWords, screenForTightening, TIGHTEN_INSTRUCTIONS, tightenSchema } from "@/lib/training/ai";
-import { askClaudeJson } from "@/lib/ai/claude";
-import { inngest, TRAINING_FACT_CHECK_EVENT } from "@/lib/inngest/client";
-import { normalizeFactCheck, type FactCheck } from "@/lib/training/library";
+import { getBuilderModule, type BuilderModule } from "@/lib/data/training";
+import {
+  buildPlayerContent,
+  coverOf,
+  MEDIA_BUCKET,
+  moduleFolder,
+  normalizeCredit,
+  normalizeFurtherReading,
+  normalizeObjectives,
+  normalizeSlidePatch,
+  normalizeVoice,
+  publishProblems,
+  safeMediaUrl,
+  slideFolder,
+  toMedia,
+  toSlides,
+  videoSource,
+  type Citation,
+  type FurtherReading,
+  type Media,
+  type MediaRow,
+  type Objective,
+  type Slide,
+  type SlideRow,
+} from "@/lib/training/slides";
+import { searchLibrary, passagesForCitations } from "@/lib/training/library-server";
 import { getVoice, listVoices, NarrationError, speak, type Voice } from "@/lib/media/elevenlabs";
 import { PhotoError, searchPhotos, trackPhotoUse, type StockPhoto } from "@/lib/media/unsplash";
 
 /**
- * The Module Builder's writes. Super Admins do everything; Authors (0033,
- * assigned per module) can edit, upload media for, and mark ready for
- * review only the modules they're assigned. RLS on the training tables is
- * the real gate; the checks here just give clear messages.
+ * Council Training builder writes (0041).
+ *
+ * Editing works like checking out a file: "Edit module" checks the module
+ * out to one person and hands their window a token; every change sends
+ * that token back, and is refused unless the module is still checked out
+ * to them in that window. "Finished editing" checks it back in. No one
+ * else can change a checked-out module; a Super Admin can release a
+ * checkout someone left behind.
+ *
+ * Super Admins can build every module; Authors only the ones they're
+ * assigned. All writes use the service role after these checks (RLS only
+ * lets signed-in users read slides and media).
  */
 
 type Result<T = object> = ({ ok: true } & T) | { ok: false; error: string };
+type AdminClient = ReturnType<typeof createAdminClient>;
 
 async function staff() {
   const profile = await getCurrentProfile();
@@ -28,6 +58,7 @@ async function staff() {
 }
 
 async function canAuthor(moduleId: string) {
+  if (!/^[0-9a-f-]{36}$/i.test(moduleId)) return false;
   const supabase = await createClient();
   const { data } = await supabase.rpc("can_author_training_module", { p_module_id: moduleId });
   return data === true;
@@ -40,85 +71,127 @@ function refresh(moduleId?: string) {
   if (moduleId) revalidatePath(`/admin/training/${moduleId}`);
 }
 
-/** Autosave: the whole module's sections, screens and blocks, cleaned up first. */
+const NOT_YOURS = "You're not editing this module any more (it was checked in, or opened for editing in another window). Reload to see the latest.";
+
 /**
- * Save the whole draft, but only over the version this editor last loaded or
- * saved (`base`, the draft's updated_at). If the draft changed since (an AI
- * build, another tab, an old copy of the page), nothing is overwritten and
- * the editor is told to reload.
+ * The module, if it's checked out to the signed-in person in this window.
+ * Every change goes through here first.
  */
-export async function saveModuleDraft(
-  moduleId: string,
-  content: unknown,
-  base: string | null
-): Promise<Result<{ savedAt: string }> | { ok: false; error: string; conflict: true }> {
-  const me = await getCurrentProfile();
-  if (!me || !(await canAuthor(moduleId))) return { ok: false, error: "You can't edit this module." };
-  const clean = normalizeModuleContent(content);
-  const supabase = await createClient();
-  const { data: current, error: readError } = await supabase.from("training_module_drafts").select("updated_at").eq("module_id", moduleId).maybeSingle();
-  if (readError || !current) {
-    if (readError) console.error("[saveModuleDraft]", readError.message);
-    return { ok: false, error: "Couldn't save. Your changes are still here; they'll save with your next edit." };
-  }
-  // Compared as instants (to the millisecond), however the timestamp happens to be written.
-  if (base && current.updated_at && Date.parse(current.updated_at as string) !== Date.parse(base)) {
-    return {
-      ok: false,
-      conflict: true,
-      error: "This module was changed somewhere else (another tab, an AI build, or an older copy of this page). Reload to get the latest version.",
-    };
-  }
-  const savedAt = new Date().toISOString();
-  const { error } = await supabase
-    .from("training_module_drafts")
-    .update({ content: clean, updated_at: savedAt, updated_by: me.id })
-    .eq("module_id", moduleId);
-  if (error) {
-    console.error("[saveModuleDraft]", error.message);
-    return { ok: false, error: "Couldn't save. Your changes are still here; they'll save with your next edit." };
-  }
-  return { ok: true, savedAt };
+async function editing(moduleId: string, token: string): Promise<{ ok: true; userId: string; trackId: string; admin: AdminClient } | { ok: false; error: string }> {
+  const profile = await getCurrentProfile();
+  if (!profile || !(await canAuthor(moduleId))) return { ok: false, error: "You can't edit this module." };
+  const admin = createAdminClient();
+  const { data } = await admin.from("training_modules").select("track_id, checked_out_by, checkout_token").eq("id", moduleId).maybeSingle();
+  if (!data) return { ok: false, error: "Module not found." };
+  if (data.checked_out_by !== profile.id || data.checkout_token !== token) return { ok: false, error: NOT_YOURS };
+  return { ok: true, userId: profile.id, trackId: data.track_id as string, admin };
 }
 
-/** When the saved draft last changed: the builder compares it with what it has open. */
-export async function getDraftStamp(moduleId: string): Promise<Result<{ updatedAt: string | null }>> {
-  if (!(await canAuthor(moduleId))) return { ok: false, error: "You can't see this module." };
-  const supabase = await createClient();
-  const { data } = await supabase.from("training_module_drafts").select("updated_at").eq("module_id", moduleId).maybeSingle();
-  return { ok: true, updatedAt: (data?.updated_at as string | null) ?? null };
-}
+// ── Checking out and in ────────────────────────────────────────────────
 
-export async function publishModule(moduleId: string): Promise<Result<{ version: number }>> {
-  if (!(await staff())) return { ok: false, error: "Only platform staff can publish training." };
-  const supabase = await createClient();
-  const { data: draft } = await supabase.from("training_module_drafts").select("content").eq("module_id", moduleId).maybeSingle();
-  const content = normalizeModuleContent(draft?.content);
-  const problems = publishProblems(content);
-  if (problems.length) return { ok: false, error: problems.join(" ") };
-  const { data, error } = await supabase.rpc("publish_training_module", { p_module_id: moduleId });
+/**
+ * Check the module out to edit it. Refused while someone else has it.
+ * Opening it again yourself (another window) moves the editing to the new
+ * window: the old one can no longer save.
+ */
+export async function checkOutModule(moduleId: string): Promise<Result<{ token: string }>> {
+  const profile = await getCurrentProfile();
+  if (!profile || !(await canAuthor(moduleId))) return { ok: false, error: "You can't edit this module." };
+  const admin = createAdminClient();
+  const token = randomUUID();
+  const { data, error } = await admin
+    .from("training_modules")
+    .update({ checked_out_by: profile.id, checked_out_at: new Date().toISOString(), checkout_token: token })
+    .eq("id", moduleId)
+    .or(`checked_out_by.is.null,checked_out_by.eq.${profile.id}`)
+    .select("id");
   if (error) {
-    console.error("[publishModule]", error.message);
-    return { ok: false, error: error.code === "P0001" ? error.message : "Couldn't publish." };
+    console.error("[checkOutModule]", error.message);
+    return { ok: false, error: "Couldn't check the module out. Try again." };
   }
-  // The card photo on the training pages follows the published first screen.
-  const { error: coverError } = await supabase.from("training_modules").update({ cover: moduleCover(content) }).eq("id", moduleId);
-  if (coverError) console.error("[publishModule] cover", coverError.message);
+  if (!data?.length) return { ok: false, error: "Someone else is editing this module. It opens for editing once they check it back in." };
   refresh(moduleId);
-  return { ok: true, version: data as number };
+  return { ok: true, token };
 }
 
+/** The module as saved now, for a builder that has just checked it out. */
+export async function loadBuilderModule(moduleId: string): Promise<Result<{ module: BuilderModule }>> {
+  const m = await getBuilderModule(moduleId);
+  return m ? { ok: true, module: m } : { ok: false, error: "You can't edit this module." };
+}
+
+/** Whether this window's checkout still holds (after a reload). */
+export async function checkoutStillMine(moduleId: string, token: string): Promise<boolean> {
+  return (await editing(moduleId, token)).ok;
+}
+
+/** Finished editing: check the module back in. */
+export async function checkInModule(moduleId: string, token: string): Promise<Result> {
+  const e = await editing(moduleId, token);
+  if (!e.ok) return e;
+  const { error } = await e.admin
+    .from("training_modules")
+    .update({ checked_out_by: null, checked_out_at: null, checkout_token: null })
+    .eq("id", moduleId)
+    .eq("checkout_token", token);
+  if (error) return { ok: false, error: "Couldn't check the module in. Try again." };
+  refresh(moduleId);
+  return { ok: true };
+}
+
+/** A Super Admin releases someone else's checkout (they left without checking in). */
+export async function releaseCheckout(moduleId: string): Promise<Result> {
+  if (!(await staff())) return { ok: false, error: "Only platform staff can release a module." };
+  const { error } = await createAdminClient()
+    .from("training_modules")
+    .update({ checked_out_by: null, checked_out_at: null, checkout_token: null })
+    .eq("id", moduleId);
+  if (error) return { ok: false, error: "Couldn't release the module." };
+  refresh(moduleId);
+  return { ok: true };
+}
+
+/** Whether a module is checked out to someone other than the signed-in person. */
+async function heldByOther(moduleId: string, userId: string) {
+  const { data } = await createAdminClient().from("training_modules").select("checked_out_by").eq("id", moduleId).maybeSingle();
+  return Boolean(data?.checked_out_by && data.checked_out_by !== userId);
+}
+
+// ── Module settings ────────────────────────────────────────────────────
+
+/** Objectives (with Bloom levels), further reading and the narration voice. */
+export async function saveModuleSettings(
+  moduleId: string,
+  token: string,
+  input: { objectives: Objective[]; furtherReading: FurtherReading[]; voice: { id: string; name: string } | null }
+): Promise<Result> {
+  const e = await editing(moduleId, token);
+  if (!e.ok) return e;
+  const objectives = normalizeObjectives(input.objectives);
+  const furtherReading = normalizeFurtherReading(input.furtherReading);
+  const { error } = await e.admin
+    .from("training_modules")
+    .update({ objectives, further_reading: furtherReading, voice: normalizeVoice(input.voice) })
+    .eq("id", moduleId);
+  if (error) {
+    console.error("[saveModuleSettings]", error.message);
+    return { ok: false, error: "Couldn't save the module settings." };
+  }
+  return { ok: true };
+}
+
+/** Title, summary and length (Super Admins, from the training list). Not while someone else is editing. */
 export async function updateModuleDetails(
   moduleId: string,
   input: { title: string; summary: string; estimatedMinutes: number | null }
 ): Promise<Result> {
-  if (!(await staff())) return { ok: false, error: "Only platform staff can edit training." };
+  const me = await staff();
+  if (!me) return { ok: false, error: "Only platform staff can edit training." };
+  if (await heldByOther(moduleId, me.id)) return { ok: false, error: "Someone is editing this module. Try again once they've checked it in." };
   const title = input.title.trim().slice(0, 200);
   if (!title) return { ok: false, error: "Give the module a title." };
   const minutes =
-    input.estimatedMinutes && Number.isFinite(input.estimatedMinutes)
-      ? Math.max(1, Math.min(600, Math.round(input.estimatedMinutes)))
-      : null;
+    input.estimatedMinutes && Number.isFinite(input.estimatedMinutes) ? Math.max(1, Math.min(600, Math.round(input.estimatedMinutes))) : null;
   const supabase = await createClient();
   const { error } = await supabase
     .from("training_modules")
@@ -134,10 +207,7 @@ export async function updateTrackDetails(trackId: string, input: { title: string
   const title = input.title.trim().slice(0, 200);
   if (!title) return { ok: false, error: "Give the track a title." };
   const supabase = await createClient();
-  const { error } = await supabase
-    .from("training_tracks")
-    .update({ title, description: input.description.trim().slice(0, 1000) })
-    .eq("id", trackId);
+  const { error } = await supabase.from("training_tracks").update({ title, description: input.description.trim().slice(0, 1000) }).eq("id", trackId);
   if (error) return { ok: false, error: "Couldn't save the track details." };
   refresh();
   return { ok: true };
@@ -161,7 +231,6 @@ export async function addModule(trackId: string, title: string): Promise<Result<
     .select("id")
     .single();
   if (error || !data) return { ok: false, error: "Couldn't add the module." };
-  await supabase.from("training_module_drafts").insert({ module_id: data.id });
   refresh();
   return { ok: true, id: data.id };
 }
@@ -170,126 +239,203 @@ export async function addModule(trackId: string, title: string): Promise<Result<
 export async function moveModule(moduleId: string, direction: -1 | 1): Promise<Result> {
   if (!(await staff())) return { ok: false, error: "Only platform staff can edit training." };
   const supabase = await createClient();
-  const { data: mod } = await supabase.from("training_modules").select("id, track_id, order_index").eq("id", moduleId).single();
+  const { data: mod } = await supabase.from("training_modules").select("id, track_id").eq("id", moduleId).single();
   if (!mod) return { ok: false, error: "Module not found." };
-  const { data: siblings } = await supabase
-    .from("training_modules")
-    .select("id, order_index")
-    .eq("track_id", mod.track_id)
-    .order("order_index");
-  const list = siblings ?? [];
-  const i = list.findIndex((m) => m.id === moduleId);
+  const { data: siblings } = await supabase.from("training_modules").select("id, order_index").eq("track_id", mod.track_id).order("order_index");
+  const order = (siblings ?? []).map((m) => m.id as string);
+  const i = order.indexOf(moduleId);
   const j = i + direction;
-  if (i < 0 || j < 0 || j >= list.length) return { ok: true };
-  // Renumber the whole track so ties never stick.
-  const order = list.map((m) => m.id);
+  if (i < 0 || j < 0 || j >= order.length) return { ok: true };
   [order[i], order[j]] = [order[j], order[i]];
-  for (const [index, id] of order.entries()) {
-    await supabase.from("training_modules").update({ order_index: index + 1 }).eq("id", id);
-  }
+  for (const [index, id] of order.entries()) await supabase.from("training_modules").update({ order_index: index + 1 }).eq("id", id);
   refresh();
   return { ok: true };
 }
 
-/** Only a never-published module can be deleted (published ones have learner progress). */
+/** Only a never-published module can be deleted (published ones have learner progress). Its folder goes with it. */
 export async function deleteModule(moduleId: string): Promise<Result> {
-  if (!(await staff())) return { ok: false, error: "Only platform staff can edit training." };
-  const supabase = await createClient();
-  const { data: mod } = await supabase.from("training_modules").select("published_version").eq("id", moduleId).single();
+  const me = await staff();
+  if (!me) return { ok: false, error: "Only platform staff can edit training." };
+  const admin = createAdminClient();
+  const { data: mod } = await admin.from("training_modules").select("track_id, published_version, checked_out_by").eq("id", moduleId).single();
   if (!mod) return { ok: false, error: "Module not found." };
   if (mod.published_version > 0) return { ok: false, error: "A published module can't be deleted; learners may have progress in it." };
-  const { error } = await supabase.from("training_modules").delete().eq("id", moduleId);
+  if (mod.checked_out_by && mod.checked_out_by !== me.id) return { ok: false, error: "Someone is editing this module." };
+  const files = [
+    ...(await listFiles(admin, moduleFolder(mod.track_id as string, moduleId)).catch(() => [])),
+    // The old builder's folder for this module.
+    ...(await listFiles(admin, `modules/${moduleId}`).catch(() => [])),
+  ];
+  const { error } = await admin.from("training_modules").delete().eq("id", moduleId);
   if (error) return { ok: false, error: "Couldn't delete the module." };
-  // Its media folder goes with it.
-  const admin = createAdminClient();
-  const files = await listMedia(admin, moduleFolder(moduleId)).catch(() => []);
-  if (files.length) await admin.storage.from(MEDIA_BUCKET).remove(files.map((f) => f.path));
+  await removeFiles(admin, files);
   refresh();
   return { ok: true };
 }
 
-const MEDIA_BUCKET = "training-media";
+// ── Slides ─────────────────────────────────────────────────────────────
 
-/** Each module's media lives in its own folder: modules/<id>/{images,video,audio,narration}/. */
-const moduleFolder = (moduleId: string) => `modules/${moduleId}`;
+const SLIDE_COLUMNS = "id, position, topic, title, body, layout, narration_script, narration_voiced, element, citations";
 
-type AdminClient = ReturnType<typeof createAdminClient>;
+async function readSlide(admin: AdminClient, moduleId: string, slideId: string): Promise<Slide | null> {
+  const [{ data: row }, { data: media }] = await Promise.all([
+    admin.from("training_slides").select(SLIDE_COLUMNS).eq("id", slideId).eq("module_id", moduleId).maybeSingle(),
+    admin.from("training_media").select("id, slide_id, role, kind, source, url, alt, credit").eq("slide_id", slideId),
+  ]);
+  return row ? toSlides([row as SlideRow], (media ?? []) as MediaRow[])[0] : null;
+}
 
-/** Every file under a folder of the training-media bucket, with when it was made. */
-async function listMedia(admin: AdminClient, prefix = ""): Promise<{ path: string; size: number; createdAt: string | null }[]> {
-  const out: { path: string; size: number; createdAt: string | null }[] = [];
+async function renumber(admin: AdminClient, moduleId: string, ids: string[]) {
+  await Promise.all(ids.map((id, i) => admin.from("training_slides").update({ position: i + 1 }).eq("id", id).eq("module_id", moduleId)));
+}
+
+/** A new slide after `afterId` (or at the end), on the same topic as the slide before it. */
+export async function addSlide(moduleId: string, token: string, afterId: string | null): Promise<Result<{ slide: Slide }>> {
+  const e = await editing(moduleId, token);
+  if (!e.ok) return e;
+  const { data: rows } = await e.admin.from("training_slides").select("id, topic").eq("module_id", moduleId).order("position");
+  const list = rows ?? [];
+  const at = afterId ? list.findIndex((r) => r.id === afterId) + 1 : list.length;
+  const before = list[at - 1];
+  const { data, error } = await e.admin
+    .from("training_slides")
+    .insert({ module_id: moduleId, position: at + 1, topic: (before?.topic as string | undefined) ?? "" })
+    .select("id")
+    .single();
+  if (error || !data) return { ok: false, error: "Couldn't add a slide." };
+  const ids = list.map((r) => r.id as string);
+  ids.splice(at, 0, data.id as string);
+  await renumber(e.admin, moduleId, ids);
+  const slide = await readSlide(e.admin, moduleId, data.id as string);
+  return slide ? { ok: true, slide } : { ok: false, error: "Couldn't add a slide." };
+}
+
+/** Save changes to one slide. Citations are checked against the library: only real sections can be cited. */
+export async function updateSlide(moduleId: string, token: string, slideId: string, raw: unknown): Promise<Result<{ citations?: Citation[] }>> {
+  const e = await editing(moduleId, token);
+  if (!e.ok) return e;
+  const patch = normalizeSlidePatch(raw);
+  const row: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if (patch.topic !== undefined) row.topic = patch.topic;
+  if (patch.title !== undefined) row.title = patch.title;
+  if (patch.body !== undefined) row.body = patch.body;
+  if (patch.layout !== undefined) row.layout = patch.layout;
+  if (patch.narrationScript !== undefined) row.narration_script = patch.narrationScript;
+  if (patch.element !== undefined) row.element = patch.element;
+  let citations: Citation[] | undefined;
+  if (patch.citations !== undefined) {
+    citations = await verifiedCitations(patch.citations.map((c) => c.chunkId));
+    row.citations = citations;
+  }
+  const { data, error } = await e.admin.from("training_slides").update(row).eq("id", slideId).eq("module_id", moduleId).select("id");
+  if (error) {
+    console.error("[updateSlide]", error.message);
+    return { ok: false, error: "Couldn't save the slide. Check your connection and try again." };
+  }
+  if (!data?.length) return { ok: false, error: "That slide no longer exists." };
+  return { ok: true, citations };
+}
+
+export async function moveSlide(moduleId: string, token: string, slideId: string, direction: -1 | 1): Promise<Result> {
+  const e = await editing(moduleId, token);
+  if (!e.ok) return e;
+  const { data: rows } = await e.admin.from("training_slides").select("id").eq("module_id", moduleId).order("position");
+  const ids = (rows ?? []).map((r) => r.id as string);
+  const i = ids.indexOf(slideId);
+  const j = i + direction;
+  if (i < 0 || j < 0 || j >= ids.length) return { ok: true };
+  [ids[i], ids[j]] = [ids[j], ids[i]];
+  await renumber(e.admin, moduleId, ids);
+  return { ok: true };
+}
+
+/** Delete a slide and its folder (unless learners' published copy still shows its files). */
+export async function deleteSlide(moduleId: string, token: string, slideId: string): Promise<Result> {
+  const e = await editing(moduleId, token);
+  if (!e.ok) return e;
+  const { error } = await e.admin.from("training_slides").delete().eq("id", slideId).eq("module_id", moduleId);
+  if (error) return { ok: false, error: "Couldn't delete the slide." };
+  const { data: rows } = await e.admin.from("training_slides").select("id").eq("module_id", moduleId).order("position");
+  await renumber(e.admin, moduleId, (rows ?? []).map((r) => r.id as string));
+  await tidyModuleFolder(e.admin, e.trackId, moduleId);
+  return { ok: true };
+}
+
+// ── Media: every file in its slide's folder ────────────────────────────
+
+/** Every file under a folder of the training-media bucket. */
+async function listFiles(admin: AdminClient, prefix: string): Promise<string[]> {
+  const out: string[] = [];
   for (let offset = 0; ; offset += 1000) {
     const { data, error } = await admin.storage.from(MEDIA_BUCKET).list(prefix, { limit: 1000, offset });
     if (error) throw new Error(error.message);
     for (const item of data ?? []) {
-      const path = prefix ? `${prefix}/${item.name}` : item.name;
+      const path = `${prefix}/${item.name}`;
       // Folders come back without an id.
-      if (item.id === null) out.push(...(await listMedia(admin, path)));
-      else out.push({ path, size: Number((item.metadata as { size?: number } | null)?.size ?? 0), createdAt: item.created_at ?? null });
+      if (item.id === null) out.push(...(await listFiles(admin, path)));
+      else out.push(path);
     }
     if (!data || data.length < 1000) break;
   }
   return out;
 }
 
+async function removeFiles(admin: AdminClient, paths: string[]) {
+  for (let i = 0; i < paths.length; i += 100) {
+    const { error } = await admin.storage.from(MEDIA_BUCKET).remove(paths.slice(i, i + 100));
+    if (error) console.error("[removeFiles]", error.message);
+  }
+}
+
 /**
- * Files in training-media that no module uses: not in any draft, published
- * version or card photo. Files from the last 30 days are left alone (an
- * upload or narration may not be attached to a screen yet).
+ * Delete files in the module's folder that nothing uses: no slide's media,
+ * and not the published copy learners are seeing. Runs after a slide or a
+ * file is removed, and after publishing.
  */
-async function unusedMedia(admin: AdminClient) {
-  const [files, drafts, versions, modules] = await Promise.all([
-    listMedia(admin),
-    admin.from("training_module_drafts").select("content"),
-    admin.from("training_module_versions").select("content"),
-    admin.from("training_modules").select("cover"),
-  ]);
-  if (drafts.error || versions.error || modules.error) throw new Error("Couldn't read the modules.");
-  const used = JSON.stringify([drafts.data, versions.data, modules.data]);
-  const marker = `/storage/v1/object/public/${MEDIA_BUCKET}/`;
-  const referenced = new Set<string>();
-  for (let at = used.indexOf(marker); at >= 0; at = used.indexOf(marker, at + 1)) {
-    const rest = used.slice(at + marker.length);
-    const path = rest.slice(0, rest.search(/["?#\\]|$/));
-    try {
-      referenced.add(decodeURIComponent(path));
-    } catch {
-      referenced.add(path);
-    }
-  }
-  // Anything from the last 30 days stays: it may still be waiting to be attached (see findLooseNarration).
-  const graceStart = Date.now() - 30 * 24 * 60 * 60 * 1000;
-  return files.filter((f) => !referenced.has(f.path) && !(f.createdAt && Date.parse(f.createdAt) > graceStart));
-}
-
-/** How many media files no module uses, and their size (Super Admin, Council Training admin page). */
-export async function findUnusedMedia(): Promise<Result<{ count: number; bytes: number }>> {
-  if (!(await staff())) return { ok: false, error: "Only platform staff can do this." };
+async function tidyModuleFolder(admin: AdminClient, trackId: string, moduleId: string) {
   try {
-    const files = await unusedMedia(createAdminClient());
-    return { ok: true, count: files.length, bytes: files.reduce((n, f) => n + f.size, 0) };
-  } catch (e) {
-    console.error("[findUnusedMedia]", e instanceof Error ? e.message : e);
-    return { ok: false, error: "Couldn't check storage. Try again." };
+    const [files, { data: media }, { data: mod }] = await Promise.all([
+      listFiles(admin, moduleFolder(trackId, moduleId)),
+      admin.from("training_media").select("path").eq("module_id", moduleId),
+      admin.from("training_modules").select("published_version").eq("id", moduleId).maybeSingle(),
+    ]);
+    const keep = new Set((media ?? []).map((m) => m.path as string | null).filter(Boolean));
+    let published = "";
+    if (mod?.published_version) {
+      const { data } = await admin
+        .from("training_module_versions")
+        .select("content")
+        .eq("module_id", moduleId)
+        .eq("version", mod.published_version)
+        .maybeSingle();
+      published = JSON.stringify(data?.content ?? "");
+    }
+    const unused = files.filter((p) => !keep.has(p) && !published.includes(p));
+    if (unused.length) await removeFiles(admin, unused);
+  } catch (err) {
+    console.error("[tidyModuleFolder]", err instanceof Error ? err.message : err);
   }
 }
 
-/** Delete the media files no module uses (worked out again at the moment of deleting). */
-export async function deleteUnusedMedia(): Promise<Result<{ deleted: number }>> {
-  if (!(await staff())) return { ok: false, error: "Only platform staff can do this." };
-  try {
-    const admin = createAdminClient();
-    const files = await unusedMedia(admin);
-    for (let i = 0; i < files.length; i += 100) {
-      const { error } = await admin.storage.from(MEDIA_BUCKET).remove(files.slice(i, i + 100).map((f) => f.path));
-      if (error) throw new Error(error.message);
-    }
-    return { ok: true, deleted: files.length };
-  } catch (e) {
-    console.error("[deleteUnusedMedia]", e instanceof Error ? e.message : e);
-    return { ok: false, error: "Couldn't delete the unused files. Try again." };
-  }
+/** Put a file on a slide as its picture/video or narration, replacing what was there. */
+async function setMedia(
+  admin: AdminClient,
+  trackId: string,
+  moduleId: string,
+  slideId: string,
+  m: { role: "visual" | "narration"; kind: "image" | "video" | "audio"; source: "upload" | "unsplash" | "link"; path: string | null; url: string; alt: string; credit: unknown; bytes?: number | null }
+): Promise<Media> {
+  await admin.from("training_media").delete().eq("slide_id", slideId).eq("role", m.role);
+  const { data, error } = await admin
+    .from("training_media")
+    .insert({ slide_id: slideId, module_id: moduleId, role: m.role, kind: m.kind, source: m.source, path: m.path, url: m.url, alt: m.alt.slice(0, 500), credit: m.credit ?? null, bytes: m.bytes ?? null })
+    .select("id, slide_id, role, kind, source, url, alt, credit")
+    .single();
+  if (error || !data) throw new Error(error?.message ?? "insert failed");
+  await tidyModuleFolder(admin, trackId, moduleId);
+  return toMedia(data as MediaRow);
 }
+
 const MEDIA_TYPES: Record<string, string> = {
   "image/jpeg": "jpg",
   "image/png": "png",
@@ -307,58 +453,361 @@ const MEDIA_TYPES: Record<string, string> = {
   "audio/ogg": "ogg",
 };
 
+async function slideBelongs(admin: AdminClient, moduleId: string, slideId: string) {
+  const { data } = await admin.from("training_slides").select("id").eq("id", slideId).eq("module_id", moduleId).maybeSingle();
+  return Boolean(data);
+}
+
 /**
- * A one-time upload URL for an image or video file, so large files go
- * straight from the browser to Storage. The bucket is public-read; the
- * returned URL is what the block stores.
+ * A one-time upload URL into the slide's folder, so large files go
+ * straight from the browser to storage. Pictures and video become the
+ * slide's visual; audio becomes its narration.
  */
-export async function createMediaUpload(
+export async function createSlideUpload(
   moduleId: string,
+  token: string,
+  slideId: string,
   file: { type: string; size: number }
-): Promise<Result<{ path: string; token: string; publicUrl: string }>> {
-  if (!(await canAuthor(moduleId))) return { ok: false, error: "You can't upload media for this module." };
+): Promise<Result<{ path: string; token: string }>> {
+  const e = await editing(moduleId, token);
+  if (!e.ok) return e;
+  if (!(await slideBelongs(e.admin, moduleId, slideId))) return { ok: false, error: "That slide no longer exists." };
   const ext = MEDIA_TYPES[file.type];
-  if (!ext)
-    return { ok: false, error: "Use a JPEG, PNG, WebP, GIF or SVG image, an MP4, WebM or MOV video, or an MP3, M4A, WAV or OGG audio file." };
+  if (!ext) return { ok: false, error: "Use a JPEG, PNG, WebP, GIF or SVG picture, an MP4, WebM or MOV video, or an MP3, M4A, WAV or OGG audio file." };
   const kind = file.type.split("/")[0];
   const limit = (kind === "video" ? 500 : kind === "audio" ? 100 : 20) * 1024 * 1024;
   if (file.size > limit)
-    return { ok: false, error: kind === "video" ? "Videos can be up to 500 MB." : kind === "audio" ? "Audio files can be up to 100 MB." : "Images can be up to 20 MB." };
-
-  const admin = createAdminClient();
-  const path = `${moduleFolder(moduleId)}/${kind === "image" ? "images" : kind}/${randomUUID()}.${ext}`;
-  const { data, error } = await admin.storage.from(MEDIA_BUCKET).createSignedUploadUrl(path);
+    return { ok: false, error: kind === "video" ? "Videos can be up to 500 MB." : kind === "audio" ? "Audio files can be up to 100 MB." : "Pictures can be up to 20 MB." };
+  const role = kind === "audio" ? "narration" : kind === "video" ? "video" : "picture";
+  const path = `${slideFolder(e.trackId, moduleId, slideId)}/${role}-${randomUUID().slice(0, 8)}.${ext}`;
+  const { data, error } = await e.admin.storage.from(MEDIA_BUCKET).createSignedUploadUrl(path);
   if (error || !data) {
-    console.error("[createMediaUpload]", error?.message);
+    console.error("[createSlideUpload]", error?.message);
     return { ok: false, error: "Couldn't start the upload." };
   }
-  const { data: pub } = admin.storage.from(MEDIA_BUCKET).getPublicUrl(path);
-  return { ok: true, path: data.path, token: data.token, publicUrl: pub.publicUrl };
+  return { ok: true, path: data.path, token: data.token };
 }
 
-/** An Author hands a draft to a Super Admin for publishing. */
-export async function markReadyForReview(moduleId: string, ready: boolean): Promise<Result> {
+/** The upload finished: put the file on the slide. */
+export async function attachUpload(
+  moduleId: string,
+  token: string,
+  slideId: string,
+  input: { path: string; alt: string }
+): Promise<Result<{ media: Media; slide: Slide | null }>> {
+  const e = await editing(moduleId, token);
+  if (!e.ok) return e;
+  const folder = slideFolder(e.trackId, moduleId, slideId);
+  if (!input.path.startsWith(`${folder}/`) || input.path.includes("..")) return { ok: false, error: "That file isn't in this slide's folder." };
+  const ext = input.path.split(".").pop()?.toLowerCase() ?? "";
+  const mime = Object.entries(MEDIA_TYPES).find(([, x]) => x === ext)?.[0] ?? "";
+  const kind = mime.startsWith("video") ? "video" : mime.startsWith("audio") ? "audio" : mime.startsWith("image") ? "image" : null;
+  if (!kind) return { ok: false, error: "That file type isn't supported." };
+  const url = e.admin.storage.from(MEDIA_BUCKET).getPublicUrl(input.path).data.publicUrl;
+  try {
+    const media = await setMedia(e.admin, e.trackId, moduleId, slideId, {
+      role: kind === "audio" ? "narration" : "visual",
+      kind,
+      source: "upload",
+      path: input.path,
+      url,
+      alt: input.alt,
+      credit: null,
+    });
+    // An uploaded recording is taken as matching the current script.
+    if (kind === "audio") {
+      const { data } = await e.admin.from("training_slides").select("narration_script").eq("id", slideId).single();
+      await e.admin.from("training_slides").update({ narration_voiced: data?.narration_script ?? "" }).eq("id", slideId);
+    }
+    return { ok: true, media, slide: await readSlide(e.admin, moduleId, slideId) };
+  } catch (err) {
+    console.error("[attachUpload]", err instanceof Error ? err.message : err);
+    return { ok: false, error: "The file uploaded but couldn't be added to the slide. Try again." };
+  }
+}
+
+/** An Unsplash photo as the slide's picture (a link to Unsplash's copy, credited). */
+export async function attachStockPhoto(
+  moduleId: string,
+  token: string,
+  slideId: string,
+  photo: { src: string; alt: string; credit: unknown; downloadLocation: string }
+): Promise<Result<{ media: Media }>> {
+  const e = await editing(moduleId, token);
+  if (!e.ok) return e;
+  if (!(await slideBelongs(e.admin, moduleId, slideId))) return { ok: false, error: "That slide no longer exists." };
+  const url = safeMediaUrl(photo.src);
+  const credit = normalizeCredit(photo.credit);
+  if (!url || new URL(url).hostname !== "images.unsplash.com" || !credit) return { ok: false, error: "That photo can't be used." };
+  try {
+    await trackPhotoUse(photo.downloadLocation);
+    const media = await setMedia(e.admin, e.trackId, moduleId, slideId, { role: "visual", kind: "image", source: "unsplash", path: null, url, alt: photo.alt, credit });
+    return { ok: true, media };
+  } catch (err) {
+    if (err instanceof PhotoError) return { ok: false, error: err.message };
+    console.error("[attachStockPhoto]", err instanceof Error ? err.message : err);
+    return { ok: false, error: "Couldn't use that photo." };
+  }
+}
+
+/** A YouTube or Vimeo video as the slide's visual. */
+export async function attachVideoLink(moduleId: string, token: string, slideId: string, link: string): Promise<Result<{ media: Media }>> {
+  const e = await editing(moduleId, token);
+  if (!e.ok) return e;
+  if (!(await slideBelongs(e.admin, moduleId, slideId))) return { ok: false, error: "That slide no longer exists." };
+  const url = safeMediaUrl(link.trim());
+  if (!url || videoSource(url)?.kind !== "embed") return { ok: false, error: "Paste a YouTube or Vimeo link (or upload a video file instead)." };
+  try {
+    const media = await setMedia(e.admin, e.trackId, moduleId, slideId, { role: "visual", kind: "video", source: "link", path: null, url, alt: "", credit: null });
+    return { ok: true, media };
+  } catch {
+    return { ok: false, error: "Couldn't add the video." };
+  }
+}
+
+/** The picture's description (alt text), or a video's caption. */
+export async function updateMediaAlt(moduleId: string, token: string, mediaId: string, alt: string): Promise<Result> {
+  const e = await editing(moduleId, token);
+  if (!e.ok) return e;
+  const { error } = await e.admin.from("training_media").update({ alt: alt.slice(0, 500) }).eq("id", mediaId).eq("module_id", moduleId);
+  return error ? { ok: false, error: "Couldn't save the description." } : { ok: true };
+}
+
+/** Take the picture/video or narration off a slide; its file is deleted. */
+export async function removeSlideMedia(moduleId: string, token: string, slideId: string, role: "visual" | "narration"): Promise<Result> {
+  const e = await editing(moduleId, token);
+  if (!e.ok) return e;
+  const { error } = await e.admin.from("training_media").delete().eq("slide_id", slideId).eq("module_id", moduleId).eq("role", role);
+  if (error) return { ok: false, error: "Couldn't remove it." };
+  if (role === "narration") await e.admin.from("training_slides").update({ narration_voiced: "" }).eq("id", slideId);
+  await tidyModuleFolder(e.admin, e.trackId, moduleId);
+  return { ok: true };
+}
+
+// ── Narration (ElevenLabs) ─────────────────────────────────────────────
+
+/**
+ * Save the slide's script and voice it. The audio goes straight into the
+ * slide's folder and onto the slide, so paid-for narration is never lost.
+ */
+export async function generateNarration(
+  moduleId: string,
+  token: string,
+  slideId: string,
+  script: string,
+  voiceId: string
+): Promise<Result<{ media: Media; voiced: string }>> {
+  const e = await editing(moduleId, token);
+  if (!e.ok) return e;
+  const text = script.trim();
+  if (!text) return { ok: false, error: "Write the narration script first." };
+  if (text.length > 5000) return { ok: false, error: "That script is too long for one slide (5,000 characters at most)." };
+  if (!/^[\w-]{1,64}$/.test(voiceId)) return { ok: false, error: "Choose a narration voice first (Module settings)." };
+  if (!(await slideBelongs(e.admin, moduleId, slideId))) return { ok: false, error: "That slide no longer exists." };
+  try {
+    const audio = await speak(text, voiceId);
+    const path = `${slideFolder(e.trackId, moduleId, slideId)}/narration-${randomUUID().slice(0, 8)}.mp3`;
+    const { error } = await e.admin.storage.from(MEDIA_BUCKET).upload(path, audio, { contentType: "audio/mpeg" });
+    if (error) {
+      console.error("[generateNarration] upload", error.message);
+      return { ok: false, error: "The audio was made but couldn't be saved. Try again." };
+    }
+    const url = e.admin.storage.from(MEDIA_BUCKET).getPublicUrl(path).data.publicUrl;
+    await e.admin.from("training_slides").update({ narration_script: text, narration_voiced: text, updated_at: new Date().toISOString() }).eq("id", slideId);
+    const media = await setMedia(e.admin, e.trackId, moduleId, slideId, { role: "narration", kind: "audio", source: "upload", path, url, alt: "", credit: null });
+    return { ok: true, media, voiced: text };
+  } catch (err) {
+    return { ok: false, error: err instanceof NarrationError ? err.message : "Couldn't make the narration. Try again." };
+  }
+}
+
+export interface EarlierNarration {
+  path: string;
+  url: string;
+}
+
+/**
+ * Narration made with the old builder, still in the module's old folder
+ * (modules/<id>/narration). Listen and choose: nothing is matched up
+ * automatically.
+ */
+export async function listEarlierNarration(moduleId: string): Promise<Result<{ files: EarlierNarration[] }>> {
   if (!(await canAuthor(moduleId))) return { ok: false, error: "You can't edit this module." };
+  const admin = createAdminClient();
+  try {
+    const files = await listFiles(admin, `modules/${moduleId}/narration`);
+    return { ok: true, files: files.map((path) => ({ path, url: admin.storage.from(MEDIA_BUCKET).getPublicUrl(path).data.publicUrl })) };
+  } catch {
+    return { ok: true, files: [] };
+  }
+}
+
+/** Copy an earlier narration file into the slide's folder and use it (it's taken as matching the current script). */
+export async function applyEarlierNarration(moduleId: string, token: string, slideId: string, fromPath: string): Promise<Result<{ media: Media; voiced: string }>> {
+  const e = await editing(moduleId, token);
+  if (!e.ok) return e;
+  if (!fromPath.startsWith(`modules/${moduleId}/narration/`) || fromPath.includes("..")) return { ok: false, error: "That file isn't this module's." };
+  const { data: slide } = await e.admin.from("training_slides").select("narration_script").eq("id", slideId).eq("module_id", moduleId).maybeSingle();
+  if (!slide) return { ok: false, error: "That slide no longer exists." };
+  const to = `${slideFolder(e.trackId, moduleId, slideId)}/narration-${randomUUID().slice(0, 8)}.mp3`;
+  const { error } = await e.admin.storage.from(MEDIA_BUCKET).copy(fromPath, to);
+  if (error) return { ok: false, error: "Couldn't copy that file." };
+  const voiced = (slide.narration_script as string) ?? "";
+  await e.admin.from("training_slides").update({ narration_voiced: voiced }).eq("id", slideId);
+  const url = e.admin.storage.from(MEDIA_BUCKET).getPublicUrl(to).data.publicUrl;
+  const media = await setMedia(e.admin, e.trackId, moduleId, slideId, { role: "narration", kind: "audio", source: "upload", path: to, url, alt: "", credit: null });
+  return { ok: true, media, voiced };
+}
+
+/** The voices on the ElevenLabs account. */
+export async function getNarrationVoices(moduleId: string): Promise<Result<{ voices: Voice[] }>> {
+  if (!(await canAuthor(moduleId))) return { ok: false, error: "You can't edit this module." };
+  try {
+    return { ok: true, voices: await listVoices() };
+  } catch (e) {
+    return { ok: false, error: e instanceof NarrationError ? e.message : "Couldn't load the voices." };
+  }
+}
+
+/** A voice that isn't in the list, by its ElevenLabs voice ID. */
+export async function findVoice(moduleId: string, voiceId: string): Promise<Result<{ voice: Voice }>> {
+  if (!(await canAuthor(moduleId))) return { ok: false, error: "You can't edit this module." };
+  try {
+    const voice = await getVoice(voiceId.trim());
+    if (!voice) return { ok: false, error: "ElevenLabs doesn't know that voice on this account. If it's from the Voice Library, add it to My Voices in ElevenLabs first." };
+    return { ok: true, voice };
+  } catch (e) {
+    return { ok: false, error: e instanceof NarrationError ? e.message : "Couldn't look up that voice." };
+  }
+}
+
+/** The voice every module uses unless it sets its own (0038). Super Admins only. */
+export async function setDefaultVoice(voice: { id: string; name: string } | null): Promise<Result> {
+  const me = await staff();
+  if (!me) return { ok: false, error: "Only platform staff can set the default voice." };
+  if (voice && !/^[\w-]{1,64}$/.test(voice.id)) return { ok: false, error: "That voice isn't valid." };
   const supabase = await createClient();
   const { error } = await supabase
-    .from("training_module_drafts")
+    .from("training_settings")
+    .update({ narration_voice: voice ? { id: voice.id, name: voice.name.slice(0, 100) } : null, updated_at: new Date().toISOString(), updated_by: me.id })
+    .eq("id", true);
+  if (error) return { ok: false, error: "Couldn't save the default voice." };
+  refresh();
+  return { ok: true };
+}
+
+// ── Photos (Unsplash) ──────────────────────────────────────────────────
+
+export async function searchStockPhotos(moduleId: string, query: string, page = 1): Promise<Result<{ photos: StockPhoto[]; totalPages: number }>> {
+  if (!(await canAuthor(moduleId))) return { ok: false, error: "You can't edit this module." };
+  try {
+    const r = await searchPhotos(query, Math.max(1, Math.min(20, Math.floor(page))));
+    return { ok: true, photos: r.photos, totalPages: r.totalPages };
+  } catch (e) {
+    return { ok: false, error: e instanceof PhotoError ? e.message : "Photo search didn't work. Try again." };
+  }
+}
+
+// ── Citations: Legislation Library sections only ───────────────────────
+
+export interface LibraryHit extends Citation {
+  snippet: string;
+}
+
+function labelFor(documentTitle: string, label: string) {
+  return label && label !== documentTitle ? `${documentTitle}, ${label}` : documentTitle;
+}
+
+/**
+ * Find library sections to cite: "45" or "s. 45" looks the section up by
+ * number; anything else searches by meaning. Only module text goes to the
+ * search (no one's details).
+ */
+export async function searchCitations(moduleId: string, query: string): Promise<Result<{ hits: LibraryHit[] }>> {
+  if (!(await canAuthor(moduleId))) return { ok: false, error: "You can't edit this module." };
+  const q = query.trim().slice(0, 300);
+  if (!q) return { ok: true, hits: [] };
+  try {
+    const bySection = /^\s*(?:s(?:ection|\.)?\s*)?\d{1,3}(?:\.\d{1,3})?\s*$/i.test(q) ? await passagesForCitations([`s. ${q.replace(/[^\d.]/g, "")}`]) : [];
+    const passages = bySection.length ? bySection : await searchLibrary([q], { perQuery: 12, threshold: 0.25, limit: 12 });
+    return {
+      ok: true,
+      hits: passages.map((p) => ({ chunkId: p.id, label: labelFor(p.documentTitle, p.label), snippet: p.text.replace(/\s+/g, " ").slice(0, 280) })),
+    };
+  } catch (e) {
+    console.error("[searchCitations]", e instanceof Error ? e.message : e);
+    return { ok: false, error: "The library search didn't work. Try again." };
+  }
+}
+
+/** Only sections that exist in the library, labelled the library's way. */
+async function verifiedCitations(chunkIds: string[]): Promise<Citation[]> {
+  const ids = [...new Set(chunkIds)].slice(0, 8);
+  if (!ids.length) return [];
+  const admin = createAdminClient();
+  const { data: chunks } = await admin.from("knowledge_chunks").select("id, title, legislation_document_id").in("id", ids).eq("scope", "legislation");
+  const docIds = [...new Set((chunks ?? []).map((c) => c.legislation_document_id as string))];
+  const { data: docs } = docIds.length ? await admin.from("legislation_documents").select("id, title").in("id", docIds) : { data: [] };
+  const docBy = new Map((docs ?? []).map((d) => [d.id as string, d.title as string]));
+  return ids.flatMap((id) => {
+    const c = (chunks ?? []).find((x) => x.id === id);
+    const doc = c ? docBy.get(c.legislation_document_id as string) : undefined;
+    return c && doc ? [{ chunkId: id, label: labelFor(doc, (c.title as string | null) ?? "") }] : [];
+  });
+}
+
+// ── Review and publishing ──────────────────────────────────────────────
+
+/** An Author hands a module to a Super Admin for publishing. */
+export async function markReadyForReview(moduleId: string, ready: boolean): Promise<Result> {
+  if (!(await canAuthor(moduleId))) return { ok: false, error: "You can't edit this module." };
+  const { error } = await createAdminClient()
+    .from("training_modules")
     .update({ ready_for_review_at: ready ? new Date().toISOString() : null })
-    .eq("module_id", moduleId);
+    .eq("id", moduleId);
   if (error) return { ok: false, error: "Couldn't update the module." };
   refresh(moduleId);
   return { ok: true };
 }
+
+/** Publish the slides as they're saved. Not while someone else has the module checked out. */
+export async function publishModule(moduleId: string): Promise<Result<{ version: number }>> {
+  const me = await staff();
+  if (!me) return { ok: false, error: "Only platform staff can publish training." };
+  if (await heldByOther(moduleId, me.id)) return { ok: false, error: "Someone is editing this module. Publish once they've checked it in." };
+  const admin = createAdminClient();
+  const [{ data: mod }, { data: rows }, { data: media }] = await Promise.all([
+    admin.from("training_modules").select("title, track_id, objectives, further_reading").eq("id", moduleId).maybeSingle(),
+    admin.from("training_slides").select(SLIDE_COLUMNS).eq("module_id", moduleId),
+    admin.from("training_media").select("id, slide_id, role, kind, source, url, alt, credit").eq("module_id", moduleId),
+  ]);
+  if (!mod) return { ok: false, error: "Module not found." };
+  const info = { title: mod.title as string, objectives: normalizeObjectives(mod.objectives), furtherReading: normalizeFurtherReading(mod.further_reading) };
+  const slides = toSlides((rows ?? []) as SlideRow[], (media ?? []) as MediaRow[]);
+  const problems = publishProblems(info, slides);
+  if (problems.length) return { ok: false, error: problems.join(" ") };
+  const content = buildPlayerContent(info, slides);
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("publish_training_module", { p_module_id: moduleId, p_content: content });
+  if (error) {
+    console.error("[publishModule]", error.message);
+    return { ok: false, error: error.code === "P0001" ? error.message : "Couldn't publish." };
+  }
+  await admin.from("training_modules").update({ cover: coverOf(content) }).eq("id", moduleId);
+  // Files only the previous published copy used can go now.
+  await tidyModuleFolder(admin, mod.track_id as string, moduleId);
+  refresh(moduleId);
+  return { ok: true, version: data as number };
+}
+
+// ── Authors ────────────────────────────────────────────────────────────
 
 /** Assign an Author to a module by email. They need a StrataCouncil.ca account. */
 export async function addModuleAuthor(moduleId: string, email: string): Promise<Result> {
   const me = await staff();
   if (!me) return { ok: false, error: "Only platform staff can assign authors." };
   const admin = createAdminClient();
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("id")
-    .ilike("email", email.trim())
-    .maybeSingle();
+  const { data: profile } = await admin.from("profiles").select("id").ilike("email", email.trim()).maybeSingle();
   if (!profile) return { ok: false, error: "No StrataCouncil.ca account uses that email. Ask them to sign up first." };
   const supabase = await createClient();
   const { error } = await supabase
@@ -378,260 +827,9 @@ export async function removeModuleAuthor(moduleId: string, userId: string): Prom
   return { ok: true };
 }
 
-// ── Narration (ElevenLabs) and stock photos (Unsplash) ─────────────────
+// ── Demo links (0040) ──────────────────────────────────────────────────
 
-/** The voices on the ElevenLabs account, for the module's narration voice. */
-export async function getNarrationVoices(moduleId: string): Promise<Result<{ voices: Voice[] }>> {
-  if (!(await canAuthor(moduleId))) return { ok: false, error: "You can't edit this module." };
-  try {
-    return { ok: true, voices: await listVoices() };
-  } catch (e) {
-    return { ok: false, error: e instanceof NarrationError ? e.message : "Couldn't load the voices." };
-  }
-}
-
-/** A voice that isn't in the list, by its ElevenLabs voice ID. */
-export async function findVoice(moduleId: string, voiceId: string): Promise<Result<{ voice: Voice }>> {
-  if (!(await canAuthor(moduleId))) return { ok: false, error: "You can't edit this module." };
-  try {
-    const voice = await getVoice(voiceId.trim());
-    if (!voice)
-      return {
-        ok: false,
-        error: "ElevenLabs doesn't know that voice on this account. If it's from the Voice Library, add it to My Voices in ElevenLabs first.",
-      };
-    return { ok: true, voice };
-  } catch (e) {
-    return { ok: false, error: e instanceof NarrationError ? e.message : "Couldn't look up that voice." };
-  }
-}
-
-/** The narration voice every module uses unless it sets its own (0038). Super Admins only. */
-export async function setDefaultVoice(voice: { id: string; name: string } | null): Promise<Result> {
-  const me = await staff();
-  if (!me) return { ok: false, error: "Only platform staff can set the default voice." };
-  if (voice && !/^[\w-]{1,64}$/.test(voice.id)) return { ok: false, error: "That voice isn't valid." };
-  const supabase = await createClient();
-  const { error } = await supabase
-    .from("training_settings")
-    .update({ narration_voice: voice ? { id: voice.id, name: voice.name.slice(0, 100) } : null, updated_at: new Date().toISOString(), updated_by: me.id })
-    .eq("id", true);
-  if (error) {
-    console.error("[setDefaultVoice]", error.message);
-    return { ok: false, error: "Couldn't save the default voice." };
-  }
-  refresh();
-  return { ok: true };
-}
-
-/**
- * Voice one screen's narration script and store the MP3 with the module's
- * other media. The builder puts the returned URL on the screen and records
- * which script it was made from.
- */
-export async function generateNarration(
-  moduleId: string,
-  text: string,
-  voiceId: string,
-  screenId?: string
-): Promise<Result<{ url: string; voicedText: string }>> {
-  if (!(await canAuthor(moduleId))) return { ok: false, error: "You can't edit this module." };
-  const script = text.trim();
-  if (!script) return { ok: false, error: "Write the narration script first." };
-  if (script.length > 5000) return { ok: false, error: "That script is too long for one screen (5,000 characters at most)." };
-  try {
-    const audio = await speak(script, voiceId);
-    const path = `${moduleFolder(moduleId)}/narration/${randomUUID()}.mp3`;
-    const admin = createAdminClient();
-    const { error } = await admin.storage.from(MEDIA_BUCKET).upload(path, audio, { contentType: "audio/mpeg" });
-    if (error) {
-      console.error("[generateNarration] upload", error.message);
-      return { ok: false, error: "The audio was made but couldn't be saved. Try again." };
-    }
-    const url = admin.storage.from(MEDIA_BUCKET).getPublicUrl(path).data.publicUrl;
-    // Attach it to its screen in the saved draft straight away, so paid-for audio can't be lost with an open page.
-    if (screenId) await attachNarration(moduleId, [{ screenId, url, voicedText: script }]).catch((e) => console.error("[generateNarration] attach", e));
-    return { ok: true, url, voicedText: script };
-  } catch (e) {
-    return { ok: false, error: e instanceof NarrationError ? e.message : "Couldn't make the narration. Try again." };
-  }
-}
-
-/**
- * Put narration on screens in the saved draft, without counting as an edit
- * (updated_at stays), so an open builder's own saves aren't refused.
- */
-async function attachNarration(moduleId: string, items: { screenId: string; url: string; voicedText: string }[]) {
-  const admin = createAdminClient();
-  const { data } = await admin.from("training_module_drafts").select("content").eq("module_id", moduleId).maybeSingle();
-  if (!data) return 0;
-  const content = data.content as { sections?: { screens?: { id?: string; narration?: Record<string, unknown> }[] }[] };
-  let changed = 0;
-  for (const section of content.sections ?? []) {
-    for (const screen of section.screens ?? []) {
-      const item = items.find((i) => i.screenId === screen.id);
-      if (!item) continue;
-      screen.narration = { ...(screen.narration ?? {}), src: item.url, voicedText: item.voicedText };
-      changed++;
-    }
-  }
-  if (changed) {
-    const { error } = await admin.from("training_module_drafts").update({ content }).eq("module_id", moduleId);
-    if (error) throw new Error(error.message);
-  }
-  return changed;
-}
-
-export interface LooseNarration {
-  url: string;
-  createdAt: string | null;
-  size: number;
-}
-
-/**
- * Narration audio in the module's folder that no screen uses: made, paid
- * for, but not attached (for example, lost with an open page). Oldest
- * first, which is the order "Generate narration" makes them in.
- */
-export async function findLooseNarration(moduleId: string): Promise<Result<{ files: LooseNarration[] }>> {
-  if (!(await canAuthor(moduleId))) return { ok: false, error: "You can't edit this module." };
-  try {
-    const admin = createAdminClient();
-    const [files, draft, versions] = await Promise.all([
-      listMedia(admin, `${moduleFolder(moduleId)}/narration`),
-      admin.from("training_module_drafts").select("content").eq("module_id", moduleId).maybeSingle(),
-      admin.from("training_module_versions").select("content").eq("module_id", moduleId),
-    ]);
-    const used = JSON.stringify([draft.data?.content, versions.data]);
-    const loose = files
-      .filter((f) => !used.includes(f.path))
-      .sort((a, b) => (a.createdAt ?? "").localeCompare(b.createdAt ?? ""))
-      .map((f) => ({ url: admin.storage.from(MEDIA_BUCKET).getPublicUrl(f.path).data.publicUrl, createdAt: f.createdAt, size: f.size }));
-    return { ok: true, files: loose };
-  } catch (e) {
-    console.error("[findLooseNarration]", e instanceof Error ? e.message : e);
-    return { ok: false, error: "Couldn't look for narration files. Try again." };
-  }
-}
-
-export async function searchStockPhotos(
-  moduleId: string,
-  query: string,
-  page = 1
-): Promise<Result<{ photos: StockPhoto[]; totalPages: number }>> {
-  if (!(await canAuthor(moduleId))) return { ok: false, error: "You can't edit this module." };
-  try {
-    const r = await searchPhotos(query, Math.max(1, Math.min(20, Math.floor(page))));
-    return { ok: true, photos: r.photos, totalPages: r.totalPages };
-  } catch (e) {
-    return { ok: false, error: e instanceof PhotoError ? e.message : "Photo search didn't work. Try again." };
-  }
-}
-
-/** An author chose a photo: tell Unsplash, as their guidelines require. */
-export async function chooseStockPhoto(moduleId: string, downloadLocation: string): Promise<Result> {
-  if (!(await canAuthor(moduleId))) return { ok: false, error: "You can't edit this module." };
-  try {
-    await trackPhotoUse(downloadLocation);
-    return { ok: true };
-  } catch (e) {
-    return { ok: false, error: e instanceof PhotoError ? e.message : "Couldn't use that photo." };
-  }
-}
-
-// ── Tighten with AI ────────────────────────────────────────────────────
-
-/**
- * Rewrite one screen's on-screen text so it reads at a glance while the
- * narration plays. Only the text-type blocks change: the narration script
- * (and so any audio made from it), questions, scenarios and media are kept
- * exactly as they are. Course text only; no one's details are involved.
- */
-/** On-screen words the builder aims for (it flags screens over this). */
-const TIGHTEN_TARGET = 45;
-
-export async function tightenScreen(moduleId: string, raw: unknown): Promise<Result<{ screen: Screen; before: number; after: number }>> {
-  if (!(await canAuthor(moduleId))) return { ok: false, error: "You can't edit this module." };
-  const screen = normalizeModuleContent({ sections: [{ id: "s", title: "s", screens: [raw] }] }).sections[0]?.screens[0];
-  if (!screen) return { ok: false, error: "That screen couldn't be read." };
-  const before = onScreenWords(screen);
-  if (!screenForTightening(screen).length) return { ok: true, screen, before, after: before };
-  try {
-    // A second, firmer pass when the first leaves it over the target.
-    let current = screen;
-    for (let pass = 0; pass < 2 && onScreenWords(current) > TIGHTEN_TARGET; pass++) {
-      const words = onScreenWords(current);
-      const result = await askClaudeJson<unknown>({
-        system: TIGHTEN_INSTRUCTIONS,
-        messages: [
-          {
-            role: "user",
-            content: `Screen title: ${current.title}\n\nNarration (read aloud with the screen):\n${current.narration.transcript || "(none)"}\n\nCurrent on-screen blocks (${words} words; bring them to 40 or fewer${pass ? ". The last rewrite was still too long: cut harder, merge or drop blocks, and leave detail to the narration" : ""}):\n${JSON.stringify(screenForTightening(current), null, 1)}`,
-          },
-        ],
-        schema: tightenSchema,
-        effort: "low",
-        maxTokens: 8000,
-      });
-      const next = applyTightened(current, result);
-      if (onScreenWords(next) >= words) break;
-      current = next;
-    }
-    return { ok: true, screen: current, before, after: onScreenWords(current) };
-  } catch (e) {
-    console.error("[tightenScreen]", e instanceof Error ? e.message : e);
-    return { ok: false, error: "The AI couldn't tighten this screen. Try again." };
-  }
-}
-
-/**
- * Check the module's saved draft against the Legislation Library (0037).
- * Runs in the background; getFactCheck reports progress and the result.
- */
-export async function startFactCheck(moduleId: string): Promise<Result> {
-  if (!(await staff())) return { ok: false, error: "Only platform staff can run a fact check." };
-  const admin = createAdminClient();
-  const { data: mod } = await admin.from("training_module_drafts").select("fact_check").eq("module_id", moduleId).maybeSingle();
-  if (!mod) return { ok: false, error: "That module wasn't found." };
-  const current = normalizeFactCheck(mod.fact_check);
-  if (current?.status === "checking" && Date.now() - Date.parse(current.checkedAt) < 15 * 60_000)
-    return { ok: false, error: "A check is already running." };
-  // Show it as started right away (before queuing, so the job's own progress isn't overwritten).
-  await admin
-    .from("training_module_drafts")
-    .update({ fact_check: { status: "checking", checkedAt: new Date().toISOString(), draftUpdatedAt: null, sectionsDone: 0, sectionsTotal: 0, issues: [] } })
-    .eq("module_id", moduleId);
-  try {
-    await inngest.send({ name: TRAINING_FACT_CHECK_EVENT, data: { moduleId } });
-  } catch (err) {
-    console.error("[startFactCheck]", err instanceof Error ? err.message : err);
-    await admin.from("training_module_drafts").update({ fact_check: mod.fact_check }).eq("module_id", moduleId);
-    return { ok: false, error: "Couldn't start the check. Try again." };
-  }
-  return { ok: true };
-}
-
-export async function getFactCheck(moduleId: string): Promise<Result<{ check: FactCheck | null }>> {
-  if (!(await canAuthor(moduleId))) return { ok: false, error: "You can't see this module." };
-  const { data } = await createAdminClient().from("training_module_drafts").select("fact_check").eq("module_id", moduleId).maybeSingle();
-  return { ok: true, check: normalizeFactCheck(data?.fact_check) };
-}
-
-/** Set a fact-check note aside as checked by hand, or bring it back. */
-export async function markFactIssue(moduleId: string, index: number, checked: boolean): Promise<Result<{ check: FactCheck | null }>> {
-  if (!(await canAuthor(moduleId))) return { ok: false, error: "You can't edit this module." };
-  const admin = createAdminClient();
-  const { data } = await admin.from("training_module_drafts").select("fact_check").eq("module_id", moduleId).maybeSingle();
-  const check = normalizeFactCheck(data?.fact_check);
-  if (!check || check.status === "checking" || !check.issues[index]) return { ok: false, error: "That note has changed. Reload the page." };
-  const issues = check.issues.map((i, n) => (n === index ? { ...i, checkedByHand: checked || undefined } : i));
-  const next = { ...check, issues };
-  const { error } = await admin.from("training_module_drafts").update({ fact_check: next }).eq("module_id", moduleId);
-  if (error) return { ok: false, error: "Couldn't save that. Try again." };
-  return { ok: true, check: next };
-}
-
-/** A Council Training demo link (0040): opens training without signing in, for outside feedback. */
+/** A Council Training demo link: opens training without signing in, for outside feedback. */
 export async function createDemoLink(input: { label: string; includeDrafts: boolean; expiresInDays: number | null }): Promise<Result<{ token: string }>> {
   const me = await staff();
   if (!me) return { ok: false, error: "Only platform staff can make demo links." };

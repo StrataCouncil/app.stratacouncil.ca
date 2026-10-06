@@ -2,20 +2,23 @@
 
 import { useEffect, useState } from "react";
 import { Modal } from "@/components/Modal";
-import { chooseStockPhoto, searchStockPhotos } from "@/app/admin/training/actions";
+import { searchStockPhotos } from "@/app/admin/training/actions";
 import type { StockPhoto } from "@/lib/media/unsplash";
-import type { PhotoCredit } from "@/lib/training/content";
+import type { PhotoCredit } from "@/lib/training/slides";
 
 export interface PickedPhoto {
   src: string;
   alt: string;
   credit: PhotoCredit;
+  /** Unsplash's download event for the photo: triggered when it's put on a slide. */
+  downloadLocation: string;
 }
 
 /**
  * Search Unsplash and choose a photo. Nothing is searched until an author
  * opens the picker (it starts with the suggested words), and nothing is
- * used until they choose a photo, which tells Unsplash it was used.
+ * used until they choose a photo; putting it on a slide tells Unsplash it
+ * was used.
  */
 export function PhotoPicker({
   moduleId,
@@ -55,15 +58,12 @@ export function PhotoPicker({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function choose(p: StockPhoto) {
-    setBusy(true);
-    const r = await chooseStockPhoto(moduleId, p.downloadLocation);
-    setBusy(false);
-    if (!r.ok) return setError(r.error);
+  function choose(p: StockPhoto) {
     onPick({
       src: p.url,
       alt: p.description,
       credit: { source: "unsplash", name: p.photographer, profileUrl: p.profileUrl, photoUrl: p.photoUrl },
+      downloadLocation: p.downloadLocation,
     });
   }
 

@@ -26,6 +26,18 @@ update training_module_drafts set content = jsonb_set(content, '{objectives}', '
 \i supabase/migrations/0039_training_objectives.sql
 select pg_temp.expect('0039 leaves edited objectives alone',
   (select content -> 'objectives' from training_module_drafts where module_id = (select id from training_modules where curriculum_key = 'cr1')) = '["My own objective"]'::jsonb);
+-- 0041: objectives come across to the module itself, each with a Bloom level from its verb.
+select pg_temp.expect('0041: every curriculum module has its objectives, each with a Bloom level',
+  not exists (select 1 from training_modules where curriculum_key is not null
+              and (jsonb_array_length(objectives) not between 1 and 3
+                   or exists (select 1 from jsonb_array_elements(objectives) o
+                              where o ->> 'bloom' not in ('remember','understand','apply','analyze','evaluate','create')))));
+select pg_temp.expect('0041: "Explain ..." is Understand, "Apply ..." is Apply',
+  (select objectives -> 0 ->> 'bloom' from training_modules where curriculum_key = 'sb3') = 'understand'
+  and exists (select 1 from training_modules, jsonb_array_elements(objectives) o
+              where curriculum_key = 'cr1' and o ->> 'text' like 'Apply%' and o ->> 'bloom' = 'apply'));
+select pg_temp.expect('0041: further reading comes across',
+  (select jsonb_array_length(further_reading) from training_modules where curriculum_key = 'sb2') >= 2);
 -- The checks below build their own modules from scratch.
 delete from training_modules;
 select pg_temp.expect('tracks in curriculum order',
@@ -35,65 +47,100 @@ select pg_temp.expect('Council Ready needs Strata Basics; the specialty tracks n
    where (t.code = 'council_ready' and r.code = 'strata_basics')
       or (t.code in ('treasurer','secretary') and r.code = 'council_ready' and t.stage = 'specialty')) = 3);
 
--- Super Admin builds a two-section module in the Council Ready track, and a second, empty one.
-set role authenticated;
-set test.uid = '00000000-0000-0000-0000-00000000000d';  -- Sam, Super Admin
+-- Super Admin builds a module with two topics in the Council Ready track, and a second, empty one.
+-- Slides are written by the server (service role) after its checkout check.
 insert into training_modules (id, track_id, order_index, title)
   select '10000000-0000-0000-0000-000000000001', id, 1, 'What council does' from training_tracks where code = 'council_ready';
 insert into training_modules (id, track_id, order_index, title)
   select '10000000-0000-0000-0000-000000000002', id, 2, 'Meetings' from training_tracks where code = 'council_ready';
-insert into training_module_drafts (module_id, content) values
-  ('10000000-0000-0000-0000-000000000001', '{"sections":[{"id":"l1","title":"One","screens":[]},{"id":"l2","title":"Two","screens":[]}]}'),
-  ('10000000-0000-0000-0000-000000000002', '{"sections":[]}');
-select pg_temp.expect('an empty module can''t be published', pg_temp.fails($$select publish_training_module('10000000-0000-0000-0000-000000000002')$$));
-select pg_temp.expect('publishing gives version 1', publish_training_module('10000000-0000-0000-0000-000000000001') = 1);
+insert into training_slides (id, module_id, position, topic, title, body) values
+  ('30000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', 1, 'One', 'First', 'Text'),
+  ('30000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000001', 2, 'Two', 'Second', 'Text');
+insert into training_media (slide_id, module_id, role, kind, source, path, url) values
+  ('30000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', 'visual', 'image', 'upload',
+   'trk/10000000-0000-0000-0000-000000000001/30000000-0000-0000-0000-000000000001/picture-1.jpg', 'https://example.test/p.jpg');
+select pg_temp.expect('a slide has one picture or video',
+  pg_temp.fails($$insert into training_media (slide_id, module_id, role, kind, source, url) values
+    ('30000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', 'visual', 'image', 'unsplash', 'https://example.test/q.jpg')$$));
+select pg_temp.expect('a slide''s layout is one of four',
+  pg_temp.fails($$update training_slides set layout = 'sideways' where id = '30000000-0000-0000-0000-000000000001'$$));
+
+set role authenticated;
+set test.uid = '00000000-0000-0000-0000-00000000000d';  -- Sam, Super Admin
+select pg_temp.expect('Super Admin reads slides and media', (select count(*) from training_slides) = 2 and (select count(*) from training_media) = 1);
+select pg_temp.expect('no one writes slides directly, not even a Super Admin',
+  pg_temp.fails($$update training_slides set title = 'x' where id = '30000000-0000-0000-0000-000000000001'$$)
+  and pg_temp.fails($$delete from training_media$$));
+select pg_temp.expect('an empty module can''t be published',
+  pg_temp.fails($$select publish_training_module('10000000-0000-0000-0000-000000000002', '{"topics":[]}')$$));
+select pg_temp.expect('publishing gives version 1',
+  publish_training_module('10000000-0000-0000-0000-000000000001', '{"format":"slides","topics":[{"id":"t1","title":"One","slides":[]},{"id":"t2","title":"Two","slides":[]}]}') = 1);
 
 -- Authors: Cara is assigned to module 1 only.
 insert into training_module_authors (module_id, user_id) values ('10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-00000000000c');
 set test.uid = '00000000-0000-0000-0000-00000000000c';
-select pg_temp.expect('an author sees only their module''s draft', (select array_agg(module_id) from training_module_drafts) = array['10000000-0000-0000-0000-000000000001'::uuid]);
-update training_module_drafts set content = '{"sections":[{"id":"l1","title":"One edited","screens":[]},{"id":"l2","title":"Two","screens":[]}]}' where module_id = '10000000-0000-0000-0000-000000000001';
-select pg_temp.expect('an author can edit their draft', (select content -> 'sections' -> 0 ->> 'title' from training_module_drafts) = 'One edited');
-select pg_temp.expect('an author can''t publish', pg_temp.fails($$select publish_training_module('10000000-0000-0000-0000-000000000001')$$));
+select pg_temp.expect('an author sees only their module''s slides',
+  (select array_agg(distinct module_id) from training_slides) = array['10000000-0000-0000-0000-000000000001'::uuid]);
+select pg_temp.expect('an author can''t publish',
+  pg_temp.fails($$select publish_training_module('10000000-0000-0000-0000-000000000001', '{"topics":[{"id":"t1"}]}')$$));
 select pg_temp.expect('an author can''t add modules', pg_temp.fails($$insert into training_modules (track_id, title) select id, 'x' from training_tracks limit 1$$));
+select pg_temp.expect('an author can''t check a module out by writing to it directly',
+  pg_temp.fails($$update training_modules set checked_out_by = '00000000-0000-0000-0000-00000000000c' where id = '10000000-0000-0000-0000-000000000001'$$)
+  or (select checked_out_by from training_modules where id = '10000000-0000-0000-0000-000000000001') is null);
 
--- Xavier (no strata) sees no drafts, can read published content.
+-- Xavier (no strata) sees no slides, can read published content.
 set test.uid = '00000000-0000-0000-0000-00000000000e';
-select pg_temp.expect('a learner sees no drafts', (select count(*) from training_module_drafts) = 0);
+select pg_temp.expect('a learner sees no slides or media', (select count(*) from training_slides) = 0 and (select count(*) from training_media) = 0);
 select pg_temp.expect('a learner sees published versions', (select count(*) from training_module_versions) = 1);
 select pg_temp.expect('a learner can''t write progress directly',
   pg_temp.fails($$insert into training_progress (user_id, module_id, version) values ('00000000-0000-0000-0000-00000000000e', '10000000-0000-0000-0000-000000000001', 1)$$));
-select pg_temp.expect('a section outside the module is refused',
+select pg_temp.expect('a topic outside the module is refused',
   pg_temp.fails($$select complete_training_section('10000000-0000-0000-0000-000000000001', 1, 'nope')$$));
 
 -- Bob (admin of BCS-1234) works through module 1. Module 2 is unpublished, so no credential yet.
 set test.uid = '00000000-0000-0000-0000-00000000000b';
-select pg_temp.expect('first section: module not complete',
-  (complete_training_section('10000000-0000-0000-0000-000000000001', 1, 'l1') ->> 'moduleComplete')::boolean = false);
-select pg_temp.expect('repeating a section is harmless',
-  (select completed_sections from training_progress where user_id = '00000000-0000-0000-0000-00000000000b') = array['l1']
-  and (complete_training_section('10000000-0000-0000-0000-000000000001', 1, 'l1') ->> 'moduleComplete')::boolean = false);
-select pg_temp.expect('last section completes the module, no credential while a module is unpublished',
+select pg_temp.expect('first topic: module not complete',
+  (complete_training_section('10000000-0000-0000-0000-000000000001', 1, 't1') ->> 'moduleComplete')::boolean = false);
+select pg_temp.expect('repeating a topic is harmless',
+  (select completed_sections from training_progress where user_id = '00000000-0000-0000-0000-00000000000b') = array['t1']
+  and (complete_training_section('10000000-0000-0000-0000-000000000001', 1, 't1') ->> 'moduleComplete')::boolean = false);
+select pg_temp.expect('last topic completes the module, no credential while a module is unpublished',
   (select r ->> 'moduleComplete' = 'true' and r ->> 'credentialEarned' = 'false'
-   from complete_training_section('10000000-0000-0000-0000-000000000001', 1, 'l2') r));
+   from complete_training_section('10000000-0000-0000-0000-000000000001', 1, 't2') r));
 
--- Module 2 published: one section to go, then the credential.
+-- Module 2 published: one topic to go, then the credential.
 set test.uid = '00000000-0000-0000-0000-00000000000d';
-update training_module_drafts set content = '{"sections":[{"id":"m1","title":"Only","screens":[]}]}' where module_id = '10000000-0000-0000-0000-000000000002';
-select publish_training_module('10000000-0000-0000-0000-000000000002');
+select publish_training_module('10000000-0000-0000-0000-000000000002', '{"format":"slides","topics":[{"id":"t1","title":"Only","slides":[]}]}');
 set test.uid = '00000000-0000-0000-0000-00000000000b';
 select pg_temp.expect('finishing every module earns the track credential',
-  (complete_training_section('10000000-0000-0000-0000-000000000002', 1, 'm1') ->> 'credentialEarned')::boolean);
+  (complete_training_section('10000000-0000-0000-0000-000000000002', 1, 't1') ->> 'credentialEarned')::boolean);
 select pg_temp.expect('the learner sees their credential', (select count(*) from training_credentials) = 1);
 
 -- Republishing never takes the credential back or reopens a finished module.
 set test.uid = '00000000-0000-0000-0000-00000000000d';
-update training_module_drafts set content = '{"sections":[{"id":"m1","title":"Only","screens":[]},{"id":"m2","title":"New","screens":[]}]}' where module_id = '10000000-0000-0000-0000-000000000002';
-select pg_temp.expect('republishing gives version 2', publish_training_module('10000000-0000-0000-0000-000000000002') = 2);
+select pg_temp.expect('republishing gives version 2',
+  publish_training_module('10000000-0000-0000-0000-000000000002', '{"format":"slides","topics":[{"id":"t1","title":"Only","slides":[]},{"id":"t2","title":"New","slides":[]}]}') = 2);
 reset role;
 select pg_temp.expect('the credential stays after a revision', exists (select 1 from training_credentials where user_id = '00000000-0000-0000-0000-00000000000b'));
 select pg_temp.expect('the finished module stays finished',
   (select completed_at is not null from training_progress where user_id = '00000000-0000-0000-0000-00000000000b' and module_id = '10000000-0000-0000-0000-000000000002'));
+
+-- Deleting a module takes its slides and media rows with it.
+delete from training_modules where id = '10000000-0000-0000-0000-000000000001';
+select pg_temp.expect('slides and media go with their module',
+  not exists (select 1 from training_slides where module_id = '10000000-0000-0000-0000-000000000001')
+  and not exists (select 1 from training_media where module_id = '10000000-0000-0000-0000-000000000001'));
+-- An old-format publication comes down when 0041 runs (the new player only reads slides).
+insert into training_module_versions (module_id, version, content) values ('10000000-0000-0000-0000-000000000002', 3, '{"sections":[{"id":"x"}]}');
+update training_modules set published_version = 3 where id = '10000000-0000-0000-0000-000000000002';
+\i supabase/migrations/0041_training_slides.sql
+select pg_temp.expect('0041 takes down an old-format publication, and the next version number still goes up',
+  (select published_version from training_modules where id = '10000000-0000-0000-0000-000000000002') = 0);
+set role authenticated;
+set test.uid = '00000000-0000-0000-0000-00000000000d';
+select pg_temp.expect('the next publish is version 4',
+  publish_training_module('10000000-0000-0000-0000-000000000002', '{"format":"slides","topics":[{"id":"t1","title":"Only","slides":[]}]}') = 4);
+reset role;
 
 -- Who can see Bob's credential and progress.
 set role authenticated;
@@ -125,9 +172,6 @@ reset role;
 select pg_temp.expect('the server can',
   has_function_privilege('service_role', 'public.match_library_for_training(extensions.vector, integer, double precision)', 'execute')
   and not has_function_privilege('authenticated', 'public.match_library_for_training(extensions.vector, integer, double precision)', 'execute'));
-select pg_temp.expect('fact checks live on the draft, where only staff and authors can read them',
-  exists (select 1 from information_schema.columns where table_name = 'training_module_drafts' and column_name = 'fact_check')
-  and not exists (select 1 from information_schema.columns where table_name = 'training_modules' and column_name = 'fact_check'));
 
 -- One narration voice for every module (0038).
 set role authenticated;

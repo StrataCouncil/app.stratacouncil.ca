@@ -59,7 +59,7 @@ export function AdminTrainingList({ tracks, authors }: { tracks: AdminTrack[]; a
                 <tr>
                   <th>#</th>
                   <th>Module</th>
-                  <th data-center="true">Lessons</th>
+                  <th data-center="true">Slides</th>
                   <th>Status</th>
                   <th>Authors</th>
                   <th></th>
@@ -75,13 +75,14 @@ export function AdminTrainingList({ tracks, authors }: { tracks: AdminTrack[]; a
                       </Link>
                       {m.estimatedMinutes && <div className="roster-table__meta">{m.estimatedMinutes} min</div>}
                     </td>
-                    <td data-center="true">{m.screenCount}</td>
+                    <td data-center="true">{m.slideCount}</td>
                     <td>
                       <span className={`billing-tag ${m.publishedVersion ? "billing-tag--ok" : "billing-tag--off"}`}>
                         {m.publishedVersion ? `Published v${m.publishedVersion}` : "Draft"}
                       </span>
                       {m.hasUnpublishedChanges && m.publishedVersion > 0 && <div className="roster-table__meta">Unpublished changes</div>}
                       {m.readyForReview && <div className="roster-table__warn">Ready for review</div>}
+                      {m.checkout && <div className="roster-table__meta">Being edited by {m.checkout.name}</div>}
                     </td>
                     <td>
                       {(authors[m.id] ?? []).map((a) => a.name).join(", ") || <span className="roster-table__na">&mdash;</span>}
@@ -89,7 +90,7 @@ export function AdminTrainingList({ tracks, authors }: { tracks: AdminTrack[]; a
                     <td>
                       <span className="text-actions">
                         <Link href={`/admin/training/${m.id}`} className="text-action">
-                          Build
+                          Open
                         </Link>
                         <button type="button" className="text-action" onClick={() => setSettings(m)}>
                           Settings
