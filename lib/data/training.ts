@@ -303,3 +303,11 @@ export async function getCredentialsFor(userIds: string[]) {
   }
   return out;
 }
+
+/** The narration voice every module uses unless it sets its own (0038). */
+export async function getDefaultVoice(): Promise<{ id: string; name: string } | null> {
+  const supabase = await createClient();
+  const { data } = await supabase.from("training_settings").select("narration_voice").eq("id", true).maybeSingle();
+  const v = data?.narration_voice as { id?: unknown; name?: unknown } | null | undefined;
+  return v && typeof v.id === "string" && typeof v.name === "string" ? { id: v.id, name: v.name } : null;
+}

@@ -117,3 +117,17 @@ select pg_temp.expect('the server can',
 select pg_temp.expect('fact checks live on the draft, where only staff and authors can read them',
   exists (select 1 from information_schema.columns where table_name = 'training_module_drafts' and column_name = 'fact_check')
   and not exists (select 1 from information_schema.columns where table_name = 'training_modules' and column_name = 'fact_check'));
+
+-- One narration voice for every module (0038).
+set role authenticated;
+set test.uid = '00000000-0000-0000-0000-00000000000e';
+select pg_temp.expect('anyone signed in reads the default voice', (select count(*) from training_settings) = 1);
+update training_settings set narration_voice = '{"id":"x","name":"X"}';
+reset role;
+select pg_temp.expect('learners can''t change it', (select narration_voice from training_settings) is null);
+set role authenticated;
+set test.uid = '00000000-0000-0000-0000-00000000000d';
+update training_settings set narration_voice = '{"id":"x","name":"X"}';
+reset role;
+select pg_temp.expect('a Super Admin can', (select narration_voice ->> 'id' from training_settings) = 'x');
+reset role;

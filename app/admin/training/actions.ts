@@ -10,7 +10,7 @@ import { applyTightened, onScreenWords, screenForTightening, TIGHTEN_INSTRUCTION
 import { askClaudeJson } from "@/lib/ai/claude";
 import { inngest, TRAINING_FACT_CHECK_EVENT } from "@/lib/inngest/client";
 import { normalizeFactCheck, type FactCheck } from "@/lib/training/library";
-import { listVoices, NarrationError, speak, type Voice } from "@/lib/media/elevenlabs";
+import { getVoice, listVoices, NarrationError, speak, type Voice } from "@/lib/media/elevenlabs";
 import { PhotoError, searchPhotos, trackPhotoUse, type StockPhoto } from "@/lib/media/unsplash";
 
 /**
@@ -200,11 +200,95 @@ export async function deleteModule(moduleId: string): Promise<Result> {
   if (mod.published_version > 0) return { ok: false, error: "A published module can't be deleted; learners may have progress in it." };
   const { error } = await supabase.from("training_modules").delete().eq("id", moduleId);
   if (error) return { ok: false, error: "Couldn't delete the module." };
+  // Its media folder goes with it.
+  const admin = createAdminClient();
+  const files = await listMedia(admin, moduleFolder(moduleId)).catch(() => []);
+  if (files.length) await admin.storage.from(MEDIA_BUCKET).remove(files.map((f) => f.path));
   refresh();
   return { ok: true };
 }
 
 const MEDIA_BUCKET = "training-media";
+
+/** Each module's media lives in its own folder: modules/<id>/{images,video,audio,narration}/. */
+const moduleFolder = (moduleId: string) => `modules/${moduleId}`;
+
+type AdminClient = ReturnType<typeof createAdminClient>;
+
+/** Every file under a folder of the training-media bucket, with when it was made. */
+async function listMedia(admin: AdminClient, prefix = ""): Promise<{ path: string; size: number; createdAt: string | null }[]> {
+  const out: { path: string; size: number; createdAt: string | null }[] = [];
+  for (let offset = 0; ; offset += 1000) {
+    const { data, error } = await admin.storage.from(MEDIA_BUCKET).list(prefix, { limit: 1000, offset });
+    if (error) throw new Error(error.message);
+    for (const item of data ?? []) {
+      const path = prefix ? `${prefix}/${item.name}` : item.name;
+      // Folders come back without an id.
+      if (item.id === null) out.push(...(await listMedia(admin, path)));
+      else out.push({ path, size: Number((item.metadata as { size?: number } | null)?.size ?? 0), createdAt: item.created_at ?? null });
+    }
+    if (!data || data.length < 1000) break;
+  }
+  return out;
+}
+
+/**
+ * Files in training-media that no module uses: not in any draft, published
+ * version or card photo. Files from the last day are left alone (an upload
+ * may not be saved into a draft yet).
+ */
+async function unusedMedia(admin: AdminClient) {
+  const [files, drafts, versions, modules] = await Promise.all([
+    listMedia(admin),
+    admin.from("training_module_drafts").select("content"),
+    admin.from("training_module_versions").select("content"),
+    admin.from("training_modules").select("cover"),
+  ]);
+  if (drafts.error || versions.error || modules.error) throw new Error("Couldn't read the modules.");
+  const used = JSON.stringify([drafts.data, versions.data, modules.data]);
+  const marker = `/storage/v1/object/public/${MEDIA_BUCKET}/`;
+  const referenced = new Set<string>();
+  for (let at = used.indexOf(marker); at >= 0; at = used.indexOf(marker, at + 1)) {
+    const rest = used.slice(at + marker.length);
+    const path = rest.slice(0, rest.search(/["?#\\]|$/));
+    try {
+      referenced.add(decodeURIComponent(path));
+    } catch {
+      referenced.add(path);
+    }
+  }
+  const dayAgo = Date.now() - 24 * 60 * 60 * 1000;
+  return files.filter((f) => !referenced.has(f.path) && !(f.createdAt && Date.parse(f.createdAt) > dayAgo));
+}
+
+/** How many media files no module uses, and their size (Super Admin, Council Training admin page). */
+export async function findUnusedMedia(): Promise<Result<{ count: number; bytes: number }>> {
+  if (!(await staff())) return { ok: false, error: "Only platform staff can do this." };
+  try {
+    const files = await unusedMedia(createAdminClient());
+    return { ok: true, count: files.length, bytes: files.reduce((n, f) => n + f.size, 0) };
+  } catch (e) {
+    console.error("[findUnusedMedia]", e instanceof Error ? e.message : e);
+    return { ok: false, error: "Couldn't check storage. Try again." };
+  }
+}
+
+/** Delete the media files no module uses (worked out again at the moment of deleting). */
+export async function deleteUnusedMedia(): Promise<Result<{ deleted: number }>> {
+  if (!(await staff())) return { ok: false, error: "Only platform staff can do this." };
+  try {
+    const admin = createAdminClient();
+    const files = await unusedMedia(admin);
+    for (let i = 0; i < files.length; i += 100) {
+      const { error } = await admin.storage.from(MEDIA_BUCKET).remove(files.slice(i, i + 100).map((f) => f.path));
+      if (error) throw new Error(error.message);
+    }
+    return { ok: true, deleted: files.length };
+  } catch (e) {
+    console.error("[deleteUnusedMedia]", e instanceof Error ? e.message : e);
+    return { ok: false, error: "Couldn't delete the unused files. Try again." };
+  }
+}
 const MEDIA_TYPES: Record<string, string> = {
   "image/jpeg": "jpg",
   "image/png": "png",
@@ -241,7 +325,7 @@ export async function createMediaUpload(
     return { ok: false, error: kind === "video" ? "Videos can be up to 500 MB." : kind === "audio" ? "Audio files can be up to 100 MB." : "Images can be up to 20 MB." };
 
   const admin = createAdminClient();
-  const path = `${new Date().getFullYear()}/${randomUUID()}.${ext}`;
+  const path = `${moduleFolder(moduleId)}/${kind === "image" ? "images" : kind}/${randomUUID()}.${ext}`;
   const { data, error } = await admin.storage.from(MEDIA_BUCKET).createSignedUploadUrl(path);
   if (error || !data) {
     console.error("[createMediaUpload]", error?.message);
@@ -305,6 +389,40 @@ export async function getNarrationVoices(moduleId: string): Promise<Result<{ voi
   }
 }
 
+/** A voice that isn't in the list, by its ElevenLabs voice ID. */
+export async function findVoice(moduleId: string, voiceId: string): Promise<Result<{ voice: Voice }>> {
+  if (!(await canAuthor(moduleId))) return { ok: false, error: "You can't edit this module." };
+  try {
+    const voice = await getVoice(voiceId.trim());
+    if (!voice)
+      return {
+        ok: false,
+        error: "ElevenLabs doesn't know that voice on this account. If it's from the Voice Library, add it to My Voices in ElevenLabs first.",
+      };
+    return { ok: true, voice };
+  } catch (e) {
+    return { ok: false, error: e instanceof NarrationError ? e.message : "Couldn't look up that voice." };
+  }
+}
+
+/** The narration voice every module uses unless it sets its own (0038). Super Admins only. */
+export async function setDefaultVoice(voice: { id: string; name: string } | null): Promise<Result> {
+  const me = await staff();
+  if (!me) return { ok: false, error: "Only platform staff can set the default voice." };
+  if (voice && !/^[\w-]{1,64}$/.test(voice.id)) return { ok: false, error: "That voice isn't valid." };
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("training_settings")
+    .update({ narration_voice: voice ? { id: voice.id, name: voice.name.slice(0, 100) } : null, updated_at: new Date().toISOString(), updated_by: me.id })
+    .eq("id", true);
+  if (error) {
+    console.error("[setDefaultVoice]", error.message);
+    return { ok: false, error: "Couldn't save the default voice." };
+  }
+  refresh();
+  return { ok: true };
+}
+
 /**
  * Voice one screen's narration script and store the MP3 with the module's
  * other media. The builder puts the returned URL on the screen and records
@@ -321,7 +439,7 @@ export async function generateNarration(
   if (script.length > 5000) return { ok: false, error: "That script is too long for one screen (5,000 characters at most)." };
   try {
     const audio = await speak(script, voiceId);
-    const path = `${new Date().getFullYear()}/narration/${randomUUID()}.mp3`;
+    const path = `${moduleFolder(moduleId)}/narration/${randomUUID()}.mp3`;
     const admin = createAdminClient();
     const { error } = await admin.storage.from(MEDIA_BUCKET).upload(path, audio, { contentType: "audio/mpeg" });
     if (error) {

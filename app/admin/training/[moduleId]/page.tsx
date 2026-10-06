@@ -1,14 +1,14 @@
 import { notFound } from "next/navigation";
 import { ModuleBuilder } from "@/components/training/ModuleBuilder";
 import { getCurrentProfile } from "@/lib/data/profile";
-import { getModuleDraft } from "@/lib/data/training";
+import { getDefaultVoice, getModuleDraft } from "@/lib/data/training";
 
 /** Super Admin: the Module Builder, full screen. */
 export default async function AdminModuleBuilderPage({ params }: { params: Promise<{ moduleId: string }> }) {
   const profile = await getCurrentProfile();
   if (!profile?.isSuperAdmin) notFound();
   const { moduleId } = await params;
-  const draft = await getModuleDraft(moduleId);
+  const [draft, defaultVoice] = await Promise.all([getModuleDraft(moduleId), getDefaultVoice()]);
   if (!draft) notFound();
   return (
     <ModuleBuilder
@@ -24,6 +24,7 @@ export default async function AdminModuleBuilderPage({ params }: { params: Promi
         factCheck: draft.factCheck,
       }}
       initialContent={draft.content}
+      defaultVoice={defaultVoice}
       canPublish
       backHref="/admin/training"
     />
