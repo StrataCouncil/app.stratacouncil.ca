@@ -686,7 +686,9 @@ export async function generateNarration(
     const media = await setMedia(e.admin, e.trackId, moduleId, slideId, { role: "narration", kind: "audio", source: "upload", path, url, alt: "", credit: null });
     return { ok: true, media, voiced: text };
   } catch (err) {
-    return { ok: false, error: err instanceof NarrationError ? err.message : "Couldn't make the narration. Try again." };
+    if (err instanceof NarrationError) return { ok: false, error: err.message };
+    console.error("[generateNarration]", slideId, err instanceof Error ? err.message : err);
+    return { ok: false, error: "The audio was made but couldn't be put on the slide. Try again." };
   }
 }
 

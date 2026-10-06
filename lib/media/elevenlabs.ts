@@ -73,12 +73,26 @@ export async function getVoice(voiceId: string): Promise<Voice | null> {
 /** One screen's narration as an MP3. */
 export async function speak(text: string, voiceId: string): Promise<ArrayBuffer> {
   if (!/^[\w-]{1,64}$/.test(voiceId)) throw new NarrationError("Choose a narration voice first.");
-  const res = await fetch(`${API}/text-to-speech/${voiceId}?output_format=mp3_44100_64`, {
-    method: "POST",
-    headers: { "xi-api-key": key(), "Content-Type": "application/json", Accept: "audio/mpeg" },
-    body: JSON.stringify({ text, model_id: MODEL }),
-    cache: "no-store",
-  });
+  const call = () =>
+    fetch(`${API}/text-to-speech/${voiceId}?output_format=mp3_44100_64`, {
+      method: "POST",
+      headers: { "xi-api-key": key(), "Content-Type": "application/json", Accept: "audio/mpeg" },
+      body: JSON.stringify({ text, model_id: MODEL }),
+      cache: "no-store",
+      signal: AbortSignal.timeout(120_000),
+    });
+  let res: Response;
+  try {
+    res = await call();
+    // Busy or a passing server error: one more try after a short wait.
+    if (res.status === 429 || res.status >= 500) {
+      await new Promise((r) => setTimeout(r, 3000));
+      res = await call();
+    }
+  } catch (e) {
+    console.error("[elevenlabs] request failed", e instanceof Error ? e.message : e);
+    throw new NarrationError("ElevenLabs didn't answer in time. Try again.");
+  }
   if (!res.ok) throw new NarrationError(await explain(res));
   return res.arrayBuffer();
 }
@@ -97,6 +111,6 @@ async function explain(res: Response) {
     return `ElevenLabs refused the request (${detail.trim().slice(0, 120)}). Check the account at elevenlabs.io.`;
   if (res.status === 401)
     return `ElevenLabs didn't accept the key${detail.trim() ? ` (${detail.trim().slice(0, 120)})` : ""}. Check ELEVENLABS_API_KEY and its permissions.`;
-  if (res.status === 429) return "ElevenLabs is busy. Wait a moment and try again.";
-  return "ElevenLabs couldn't make the audio. Try again.";
+  if (res.status === 429) return "ElevenLabs is busy (too many requests at once). Wait a minute and try again.";
+  return `ElevenLabs couldn't make the audio (error ${res.status}${detail.trim() ? `: ${detail.trim().slice(0, 120)}` : ""}). Try again.`;
 }

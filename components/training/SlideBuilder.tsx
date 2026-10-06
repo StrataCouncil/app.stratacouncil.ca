@@ -1013,6 +1013,7 @@ function Narration({
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [earlier, setEarlier] = useState<EarlierNarration[] | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
   const stale = narrationOutOfDate(slide);
 
   async function make() {
@@ -1021,9 +1022,13 @@ function Narration({
     if (slide.narration && !stale && !window.confirm("This slide's narration already matches its script. Update it anyway (this uses ElevenLabs credits)?")) return;
     setBusy(slide.narration ? "Updating narration…" : "Creating narration…");
     await beforeFiles();
-    const r = await generateNarration(moduleId, token, slide.id, slide.narrationScript, voice.id);
+    setProblem(null);
+    const r = await narrate(moduleId, token, slide, voice.id);
     setBusy(null);
-    if (!r.ok) return onError(r.error);
+    if (!r.ok) {
+      setProblem(r.error);
+      return r.error.startsWith(LOST) ? onError(r.error) : undefined;
+    }
     onSaved({ narration: r.media, narrationVoiced: r.voiced, narrationScript: r.voiced });
   }
 
@@ -1088,6 +1093,11 @@ function Narration({
           </button>
           <span className="card__meta">Voice: {voice?.name ?? "not chosen (Module settings)"}</span>
         </div>
+        {problem && (
+          <p className="form-error" role="alert">
+            {problem}
+          </p>
+        )}
         <div className="be-row">
           <input ref={input} type="file" hidden accept="audio/*" onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} />
           <button type="button" className="text-action" disabled={Boolean(busy)} onClick={() => input.current?.click()}>
@@ -1133,6 +1143,19 @@ function Narration({
 }
 
 /**
+ * Create one slide's narration. A request that never comes back (the
+ * connection dropped, or it took too long) is reported, not left hanging.
+ */
+async function narrate(moduleId: string, token: string, slide: Slide, voiceId: string) {
+  try {
+    return await generateNarration(moduleId, token, slide.id, slide.narrationScript, voiceId);
+  } catch (e) {
+    console.error("[narrate]", e);
+    return { ok: false as const, error: "The request didn't finish: the connection dropped or ElevenLabs took too long. Try this slide again." };
+  }
+}
+
+/**
  * Create narration for every slide that needs it (a script and no audio,
  * or audio made from an older script), one slide at a time. Each file is
  * saved to its slide as soon as it's made, so stopping part way loses
@@ -1156,6 +1179,7 @@ function NarrateAll({
   onError: (e: string) => void;
 }) {
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
   const stop = useRef(false);
   const todo = slides.filter((s) => s.narrationScript.trim() && (!s.narration || narrationOutOfDate(s)));
   const outdated = todo.filter((s) => s.narration).length;
@@ -1168,13 +1192,16 @@ function NarrateAll({
     stop.current = false;
     await beforeStart();
     const list = [...todo];
+    setProblem(null);
     setProgress({ done: 0, total: list.length });
     for (let i = 0; i < list.length; i++) {
       if (stop.current) break;
       const s = list[i];
-      const r = await generateNarration(moduleId, token, s.id, s.narrationScript, voice.id);
+      const r = await narrate(moduleId, token, s, voice.id);
       if (!r.ok) {
-        onError(`Stopped at slide "${s.title}": ${r.error}`);
+        const message = `Stopped at slide ${slides.indexOf(s) + 1} ("${s.title}"): ${r.error}`;
+        setProblem(message);
+        if (r.error.startsWith(LOST)) onError(r.error);
         break;
       }
       onVoiced(s.id, { narration: r.media, narrationVoiced: r.voiced, narrationScript: r.voiced });
@@ -1192,6 +1219,11 @@ function NarrateAll({
         {ready} of {slides.length} slides have up-to-date narration. {todo.length > 0 ? `${todo.length - outdated} need it${outdated ? `, and ${outdated} need updating because the script changed` : ""}.` : "None need it."} Voice:{" "}
         {voice?.name ?? "not chosen"}.
       </p>
+      {problem && (
+        <p className="form-error" role="alert">
+          {problem}
+        </p>
+      )}
       {progress ? (
         <div className="be-row">
           <span role="status">
