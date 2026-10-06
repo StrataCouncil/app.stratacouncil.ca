@@ -11,7 +11,19 @@ import { formatMinutes, lockedBehind, minutesLeft, nextModule, trackStatus, type
  * it. Completion shows as the filled circles on Council & Roles.
  */
 /** The overview itself, from the learner's tracks (also used by previews). */
-export function TrainingOverview({ tracks, news }: { tracks: TrainingTrack[]; news?: React.ReactNode }) {
+export function TrainingOverview({
+  tracks,
+  news,
+  hrefBase = "/training",
+  demo = false,
+}: {
+  tracks: TrainingTrack[];
+  news?: React.ReactNode;
+  /** Where track and module links point ("/training", or a demo link's "/demo/<token>"). */
+  hrefBase?: string;
+  /** A demo link (0040): nothing is saved, so there's no progress to show. */
+  demo?: boolean;
+}) {
   const core = tracks.filter((t) => t.stage === "core");
   const specialty = tracks.filter((t) => t.stage === "specialty");
   const next = nextModule(tracks);
@@ -34,7 +46,7 @@ export function TrainingOverview({ tracks, news }: { tracks: TrainingTrack[]; ne
 
       <div className="training-overview">
         <div className="training-overview__main">
-          <NextUp tracks={tracks} next={next} />
+          <NextUp tracks={tracks} next={next} hrefBase={hrefBase} />
 
           <TrackGroup
             title="The core"
@@ -42,16 +54,27 @@ export function TrainingOverview({ tracks, news }: { tracks: TrainingTrack[]; ne
             tracks={core}
             all={tracks}
             numbered
+            hrefBase={hrefBase}
           />
           <TrackGroup
             title="Specialty tracks"
             note="For treasurers and secretaries, once you're Council Ready. Each is under an hour."
             tracks={specialty}
             all={tracks}
+            hrefBase={hrefBase}
           />
         </div>
 
         <aside className="training-overview__side" aria-label="Your training">
+          {demo ? (
+            <section className="training-panel">
+              <h2>About this preview</h2>
+              <p className="training-panel__note">
+                You&rsquo;re seeing Council Training as a learner would. Every module is open, and nothing you do is saved.
+                Use &ldquo;Comment on this screen&rdquo; under any screen to tell us what you think.
+              </p>
+            </section>
+          ) : (
           <section className="training-panel">
             <h2>Your progress</h2>
             <ul className="training-progress">
@@ -91,6 +114,7 @@ export function TrainingOverview({ tracks, news }: { tracks: TrainingTrack[]; ne
               A filled circle means the track is complete. Your council sees the same circles on Council &amp; Roles.
             </p>
           </section>
+          )}
 
           {upNext.length > 0 && (
             <section className="training-panel">
@@ -126,7 +150,7 @@ export function TrainingOverview({ tracks, news }: { tracks: TrainingTrack[]; ne
   );
 }
 
-function NextUp({ tracks, next }: { tracks: TrainingTrack[]; next: ReturnType<typeof nextModule<TrainingTrack>> }) {
+function NextUp({ tracks, next, hrefBase }: { tracks: TrainingTrack[]; next: ReturnType<typeof nextModule<TrainingTrack>>; hrefBase: string }) {
   if (!next) {
     const anyPublished = tracks.some((t) => t.modules.some((m) => m.publishedVersion > 0));
     const allDone = anyPublished && tracks.every((t) => t.modules.every((m) => m.publishedVersion === 0 || m.completed));
@@ -157,10 +181,10 @@ function NextUp({ tracks, next }: { tracks: TrainingTrack[]; next: ReturnType<ty
         </p>
         {module.summary && <p className="training-next__summary">{module.summary}</p>}
         <div className="training-next__actions">
-          <Link href={`/training/${track.slug}/${module.id}`} className="button button-primary" data-testid="training-next-start">
+          <Link href={`${hrefBase}/${track.slug}/${module.id}`} className="button button-primary" data-testid="training-next-start">
             {resuming ? "Continue" : "Start module"}
           </Link>
-          <Link href={`/training/${track.slug}`} className="button button-secondary">
+          <Link href={`${hrefBase}/${track.slug}`} className="button button-secondary">
             See {track.title}
           </Link>
         </div>
@@ -176,12 +200,14 @@ function TrackGroup({
   tracks,
   all,
   numbered,
+  hrefBase,
 }: {
   title: string;
   note: string;
   tracks: TrainingTrack[];
   all: TrainingTrack[];
   numbered?: boolean;
+  hrefBase: string;
 }) {
   if (tracks.length === 0) return null;
   return (
@@ -192,7 +218,7 @@ function TrackGroup({
       </div>
       <div className="training-tracks">
         {tracks.map((t, i) => (
-          <TrackCard key={t.id} track={t} all={all} step={numbered ? i + 1 : null} />
+          <TrackCard key={t.id} track={t} all={all} step={numbered ? i + 1 : null} hrefBase={hrefBase} />
         ))}
       </div>
     </section>
@@ -207,7 +233,7 @@ const statusPill: Record<TrackStatus, { label: string; tone: string }> = {
   soon: { label: "Coming soon", tone: "locked" },
 };
 
-function TrackCard({ track, all, step }: { track: TrainingTrack; all: TrainingTrack[]; step: number | null }) {
+function TrackCard({ track, all, step, hrefBase }: { track: TrainingTrack; all: TrainingTrack[]; step: number | null; hrefBase: string }) {
   const status = trackStatus(track, all);
   const blocker = lockedBehind(track, all);
   const published = track.modules.filter((m) => m.publishedVersion > 0);
@@ -262,7 +288,7 @@ function TrackCard({ track, all, step }: { track: TrainingTrack; all: TrainingTr
     );
   }
   return (
-    <Link href={`/training/${track.slug}`} className="track-card" data-status={status} data-testid={`track-card-${track.slug}`}>
+    <Link href={`${hrefBase}/${track.slug}`} className="track-card" data-status={status} data-testid={`track-card-${track.slug}`}>
       {body}
     </Link>
   );

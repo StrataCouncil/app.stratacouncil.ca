@@ -99,7 +99,7 @@ export async function getTrainingTracks(): Promise<TrainingTrack[]> {
   });
 }
 
-function toCover(raw: unknown): ModuleCover | null {
+export function toCover(raw: unknown): ModuleCover | null {
   if (!raw || typeof raw !== "object") return null;
   const c = raw as Record<string, unknown>;
   if (typeof c.src !== "string" || !c.src) return null;

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { completeSection } from "@/app/training/actions";
 import { BlockView, Transcript } from "@/components/training/BlockView";
 import { PhotoCreditLine } from "@/components/training/PhotoPicker";
+import { DemoFeedback } from "@/components/training/DemoFeedback";
 import { isReadingUrl, screenRequirements, type FurtherReading, type ModuleContent, type Screen } from "@/lib/training/content";
 
 type Page =
@@ -39,6 +40,8 @@ export function ModulePlayer({
   preview = false,
   skipWaits = false,
   startScreenId,
+  hrefBase = "/training",
+  demo,
 }: {
   moduleId: string;
   moduleTitle: string;
@@ -51,6 +54,10 @@ export function ModulePlayer({
   /** Author preview only: let Next through without waiting. */
   skipWaits?: boolean;
   startScreenId?: string;
+  /** Where track and module links point ("/training", or a demo link's "/demo/<token>"). */
+  hrefBase?: string;
+  /** A demo link (0040): nothing is saved, and each screen can take a comment. */
+  demo?: { token: string };
 }) {
   const sections = content.sections;
   const pages = useMemo(() => buildPages(content), [content]);
@@ -167,7 +174,7 @@ export function ModulePlayer({
     setError(null);
     const section = sections[page.sectionIndex];
     if (lastOfSection && section && !done.has(section.id)) {
-      if (!preview) {
+      if (!preview && !demo) {
         setSaving(true);
         const r = await completeSection(moduleId, version, section.id);
         setSaving(false);
@@ -232,7 +239,7 @@ export function ModulePlayer({
   return (
     <div className="player" data-large-text={settings.largeText}>
       <nav className="player__menu" data-open={menuOpen} aria-label="Sections">
-        <Link href={preview ? "#" : `/training/${track.slug}`} className="player__back">
+        <Link href={preview ? "#" : `${hrefBase}/${track.slug}`} className="player__back">
           &larr; {track.title}
         </Link>
         <div className="player__module">{moduleTitle}</div>
@@ -281,6 +288,12 @@ export function ModulePlayer({
           <section className="player__complete">
             <h2>{allDone ? "Module complete" : "Almost there"}</h2>
             <p>{allDone ? `You've finished "${moduleTitle}".` : "Some sections still need finishing. Pick one from the menu."}</p>
+            {demo && (
+              <>
+                <p className="card__meta">This is a preview, so nothing was saved. Tell us what you thought of the module as a whole:</p>
+                <DemoFeedback token={demo.token} moduleId={moduleId} moduleTitle={moduleTitle} screenId={null} screenTitle="The whole module" open />
+              </>
+            )}
             {credential && (
               <p className="sync-note sync-note--ok" role="status">
                 You&rsquo;ve completed {track.title}. Your circle is filled in on your training page, and councils
@@ -290,11 +303,11 @@ export function ModulePlayer({
             {!preview && (
               <div className="text-actions">
                 {nextModule && allDone && (
-                  <Link href={`/training/${track.slug}/${nextModule.id}`} className="button button-primary">
+                  <Link href={`${hrefBase}/${track.slug}/${nextModule.id}`} className="button button-primary">
                     Next module: {nextModule.title}
                   </Link>
                 )}
-                <Link href={`/training/${track.slug}`} className="button button-secondary">
+                <Link href={`${hrefBase}/${track.slug}`} className="button button-secondary">
                   Back to {track.title}
                 </Link>
               </div>
@@ -414,6 +427,15 @@ export function ModulePlayer({
               </button>
             </div>
             {narration && waitingOn && <p className="player__waiting player__waiting--below">{waitingOn}</p>}
+            {demo && (
+              <DemoFeedback
+                token={demo.token}
+                moduleId={moduleId}
+                moduleTitle={moduleTitle}
+                screenId={screen?.id ?? page.key}
+                screenTitle={page.title}
+              />
+            )}
           </>
         )}
       </main>

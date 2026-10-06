@@ -142,3 +142,17 @@ update training_settings set narration_voice = '{"id":"x","name":"X"}';
 reset role;
 select pg_temp.expect('a Super Admin can', (select narration_voice ->> 'id' from training_settings) = 'x');
 reset role;
+
+-- Demo links and feedback (0040): Super Admins only.
+reset role;
+insert into training_demo_links (token, label) values ('abcdefghijklmnopqrstuvwxyz', 'BCREA');
+insert into training_feedback (link_label, message) values ('BCREA', 'Screen 3 is too long');
+set role authenticated;
+set test.uid = '00000000-0000-0000-0000-00000000000e';
+select pg_temp.expect('learners see no demo links or feedback',
+  (select count(*) from training_demo_links) = 0 and (select count(*) from training_feedback) = 0);
+select pg_temp.expect('and can''t make a demo link', pg_temp.fails($$insert into training_demo_links (token, label) values ('zyxwvutsrqponmlkjihgfedcba', 'x')$$));
+set test.uid = '00000000-0000-0000-0000-00000000000d';
+select pg_temp.expect('a Super Admin sees them',
+  (select count(*) from training_demo_links) = 1 and (select count(*) from training_feedback) = 1);
+reset role;

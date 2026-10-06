@@ -2,7 +2,8 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 // Reachable without a session. Everything else redirects to /login.
-const PUBLIC_PATHS = ["/login", "/signup", "/auth/confirm"];
+// /demo: Council Training demo links (0040), which check their own token.
+const PUBLIC_PATHS = ["/login", "/signup", "/auth/confirm", "/demo"];
 
 function isPublicPath(pathname: string) {
   return PUBLIC_PATHS.some(
