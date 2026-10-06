@@ -8534,3 +8534,29 @@ a.track-card:focus-visible {
   position: static;
   display: block;
 }
+.builder__outline-edit {
+  margin: 0;
+  padding-left: 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.builder__outline-edit li {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.builder__outline-edit li[data-done="true"] {
+  opacity: 0.6;
+}
+.builder__outline-edit input,
+.builder__outline-edit textarea,
+.builder__outline-edit select {
+  font: inherit;
+  font-size: 0.9rem;
+  padding: 0.4em 0.65em;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--paper);
+  color: var(--ink);
+}
