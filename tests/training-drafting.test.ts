@@ -90,19 +90,26 @@ test("sources are numbered in the order given", () => {
   assert.match(text, /<source id="P1" document="Strata Property Act" section="s. a">/);
 });
 
-test("the instructions carry the objectives, the curriculum and the names, and don't prescribe one teaching model", () => {
+test("the outline follows the blueprint, in order, and nothing else", () => {
   const req = outlineRequest({
     title: "What a strata is",
     summary: "",
     track: "Strata Basics",
     minutes: 12,
     objectives: [{ text: "Describe a strata lot", bloom: "understand" }],
-    curriculum: [{ track: "Strata Basics", title: "What a strata is", summary: "s", current: true }],
+    blueprint: [
+      { topic: "What a strata is", teach: "A type of real estate, and the corporation of all the owners.", activity: "none" },
+      { topic: "How a strata is created", teach: "The strata plan is deposited at the Land Title Office.", activity: "knowledge_check" },
+    ],
     existingTitles: [],
   });
-  assert.match(req, /Describe a strata lot \(Understand\)/);
-  assert.match(req, />> Strata Basics: What a strata is/);
+  assert.match(req, /Describe a strata lot \(Understand: the learner can say what something is and why it matters, in their own words; go no deeper\)/);
+  assert.match(req, /1\. \[What a strata is\] A type of real estate/);
+  assert.match(req, /2\. \[How a strata is created\] \(knowledge_check\)/);
+  assert.match(req, /Follow the blueprint exactly/);
+  assert.match(req, /lawsuits/);
   assert.doesNotMatch(req, /BOPPPS/);
   const slide = slideRequest({ module: { title: "M", objectives: [] }, outline: [planned()], index: 0, written: [], names: ["Wei", "Rosa"] });
   assert.match(slide, /use only these first names: Wei and Rosa/);
+  assert.match(slide, /It teaches only this: Hallways are common property\./);
 });

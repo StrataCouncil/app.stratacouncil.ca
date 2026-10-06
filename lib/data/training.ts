@@ -1,11 +1,13 @@
 import { createClient } from "@/lib/supabase/server";
 import {
+  normalizeBlueprint,
   normalizeCredit,
   normalizeFurtherReading,
   normalizeObjectives,
   normalizePlayerContent,
   normalizeVoice,
   toSlides,
+  type BlueprintStep,
   type FurtherReading,
   type MediaRow,
   type ModuleCover,
@@ -244,6 +246,7 @@ export interface BuilderModule {
   readyForReviewAt: string | null;
   track: { id: string; title: string; slug: string };
   objectives: Objective[];
+  blueprint: BlueprintStep[];
   furtherReading: FurtherReading[];
   voice: { id: string; name: string } | null;
   checkout: Checkout | null;
@@ -258,7 +261,7 @@ export async function getBuilderModule(moduleId: string): Promise<BuilderModule 
     supabase
       .from("training_modules")
       .select(
-        `id, title, summary, estimated_minutes, published_version, published_at, ready_for_review_at, objectives, further_reading, voice, ${CHECKOUT_COLUMNS}, track:training_tracks(id, code, title)`
+        `id, title, summary, estimated_minutes, published_version, published_at, ready_for_review_at, objectives, blueprint, further_reading, voice, ${CHECKOUT_COLUMNS}, track:training_tracks(id, code, title)`
       )
       .eq("id", moduleId)
       .maybeSingle(),
@@ -279,6 +282,7 @@ export async function getBuilderModule(moduleId: string): Promise<BuilderModule 
     readyForReviewAt: (mod.ready_for_review_at as string | null) ?? null,
     track: { id: track.id, title: track.title, slug: trackSlug(track.code) },
     objectives: normalizeObjectives(mod.objectives),
+    blueprint: normalizeBlueprint(mod.blueprint),
     furtherReading: normalizeFurtherReading(mod.further_reading),
     voice: normalizeVoice(mod.voice),
     checkout: toCheckout(mod as unknown as CheckoutRow),

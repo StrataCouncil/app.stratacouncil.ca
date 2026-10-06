@@ -16,6 +16,8 @@
 import type { LibraryPassage } from "./library.ts";
 import {
   bloomLabels,
+  type BlueprintStep,
+  type Bloom,
   countWords,
   ITEM_WORDS_MAX,
   newId,
@@ -84,42 +86,48 @@ Rules:
 - Education, not legal advice: where a situation turns on its facts, say council should get professional advice.
 - No emoji, no exclamation marks.`;
 
-/** How to organize a module so it's easy to learn. */
-export const ORGANIZING = `Organize the module so it's easy to learn:
-- Start with why it matters to the learner: a short situation from strata life, or a question they'd ask (it can be rhetorical).
-- Build from what they already know as an owner to what's new, simple to complex, the big picture before detail.
-- One idea per slide. Never use an idea before the slide that teaches it. Group slides into two to four topics, each answering one question a newcomer would ask, named in plain words.
-- Stay at the objectives' Bloom levels: don't go deeper than they call for. Anything complex or belonging to another module: name it in a sentence and move on.
-- Give the learner something to do on some slides, choosing what fits the material:
-  - accordion: the parts of a whole, or steps, opened one at a time;
-  - flip_cards: a term and what it means, or a common belief and what the law actually says;
-  - knowledge_check: a question on an objective, near the end of the topic that teaches it. Every objective gets at least one.
-- Don't add slides for the objectives or a summary: the player shows the objectives first and a recap at the end.`;
+/** How deep each Bloom level goes, so a basics module doesn't reach for lawsuits. */
+export const BLOOM_DEPTH: Record<Bloom, string> = {
+  remember: "name and recognize the basic terms and facts",
+  understand: "say what something is and why it matters, in their own words",
+  apply: "use a rule or step in an everyday council situation",
+  analyze: "compare options or break a situation into its parts",
+  evaluate: "judge which choice is best and why",
+  create: "put together a plan or document",
+};
 
+/**
+ * The outline: the module's blueprint, turned into slides. The blueprint
+ * is fixed; the AI decides only how to split each step and what each
+ * slide says, never what the module covers.
+ */
 export function outlineRequest(m: {
   title: string;
   summary: string;
   track: string;
   minutes: number | null;
   objectives: Objective[];
-  curriculum: { track: string; title: string; summary: string; current: boolean }[];
+  blueprint: BlueprintStep[];
   existingTitles: string[];
 }) {
-  return `Plan the slides for one Council Training module.
+  return `Turn this Council Training module's blueprint into slides.
 
 Module: ${m.title}
 Track: ${m.track}
-Scope: ${m.summary || "(as the title says)"}
-Length: about ${m.minutes ?? 12} minutes, so 8 to 14 slides.
-Learning objectives (with their Bloom levels):
-${m.objectives.map((o) => `- ${o.text} (${bloomLabels[o.bloom]})`).join("\n")}
+Learning objectives, and how deep each goes:
+${m.objectives.map((o) => `- ${o.text} (${bloomLabels[o.bloom]}: the learner can ${BLOOM_DEPTH[o.bloom]}; go no deeper)`).join("\n")}
 
-The whole curriculum, in order (this module is marked). Leave other modules' material to them:
-${m.curriculum.map((c) => `- ${c.current ? ">> " : ""}${c.track}: ${c.title}. ${c.summary}`).join("\n")}
+The blueprint (the fixed progression of this module):
+${m.blueprint.map((b, i) => `${i + 1}. [${b.topic}]${b.activity !== "none" ? ` (${b.activity})` : ""} ${b.teach.replace(/\s+/g, " ").trim()}`).join("\n")}
 ${m.existingTitles.length ? `\nThe module already has these slides (the new ones go after them; don't repeat them):\n${m.existingTitles.map((t) => `- ${t}`).join("\n")}\n` : ""}
-${ORGANIZING}
+Rules:
+- Follow the blueprint exactly: its steps in order, its topic names unchanged. Add no steps, topics, introductions, objective slides or summary slides (the player shows the objectives first and a recap at the end).
+- Each step becomes one slide, or two if it holds more than one idea. One idea per slide; a learner reads each slide in under 20 seconds.
+- A step marked knowledge_check becomes one slide with a knowledge check on what the steps just before it taught. Other activities (accordion, flip_cards) go on the step's slide.
+- Teach only what each step says. The sources contain far more than this module covers (powers, lawsuits, procedures, exceptions, deadlines): leave all of that out, however relevant it seems. Never reach into other modules.
+- About ${m.minutes ?? 12} minutes in all.
 
-For each slide give: its topic (slides in the same topic share the exact same topic name), a short plain title, the one point it teaches (a sentence, from the sources), the interactive element it uses ("none" for most), and the ids of the sources it relies on.`;
+For each slide give: its topic (the step's topic, exactly), a short plain title, the one point it teaches (a sentence, within the step), its activity ("none" unless the step has one), and the ids of the sources that support it.`;
 }
 
 export function slideRequest(a: {
@@ -138,8 +146,8 @@ Objectives: ${a.module.objectives.map((o) => `${o.text} (${bloomLabels[o.bloom]}
 The plan:
 ${a.outline.map((o, i) => `${i === a.index ? ">> " : "   "}${i + 1}. [${o.topic}] ${o.title}: ${o.point}${o.element !== "none" ? ` (${o.element})` : ""}`).join("\n")}
 ${a.written.length ? `\nSlides already written (build on them; don't repeat them):\n${a.written.map((w) => `- ${w.title}: ${w.body.replace(/\n/g, " ")}`).join("\n")}\n` : ""}
-This slide: "${s.title}". It teaches: ${s.point}
-Use the sources it relies on (${s.sourceIds.join(", ") || "any that apply"}); other sources only if needed.
+This slide: "${s.title}". It teaches only this: ${s.point}
+Use the sources it relies on (${s.sourceIds.join(", ") || "any that apply"}) to get the facts right. Say nothing else from the sources: everything not in this point belongs to another slide or another module.
 
 Write:
 - "title": the slide title (you may keep "${s.title}").

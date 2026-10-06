@@ -18,7 +18,7 @@ import {
   type DraftedSlide,
   type OutlineSlide,
 } from "@/lib/training/drafting";
-import { normalizeObjectives, type Slide } from "@/lib/training/slides";
+import { normalizeBlueprint, normalizeObjectives, type Slide } from "@/lib/training/slides";
 import type { AdminClient } from "@/lib/training/builder-server";
 
 /**
@@ -36,7 +36,7 @@ const MAX_SOURCES = 40;
 async function moduleInfo(admin: AdminClient, moduleId: string) {
   const { data: m } = await admin
     .from("training_modules")
-    .select("id, title, summary, estimated_minutes, objectives, track:training_tracks(title)")
+    .select("id, title, summary, estimated_minutes, objectives, blueprint, track:training_tracks(title)")
     .eq("id", moduleId)
     .maybeSingle();
   if (!m) return null;
@@ -47,6 +47,7 @@ async function moduleInfo(admin: AdminClient, moduleId: string) {
     minutes: m.estimated_minutes as number | null,
     track: track?.title ?? "",
     objectives: normalizeObjectives(m.objectives).filter((o) => o.text.trim()),
+    blueprint: normalizeBlueprint(m.blueprint).filter((b) => b.teach.trim()),
   };
 }
 
@@ -56,14 +57,15 @@ export interface SourceHit {
   snippet: string;
 }
 
-/** Library sections that match the module's title, scope and objectives, for the author to approve. */
+/** Library sections that match each step of the module's blueprint, for the author to approve. */
 export async function suggestSources(moduleId: string): Promise<Result<{ hits: SourceHit[] }>> {
   if (!(await canAuthor(moduleId))) return { ok: false, error: "You can't edit this module." };
   const m = await moduleInfo(createAdminClient(), moduleId);
   if (!m) return { ok: false, error: "Module not found." };
   try {
-    const queries = [[m.title, m.summary].filter(Boolean).join(". "), ...m.objectives.map((o) => o.text)];
-    const passages = await searchLibrary(queries, { perQuery: 8, threshold: 0.3, limit: 24 });
+    if (!m.blueprint.length) return { ok: false, error: "Fill in the module's blueprint first: it decides what the AI looks for." };
+    const queries = m.blueprint.map((b) => `${b.topic}. ${b.teach}`).slice(0, 20);
+    const passages = await searchLibrary(queries, { perQuery: 4, threshold: 0.3, limit: 30 });
     return {
       ok: true,
       hits: passages.map((p) => ({ chunkId: p.id, label: labelFor(p.documentTitle, p.label), snippet: p.text.replace(/\s+/g, " ").slice(0, 240) })),
@@ -94,19 +96,13 @@ export async function draftOutline(moduleId: string, token: string, chunkIds: st
   const m = await moduleInfo(e.admin, moduleId);
   if (!m) return { ok: false, error: "Module not found." };
   if (!m.objectives.length) return { ok: false, error: "Add the module's learning objectives first." };
+  if (!m.blueprint.length) return { ok: false, error: "Fill in the module's blueprint first." };
   if (!chunkIds.length) return { ok: false, error: "Choose at least one Legislation Library section to work from." };
   try {
-    const [src, { data: all }, { data: existing }] = await Promise.all([
+    const [src, { data: existing }] = await Promise.all([
       sources(chunkIds),
-      e.admin.from("training_modules").select("id, title, summary, order_index, track:training_tracks(title, order_index)"),
       e.admin.from("training_slides").select("title, position").eq("module_id", moduleId).order("position"),
     ]);
-    const curriculum = (all ?? [])
-      .map((r) => {
-        const t = (Array.isArray(r.track) ? r.track[0] : r.track) as { title: string; order_index: number } | null;
-        return { track: t?.title ?? "", trackOrder: t?.order_index ?? 0, order: r.order_index as number, title: r.title as string, summary: (r.summary as string) ?? "", current: r.id === moduleId };
-      })
-      .sort((a, b) => a.trackOrder - b.trackOrder || a.order - b.order);
     const raw = await askClaudeJson<unknown>({
       system: [
         { type: "text", text: WRITER_SYSTEM },
@@ -116,7 +112,7 @@ export async function draftOutline(moduleId: string, token: string, chunkIds: st
       messages: [
         {
           role: "user",
-          content: outlineRequest({ ...m, curriculum, existingTitles: (existing ?? []).map((s) => s.title as string).filter(Boolean) }),
+          content: outlineRequest({ ...m, existingTitles: (existing ?? []).map((s) => s.title as string).filter(Boolean) }),
         },
       ],
       schema: outlineSchema,

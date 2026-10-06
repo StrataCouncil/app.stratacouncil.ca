@@ -39,6 +39,7 @@ import { PhotoCreditLine, PhotoPicker } from "@/components/training/PhotoPicker"
 import type { BuilderModule, Checkout } from "@/lib/data/training";
 import type { Voice } from "@/lib/media/elevenlabs";
 import {
+  ACTIVITIES,
   BLOOM_LEVELS,
   bloomFor,
   bloomLabels,
@@ -58,7 +59,9 @@ import {
   SLIDE_WORDS_MAX,
   SLIDE_WORDS_TARGET,
   slideProblems,
+  type Activity,
   type Bloom,
+  type BlueprintStep,
   type ElementType,
   type FurtherReading,
   type Objective,
@@ -96,6 +99,7 @@ export function SlideBuilder({
   const router = useRouter();
   const [slides, setSlides] = useState<Slide[]>(initial.slides);
   const [objectives, setObjectives] = useState<Objective[]>(initial.objectives);
+  const [blueprint, setBlueprint] = useState<BlueprintStep[]>(initial.blueprint);
   const [reading, setReading] = useState<FurtherReading[]>(initial.furtherReading);
   const [voice, setVoice] = useState<Voiced>(initial.voice);
   const [defaultVoice, setDefaultVoiceState] = useState<Voiced>(initialDefaultVoice);
@@ -113,8 +117,8 @@ export function SlideBuilder({
   // ── Saving: queued changes per slide, sent a moment after the last edit ──
   const pending = useRef(new Map<string, SlidePatch>());
   const settingsPending = useRef(false);
-  const latest = useRef({ objectives, reading, voice });
-  latest.current = { objectives, reading, voice };
+  const latest = useRef({ objectives, blueprint, reading, voice });
+  latest.current = { objectives, blueprint, reading, voice };
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const flushing = useRef<Promise<boolean> | null>(null);
   const tokenRef = useRef(token);
@@ -132,6 +136,7 @@ export function SlideBuilder({
   const load = useCallback((m: BuilderModule) => {
     setSlides(m.slides);
     setObjectives(m.objectives);
+    setBlueprint(m.blueprint);
     setReading(m.furtherReading);
     setVoice(m.voice);
     setReadyAt(m.readyForReviewAt);
@@ -219,8 +224,8 @@ export function SlideBuilder({
       }
       if (settingsPending.current) {
         settingsPending.current = false;
-        const { objectives: o, reading: fr, voice: v } = latest.current;
-        const r = await saveModuleSettings(initial.id, t, { objectives: o, furtherReading: fr, voice: v });
+        const { objectives: o, blueprint: bp, reading: fr, voice: v } = latest.current;
+        const r = await saveModuleSettings(initial.id, t, { objectives: o, blueprint: bp, furtherReading: fr, voice: v });
         if (!r.ok) {
           settingsPending.current = true;
           if (r.error.startsWith(LOST)) lose(r.error);
@@ -557,6 +562,8 @@ export function SlideBuilder({
               <Settings
                 moduleId={initial.id}
                 objectives={objectives}
+                blueprint={blueprint}
+                onBlueprint={(b) => changeSettings(() => setBlueprint(b))}
                 reading={reading}
                 voice={voice}
                 defaultVoice={defaultVoice}
@@ -590,6 +597,14 @@ export function SlideBuilder({
                 moduleId={initial.id}
                 token={token}
                 hasObjectives={objectives.some((o) => o.text.trim())}
+                hasBlueprint={blueprint.some((b) => b.teach.trim())}
+                beforeDraft={flush}
+                slideCount={slides.length}
+                onCleared={() => {
+                  pending.current.clear();
+                  setSlides([]);
+                  setSelected("settings");
+                }}
                 onSlide={(s) => setSlides((ss) => [...ss, s].sort((a, b) => a.position - b.position))}
               />
             </div>
@@ -1308,6 +1323,8 @@ function Citations({
 function Settings({
   moduleId,
   objectives,
+  blueprint,
+  onBlueprint,
   reading,
   voice,
   defaultVoice,
@@ -1319,6 +1336,8 @@ function Settings({
 }: {
   moduleId: string;
   objectives: Objective[];
+  blueprint: BlueprintStep[];
+  onBlueprint: (b: BlueprintStep[]) => void;
   reading: FurtherReading[];
   voice: Voiced;
   defaultVoice: Voiced;
@@ -1384,6 +1403,8 @@ function Settings({
         </div>
       </section>
 
+      <BlueprintEditor steps={blueprint} onChange={onBlueprint} />
+
       <VoicePicker moduleId={moduleId} voice={voice} defaultVoice={defaultVoice} canSetDefault={canSetDefault} onVoice={onVoice} onDefaultVoice={onDefaultVoice} />
 
       <section className="builder__block" data-testid="further-reading-editor">
@@ -1413,6 +1434,63 @@ function Settings({
         </div>
       </section>
     </div>
+  );
+}
+
+/**
+ * The module's blueprint: the steps it teaches, in order. AI drafting
+ * follows it exactly and teaches nothing outside it.
+ */
+function BlueprintEditor({ steps, onChange }: { steps: BlueprintStep[]; onChange: (s: BlueprintStep[]) => void }) {
+  const set = (i: number, p: Partial<BlueprintStep>) => onChange(steps.map((x, n) => (n === i ? { ...x, ...p } : x)));
+  const move = (i: number, d: -1 | 1) => {
+    const j = i + d;
+    if (j < 0 || j >= steps.length) return;
+    const c = [...steps];
+    [c[i], c[j]] = [c[j], c[i]];
+    onChange(c);
+  };
+  return (
+    <section className="builder__block" data-testid="blueprint-editor">
+      <div className="builder__block-head">
+        <span className="builder__block-type">Blueprint</span>
+      </div>
+      <p className="card__meta">
+        What this module teaches, step by step, in order. AI drafting turns each step into a slide or two and leaves out
+        everything else, however relevant the sources make it look.
+      </p>
+      <ol className="builder__outline-edit">
+        {steps.map((b, i) => (
+          <li key={i}>
+            <div className="be-row">
+              <input className="be-grow" value={b.topic} maxLength={200} placeholder="Topic" aria-label={`Step ${i + 1} topic`} onChange={(e) => set(i, { topic: e.target.value })} />
+              <select value={b.activity} aria-label={`Step ${i + 1} activity`} onChange={(e) => set(i, { activity: e.target.value as Activity })}>
+                {ACTIVITIES.map((a) => (
+                  <option key={a} value={a}>
+                    {a === "none" ? "No activity" : elementLabels[a]}
+                  </option>
+                ))}
+              </select>
+              <button type="button" className="be-icon" disabled={i === 0} onClick={() => move(i, -1)} aria-label={`Move step ${i + 1} up`}>
+                &uarr;
+              </button>
+              <button type="button" className="be-icon" disabled={i === steps.length - 1} onClick={() => move(i, 1)} aria-label={`Move step ${i + 1} down`}>
+                &darr;
+              </button>
+              <button type="button" className="be-icon be-icon--danger" onClick={() => onChange(steps.filter((_, n) => n !== i))} aria-label={`Remove step ${i + 1}`}>
+                &times;
+              </button>
+            </div>
+            <textarea rows={3} value={b.teach} maxLength={1500} placeholder="What this step teaches" aria-label={`What step ${i + 1} teaches`} onChange={(e) => set(i, { teach: e.target.value })} />
+          </li>
+        ))}
+      </ol>
+      {steps.length < 30 && (
+        <button type="button" className="text-action" onClick={() => onChange([...steps, { topic: steps[steps.length - 1]?.topic ?? "", teach: "", activity: "none" }])}>
+          + Add a step
+        </button>
+      )}
+    </section>
   );
 }
 
