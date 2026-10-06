@@ -41,8 +41,9 @@ import { PhotoError, searchPhotos, trackPhotoUse, type StockPhoto } from "@/lib/
  * out to one person and hands their window a token; every change sends
  * that token back, and is refused unless the module is still checked out
  * to them in that window. "Finished editing" checks it back in. No one
- * else can change a checked-out module; a Super Admin can release a
- * checkout someone left behind.
+ * else, and no other window, can change a checked-out module; the holder
+ * can check it in from elsewhere if its window was closed, and a Super
+ * Admin can release a checkout someone left behind.
  *
  * Super Admins can build every module; Authors only the ones they're
  * assigned. All writes use the service role after these checks (RLS only
@@ -71,7 +72,7 @@ function refresh(moduleId?: string) {
   if (moduleId) revalidatePath(`/admin/training/${moduleId}`);
 }
 
-const NOT_YOURS = "You're not editing this module any more (it was checked in, or opened for editing in another window). Reload to see the latest.";
+const NOT_YOURS = "You're not editing this module any more: it was checked in from another window, or released by a Super Admin. Reload to see the latest.";
 
 /**
  * The module, if it's checked out to the signed-in person in this window.
@@ -90,9 +91,9 @@ async function editing(moduleId: string, token: string): Promise<{ ok: true; use
 // ── Checking out and in ────────────────────────────────────────────────
 
 /**
- * Check the module out to edit it. Refused while someone else has it.
- * Opening it again yourself (another window) moves the editing to the new
- * window: the old one can no longer save.
+ * Check the module out to edit it. Refused while it's checked out,
+ * including to you in another window: the window that checked it out
+ * keeps it until it's checked back in.
  */
 export async function checkOutModule(moduleId: string): Promise<Result<{ token: string }>> {
   const profile = await getCurrentProfile();
@@ -103,13 +104,22 @@ export async function checkOutModule(moduleId: string): Promise<Result<{ token: 
     .from("training_modules")
     .update({ checked_out_by: profile.id, checked_out_at: new Date().toISOString(), checkout_token: token })
     .eq("id", moduleId)
-    .or(`checked_out_by.is.null,checked_out_by.eq.${profile.id}`)
+    .is("checked_out_by", null)
     .select("id");
   if (error) {
     console.error("[checkOutModule]", error.message);
     return { ok: false, error: "Couldn't check the module out. Try again." };
   }
-  if (!data?.length) return { ok: false, error: "Someone else is editing this module. It opens for editing once they check it back in." };
+  if (!data?.length) {
+    const { data: held } = await admin.from("training_modules").select("checked_out_by").eq("id", moduleId).maybeSingle();
+    return {
+      ok: false,
+      error:
+        held?.checked_out_by === profile.id
+          ? "You're already editing this module in another window. Finish editing there first."
+          : "Someone else is editing this module. It opens for editing once they check it back in.",
+    };
+  }
   refresh(moduleId);
   return { ok: true, token };
 }
@@ -139,10 +149,19 @@ export async function checkInModule(moduleId: string, token: string): Promise<Re
   return { ok: true };
 }
 
-/** A Super Admin releases someone else's checkout (they left without checking in). */
+/**
+ * Check a module back in without its editing window: your own checkout
+ * (that window was closed), or, for a Super Admin, anyone's (they left
+ * without checking in). Every change was already saved as it was made.
+ */
 export async function releaseCheckout(moduleId: string): Promise<Result> {
-  if (!(await staff())) return { ok: false, error: "Only platform staff can release a module." };
-  const { error } = await createAdminClient()
+  const profile = await getCurrentProfile();
+  if (!profile) return { ok: false, error: "You can't edit this module." };
+  const admin = createAdminClient();
+  const { data: mod } = await admin.from("training_modules").select("checked_out_by").eq("id", moduleId).maybeSingle();
+  if (!mod) return { ok: false, error: "Module not found." };
+  if (mod.checked_out_by !== profile.id && !profile.isSuperAdmin) return { ok: false, error: "Only platform staff can release someone else's module." };
+  const { error } = await admin
     .from("training_modules")
     .update({ checked_out_by: null, checked_out_at: null, checkout_token: null })
     .eq("id", moduleId);
