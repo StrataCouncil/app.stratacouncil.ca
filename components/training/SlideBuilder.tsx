@@ -30,12 +30,20 @@ import {
   updateMediaAlt,
   updateSlide,
   applyEarlierNarration,
+  addUploadedMusic,
+  createMusic,
+  createMusicUpload,
+  deleteMusic,
+  listMusic,
+  setSlideMusic,
   type EarlierNarration,
+  type MusicTrack,
   type LibraryHit,
 } from "@/app/admin/training/actions";
 import { ModulePlayer } from "@/components/training/ModulePlayer";
 import { DraftWithAI } from "@/components/training/DraftWithAI";
 import { PhotoCreditLine, PhotoPicker } from "@/components/training/PhotoPicker";
+import { Modal } from "@/components/Modal";
 import type { BuilderModule, Checkout } from "@/lib/data/training";
 import type { Voice } from "@/lib/media/elevenlabs";
 import {
@@ -834,6 +842,8 @@ function SlideEditor({
 
       <Narration moduleId={moduleId} token={token} slide={slide} voice={voice} onChange={onChange} onSaved={onSaved} onError={onError} beforeFiles={beforeFiles} />
 
+      <Music moduleId={moduleId} token={token} slide={slide} onSaved={onSaved} onError={onError} />
+
       <ElementEditor element={slide.element} onChange={(element) => onChange({ element })} />
 
       <Citations moduleId={moduleId} slide={slide} onChange={(citations) => onChange({ citations })} onError={onError} />
@@ -1237,6 +1247,205 @@ function NarrateAll({
         <button type="button" className="button button-primary button-small" disabled={!todo.length || !voice} onClick={run}>
           {todo.some((s) => s.narration) ? "Create or update" : "Create"} narration for {todo.length || "all"} {todo.length === 1 ? "slide" : "slides"}
         </button>
+      )}
+    </section>
+  );
+}
+
+// ── Background music ─────────────────────────────────────────────────
+
+const MUSIC_LENGTHS = [15, 30, 60, 90];
+
+/**
+ * A slide's background music: none by default. Tracks live in a shared
+ * library, so one made or uploaded once can be used on any slide.
+ */
+function Music({
+  moduleId,
+  token,
+  slide,
+  onSaved,
+  onError,
+}: {
+  moduleId: string;
+  token: string | null;
+  slide: Slide;
+  onSaved: (p: Partial<Slide>) => void;
+  onError: (e: string) => void;
+}) {
+  const input = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [library, setLibrary] = useState<MusicTrack[] | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [seconds, setSeconds] = useState(30);
+
+  const fail = (e: string) => {
+    setProblem(e);
+    if (e.startsWith(LOST)) onError(e);
+  };
+
+  async function openLibrary() {
+    setProblem(null);
+    const r = await listMusic(moduleId);
+    if (!r.ok) return fail(r.error);
+    setLibrary(r.tracks);
+  }
+
+  async function use(trackId: string | null) {
+    if (!token) return;
+    setBusy(trackId ? "Adding…" : "Removing…");
+    const r = await setSlideMusic(moduleId, token, slide.id, trackId);
+    setBusy(null);
+    if (!r.ok) return fail(r.error);
+    setLibrary(null);
+    onSaved({ music: r.media });
+  }
+
+  async function remove(t: MusicTrack) {
+    if (!token) return;
+    const also = t.uses ? ` It's used on ${t.uses} ${t.uses === 1 ? "slide" : "slides"}, which will have no music.` : "";
+    if (!window.confirm(`Delete "${t.title}" from the music library? The file is deleted.${also}`)) return;
+    const r = await deleteMusic(moduleId, token, t.id);
+    if (!r.ok) return fail(r.error);
+    setLibrary((l) => (l ? l.filter((x) => x.id !== t.id) : l));
+    if (slide.music?.url === t.url) onSaved({ music: null });
+  }
+
+  async function create() {
+    if (!token) return;
+    if (!window.confirm(`Create ${seconds} seconds of music with ElevenLabs? This uses ElevenLabs credits.`)) return;
+    setProblem(null);
+    setBusy("Creating music… (this can take a minute or two)");
+    let r;
+    try {
+      r = await createMusic(moduleId, token, slide.id, { title, description, seconds });
+    } catch {
+      r = { ok: false as const, error: "The request didn't finish: the connection dropped or ElevenLabs took too long. Try again." };
+    }
+    setBusy(null);
+    if (!r.ok) return fail(r.error);
+    setCreating(false);
+    setTitle("");
+    setDescription("");
+    onSaved({ music: r.media });
+  }
+
+  async function upload(file: File) {
+    if (!token) return;
+    setProblem(null);
+    setBusy("Uploading…");
+    const ticket = await createMusicUpload(moduleId, token, { type: file.type, size: file.size });
+    if (!ticket.ok) {
+      setBusy(null);
+      return fail(ticket.error);
+    }
+    const { error } = await createClient().storage.from(MEDIA_BUCKET).uploadToSignedUrl(ticket.path, ticket.token, file, { contentType: file.type });
+    if (error) {
+      setBusy(null);
+      return fail("The upload didn't finish. Try again.");
+    }
+    const r = await addUploadedMusic(moduleId, token, slide.id, { path: ticket.path, title: file.name.replace(/\.[^.]+$/, "") });
+    setBusy(null);
+    if (!r.ok) return fail(r.error);
+    onSaved({ music: r.media });
+  }
+
+  return (
+    <section className="builder__block" data-testid="slide-music">
+      <div className="builder__block-head">
+        <span className="builder__block-type">Background music</span>
+      </div>
+      <p className="card__meta">Plays quietly under the slide: it fades in when the slide opens and fades out when the learner moves on.</p>
+      <div className="be-stack">
+        {slide.music ? (
+          <div className="be-row">
+            <strong>{slide.music.alt || "Music"}</strong>
+            <audio src={slide.music.url} controls preload="none" aria-label="This slide's music" />
+          </div>
+        ) : (
+          <p className="card__meta">None.</p>
+        )}
+        {problem && (
+          <p className="form-error" role="alert">
+            {problem}
+          </p>
+        )}
+        <div className="be-row">
+          <button type="button" className="button button-secondary button-small" disabled={Boolean(busy)} onClick={openLibrary}>
+            Choose from the library
+          </button>
+          <button type="button" className="button button-secondary button-small" disabled={Boolean(busy)} onClick={() => setCreating((c) => !c)}>
+            Create with ElevenLabs
+          </button>
+          <input ref={input} type="file" hidden accept="audio/mpeg,audio/mp4,audio/x-m4a,audio/wav,audio/x-wav,audio/ogg" onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} />
+          <button type="button" className="text-action" disabled={Boolean(busy)} onClick={() => input.current?.click()}>
+            Upload a track
+          </button>
+          {slide.music && (
+            <button type="button" className="text-action" disabled={Boolean(busy)} onClick={() => use(null)}>
+              Set to none
+            </button>
+          )}
+        </div>
+        {busy && <span role="status" className="card__meta">{busy}</span>}
+        {creating && (
+          <div className="be-item">
+            <input value={title} maxLength={120} placeholder="Name, e.g. Calm intro" aria-label="Track name" onChange={(e) => setTitle(e.target.value)} />
+            <textarea
+              rows={2}
+              value={description}
+              maxLength={1000}
+              placeholder="Describe it, e.g. calm, warm acoustic guitar and soft piano, slow tempo, no vocals"
+              aria-label="Describe the music"
+              onChange={(e) => setDescription(e.target.value)}
+            />
+            <div className="be-row">
+              <select value={seconds} aria-label="Length" onChange={(e) => setSeconds(Number(e.target.value))}>
+                {MUSIC_LENGTHS.map((n) => (
+                  <option key={n} value={n}>
+                    {n} seconds
+                  </option>
+                ))}
+              </select>
+              <button type="button" className="button button-primary button-small" disabled={Boolean(busy) || !title.trim() || !description.trim()} onClick={create}>
+                Create music
+              </button>
+            </div>
+            <span className="card__meta">Instrumental only. It&rsquo;s saved to the library, so you can use it on other slides.</span>
+          </div>
+        )}
+      </div>
+      {library && (
+        <Modal title="Music library" onClose={() => setLibrary(null)} wide>
+          {library.length === 0 ? (
+            <p>The library is empty. Create a track with ElevenLabs or upload one.</p>
+          ) : (
+            <ul className="builder__hits">
+              {library.map((t) => (
+                <li key={t.id}>
+                  <div>
+                    <strong>{t.title}</strong>
+                    <p className="card__meta">
+                      {t.source === "upload" ? "Uploaded" : "Created with ElevenLabs"}
+                      {t.durationSeconds ? ` · ${t.durationSeconds} s` : ""} · used on {t.uses} {t.uses === 1 ? "slide" : "slides"}
+                      {t.description ? ` · ${t.description}` : ""}
+                    </p>
+                  </div>
+                  <audio src={t.url} controls preload="none" aria-label={`Preview ${t.title}`} />
+                  <button type="button" className="button button-primary button-small" disabled={Boolean(busy) || slide.music?.url === t.url} onClick={() => use(t.id)}>
+                    {slide.music?.url === t.url ? "On this slide" : "Use on this slide"}
+                  </button>
+                  <button type="button" className="text-action" onClick={() => remove(t)}>
+                    Delete
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Modal>
       )}
     </section>
   );

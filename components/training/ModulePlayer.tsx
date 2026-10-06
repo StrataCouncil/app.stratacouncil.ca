@@ -12,9 +12,9 @@ type Page =
   | { key: string; kind: "recap"; sectionIndex: number; title: string }
   | { key: string; kind: "screen"; sectionIndex: number; title: string; screen: PlayerSlide };
 
-type Settings = { largeText: boolean; autoplay: boolean; shortcuts: boolean };
+type Settings = { largeText: boolean; autoplay: boolean; shortcuts: boolean; music: boolean };
 const SETTINGS_KEY = "sc-training-player";
-const defaultSettings: Settings = { largeText: false, autoplay: true, shortcuts: true };
+const defaultSettings: Settings = { largeText: false, autoplay: true, shortcuts: true, music: true };
 
 /**
  * The learner's module player, one slide at a time: the module's topics
@@ -327,6 +327,9 @@ export function ModulePlayer({
               {screen && <SlideView slide={screen} onDone={() => satisfy("element")} />}
             </div>
 
+            {/* Keyed by the track, so slides that share music keep playing it without a break. */}
+            {screen?.music && settings.music && <SlideMusic key={screen.music.url} url={screen.music.url} />}
+
             {captions && narration && (
               <div className="player__captions">
                 <Transcript text={narration.script || "No transcript for this slide."} label="Captions" />
@@ -394,6 +397,7 @@ export function ModulePlayer({
                   <div className="player__settings-menu" role="group" aria-label="Player settings">
                     <Toggle label="Larger text" on={settings.largeText} onChange={() => changeSetting("largeText")} />
                     <Toggle label="Play narration automatically" on={settings.autoplay} onChange={() => changeSetting("autoplay")} />
+                    <Toggle label="Background music" on={settings.music} onChange={() => changeSetting("music")} />
                     <Toggle label="Arrow-key shortcuts" on={settings.shortcuts} onChange={() => changeSetting("shortcuts")} />
                   </div>
                 )}
@@ -489,6 +493,63 @@ function Recap({ moduleTitle, objectives, reading }: { moduleTitle: string; obje
       )}
     </div>
   );
+}
+
+const MUSIC_VOLUME = 0.22;
+const FADE_IN_MS = 1500;
+const FADE_OUT_MS = 800;
+
+/** Ramp an audio element's volume to a level over a time, then run `done`. */
+function fade(a: HTMLAudioElement, to: number, ms: number, done?: () => void) {
+  const from = a.volume;
+  const start = performance.now();
+  const step = (now: number) => {
+    const t = Math.min(1, (now - start) / ms);
+    a.volume = Math.max(0, Math.min(1, from + (to - from) * t));
+    if (t < 1) requestAnimationFrame(step);
+    else done?.();
+  };
+  requestAnimationFrame(step);
+}
+
+/**
+ * A slide's background music, quietly under the narration: fades in when
+ * the slide opens, loops while it's open, and fades out when the learner
+ * moves on (Next, Prev, the menu, or leaving the module). If the browser
+ * won't play sound before the learner has clicked, it starts on the first
+ * click or key press.
+ */
+function SlideMusic({ url }: { url: string }) {
+  useEffect(() => {
+    const a = new Audio(url);
+    a.loop = true;
+    a.volume = 0;
+    let stopped = false;
+    const start = () => {
+      if (stopped) return;
+      a.play()
+        .then(() => fade(a, MUSIC_VOLUME, FADE_IN_MS))
+        .catch(() => {
+          const once = () => {
+            window.removeEventListener("pointerdown", once);
+            window.removeEventListener("keydown", once);
+            start();
+          };
+          window.addEventListener("pointerdown", once, { once: true });
+          window.addEventListener("keydown", once, { once: true });
+        });
+    };
+    start();
+    return () => {
+      stopped = true;
+      fade(a, 0, FADE_OUT_MS, () => {
+        a.pause();
+        a.removeAttribute("src");
+        a.load();
+      });
+    };
+  }, [url]);
+  return null;
 }
 
 function Toggle({ label, on, onChange }: { label: string; on: boolean; onChange: () => void }) {
