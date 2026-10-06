@@ -156,6 +156,8 @@ export const FACT_CHECK_INSTRUCTIONS = `Fact-check one section of a Council Trai
 
 For every screen below, check each statement of fact: numbers, deadlines, vote thresholds, who can do what, what the law requires or allows, and every reference ("Strata Property Act, s. 45").
 
+For knowledge checks, also check the answers: report as "contradicted" a correct answer the passages don't support, or a wrong option that the passages show is also right (the question must have exactly one right answer).
+
 Report only real problems:
 - "contradicted": the passages say something different. Quote what they say, with the citation, in "library".
 - "wrong_reference": the statement is right but the reference points to the wrong section, or the cited section doesn't say it. Give the right citation in "library" if a passage has it.
