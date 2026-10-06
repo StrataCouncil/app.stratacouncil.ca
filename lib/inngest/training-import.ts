@@ -372,7 +372,10 @@ function systemFor(imp: { sourceText: string }): Anthropic.Beta.BetaTextBlockPar
 
 function sectionRequest(m: PlannedModule, index: number, earlier: Screen[][], instructions: string, problems = "") {
   const outline = m.sections
-    .map((s, i) => `${i + 1}. ${s.title}${i === index ? "  <- write this one" : ""}\n${s.keyPoints.map((p) => `   - ${p}`).join("\n")}`)
+    .map(
+      (s, i) =>
+        `${i + 1}. ${s.title}${i === index ? "  <- write this one" : ""}\n${s.approach ? `   Teaching technique: ${s.approach}\n` : ""}${s.keyPoints.map((p) => `   - ${p}`).join("\n")}`
+    )
     .join("\n");
   const done = earlier
     .map((screens, i) => `Section ${i + 1} screens already written: ${screens.map((s) => `"${s.title}"`).join(", ") || "(none)"}`)

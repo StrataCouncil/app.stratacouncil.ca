@@ -151,6 +151,18 @@ export function PlanReview({
                         })
                       }
                     />
+                    <label className="plan-section__approach">
+                      <span>How it teaches</span>
+                      <input
+                        value={s.approach}
+                        maxLength={500}
+                        placeholder="e.g. Worked example, then practice: walk through one notice, then the learner checks another"
+                        disabled={!editable || m.status === "done"}
+                        onChange={(e) =>
+                          update(m.key, { sections: m.sections.map((x, xi) => (xi === si ? { ...x, approach: e.target.value } : x)) })
+                        }
+                      />
+                    </label>
                     {editable && m.status !== "done" && m.sections.length > 1 && (
                       <button
                         type="button"
@@ -166,7 +178,7 @@ export function PlanReview({
                   <button
                     type="button"
                     className="text-action"
-                    onClick={() => update(m.key, { sections: [...m.sections, { title: "New section", keyPoints: [] }] })}
+                    onClick={() => update(m.key, { sections: [...m.sections, { title: "New section", keyPoints: [], approach: "" }] })}
                   >
                     + Add section
                   </button>

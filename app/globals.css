@@ -8140,3 +8140,12 @@ a.track-card:focus-visible {
   font-size: 1.15rem;
   margin: 0;
 }
+.plan-section__approach {
+  display: grid;
+  gap: 0.25rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.plan-section__approach input {
+  font-size: 0.9rem;
+}
