@@ -2,17 +2,21 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { getTrainingTracks, moduleStatuses } from "@/lib/data/training";
+import { lockedBehind } from "@/lib/training/progress";
 
 /**
  * A track as a learning path: its modules in order, each done, open,
  * locked (finish the one before it first) or coming soon, ending in the
- * track's credential.
+ * track's completion. The whole track waits on the one before it (0035).
  */
 export default async function TrackPage({ params }: { params: Promise<{ track: string }> }) {
   const { track: slug } = await params;
-  const track = (await getTrainingTracks()).find((t) => t.slug === slug);
+  const tracks = await getTrainingTracks();
+  const track = tracks.find((t) => t.slug === slug);
   if (!track) notFound();
+  const blocker = lockedBehind(track, tracks);
   const statuses = moduleStatuses(track);
+  if (blocker) for (const m of track.modules) if (m.publishedVersion > 0) statuses.set(m.id, "locked");
   const published = track.modules.filter((m) => m.publishedVersion > 0);
   const completed = published.filter((m) => m.completed).length;
   const minutes = published.reduce((sum, m) => sum + (m.completed ? 0 : m.estimatedMinutes ?? 0), 0);
@@ -22,15 +26,21 @@ export default async function TrackPage({ params }: { params: Promise<{ track: s
       <div className="wrap page">
         <div className="page-header">
           <Link href="/training" className="card__meta" style={{ display: "inline-block", marginBottom: "0.75rem" }}>
-            &larr; All tracks
+            &larr; Council Training
           </Link>
           <h1>{track.title}</h1>
           <p>{track.description}</p>
           <p className="card__meta">
             {track.modules.length === 0
               ? "Modules for this track are on the way."
-              : `${completed} of ${track.modules.length} modules complete${minutes ? ` · about ${minutes} minutes to go` : ""}. Modules open in order; finishing them all earns the ${track.title} credential.`}
+              : `${completed} of ${track.modules.length} modules complete${minutes ? ` · about ${minutes} minutes to go` : ""}. Modules open in order.`}
           </p>
+          {blocker && (
+            <p className="form-alert" data-testid="track-locked">
+              This track opens once you&rsquo;ve finished{" "}
+              <Link href={`/training/${blocker.slug}`}>{blocker.title}</Link>.
+            </p>
+          )}
         </div>
 
         <ol className="path" data-testid="training-path">
@@ -48,7 +58,7 @@ export default async function TrackPage({ params }: { params: Promise<{ track: s
                     <div className="path__meta">
                       {status === "done" && "Complete"}
                       {status === "open" && (m.completedSections > 0 ? "In progress" : "Up next")}
-                      {status === "locked" && "Finish the module before this one first"}
+                      {status === "locked" && (blocker ? `Finish ${blocker.title} first` : "Finish the module before this one first")}
                       {status === "soon" && "Coming soon"}
                       {m.estimatedMinutes ? ` · ${m.estimatedMinutes} min` : ""}
                     </div>
@@ -73,11 +83,11 @@ export default async function TrackPage({ params }: { params: Promise<{ track: s
             </span>
             <div className="path__card">
               <div>
-                <div className="path__title">{track.title} credential</div>
+                <div className="path__title">{track.title} complete</div>
                 <div className="path__meta">
                   {track.credential
-                    ? `Earned ${new Date(track.credential.issuedAt).toLocaleDateString("en-CA", { year: "numeric", month: "long", day: "numeric" })}. Councils you're connected to can see it on Council & Roles.`
-                    : "Earned when every module above is complete. It shows here and on Council & Roles for your council."}
+                    ? `Completed ${new Date(track.credential.issuedAt).toLocaleDateString("en-CA", { year: "numeric", month: "long", day: "numeric" })}. Your council sees a filled circle on Council & Roles.`
+                    : "When every module above is done, your circle fills in here and on Council & Roles."}
                 </div>
               </div>
             </div>

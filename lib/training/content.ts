@@ -548,6 +548,16 @@ export function flattenScreens(content: ModuleContent) {
   );
 }
 
+export type ModuleCover = { src: string; alt: string; credit: PhotoCredit | null };
+
+/** The module's card photo on the training pages: its first screen photo. */
+export function moduleCover(content: ModuleContent): ModuleCover | null {
+  const first = flattenScreens(content).find(({ screen }) => screen.image.src);
+  if (!first) return null;
+  const { src, alt, credit } = first.screen.image;
+  return { src, alt, credit: normalizeCredit(credit) };
+}
+
 // ── Learner rules ──────────────────────────────────────────────────────
 
 /**

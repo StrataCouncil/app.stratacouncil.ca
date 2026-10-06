@@ -19,7 +19,7 @@ import {
   type Screen,
 } from "./content.ts";
 
-export const TRACK_CODES = ["mal", "president", "vice_president", "treasurer", "secretary"] as const;
+export const TRACK_CODES = ["strata_basics", "council_ready", "treasurer", "secretary"] as const;
 export type TrackCode = (typeof TRACK_CODES)[number];
 
 /** The longest document text sent in one go (roughly 350,000 tokens, well inside the context window). */
@@ -119,7 +119,7 @@ export function normalizePlan(raw: unknown): ImportPlan {
       key: typeof x.key === "string" && /^[\w-]{1,40}$/.test(x.key) ? x.key : newId("m"),
       include: x.include !== false,
       title: text(x.title, 200) || "Untitled module",
-      trackCode: TRACK_CODES.includes(x.trackCode as TrackCode) ? (x.trackCode as TrackCode) : "mal",
+      trackCode: TRACK_CODES.includes(x.trackCode as TrackCode) ? (x.trackCode as TrackCode) : "council_ready",
       summary: text(x.summary, 500),
       estimatedMinutes: Number.isFinite(minutes) ? Math.min(90, Math.max(5, Math.round(minutes))) : 15,
       objectives: texts(x.objectives, 300, 8),
@@ -413,11 +413,14 @@ function inline(text: string): RichNode[] {
 // ── What the AI is told ────────────────────────────────────────────────
 
 export const TRACK_DESCRIPTIONS: Record<TrackCode, string> = {
-  mal: "General Council: what every council member needs (responsibilities, decisions, meetings, bylaws, money basics, working with owners and the strata manager).",
-  president: "President: chairing meetings, setting agendas, leading council, representing council to owners.",
-  vice_president: "Vice President: stepping in for the president, shared officer duties.",
-  treasurer: "Treasurer: budgets, the contingency reserve fund, levies, insurance, financial statements and reporting.",
-  secretary: "Secretary: minutes, records, notices, correspondence, running meetings.",
+  strata_basics:
+    "Strata Basics (for any owner): what a strata is (strata lots, common property, unit entitlement, the governing documents), who decides what (owners, council, the strata manager, vote types), and where the money goes (operating fund, contingency reserve fund, fees, special levies, the budget).",
+  council_ready:
+    "Council Ready (for every council member, after Strata Basics): duties and conflicts of interest, running council meetings, general meetings and voting, bylaws and fair enforcement, repairs, maintenance and insurance, records and privacy, working with a strata manager or self-managing.",
+  treasurer:
+    "Treasurer (after Council Ready): reading financial statements, the budget and fees, the reserve fund and depreciation report, collections and financial controls.",
+  secretary:
+    "Secretary (after Council Ready): notices and agendas, writing minutes, records and owner requests, correspondence and privacy.",
 };
 
 /** The fixed instructions (cached together with the document across every call for one import). */
@@ -435,17 +438,17 @@ Rules:
 
 export const PLAN_INSTRUCTIONS = `Break the source documents into Council Training modules.
 
-- Each module is 10 to 20 minutes for a volunteer and covers one coherent topic. Prefer several focused modules to one long one; a short document may be a single module.
+- Each module is 10 to 15 minutes for a volunteer (at most about 18 screens) and covers one coherent topic. Prefer several focused modules to one long one; a short document may be a single module.
 - Put each module in the track it best fits:
 ${TRACK_CODES.map((c) => `  - ${c}: ${TRACK_DESCRIPTIONS[c]}`).join("\n")}
-- For each module give: a title (plain, specific, no colon subtitles), a one- or two-sentence summary, an estimate in minutes, 3 to 5 learning objectives (each starting with a verb, e.g. "Explain when council needs a 3/4 vote"), and 3 to 6 sections. Each section has a short title and the key points it will teach, drawn from the documents.
+- For each module give: a title (plain, specific, no colon subtitles), a one- or two-sentence summary, an estimate in minutes, 3 to 5 learning objectives (each starting with a verb, e.g. "Explain when council needs a 3/4 vote"), and 3 or 4 sections. Each section has a short title and the key points it will teach, drawn from the documents.
 - Order the modules the way a new council member should take them.
 - "summary" describes the documents and how you've divided them, in two or three sentences.`;
 
 export const SECTION_INSTRUCTIONS = `Write one section of a module as screens. The learner sees one screen at a time, with a title bar and Next.
 
 Screens:
-- 4 to 7 screens per section. Each screen teaches one idea.
+- 3 to 5 screens per section, so the whole module stays at about 18 screens or fewer. Each screen teaches one idea; leave out detail a volunteer won't use.
 - The screen is read while the narration plays, so keep it sparse: at most about 40 words of on-screen text in total (knowledge checks and scenarios aside), usually one or two blocks. Show the key words, not sentences: a short line, 2 to 4 bullets of a few words, a callout, cards or a table. Card and reveal text is at most about 15 words each. Never put the explanation on screen; that's the narration's job.
 - "narration" is a script read aloud with the screen: 40 to 90 words, conversational. It explains what the screen shows, without reading the screen out word for word. Write it to be spoken: no lists, no abbreviations a narrator would stumble on, numbers as words where that reads better.
 - "photoSearch" is two to five words to search a stock-photo library for a picture that suits the screen (real people, buildings, meetings, documents; e.g. "condo building balconies", "people at meeting table"). Never names, logos or text.

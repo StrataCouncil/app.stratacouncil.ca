@@ -181,3 +181,19 @@ test("audio, uploaded video and slides blocks hold up Next; embeds can't report 
   screen.blocks = [audio, video, embed, slides];
   assert.deepEqual(screenRequirements(screen), [audio.id, video.id, slides.id]);
 });
+
+test("the module cover is the first screen photo, with its credit", async () => {
+  const { moduleCover } = await import("../lib/training/content.ts");
+  const a = newSection("A");
+  const b = newSection("B");
+  b.screens[0].image = {
+    src: "https://images.unsplash.com/photo-1",
+    alt: "A meeting",
+    credit: { source: "unsplash", name: "Pat", profileUrl: "https://unsplash.com/@pat", photoUrl: "https://unsplash.com/photos/1" },
+    hint: "",
+  };
+  assert.equal(moduleCover({ objectives: [], sections: [a] }), null);
+  const cover = moduleCover({ objectives: [], sections: [a, b] });
+  assert.equal(cover?.src, "https://images.unsplash.com/photo-1");
+  assert.equal(cover?.credit?.name, "Pat");
+});

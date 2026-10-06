@@ -409,8 +409,8 @@ export function RosterTable({
                         className="training-dot"
                         data-earned={earned}
                         role="img"
-                        aria-label={`${t.title} credential: ${earned ? "earned" : "not earned"}`}
-                        title={`${t.title}: ${earned ? "earned" : "not earned yet"}`}
+                        aria-label={`${t.title} training: ${earned ? "complete" : "not complete"}`}
+                        title={`${t.title}: ${earned ? "complete" : "not complete yet"}`}
                       />
                     </td>
                   );
@@ -421,14 +421,14 @@ export function RosterTable({
         </tbody>
       </table>
       <p className="roster-table__legend">
-        Training credentials:{" "}
+        Training:{" "}
         {tracks.map((t, i) => (
           <span key={t.code}>
             {i > 0 && " · "}
             <strong>{t.abbr}</strong> {t.title}
           </span>
         ))}
-        . A filled circle means the credential is earned.
+        . A filled circle means the track is complete.
       </p>
     </div>
   );

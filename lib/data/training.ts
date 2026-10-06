@@ -1,5 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
-import { flattenScreens, normalizeModuleContent, type ModuleContent } from "@/lib/training/content";
+import { flattenScreens, normalizeCredit, normalizeModuleContent, type ModuleContent, type ModuleCover } from "@/lib/training/content";
+
+export { moduleStatuses, type ModuleStatus } from "@/lib/training/progress";
 
 /**
  * Council Training reads (0033). Learners see tracks, module outlines and
@@ -19,6 +21,8 @@ export interface TrainingModuleSummary {
   /** The signed-in learner's progress, if any. */
   completedSections: number;
   completed: boolean;
+  /** The published first screen's photo, for cards. */
+  cover: ModuleCover | null;
 }
 
 export interface TrainingTrack {
@@ -27,6 +31,10 @@ export interface TrainingTrack {
   slug: string;
   title: string;
   description: string;
+  /** "core" (Strata Basics, Council Ready) or "specialty" (Treasurer, Secretary). */
+  stage: "core" | "specialty";
+  /** The track to finish first (0035). */
+  requiresTrackId: string | null;
   modules: TrainingModuleSummary[];
   credential: { issuedAt: string } | null;
 }
@@ -41,10 +49,10 @@ export async function getTrainingTracks(): Promise<TrainingTrack[]> {
     data: { user },
   } = await supabase.auth.getUser();
   const [{ data: tracks }, { data: modules }, { data: progress }, { data: credentials }] = await Promise.all([
-    supabase.from("training_tracks").select("id, code, title, description, order_index").order("order_index"),
+    supabase.from("training_tracks").select("id, code, title, description, order_index, stage, requires_track_id").order("order_index"),
     supabase
       .from("training_modules")
-      .select("id, track_id, order_index, title, summary, estimated_minutes, published_version, published_at")
+      .select("id, track_id, order_index, title, summary, estimated_minutes, published_version, published_at, cover")
       .order("order_index"),
     user
       ? supabase.from("training_progress").select("module_id, completed_sections, completed_at").eq("user_id", user.id)
@@ -64,6 +72,8 @@ export async function getTrainingTracks(): Promise<TrainingTrack[]> {
       slug: trackSlug(t.code),
       title: t.title,
       description: t.description,
+      stage: t.stage === "specialty" ? "specialty" : "core",
+      requiresTrackId: (t.requires_track_id as string | null) ?? null,
       credential: credential ? { issuedAt: credential.issued_at } : null,
       modules: (modules ?? [])
         .filter((m) => m.track_id === t.id)
@@ -80,31 +90,18 @@ export async function getTrainingTracks(): Promise<TrainingTrack[]> {
             publishedAt: m.published_at,
             completedSections: (p?.completed_sections as string[] | undefined)?.length ?? 0,
             completed: Boolean(p?.completed_at),
+            cover: toCover(m.cover),
           };
         }),
     };
   });
 }
 
-export type ModuleStatus = "done" | "open" | "locked" | "soon";
-
-/**
- * Modules open in order within a track (doc03 Stage 3): a published module
- * opens once every published module before it is complete. Unpublished
- * modules show as coming soon and don't hold anything up.
- */
-export function moduleStatuses(track: TrainingTrack): Map<string, ModuleStatus> {
-  const out = new Map<string, ModuleStatus>();
-  let blocked = false;
-  for (const m of [...track.modules].sort((a, b) => a.orderIndex - b.orderIndex)) {
-    if (m.publishedVersion === 0) out.set(m.id, "soon");
-    else if (m.completed) out.set(m.id, "done");
-    else {
-      out.set(m.id, blocked ? "locked" : "open");
-      blocked = true;
-    }
-  }
-  return out;
+function toCover(raw: unknown): ModuleCover | null {
+  if (!raw || typeof raw !== "object") return null;
+  const c = raw as Record<string, unknown>;
+  if (typeof c.src !== "string" || !c.src) return null;
+  return { src: c.src, alt: typeof c.alt === "string" ? c.alt : "", credit: normalizeCredit(c.credit) };
 }
 
 export interface PublishedModule {

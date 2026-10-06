@@ -91,7 +91,7 @@ test("a plan is tidied and an assembled module passes the publish checks", () =>
     ],
   });
   const m = plan.modules[0];
-  assert.equal(m.trackCode, "mal");
+  assert.equal(m.trackCode, "council_ready");
   assert.equal(m.estimatedMinutes, 90);
   assert.deepEqual(m.objectives, ["Explain what council does"]);
   assert.equal(m.include, true);
