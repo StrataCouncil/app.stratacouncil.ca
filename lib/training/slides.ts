@@ -453,7 +453,7 @@ export function slideProblems(s: Slide): string[] {
   if (s.layout !== "text" && !s.visual) out.push("Add a picture or video, or set the layout to text only.");
   if (s.visual && s.visual.kind === "image" && !s.visual.alt.trim()) out.push("Describe the picture (alt text) for people using screen readers.");
   if (s.visual?.kind === "video" && s.visual.source === "link" && !videoSource(s.visual.url)) out.push("The video link isn't a YouTube, Vimeo or video file link.");
-  if (narrationOutOfDate(s)) out.push("The script changed after the narration was made. Make the narration again.");
+  if (narrationOutOfDate(s)) out.push("The script changed after the narration was made. Create the narration again.");
   if (s.narrationScript.trim() && !s.narration) out.push("The narration script has no audio yet.");
   const el = s.element;
   if (el) {

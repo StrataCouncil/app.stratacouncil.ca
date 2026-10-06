@@ -607,6 +607,15 @@ export function SlideBuilder({
                 }}
                 onSlide={(s) => setSlides((ss) => [...ss, s].sort((a, b) => a.position - b.position))}
               />
+              <NarrateAll
+                moduleId={initial.id}
+                token={token}
+                slides={slides}
+                voice={voice ?? defaultVoice}
+                beforeStart={flush}
+                onVoiced={(id, p) => patchLocal(id, p)}
+                onError={(e) => (e.startsWith(LOST) ? lose(e) : setAlert(e))}
+              />
             </div>
           )}
         </main>
@@ -1009,8 +1018,8 @@ function Narration({
   async function make() {
     if (!token) return;
     if (!voice) return onError("Choose a narration voice first, in Module settings.");
-    if (slide.narration && !stale && !window.confirm("This slide already has narration for this script. Make it again (this uses ElevenLabs credits)?")) return;
-    setBusy("Making narration…");
+    if (slide.narration && !stale && !window.confirm("This slide already has narration for this script. Create it again (this uses ElevenLabs credits)?")) return;
+    setBusy("Creating narration…");
     await beforeFiles();
     const r = await generateNarration(moduleId, token, slide.id, slide.narrationScript, voice.id);
     setBusy(null);
@@ -1070,7 +1079,7 @@ function Narration({
         )}
         <div className="be-row">
           <button type="button" className="button button-primary button-small" disabled={Boolean(busy) || !slide.narrationScript.trim()} onClick={make}>
-            {busy ?? (slide.narration ? "Make the narration again" : "Make narration")}
+            {busy ?? (slide.narration ? "Create narration again" : "Create narration")}
           </button>
           <span className="card__meta">Voice: {voice?.name ?? "not chosen (Module settings)"}</span>
         </div>
@@ -1114,6 +1123,83 @@ function Narration({
           </div>
         )}
       </div>
+    </section>
+  );
+}
+
+/**
+ * Create narration for every slide that needs it (a script and no audio,
+ * or audio made from an older script), one slide at a time. Each file is
+ * saved to its slide as soon as it's made, so stopping part way loses
+ * nothing.
+ */
+function NarrateAll({
+  moduleId,
+  token,
+  slides,
+  voice,
+  beforeStart,
+  onVoiced,
+  onError,
+}: {
+  moduleId: string;
+  token: string;
+  slides: Slide[];
+  voice: Voiced;
+  beforeStart: () => Promise<boolean>;
+  onVoiced: (id: string, p: Partial<Slide>) => void;
+  onError: (e: string) => void;
+}) {
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  const stop = useRef(false);
+  const todo = slides.filter((s) => s.narrationScript.trim() && (!s.narration || narrationOutOfDate(s)));
+  const ready = slides.filter((s) => s.narration && !narrationOutOfDate(s)).length;
+  const characters = todo.reduce((n, s) => n + s.narrationScript.trim().length, 0);
+
+  async function run() {
+    if (!voice) return onError("Choose a narration voice first (Narration voice, above).");
+    if (!window.confirm(`Create narration for ${todo.length} ${todo.length === 1 ? "slide" : "slides"} with ${voice.name}? This uses about ${characters.toLocaleString("en-CA")} ElevenLabs characters.`)) return;
+    stop.current = false;
+    await beforeStart();
+    const list = [...todo];
+    setProgress({ done: 0, total: list.length });
+    for (let i = 0; i < list.length; i++) {
+      if (stop.current) break;
+      const s = list[i];
+      const r = await generateNarration(moduleId, token, s.id, s.narrationScript, voice.id);
+      if (!r.ok) {
+        onError(`Stopped at slide "${s.title}": ${r.error}`);
+        break;
+      }
+      onVoiced(s.id, { narration: r.media, narrationVoiced: r.voiced, narrationScript: r.voiced });
+      setProgress({ done: i + 1, total: list.length });
+    }
+    setProgress(null);
+  }
+
+  return (
+    <section className="builder__block" data-testid="narrate-all">
+      <div className="builder__block-head">
+        <span className="builder__block-type">Narration for all slides</span>
+      </div>
+      <p className="card__meta">
+        {ready} of {slides.length} slides have up-to-date narration. {todo.length > 0 ? `${todo.length} need it.` : "None need it."} Voice:{" "}
+        {voice?.name ?? "not chosen"}.
+      </p>
+      {progress ? (
+        <div className="be-row">
+          <span role="status">
+            Creating narration: {progress.done} of {progress.total} slides…
+          </span>
+          <button type="button" className="text-action" onClick={() => (stop.current = true)}>
+            Stop after this slide
+          </button>
+        </div>
+      ) : (
+        <button type="button" className="button button-primary button-small" disabled={!todo.length || !voice} onClick={run}>
+          Create narration for {todo.length || "all"} {todo.length === 1 ? "slide" : "slides"}
+        </button>
+      )}
     </section>
   );
 }
