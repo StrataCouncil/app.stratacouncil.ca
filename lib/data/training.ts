@@ -52,6 +52,8 @@ export interface TrainingTrack {
   requiresTrackId: string | null;
   modules: TrainingModuleSummary[];
   credential: { issuedAt: string } | null;
+  /** The picture on the track's card (0042); the first module photo stands in when there's none. */
+  cover: ModuleCover | null;
 }
 
 export const trackSlug = (code: string) => code.replace(/_/g, "-");
@@ -64,7 +66,7 @@ export async function getTrainingTracks(): Promise<TrainingTrack[]> {
     data: { user },
   } = await supabase.auth.getUser();
   const [{ data: tracks }, { data: modules }, { data: progress }, { data: credentials }] = await Promise.all([
-    supabase.from("training_tracks").select("id, code, title, description, order_index, stage, requires_track_id").order("order_index"),
+    supabase.from("training_tracks").select("id, code, title, description, order_index, stage, requires_track_id, cover").order("order_index"),
     supabase
       .from("training_modules")
       .select("id, track_id, order_index, title, summary, estimated_minutes, published_version, published_at, cover")
@@ -90,6 +92,7 @@ export async function getTrainingTracks(): Promise<TrainingTrack[]> {
       stage: t.stage === "specialty" ? "specialty" : "core",
       requiresTrackId: (t.requires_track_id as string | null) ?? null,
       credential: credential ? { issuedAt: credential.issued_at } : null,
+      cover: toCover(t.cover),
       modules: (modules ?? [])
         .filter((m) => m.track_id === t.id)
         .map((m) => {

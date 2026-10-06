@@ -294,9 +294,9 @@ function TrackCard({ track, all, step, hrefBase }: { track: TrainingTrack; all: 
   );
 }
 
-/** A track's card photo: its first module with one. */
+/** A track's card photo: the one chosen for the track, or else its first module photo. */
 function trackCover(track: TrainingTrack): ModuleCover | null {
-  return [...track.modules].sort((a, b) => a.orderIndex - b.orderIndex).find((m) => m.cover)?.cover ?? null;
+  return track.cover ?? [...track.modules].sort((a, b) => a.orderIndex - b.orderIndex).find((m) => m.cover)?.cover ?? null;
 }
 
 /** The modules after the one up next, in the order a learner meets them (open tracks only). */
