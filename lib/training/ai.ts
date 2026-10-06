@@ -430,7 +430,7 @@ You work from the source documents given below (each in a <source_document> tag 
 
 Rules:
 - Every fact, number, deadline and threshold must come from the source documents. If they don't support something, leave it out. Never invent section numbers, case names, dollar figures or dates.
-- References name the document and its own section or heading, e.g. "Strata Property Act, s. 45" or "Strata corporations (Province of BC), 'Decision making'". Only cite what a document actually contains, and ignore website menus, navigation and page furniture.
+- References name the document and its own section or heading, e.g. "Strata Property Act, s. 45" or "Strata corporations (Province of BC), 'Decision making'". Cite the section that actually says the thing, not the definitions section or a section that only mentions it. Only cite what a document actually contains, and ignore website menus, navigation and page furniture.
 - Plain, warm, direct Canadian English (Canadian spelling: "council", "centre", "favour"). Short sentences. Address the learner as "you". Explain any legal term the first time it appears.
 - Practical over theoretical: what council does, when, who decides, what can go wrong.
 - This is education, not legal advice. Where a situation turns on its facts, say council should get professional advice.
@@ -516,7 +516,7 @@ Blocks (choose the ones that fit; vary them):
 - reveal: click to reveal. "style" accordion (headings that open) or cards (flip cards: term on the front, meaning on the back). "items" with title and text. Good for definitions, lists of roles, the parts of something.
 - features: two to four side-by-side items ("items" with a short title and caption), e.g. the three people involved.
 - table: "rows", first row the header, e.g. deadlines, who does what, vote thresholds. "title" is the caption.
-- knowledge_check: "question", 3 or 4 "options" with exactly one "correct": true and a one-sentence "why" for every option (why it's right, or why it's wrong), an "explanation" tying it together, a "studyNote" (one or two sentences to remember), and a "reference". Put each knowledge check on its own screen titled "Knowledge check".
+- knowledge_check: a "question" with one right answer and 2 or 3 distractors that sound plausible but are wrong. Mark the right answer "correct": true. Every distractor must be plainly wrong under the source documents, never partly right or right in some cases; if an option could be argued, replace it. Ask about something a council member would actually need to know or do, in plain words. Give each option a one-sentence "why" (why it's right, or why it's wrong), an "explanation" tying it together, a "studyNote" (one or two sentences to remember), and a "reference" to the section that answers the question. Put each knowledge check on its own screen titled "Knowledge check".
 - scenario: a realistic council situation in "text" (invent plausible people and buildings; never real ones), a "prompt", and 2 to 4 "choices", each with an "outcome" (what happens and why) and a "rating" (best, okay, poor).
 - summary: the section's key points in "items" (use the "text" of each item).
 - checklist: practical steps in "items".
