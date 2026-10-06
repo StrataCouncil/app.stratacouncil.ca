@@ -49,7 +49,7 @@ export async function getDemoLink(token: string): Promise<DemoLink | null> {
 async function readAll(link: DemoLink) {
   const admin = createAdminClient();
   const [{ data: tracks }, { data: modules }, { data: slides }, { data: media }] = await Promise.all([
-    admin.from("training_tracks").select("id, code, title, description, order_index, stage").order("order_index"),
+    admin.from("training_tracks").select("id, code, title, description, order_index, stage, cover").order("order_index"),
     admin
       .from("training_modules")
       .select("id, track_id, order_index, title, summary, estimated_minutes, published_version, published_at, cover, objectives, further_reading")
@@ -85,6 +85,7 @@ export async function getDemoTracks(link: DemoLink): Promise<TrainingTrack[]> {
     // Everything is open in a demo.
     requiresTrackId: null,
     credential: null,
+    cover: toCover(t.cover),
     modules: modules
       .filter((m) => m.track_id === t.id)
       .map((m) => {

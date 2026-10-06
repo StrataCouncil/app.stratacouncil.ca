@@ -232,6 +232,82 @@ export async function updateTrackDetails(trackId: string, input: { title: string
   return { ok: true };
 }
 
+// ── Track pictures (0042): in the track's own folder ───────────────────
+
+const IMAGE_TYPES: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
+
+/** A one-time upload URL for a track's card picture, in training-media/<track id>/. */
+export async function createTrackCoverUpload(trackId: string, file: { type: string; size: number }): Promise<Result<{ path: string; token: string }>> {
+  if (!(await staff())) return { ok: false, error: "Only platform staff can change track pictures." };
+  if (!/^[0-9a-f-]{36}$/i.test(trackId)) return { ok: false, error: "Track not found." };
+  const ext = IMAGE_TYPES[file.type];
+  if (!ext) return { ok: false, error: "Use a JPEG, PNG or WebP picture." };
+  if (file.size > 20 * 1024 * 1024) return { ok: false, error: "Pictures can be up to 20 MB." };
+  const path = `${trackId}/cover-${randomUUID().slice(0, 8)}.${ext}`;
+  const { data, error } = await createAdminClient().storage.from(MEDIA_BUCKET).createSignedUploadUrl(path);
+  if (error || !data) return { ok: false, error: "Couldn't start the upload." };
+  return { ok: true, path: data.path, token: data.token };
+}
+
+/** Put a picture on the track's card, deleting the one it replaces. */
+async function setTrackCover(trackId: string, cover: { src: string; alt: string; credit: unknown; path: string | null }): Promise<Result> {
+  const admin = createAdminClient();
+  const { data: track } = await admin.from("training_tracks").select("cover").eq("id", trackId).maybeSingle();
+  if (!track) return { ok: false, error: "Track not found." };
+  const { error } = await admin.from("training_tracks").update({ cover }).eq("id", trackId);
+  if (error) return { ok: false, error: "Couldn't save the picture." };
+  const old = (track.cover as { path?: unknown } | null)?.path;
+  if (typeof old === "string" && old !== cover.path && old.startsWith(`${trackId}/cover-`)) await removeFiles(admin, [old]);
+  refresh();
+  return { ok: true };
+}
+
+export async function attachTrackUpload(trackId: string, input: { path: string; alt: string }): Promise<Result> {
+  if (!(await staff())) return { ok: false, error: "Only platform staff can change track pictures." };
+  if (!input.path.startsWith(`${trackId}/cover-`) || input.path.includes("..") || input.path.split("/").length !== 2)
+    return { ok: false, error: "That file isn't this track's." };
+  const src = createAdminClient().storage.from(MEDIA_BUCKET).getPublicUrl(input.path).data.publicUrl;
+  return setTrackCover(trackId, { src, alt: input.alt.slice(0, 500), credit: null, path: input.path });
+}
+
+export async function attachTrackStockPhoto(trackId: string, photo: { src: string; alt: string; credit: unknown; downloadLocation: string }): Promise<Result> {
+  if (!(await staff())) return { ok: false, error: "Only platform staff can change track pictures." };
+  const src = safeMediaUrl(photo.src);
+  const credit = normalizeCredit(photo.credit);
+  if (!src || new URL(src).hostname !== "images.unsplash.com" || !credit) return { ok: false, error: "That photo can't be used." };
+  try {
+    await trackPhotoUse(photo.downloadLocation);
+  } catch (e) {
+    return { ok: false, error: e instanceof PhotoError ? e.message : "Couldn't use that photo." };
+  }
+  return setTrackCover(trackId, { src, alt: photo.alt.slice(0, 500), credit, path: null });
+}
+
+export async function updateTrackCoverAlt(trackId: string, alt: string): Promise<Result> {
+  if (!(await staff())) return { ok: false, error: "Only platform staff can change track pictures." };
+  const admin = createAdminClient();
+  const { data: track } = await admin.from("training_tracks").select("cover").eq("id", trackId).maybeSingle();
+  if (!track?.cover) return { ok: false, error: "The track has no picture." };
+  const { error } = await admin.from("training_tracks").update({ cover: { ...(track.cover as object), alt: alt.slice(0, 500) } }).eq("id", trackId);
+  if (error) return { ok: false, error: "Couldn't save the description." };
+  refresh();
+  return { ok: true };
+}
+
+/** Back to the first module photo; the uploaded picture is deleted. */
+export async function removeTrackCover(trackId: string): Promise<Result> {
+  if (!(await staff())) return { ok: false, error: "Only platform staff can change track pictures." };
+  const admin = createAdminClient();
+  const { data: track } = await admin.from("training_tracks").select("cover").eq("id", trackId).maybeSingle();
+  if (!track) return { ok: false, error: "Track not found." };
+  const { error } = await admin.from("training_tracks").update({ cover: null }).eq("id", trackId);
+  if (error) return { ok: false, error: "Couldn't remove the picture." };
+  const old = (track.cover as { path?: unknown } | null)?.path;
+  if (typeof old === "string" && old.startsWith(`${trackId}/cover-`)) await removeFiles(admin, [old]);
+  refresh();
+  return { ok: true };
+}
+
 export async function addModule(trackId: string, title: string): Promise<Result<{ id: string }>> {
   if (!(await staff())) return { ok: false, error: "Only platform staff can edit training." };
   const clean = title.trim().slice(0, 200);
@@ -717,8 +793,9 @@ export async function setDefaultVoice(voice: { id: string; name: string } | null
 
 // ── Photos (Unsplash) ──────────────────────────────────────────────────
 
+/** Photo search for a module's author, or (with no module, for a track's picture) a Super Admin. */
 export async function searchStockPhotos(moduleId: string, query: string, page = 1): Promise<Result<{ photos: StockPhoto[]; totalPages: number }>> {
-  if (!(await canAuthor(moduleId))) return { ok: false, error: "You can't edit this module." };
+  if (!(moduleId ? await canAuthor(moduleId) : await staff())) return { ok: false, error: "You can't search photos here." };
   try {
     const r = await searchPhotos(query, Math.max(1, Math.min(20, Math.floor(page))));
     return { ok: true, photos: r.photos, totalPages: r.totalPages };

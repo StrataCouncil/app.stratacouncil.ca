@@ -1,10 +1,15 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   addModule,
+  attachTrackStockPhoto,
+  attachTrackUpload,
+  createTrackCoverUpload,
+  removeTrackCover,
+  updateTrackCoverAlt,
   addModuleAuthor,
   deleteModule,
   moveModule,
@@ -13,9 +18,12 @@ import {
   updateTrackDetails,
 } from "@/app/admin/training/actions";
 import { Modal } from "@/components/Modal";
+import { PhotoCreditLine, PhotoPicker } from "@/components/training/PhotoPicker";
+import { createClient } from "@/lib/supabase/client";
 import type { AdminModule } from "@/lib/data/training";
+import { MEDIA_BUCKET, type ModuleCover } from "@/lib/training/slides";
 
-type AdminTrack = { id: string; title: string; description: string; modules: AdminModule[] };
+type AdminTrack = { id: string; title: string; description: string; modules: AdminModule[]; cover: ModuleCover | null };
 type Authors = Record<string, { userId: string; name: string; email: string }[]>;
 
 /** Super Admin: every track and module, their state, and the module settings. */
@@ -148,6 +156,13 @@ export function AdminTrainingList({ tracks, authors }: { tracks: AdminTrack[]; a
               <span>Description</span>
               <textarea name="description" rows={3} defaultValue={trackEdit.description} maxLength={1000} />
             </label>
+            <TrackPicture
+              track={trackEdit}
+              onChanged={(cover) => {
+                setTrackEdit((t) => (t ? { ...t, cover } : t));
+                router.refresh();
+              }}
+            />
             <div className="role-editor__actions">
               <button type="button" className="button button-secondary" onClick={() => setTrackEdit(null)}>
                 Cancel
@@ -190,6 +205,110 @@ export function AdminTrainingList({ tracks, authors }: { tracks: AdminTrack[]; a
         </Modal>
       )}
     </>
+  );
+}
+
+/**
+ * The picture on a track's card. Saved as soon as it's chosen, into the
+ * track's own folder; replacing or removing it deletes the old file.
+ */
+function TrackPicture({ track, onChanged }: { track: AdminTrack; onChanged: (c: ModuleCover | null) => void }) {
+  const input = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [picking, setPicking] = useState(false);
+  const [alt, setAlt] = useState(track.cover?.alt ?? "");
+  const cover = track.cover;
+
+  async function upload(file: File) {
+    setBusy(true);
+    setError(null);
+    const ticket = await createTrackCoverUpload(track.id, { type: file.type, size: file.size });
+    if (!ticket.ok) {
+      setBusy(false);
+      return setError(ticket.error);
+    }
+    const { error: upErr } = await createClient().storage.from(MEDIA_BUCKET).uploadToSignedUrl(ticket.path, ticket.token, file, { contentType: file.type });
+    if (upErr) {
+      setBusy(false);
+      return setError("The upload didn't finish. Try again.");
+    }
+    const r = await attachTrackUpload(track.id, { path: ticket.path, alt });
+    setBusy(false);
+    if (!r.ok) return setError(r.error);
+    const src = createClient().storage.from(MEDIA_BUCKET).getPublicUrl(ticket.path).data.publicUrl;
+    onChanged({ src, alt, credit: null });
+  }
+
+  async function remove() {
+    if (!window.confirm("Remove this track's picture? Its card will show the first module's photo instead.")) return;
+    const r = await removeTrackCover(track.id);
+    if (!r.ok) return setError(r.error);
+    setAlt("");
+    onChanged(null);
+  }
+
+  async function saveAlt() {
+    if (!cover || alt === cover.alt) return;
+    const r = await updateTrackCoverAlt(track.id, alt);
+    if (!r.ok) return setError(r.error);
+    onChanged({ ...cover, alt });
+  }
+
+  return (
+    <div className="field">
+      <span>Card picture</span>
+      {cover ? (
+        <div className="be-media">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={cover.src} alt="" className="be-media__thumb" />
+          <PhotoCreditLine credit={cover.credit} />
+        </div>
+      ) : (
+        <p className="card__meta">None yet: the card shows the first module&rsquo;s photo.</p>
+      )}
+      <div className="be-row">
+        <input ref={input} type="file" hidden accept="image/jpeg,image/png,image/webp" onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} />
+        <button type="button" className="button button-secondary button-small" disabled={busy} onClick={() => input.current?.click()}>
+          {busy ? "Saving…" : cover ? "Replace with a file" : "Upload a picture"}
+        </button>
+        <button type="button" className="button button-secondary button-small" disabled={busy} onClick={() => setPicking(true)}>
+          Find a photo
+        </button>
+        {cover && (
+          <button type="button" className="text-action" onClick={remove}>
+            Remove
+          </button>
+        )}
+      </div>
+      {cover && (
+        <label className="field">
+          <span>Describe the picture (for screen readers)</span>
+          <input value={alt} maxLength={500} onChange={(e) => setAlt(e.target.value)} onBlur={saveAlt} />
+        </label>
+      )}
+      {error && (
+        <p className="form-error" role="alert">
+          {error}
+        </p>
+      )}
+      {picking && (
+        <PhotoPicker
+          moduleId=""
+          initialQuery={track.title}
+          onClose={() => setPicking(false)}
+          onPick={async (p) => {
+            setPicking(false);
+            setBusy(true);
+            const r = await attachTrackStockPhoto(track.id, p);
+            setBusy(false);
+            if (!r.ok) return setError(r.error);
+            setAlt(p.alt);
+            onChanged({ src: p.src, alt: p.alt, credit: p.credit });
+          }}
+        />
+      )}
+    </div>
   );
 }
 

@@ -6,18 +6,42 @@ begin execute sql; return false; exception when others then return true; end $$;
 grant execute on function pg_temp.expect(text,boolean), pg_temp.fails(text) to authenticated;
 
 select pg_temp.expect('four tracks', (select count(*) from training_tracks) = 4);
-select pg_temp.expect('the curriculum: 17 unpublished modules, each with a draft, objectives and further reading',
-  (select count(*) from training_modules where curriculum_key is not null and published_version = 0) = 17
+select pg_temp.expect('the curriculum: 18 unpublished modules; the 17 from 0036 each with a draft, objectives and further reading',
+  (select count(*) from training_modules where curriculum_key is not null and published_version = 0) = 18
   and (select count(*) from training_module_drafts d join training_modules m on m.id = d.module_id
        where jsonb_array_length(d.content -> 'objectives') >= 3 and jsonb_array_length(d.content -> 'furtherReading') >= 2) = 17);
-select pg_temp.expect('3 + 6 + 4 + 4 modules by track',
+select pg_temp.expect('3 + 6 + 4 + 5 modules by track',
   (select array_agg(n order by o) from (select t.order_index o, count(*) n from training_modules m join training_tracks t on t.id = m.track_id group by t.order_index) x)
-  = array[3, 6, 4, 4]::bigint[]);
+  = array[3, 6, 4, 5]::bigint[]);
+-- 0042: the teaching order.
+select pg_temp.expect('0042: Council Ready goes role, meetings, general meetings, repairs, managers, disputes',
+  (select array_agg(curriculum_key order by order_index) from training_modules where curriculum_key like 'cr%')
+  = array['cr1','cr2','cr3','cr5','cr6','cr4']);
+select pg_temp.expect('0042: Treasurer goes budget, reserve fund, statements, collections',
+  (select array_agg(curriculum_key order by order_index) from training_modules where curriculum_key like 't%')
+  = array['t2','t3','t1','t4']);
+select pg_temp.expect('0042: Secretary 5 is Using the Stratasphere, with three objectives',
+  (select title = 'Using the Stratasphere' and jsonb_array_length(objectives) = 3 and order_index = 5
+   from training_modules where curriculum_key = 's5'));
+select pg_temp.expect('0042: new titles and objectives',
+  (select title from training_modules where curriculum_key = 'cr6') = 'Strata managers and contracts'
+  and (select objectives -> 2 ->> 'bloom' from training_modules where curriculum_key = 'cr6') = 'analyze'
+  and (select title from training_modules where curriculum_key = 's4') = 'Certificates and privacy');
+-- An author's changes survive a re-run, and the order isn't shuffled again.
+update training_modules set title = 'My repairs module', objectives = '[{"text": "Mine", "bloom": "apply"}]' where curriculum_key = 'cr5';
+update training_modules set order_index = 9 where curriculum_key = 'cr1';
+\i supabase/migrations/0042_training_progression.sql
+select pg_temp.expect('0042 leaves edited modules and a changed order alone, and adds Secretary 5 only once',
+  (select title from training_modules where curriculum_key = 'cr5') = 'My repairs module'
+  and (select objectives ->> 0 from training_modules where curriculum_key = 'cr5') like '%Mine%'
+  and (select order_index from training_modules where curriculum_key = 'cr1') = 9
+  and (select count(*) from training_modules where curriculum_key = 's5') = 1);
+select pg_temp.expect('tracks have a card picture column', exists (select 1 from information_schema.columns where table_name = 'training_tracks' and column_name = 'cover'));
 select pg_temp.expect('every further reading link is https',
   not exists (select 1 from training_module_drafts d, jsonb_array_elements(d.content -> 'furtherReading') r where r ->> 'url' not like 'https://%'));
 select pg_temp.expect('0039: every curriculum module has one to three objectives',
-  not exists (select 1 from training_module_drafts d join training_modules m on m.id = d.module_id
-              where m.curriculum_key is not null and jsonb_array_length(d.content -> 'objectives') not between 1 and 3));
+  not exists (select 1 from training_modules m left join training_module_drafts d on m.id = d.module_id
+              where m.curriculum_key is not null and jsonb_array_length(coalesce(d.content -> 'objectives', m.objectives)) not between 1 and 3));
 select pg_temp.expect('0039: Strata Basics 2 is the rules a strata lives by',
   (select title from training_modules where curriculum_key = 'sb2') = 'The rules a strata lives by');
 -- An author's own objectives survive a re-run of 0039.
