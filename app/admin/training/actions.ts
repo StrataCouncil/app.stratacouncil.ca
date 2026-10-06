@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProfile } from "@/lib/data/profile";
 import { moduleCover, normalizeModuleContent, publishProblems, type Screen } from "@/lib/training/content";
-import { applyTightened, screenForTightening, TIGHTEN_INSTRUCTIONS, tightenSchema } from "@/lib/training/ai";
+import { applyTightened, onScreenWords, screenForTightening, TIGHTEN_INSTRUCTIONS, tightenSchema } from "@/lib/training/ai";
 import { askClaudeJson } from "@/lib/ai/claude";
 import { inngest, TRAINING_FACT_CHECK_EVENT } from "@/lib/inngest/client";
 import { normalizeFactCheck, type FactCheck } from "@/lib/training/library";
@@ -337,26 +337,37 @@ export async function chooseStockPhoto(moduleId: string, downloadLocation: strin
  * (and so any audio made from it), questions, scenarios and media are kept
  * exactly as they are. Course text only; no one's details are involved.
  */
-export async function tightenScreen(moduleId: string, raw: unknown): Promise<Result<{ screen: Screen }>> {
+/** On-screen words the builder aims for (it flags screens over this). */
+const TIGHTEN_TARGET = 45;
+
+export async function tightenScreen(moduleId: string, raw: unknown): Promise<Result<{ screen: Screen; before: number; after: number }>> {
   if (!(await canAuthor(moduleId))) return { ok: false, error: "You can't edit this module." };
   const screen = normalizeModuleContent({ sections: [{ id: "s", title: "s", screens: [raw] }] }).sections[0]?.screens[0];
   if (!screen) return { ok: false, error: "That screen couldn't be read." };
-  const blocks = screenForTightening(screen);
-  if (!blocks.length) return { ok: true, screen };
+  const before = onScreenWords(screen);
+  if (!screenForTightening(screen).length) return { ok: true, screen, before, after: before };
   try {
-    const result = await askClaudeJson<unknown>({
-      system: TIGHTEN_INSTRUCTIONS,
-      messages: [
-        {
-          role: "user",
-          content: `Screen title: ${screen.title}\n\nNarration (read aloud with the screen):\n${screen.narration.transcript || "(none)"}\n\nCurrent on-screen blocks:\n${JSON.stringify(blocks, null, 1)}`,
-        },
-      ],
-      schema: tightenSchema,
-      effort: "low",
-      maxTokens: 8000,
-    });
-    return { ok: true, screen: applyTightened(screen, result) };
+    // A second, firmer pass when the first leaves it over the target.
+    let current = screen;
+    for (let pass = 0; pass < 2 && onScreenWords(current) > TIGHTEN_TARGET; pass++) {
+      const words = onScreenWords(current);
+      const result = await askClaudeJson<unknown>({
+        system: TIGHTEN_INSTRUCTIONS,
+        messages: [
+          {
+            role: "user",
+            content: `Screen title: ${current.title}\n\nNarration (read aloud with the screen):\n${current.narration.transcript || "(none)"}\n\nCurrent on-screen blocks (${words} words; bring them to 40 or fewer${pass ? ". The last rewrite was still too long: cut harder, merge or drop blocks, and leave detail to the narration" : ""}):\n${JSON.stringify(screenForTightening(current), null, 1)}`,
+          },
+        ],
+        schema: tightenSchema,
+        effort: "low",
+        maxTokens: 8000,
+      });
+      const next = applyTightened(current, result);
+      if (onScreenWords(next) >= words) break;
+      current = next;
+    }
+    return { ok: true, screen: current, before, after: onScreenWords(current) };
   } catch (e) {
     console.error("[tightenScreen]", e instanceof Error ? e.message : e);
     return { ok: false, error: "The AI couldn't tighten this screen. Try again." };
@@ -394,4 +405,18 @@ export async function getFactCheck(moduleId: string): Promise<Result<{ check: Fa
   if (!(await canAuthor(moduleId))) return { ok: false, error: "You can't see this module." };
   const { data } = await createAdminClient().from("training_module_drafts").select("fact_check").eq("module_id", moduleId).maybeSingle();
   return { ok: true, check: normalizeFactCheck(data?.fact_check) };
+}
+
+/** Set a fact-check note aside as checked by hand, or bring it back. */
+export async function markFactIssue(moduleId: string, index: number, checked: boolean): Promise<Result<{ check: FactCheck | null }>> {
+  if (!(await canAuthor(moduleId))) return { ok: false, error: "You can't edit this module." };
+  const admin = createAdminClient();
+  const { data } = await admin.from("training_module_drafts").select("fact_check").eq("module_id", moduleId).maybeSingle();
+  const check = normalizeFactCheck(data?.fact_check);
+  if (!check || check.status === "checking" || !check.issues[index]) return { ok: false, error: "That note has changed. Reload the page." };
+  const issues = check.issues.map((i, n) => (n === index ? { ...i, checkedByHand: checked || undefined } : i));
+  const next = { ...check, issues };
+  const { error } = await admin.from("training_module_drafts").update({ fact_check: next }).eq("module_id", moduleId);
+  if (error) return { ok: false, error: "Couldn't save that. Try again." };
+  return { ok: true, check: next };
 }

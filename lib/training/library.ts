@@ -136,6 +136,8 @@ export interface FactIssue {
   note: string;
   /** What the library says, with its citation, when it says something. */
   library: string;
+  /** The author looked into it and is satisfied (it stays listed, set aside). */
+  checkedByHand?: boolean;
 }
 
 export interface FactCheck {
@@ -202,6 +204,7 @@ export function normalizeIssues(raw: unknown, screenIds: Set<string>): FactIssue
         kind: x.kind === "contradicted" || x.kind === "wrong_reference" ? x.kind : "unsupported",
         note: String(x.note ?? "").slice(0, 600),
         library: String(x.library ?? "").slice(0, 1200),
+        ...(x.checkedByHand === true ? { checkedByHand: true } : {}),
       })
     )
     .filter((x) => x.note.trim())

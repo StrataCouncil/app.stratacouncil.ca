@@ -2,7 +2,7 @@ import { NonRetriableError } from "inngest";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { askClaudeJson } from "@/lib/ai/claude";
 import { inngest, TRAINING_FACT_CHECK_EVENT } from "@/lib/inngest/client";
-import { normalizeModuleContent, type Block } from "@/lib/training/content";
+import { normalizeModuleContent } from "@/lib/training/content";
 import {
   FACT_CHECK_INSTRUCTIONS,
   factCheckSchema,
@@ -59,17 +59,16 @@ export const factCheckTrainingModule = inngest.createFunction(
       await step.run(`check-${i}`, async () => {
         const m = await load(moduleId);
         const section = m.content.sections.find((s) => s.id === start.sections[i]);
-        const screens = (section?.screens ?? []).map((sc) => ({ id: sc.id, text: screenFactText(sc), refs: references(sc.blocks) }));
+        const screens = (section?.screens ?? []).map((sc) => ({ id: sc.id, text: screenFactText(sc) }));
         let issues: FactIssue[] = [];
         if (screens.some((s) => s.text.includes("\n"))) {
           const [found, cited] = await Promise.all([
-            searchLibrary(
-              screens.map((s) => s.text.slice(0, 1500)),
-              { perQuery: 5, threshold: 0.3, limit: 30 }
-            ),
-            passagesForCitations(screens.flatMap((s) => s.refs)),
+            // Each screen in a few short pieces, so every statement gets its own search.
+            searchLibrary(screens.flatMap((s) => searchPieces(s.text)), { perQuery: 6, threshold: 0.3, limit: 45 }),
+            // Any section a screen names, in its references, text or narration.
+            passagesForCitations(screens.map((s) => s.text)),
           ]);
-          const passages = mergeHits([cited, found]).slice(0, 40);
+          const passages = mergeHits([cited, found]).slice(0, 60);
           if (passages.length) {
             const raw = await askClaudeJson<unknown>({
               system: [
@@ -114,8 +113,19 @@ export const factCheckTrainingModule = inngest.createFunction(
   }
 );
 
-function references(blocks: Block[]): string[] {
-  return blocks.flatMap((b) => (b.type === "callout" || b.type === "knowledge_check") && b.reference.trim() ? [b.reference] : []);
+/** A screen's text in pieces of a few lines (at most four), for searching. */
+function searchPieces(text: string): string[] {
+  const pieces: string[] = [];
+  let current = "";
+  for (const line of text.split("\n")) {
+    if (current && current.length + line.length > 700) {
+      pieces.push(current);
+      current = "";
+    }
+    current = current ? `${current}\n${line}` : line;
+  }
+  if (current) pieces.push(current);
+  return pieces.slice(0, 4);
 }
 
 async function load(moduleId: string) {
