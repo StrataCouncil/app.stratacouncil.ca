@@ -23,6 +23,8 @@ export interface StrataAccess {
   freeMeetingUsed: boolean;
   roles: string[];
   isAdmin: boolean;
+  /** The admin, or the Manager when the admin allows it (0045): uses Billing. */
+  canBill: boolean;
   /** Secretary, admin, or the "Can run meetings" switch (0014). */
   canRunMeetings: boolean;
   userId: string;
@@ -37,7 +39,7 @@ export const getStrataAccess = cache(async (corpId: string): Promise<StrataAcces
   } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const [{ data: corp }, { data: sub }, { data: roleRows }, { data: canRun }, { data: membership }, { data: superAdmin }] =
+  const [{ data: corp }, { data: sub }, { data: roleRows }, { data: canRun }, { data: membership }, { data: superAdmin }, { data: canBill }] =
     await Promise.all([
     supabase
       .from("strata_corporations")
@@ -59,6 +61,7 @@ export const getStrataAccess = cache(async (corpId: string): Promise<StrataAcces
       .eq("status", "active")
       .maybeSingle(),
     supabase.rpc("is_super_admin"),
+    supabase.rpc("can_manage_billing", { target_corporation_id: corpId }),
   ]);
   if (!corp) return null;
 
@@ -70,6 +73,7 @@ export const getStrataAccess = cache(async (corpId: string): Promise<StrataAcces
     freeMeetingUsed: corp.free_meeting_used,
     roles,
     isAdmin: superAdmin === true || roles.includes("admin"),
+    canBill: canBill === true,
     canRunMeetings: canRun === true,
     userId: user.id,
     superAdminOnly: superAdmin === true && !membership,

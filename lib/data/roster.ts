@@ -53,6 +53,8 @@ export interface PendingJoinRequest {
 export interface CorporationRoster {
   currentUserId: string;
   isAdmin: boolean;
+  /** The admin lets the strata's Manager use Billing (0045). */
+  managersCanBill: boolean;
   jurisdiction: string;
   members: RosterMember[];
   /** Every strata lot on the roster, for tying members to their lot. */
@@ -78,7 +80,7 @@ export async function getCorporationRoster(
       .eq("corporation_id", corporationId),
     supabase
       .from("strata_corporations")
-      .select("jurisdiction")
+      .select("jurisdiction, managers_can_bill")
       .eq("strata_plan_number", corporationId)
       .maybeSingle(),
     supabase.from("owners_and_council").select("lot_number").eq("corporation_id", corporationId).order("lot_number"),
@@ -175,6 +177,7 @@ export async function getCorporationRoster(
   return {
     currentUserId: user.id,
     isAdmin,
+    managersCanBill: Boolean((corporation.data as { managers_can_bill?: boolean } | null)?.managers_can_bill),
     jurisdiction: corporation.data?.jurisdiction ?? "",
     members,
     lots: (lots.data ?? []).map((l) => l.lot_number as string),

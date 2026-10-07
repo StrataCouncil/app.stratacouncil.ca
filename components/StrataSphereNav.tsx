@@ -19,7 +19,7 @@ import { SubscriptionPendingNote } from "@/components/SubscriptionPendingNote";
  * context and has no browse surface (doc01 §4a). No "Calendar" either —
  * not built in V1 (doc01 §7 item 21).
  */
-const allItems: Array<{ slug: string; label: string; gated: boolean; managersOnly?: boolean; adminsOnly?: boolean }> = [
+const allItems: Array<{ slug: string; label: string; gated: boolean; managersOnly?: boolean; billingOnly?: boolean }> = [
   // Overview is the strata's landing page: its dashboard.
   { slug: "", label: "Overview", gated: false },
   { slug: "assistant", label: "Stratasphere™", gated: true },
@@ -29,8 +29,8 @@ const allItems: Array<{ slug: string; label: string; gated: boolean; managersOnl
   { slug: "meetings", label: "Meetings", gated: false },
   { slug: "minutes", label: "Minutes", gated: false },
   { slug: "documents", label: "Documents", gated: false },
-  // Billing is admin-only (doc01 §7 item 7); others never see the tab.
-  { slug: "billing", label: "Billing", gated: false, adminsOnly: true },
+  // Billing: the admin, and the Manager when the admin allows it (0045); others never see the tab.
+  { slug: "billing", label: "Billing", gated: false, billingOnly: true },
   // Only the Admin and the Manager role see this one at all.
   { slug: "management", label: "Management", gated: false, managersOnly: true },
 ];
@@ -56,8 +56,8 @@ function LockIcon() {
 }
 
 export function StrataSphereNav({ active }: { active: string }) {
-  const { corpId, subscribed, pending, isAdmin, canManage } = useStrata();
-  const items = allItems.filter((i) => (!i.managersOnly || canManage) && (!i.adminsOnly || isAdmin));
+  const { corpId, subscribed, pending, canBill, canManage } = useStrata();
+  const items = allItems.filter((i) => (!i.managersOnly || canManage) && (!i.billingOnly || canBill));
   const [prompt, setPrompt] = useState<string | null>(null);
 
   return (
@@ -101,7 +101,7 @@ export function StrataSphereNav({ active }: { active: string }) {
       {prompt && (
         <SubscribePrompt
           corpId={corpId}
-          isAdmin={isAdmin}
+          canBill={canBill}
           pending={pending}
           onClose={() => setPrompt(null)}
         />
@@ -112,12 +112,12 @@ export function StrataSphereNav({ active }: { active: string }) {
 
 function SubscribePrompt({
   corpId,
-  isAdmin,
+  canBill,
   pending,
   onClose,
 }: {
   corpId: string;
-  isAdmin: boolean;
+  canBill: boolean;
   pending: boolean;
   onClose: () => void;
 }) {
@@ -144,7 +144,7 @@ function SubscribePrompt({
       >
         <h2 id="subscribe-prompt-title">{pending ? "Stratasphere™ is on its way" : STRATASPHERE_TITLE}</h2>
         {pending ? <SubscriptionPendingNote /> : <p>{STRATASPHERE_PITCH}</p>}
-        {!isAdmin && !pending && (
+        {!canBill && !pending && (
           <p className="card__meta">
             Only your strata&rsquo;s admin can subscribe. Request it and we&rsquo;ll email them for you.
           </p>
@@ -153,7 +153,7 @@ function SubscribePrompt({
           <button ref={closeRef} type="button" className="button button-secondary" onClick={onClose}>
             {pending ? "OK" : "Not now"}
           </button>
-          {pending ? null : isAdmin ? (
+          {pending ? null : canBill ? (
             <Link
               href={`/strata/${corpId}/billing?step=plan`}
               className="button button-primary"

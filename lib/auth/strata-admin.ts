@@ -13,3 +13,12 @@ export async function isStrataAdmin(supabase: SupabaseClient, corpId: string): P
   });
   return data === true;
 }
+
+/**
+ * Can the signed-in user use this strata's Billing? Its admin (and Super
+ * Admins), or its Manager when the admin has allowed it (0045).
+ */
+export async function canManageBilling(supabase: SupabaseClient, corpId: string): Promise<boolean> {
+  const { data } = await supabase.rpc("can_manage_billing", { target_corporation_id: corpId });
+  return data === true;
+}

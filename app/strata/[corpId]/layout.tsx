@@ -113,7 +113,7 @@ export default async function StrataSphereLayout({
             </div>
           )}
 
-          {!subscribed && !pending && access?.isAdmin && <SubscribeNudge corpId={currentCorporation.id} />}
+          {!subscribed && !pending && access?.canBill && <SubscribeNudge corpId={currentCorporation.id} />}
 
           <StrataContextProvider
             value={{
@@ -122,6 +122,7 @@ export default async function StrataSphereLayout({
               pending,
               isAdmin: access?.isAdmin ?? false,
               canManage: Boolean(access?.isAdmin || access?.roles.includes("manager")),
+              canBill: access?.canBill ?? false,
             }}
           >
             {children}

@@ -1,6 +1,7 @@
 import { InviteMemberButton, RosterInvites } from "@/components/RosterInvites";
 import { RosterJoinRequests } from "@/components/RosterJoinRequests";
 import { RosterTable } from "@/components/RosterTable";
+import { ManagerBillingSwitch } from "@/components/ManagerBillingSwitch";
 import type { CorporationRoster } from "@/lib/data/roster";
 
 /**
@@ -43,6 +44,7 @@ export function CouncilRoster({
         currentUserId={roster.currentUserId}
         jurisdiction={roster.jurisdiction}
       />
+      {roster.isAdmin && <ManagerBillingSwitch corporationId={corporationId} on={roster.managersCanBill} />}
     </>
   );
 }

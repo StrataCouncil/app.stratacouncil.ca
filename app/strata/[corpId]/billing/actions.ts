@@ -12,7 +12,7 @@ import { recordPaymentMethodUpdate, recordSubscriptionPayment } from "@/lib/stri
 import type Stripe from "stripe";
 import { syncSubscription } from "@/lib/stripe/sync";
 import { parseEmails } from "@/lib/roster-csv";
-import { isStrataAdmin } from "@/lib/auth/strata-admin";
+import { canManageBilling } from "@/lib/auth/strata-admin";
 
 /**
  * Server Actions behind billing/page.tsx's buttons. These are the
@@ -31,8 +31,8 @@ async function requireAdmin(corporationId: string) {
   } = await supabase.auth.getUser();
   if (!user) throw new Error("Not signed in.");
 
-  if (!(await isStrataAdmin(supabase, corporationId))) {
-    throw new Error("Only a corporation admin can manage billing.");
+  if (!(await canManageBilling(supabase, corporationId))) {
+    throw new Error("Only this strata's admin, or its Manager when the admin allows it, can manage billing.");
   }
   return user;
 }

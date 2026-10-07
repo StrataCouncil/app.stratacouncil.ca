@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { isStrataAdmin } from "@/lib/auth/strata-admin";
+import { canManageBilling } from "@/lib/auth/strata-admin";
 import { getStripe, publishableKeyFor, stripeModeFor, type StripeMode } from "@/lib/stripe/client";
 import { settlePaymentMethodUpdate } from "@/lib/stripe/payment-results";
 import { UpdatePaymentMethod } from "@/components/UpdatePaymentMethod";
@@ -120,10 +120,11 @@ export default async function BillingPage({
     .eq("user_id", user.id)
     .eq("role", "admin");
   const adminCorpIds = (adminRows ?? []).map((r) => r.corporation_id as string);
-  // No billing information at all for anyone who isn't this strata's admin.
-  // A Super Admin is admin of every strata (0021).
+  // No billing information at all for anyone but this strata's admin, or
+  // its Manager when the admin allows it (0045). A Super Admin is admin of
+  // every strata (0021).
   if (!adminCorpIds.includes(corpId)) {
-    if (!(await isStrataAdmin(supabase, corpId))) redirect(`/strata/${corpId}`);
+    if (!(await canManageBilling(supabase, corpId))) redirect(`/strata/${corpId}`);
     adminCorpIds.push(corpId);
   }
 
@@ -269,7 +270,7 @@ export default async function BillingPage({
       <div className="page-header" style={{ marginBottom: "1.75rem" }}>
         <h2 style={{ margin: 0 }}>Billing for {corp.building_name ?? corp.legal_name}</h2>
         <p className="card__meta" style={{ marginTop: "0.35rem" }}>
-          {corpId} &middot; Each strata has its own payment method, billing contacts and subscription &middot; Admin only
+          {corpId} &middot; Each strata has its own payment method, billing contacts and subscription &middot; Admin, and the Manager if the admin allows it
         </p>
       </div>
 
