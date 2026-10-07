@@ -2,6 +2,8 @@
 
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
+import { mirrorLegislationToDemo } from "@/lib/demo-mirror";
 import { requireSuperAdmin } from "@/lib/data/admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { queueLegislationIndexing } from "@/lib/kb/queue";
@@ -171,6 +173,8 @@ export async function deleteLegislation(id: string): Promise<Done> {
   if (error || !data?.length) return { ok: false, error: "Couldn't delete that entry." };
   const path = data[0].storage_path as string | null;
   if (path) await createAdminClient().storage.from(LEGISLATION_BUCKET).remove([path]);
+  // And from the demo site's copy (lib/demo-mirror.ts).
+  after(() => mirrorLegislationToDemo().then(() => undefined));
   revalidatePath("/admin/legislation");
   return { ok: true };
 }

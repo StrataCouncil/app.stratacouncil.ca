@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { demoDayLabel, demoLink, endOfDemoDay, isDemoToken, newDemoToken } from "../lib/demo.ts";
+import { demoDayLabel, demoLink, demoOpenModule, endOfDemoDay, isDemoToken, newDemoToken } from "../lib/demo.ts";
 
 const end = (iso: string) => endOfDemoDay(new Date(iso)).toISOString();
 
@@ -31,4 +31,19 @@ test("link tokens are long, random and URL-safe", () => {
   assert.ok(!isDemoToken("short"));
   assert.ok(!isDemoToken("a".repeat(40) + "/.."));
   assert.match(demoLink(a), /^https:\/\/demo\.stratacouncil\.ca\/start\/[A-Za-z0-9_-]{43}$/);
+});
+
+test("demo visitors get the first published module, in learning order", () => {
+  const tracks = [
+    { id: "council-ready", order_index: 2 },
+    { id: "basics", order_index: 1 },
+  ];
+  const m = (id: string, track_id: string, order_index: number, published_version: number) => ({ id, track_id, order_index, published_version });
+  assert.equal(
+    demoOpenModule(tracks, [m("cr1", "council-ready", 1, 3), m("b2", "basics", 2, 1), m("b1", "basics", 1, 0)])?.id,
+    "b2",
+    "an unpublished first module is skipped"
+  );
+  assert.equal(demoOpenModule(tracks, [m("cr1", "council-ready", 1, 3), m("b1", "basics", 1, 2)])?.id, "b1");
+  assert.equal(demoOpenModule(tracks, [m("b1", "basics", 1, 0)]), null);
 });

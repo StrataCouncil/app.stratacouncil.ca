@@ -20,8 +20,35 @@ and its own Supabase project. See `lib/demo.ts`.
    every link opened also clears anything already expired. Names and emails are
    deleted 7 days after the link ended.
 
-In the demo: no Stripe or billing, no email (nothing is sent), no sign-up or
-sign-in page, no Super Admin console or builders, and no way into another
+## What a visitor finds
+
+Their own copy of Larchwood Commons (`lib/demo-kit/`), built when the link is
+first opened and dated from that day:
+
+- 24 owners on the roster, a five-member council, Harbourline Strata
+  Management (manager, logo, letterhead), and Marisol Ortega's request to join.
+- The Library: bylaws, rules, budget, depreciation report summary, insurance
+  summary, AGM minutes, roof assessment, contracts, letters and an incident
+  report, already indexed (PII-stripped, as usual) for the Stratasphere.
+- Two held council meetings with final minutes and their decisions, the AGM's
+  resolutions in the decision ledger, and the next meeting's agenda with its
+  attachments, ready for Meeting Mode.
+- Running stories to ask about: the roof replacement levy and contract, a
+  visitor-parking dispute, a water leak and its deductible, an EV charger
+  request and a barking dog.
+
+Search vectors for the documents are kept (`demo_kit_embeddings`), so only the
+first visitor's strata calls the embeddings service.
+
+Council Training and the legislation library are copied from the live site
+(`lib/demo-mirror.ts`): training after every publish or track/module change
+(only the first published module is open in the demo), the library after
+every indexed entry, and both from the console's "Copy training and
+legislation to the demo" button. The global precedent pool is never copied.
+
+In the demo: no Stripe or billing, no email (invites wait as pending), no
+welcome checklist, no sign-up or sign-in page (the banner and the front page
+link to sign-up on the live site), no Super Admin console or builders, and no way into another
 strata. Inngest jobs run as a separate app (`stratacouncil-demo`) with `demo/`
 event names, so they never mix with the live site's.
 

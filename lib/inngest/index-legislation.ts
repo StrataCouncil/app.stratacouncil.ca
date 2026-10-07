@@ -6,6 +6,7 @@ import { chunkLegislation, detectCurrentTo } from "@/lib/kb/legislation";
 import { stripForLibrary } from "@/lib/kb/privacy";
 import { LEGISLATION_INDEX_EVENT, inngest } from "@/lib/inngest/client";
 import { LEGISLATION_BUCKET } from "@/lib/legislation";
+import { mirrorLegislationToDemo } from "@/lib/demo-mirror";
 
 /**
  * Index one legislation library entry (doc04 §5): read the file on our own
@@ -64,7 +65,7 @@ export const indexLegislation = inngest.createFunction(
 
     if (extracted.status !== "ok") return extracted;
 
-    return step.run("embed", async () => {
+    const indexed = await step.run("embed", async () => {
       const admin = createAdminClient();
       const { data: doc } = await admin
         .from("legislation_documents")
@@ -112,6 +113,14 @@ export const indexLegislation = inngest.createFunction(
         .eq("id", id);
       return { status: "indexed", sections, chunks: rows.length };
     });
+
+    // The demo site answers from the same library (lib/demo-mirror.ts).
+    // Best effort: the console's copy button catches anything missed.
+    await step.run("copy to the demo", async () => {
+      const r = await mirrorLegislationToDemo();
+      return r.ok ? { copied: r.copied } : { skipped: r.error };
+    });
+    return indexed;
   }
 );
 

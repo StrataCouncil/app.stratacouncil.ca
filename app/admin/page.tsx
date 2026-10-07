@@ -100,3 +100,6 @@ export default async function AdminConsolePage() {
     </AppShell>
   );
 }
+
+// Copying training and the legislation library to the demo can take a while.
+export const maxDuration = 300;
