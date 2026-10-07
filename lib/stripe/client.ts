@@ -1,4 +1,5 @@
 import Stripe from "stripe";
+import { IS_DEMO } from "@/lib/demo";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
@@ -22,6 +23,8 @@ export type StripeMode = "live" | "sandbox";
 const clients: Partial<Record<StripeMode, Stripe>> = {};
 
 export function getStripe(mode: StripeMode = "live"): Stripe {
+  // The demo site (lib/demo.ts) never bills: every demo strata is subscribed.
+  if (IS_DEMO) throw new Error("Billing is off in the demo.");
   const cached = clients[mode];
   if (cached) return cached;
 

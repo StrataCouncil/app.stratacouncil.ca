@@ -15,14 +15,11 @@ export function TrainingOverview({
   tracks,
   news,
   hrefBase = "/training",
-  demo = false,
 }: {
   tracks: TrainingTrack[];
   news?: React.ReactNode;
-  /** Where track and module links point ("/training", or a demo link's "/demo/<token>"). */
+  /** Where track and module links point. */
   hrefBase?: string;
-  /** A demo link (0040): nothing is saved, so there's no progress to show. */
-  demo?: boolean;
 }) {
   const core = tracks.filter((t) => t.stage === "core");
   const specialty = tracks.filter((t) => t.stage === "specialty");
@@ -66,15 +63,6 @@ export function TrainingOverview({
         </div>
 
         <aside className="training-overview__side" aria-label="Your training">
-          {demo ? (
-            <section className="training-panel">
-              <h2>About this preview</h2>
-              <p className="training-panel__note">
-                You&rsquo;re seeing Council Training as a learner would. Every module is open, and nothing you do is saved.
-                Use &ldquo;Comment on this screen&rdquo; under any screen to tell us what you think.
-              </p>
-            </section>
-          ) : (
           <section className="training-panel">
             <h2>Your progress</h2>
             <ul className="training-progress">
@@ -114,7 +102,6 @@ export function TrainingOverview({
               A filled circle means the track is complete. Your council sees the same circles on Council &amp; Roles.
             </p>
           </section>
-          )}
 
           {upNext.length > 0 && (
             <section className="training-panel">

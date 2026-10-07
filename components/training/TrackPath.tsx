@@ -6,25 +6,20 @@ import { lockedBehind } from "@/lib/training/progress";
  * A track as a learning path: its modules in order, each done, open,
  * locked (finish the one before it first) or coming soon, ending in the
  * track's completion. The whole track waits on the one before it (0035).
- * Shared by Council Training and demo links.
  */
 export function TrackPath({
   track,
   tracks,
   hrefBase = "/training",
-  demo = false,
 }: {
   track: TrainingTrack;
   tracks: TrainingTrack[];
-  /** Where links point ("/training", or a demo link's "/demo/<token>"). */
+  /** Where links point. */
   hrefBase?: string;
-  /** A demo link (0040): every module is open and nothing is saved. */
-  demo?: boolean;
 }) {
-  const blocker = demo ? null : lockedBehind(track, tracks);
+  const blocker = lockedBehind(track, tracks);
   const statuses = moduleStatuses(track);
   if (blocker) for (const m of track.modules) if (m.publishedVersion > 0) statuses.set(m.id, "locked");
-  if (demo) for (const m of track.modules) if (m.publishedVersion > 0) statuses.set(m.id, "open");
   const published = track.modules.filter((m) => m.publishedVersion > 0);
   const completed = published.filter((m) => m.completed).length;
   const minutes = published.reduce((sum, m) => sum + (m.completed ? 0 : (m.estimatedMinutes ?? 0)), 0);
@@ -40,9 +35,7 @@ export function TrackPath({
         <p className="card__meta">
           {track.modules.length === 0
             ? "Modules for this track are on the way."
-            : demo
-              ? `${track.modules.length} modules. In this preview every module is open; learners take them in order.`
-              : `${completed} of ${track.modules.length} modules complete${minutes ? ` · about ${minutes} minutes to go` : ""}. Modules open in order.`}
+            : `${completed} of ${track.modules.length} modules complete${minutes ? ` · about ${minutes} minutes to go` : ""}. Modules open in order.`}
         </p>
         {blocker && (
           <p className="form-alert" data-testid="track-locked">

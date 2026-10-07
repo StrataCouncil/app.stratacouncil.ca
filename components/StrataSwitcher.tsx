@@ -16,9 +16,12 @@ import type { ConnectedCorporation } from "@/lib/data/corporations";
 export function StrataSwitcher({
   corporations,
   currentId,
+  canConnect = true,
 }: {
   corporations: ConnectedCorporation[];
   currentId: string;
+  /** Off in the demo, where each visitor has only their own strata. */
+  canConnect?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const wrap = useRef<HTMLDivElement>(null);
@@ -64,13 +67,11 @@ export function StrataSwitcher({
               )}
             </Link>
           ))}
-          <Link
-            href="/strata?connect=1"
-            className="strata-switcher__connect"
-            data-testid="strata-switcher-connect"
-          >
-            + Connect another strata
-          </Link>
+          {canConnect && (
+            <Link href="/strata?connect=1" className="strata-switcher__connect" data-testid="strata-switcher-connect">
+              + Connect another strata
+            </Link>
+          )}
         </div>
       )}
     </div>

@@ -7,7 +7,8 @@ database functions. They run on every pull request (`.github/workflows/checks.ym
   use (roles, `auth`, `storage`, `auth.uid()`).
 - `setup/seed.sql`: test people and one strata (BCS-1234), made through the real
   functions, plus the core create/join/invite/roles checks.
-- `suites/*.sql`: one file per area. Each runs on a fresh copy of the seeded
+- `suites/*.sql`: one file per area (`demo.sql` also loads the demo site's own
+  tables and functions, `supabase/demo/demo.sql`). Each runs on a fresh copy of the seeded
   database. A check is `select pg_temp.expect('what should be true', <condition>);`
   and "signing in" is `set role authenticated; set test.uid = '<user uuid>';`.
 

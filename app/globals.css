@@ -8150,7 +8150,7 @@ a.track-card:focus-visible {
   font-size: 0.9rem;
 }
 
-/* Council Training demo links (0040) */
+/* The demo site (demo.stratacouncil.ca): the strip above every page */
 .demo-banner {
   background: var(--ink);
   color: var(--paper);
@@ -8163,84 +8163,48 @@ a.track-card:focus-visible {
   gap: 1rem;
   flex-wrap: wrap;
 }
-.demo-feedback {
-  margin-top: 0.75rem;
-  font-size: 0.9rem;
-}
-.demo-feedback--open {
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-lg);
-  padding: 1rem;
-  display: grid;
-  gap: 0.6rem;
-  max-width: 640px;
-}
-.demo-links {
-  margin-top: 2rem;
-  max-width: 900px;
-}
+/* Super Admin console: personal demo links */
 .demo-links h2 {
-  font-size: 1.15rem;
-  margin: 0;
+  font-size: 1.25rem;
+}
+.demo-links h3 {
+  font-size: 1rem;
+  margin-top: 0.75rem;
 }
 .demo-links__form {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 220px;
-  gap: 0.75rem;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 0 1rem;
   align-items: end;
 }
-.demo-links__form .be-check,
-.demo-links__form > div {
-  grid-column: 1 / -1;
+.demo-links__form .button {
+  margin-bottom: 1.1rem;
 }
-@media (max-width: 599px) {
+@media (max-width: 720px) {
   .demo-links__form {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: 1fr;
   }
 }
-.demo-links__list,
-.demo-feedback-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
+.demo-links__made {
   display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-.demo-links__list li {
-  display: flex;
-  justify-content: space-between;
-  gap: 1rem;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  padding: 0.75rem 0.9rem;
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
-  padding: 0.75rem 1rem;
-  flex-wrap: wrap;
+  background: var(--paper);
 }
 .demo-links__url {
-  display: block;
-  margin-top: 0.35rem;
-  font-size: 0.8rem;
+  font-size: 0.85rem;
   word-break: break-all;
-  color: var(--muted);
 }
 .demo-links__actions {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
+  white-space: nowrap;
+  text-align: right;
 }
-.demo-links__subhead {
-  font-size: 1rem;
-  margin: 1rem 0 0;
-}
-.demo-feedback-list li {
-  border-bottom: 1px solid var(--line);
-  padding-bottom: 0.75rem;
-}
-.demo-feedback-list p {
-  margin: 0.25rem 0;
-  color: var(--ink);
-  white-space: pre-wrap;
+.demo-links__actions .button + .button {
+  margin-left: 0.4rem;
 }
 .recover-narration {
   margin-top: 1rem;

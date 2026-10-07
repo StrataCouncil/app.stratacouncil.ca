@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { inviteIsPending, notifyInviteAccepted } from "@/lib/email/invite-accepted";
+import { IS_DEMO } from "@/lib/demo";
 import { EMAIL_RE, isJurisdictionCode, normalizeStrataPlanNumber } from "@/lib/strata";
 import { extractDocumentText } from "@/lib/kb/extract";
 import { stripPII } from "@/lib/pii";
@@ -62,7 +63,10 @@ export type LookupResult =
       pendingCreationRequestByOther: boolean;
     };
 
+const DEMO_ONE_STRATA = "In the demo you have one strata, your own.";
+
 export async function lookupStrata(input: string): Promise<LookupResult> {
+  if (IS_DEMO) return { status: "invalid" };
   const strataPlanNumber = normalizeStrataPlanNumber(input);
   if (!strataPlanNumber) return { status: "invalid" };
 
@@ -126,6 +130,8 @@ export async function lookupStrata(input: string): Promise<LookupResult> {
 export type SimpleResult = { ok: true } | { ok: false; error: string };
 
 export async function requestToJoin(strataPlanNumber: string): Promise<SimpleResult> {
+  // The demo (lib/demo.ts): each visitor has their own strata, and no other.
+  if (IS_DEMO) return { ok: false, error: DEMO_ONE_STRATA };
   const ctx = await requireUser();
   if (!ctx) return { ok: false, error: "Please sign in again." };
   const { supabase, user } = ctx;
@@ -194,6 +200,8 @@ export async function createStrataPlanUpload(file: {
   size: number;
   type: string;
 }): Promise<UploadTicket> {
+  // The demo (lib/demo.ts): each visitor has their own strata, and no other.
+  if (IS_DEMO) return { ok: false, error: DEMO_ONE_STRATA };
   const ctx = await requireUser();
   if (!ctx) return { ok: false, error: "Please sign in again." };
 
@@ -251,6 +259,8 @@ const PLAN_SCHEMA = {
  * `submitCreationRequest` uses, so the browser can't change it.
  */
 export async function parseStrataPlan(strataPlanNumber: string, planStoragePath: string): Promise<PlanParseResult> {
+  // The demo (lib/demo.ts): each visitor has their own strata, and no other.
+  if (IS_DEMO) return { ok: false, error: DEMO_ONE_STRATA };
   const ctx = await requireUser();
   if (!ctx) return { ok: false, error: "Please sign in again." };
   const sp = normalizeStrataPlanNumber(strataPlanNumber);
@@ -345,6 +355,8 @@ export interface CreationRequestInput {
 }
 
 export async function submitCreationRequest(input: CreationRequestInput): Promise<SimpleResult> {
+  // The demo (lib/demo.ts): each visitor has their own strata, and no other.
+  if (IS_DEMO) return { ok: false, error: DEMO_ONE_STRATA };
   const ctx = await requireUser();
   if (!ctx) return { ok: false, error: "Please sign in again." };
   const { supabase, user } = ctx;

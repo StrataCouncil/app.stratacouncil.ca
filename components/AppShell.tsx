@@ -4,6 +4,7 @@ import { SiteFooter } from "@/components/SiteFooter";
 import { Logo } from "@/components/Logo";
 import { getCurrentProfile } from "@/lib/data/profile";
 import { getConnectedCorporations } from "@/lib/data/corporations";
+import { IS_DEMO } from "@/lib/demo";
 
 /**
  * Top-level app shell (doc03 "Screen layout — two levels, not one flat
@@ -32,6 +33,16 @@ export async function AppShell({
 
   return (
     <>
+      {IS_DEMO && (
+        <div className="demo-banner" role="note" data-testid="demo-banner">
+          <div className="wrap">
+            <span>
+              <strong>Demo.</strong> Your strata and everyone in it are fictional, and nothing is emailed. Try anything: it&rsquo;s
+              all cleared at midnight.
+            </span>
+          </div>
+        </div>
+      )}
       <header className="app-header">
         <div className="wrap app-header__inner">
           <Link href="/training" className="app-header__brand">

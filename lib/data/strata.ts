@@ -1,4 +1,5 @@
 import { cache } from "react";
+import { IS_DEMO } from "@/lib/demo";
 import { createClient } from "@/lib/supabase/server";
 
 /**
@@ -23,7 +24,7 @@ export interface StrataAccess {
   freeMeetingUsed: boolean;
   roles: string[];
   isAdmin: boolean;
-  /** The admin, or the Manager when the admin allows it (0045): uses Billing. */
+  /** The admin, or the Manager when the admin allows it (0045): uses Billing. Never in the demo. */
   canBill: boolean;
   /** Secretary, admin, or the "Can run meetings" switch (0014). */
   canRunMeetings: boolean;
@@ -73,7 +74,7 @@ export const getStrataAccess = cache(async (corpId: string): Promise<StrataAcces
     freeMeetingUsed: corp.free_meeting_used,
     roles,
     isAdmin: superAdmin === true || roles.includes("admin"),
-    canBill: canBill === true,
+    canBill: !IS_DEMO && canBill === true,
     canRunMeetings: canRun === true,
     userId: user.id,
     superAdminOnly: superAdmin === true && !membership,

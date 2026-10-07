@@ -10,6 +10,7 @@ import { SubscribeNudge } from "@/components/SubscribeNudge";
 import { getConnectedCorporations, type ConnectedCorporation } from "@/lib/data/corporations";
 import { createClient } from "@/lib/supabase/server";
 import { getStrataAccess } from "@/lib/data/strata";
+import { IS_DEMO } from "@/lib/demo";
 
 /**
  * Stratasphere™ is desktop-only — the governance tools (roster tables,
@@ -95,7 +96,7 @@ export default async function StrataSphereLayout({
               </h1>
               <p>{currentCorporation.address}</p>
             </div>
-            <StrataSwitcher corporations={switcherCorporations} currentId={currentCorporation.id} />
+            <StrataSwitcher corporations={switcherCorporations} currentId={currentCorporation.id} canConnect={!IS_DEMO} />
           </div>
 
           {access?.superAdminOnly && (

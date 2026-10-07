@@ -2,8 +2,6 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { AdminTrainingList } from "@/components/training/AdminTrainingList";
-import { DemoLinks } from "@/components/training/DemoLinks";
-import { getDemoAdmin } from "@/lib/data/training-demo";
 import { getCurrentProfile } from "@/lib/data/profile";
 import { getAdminTraining, getAllModuleAuthors } from "@/lib/data/training";
 
@@ -11,7 +9,7 @@ import { getAdminTraining, getAllModuleAuthors } from "@/lib/data/training";
 export default async function AdminTrainingPage() {
   const profile = await getCurrentProfile();
   if (!profile?.isSuperAdmin) notFound();
-  const [tracks, authors, demo] = await Promise.all([getAdminTraining(), getAllModuleAuthors(), getDemoAdmin()]);
+  const [tracks, authors] = await Promise.all([getAdminTraining(), getAllModuleAuthors()]);
   const review = tracks.flatMap((t) => t.modules.filter((m) => m.readyForReview));
 
   return (
@@ -33,7 +31,6 @@ export default async function AdminTrainingPage() {
           </p>
         )}
         <AdminTrainingList tracks={tracks} authors={authors} />
-        <DemoLinks links={demo.links} feedback={demo.feedback} />
       </div>
     </AppShell>
   );
