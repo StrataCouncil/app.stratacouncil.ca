@@ -108,7 +108,7 @@ export default async function MeetingsPage({ params }: { params: Promise<{ corpI
           </p>
           {access.pending ? (
             <SubscriptionPendingNote />
-          ) : access.isAdmin ? (
+          ) : access.canBill ? (
             <Link href={`/strata/${corpId}/billing`} className="button button-primary" data-testid="meetings-subscribe-cta">
               See plans
             </Link>

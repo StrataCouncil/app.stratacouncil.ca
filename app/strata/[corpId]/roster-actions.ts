@@ -346,6 +346,16 @@ export async function saveMemberRoles(
   return { ok: true };
 }
 
+/** Let the strata's Manager use Billing, or not (0045). Admin only. */
+export async function setManagersCanBill(corporationId: string, value: boolean): Promise<ActionResult> {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("set_managers_can_bill", { p_corporation_id: corporationId, p_on: value });
+  if (error) return dbError(error, "Couldn't change billing access.");
+  refresh(corporationId);
+  revalidatePath(`/strata/${corporationId}`, "layout");
+  return { ok: true };
+}
+
 export async function setMeetingPermission(
   corporationId: string,
   userId: string,
