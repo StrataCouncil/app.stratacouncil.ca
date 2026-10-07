@@ -4,4 +4,4 @@
  */
 export const STRATASPHERE_TITLE = "Subscribe to Stratasphere™";
 export const STRATASPHERE_PITCH =
-  "Unlock the power of ultra-compliant meetings, instantaneous minutes, and persistent institutional memory!";
+  "Supercharge your council with ultra-compliant meetings, instantaneous minutes, and permanent institutional memory!";
