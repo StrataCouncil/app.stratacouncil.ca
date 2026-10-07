@@ -8160,8 +8160,22 @@ a.track-card:focus-visible {
 .demo-banner .wrap {
   display: flex;
   justify-content: space-between;
-  gap: 1rem;
+  align-items: center;
+  gap: 0.5rem 1rem;
   flex-wrap: wrap;
+}
+.demo-banner__cta {
+  color: var(--paper);
+  font-weight: 600;
+  white-space: nowrap;
+  padding: 0.3rem 0.8rem;
+  border: 1px solid currentColor;
+  border-radius: var(--radius-sm);
+  text-decoration: none;
+}
+.demo-banner__cta:hover {
+  background: var(--paper);
+  color: var(--ink);
 }
 /* Super Admin console: personal demo links */
 .demo-links h2 {

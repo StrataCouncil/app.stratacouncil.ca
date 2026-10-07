@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createDemoLink, endDemoLink, resendDemoLink } from "@/app/admin/demo-actions";
+import { copyContentToDemo, createDemoLink, endDemoLink, resendDemoLink } from "@/app/admin/demo-actions";
 import type { DemoVisitor, DemoVisitorList } from "@/lib/data/demo-visitors";
 import { DEMO_LANDINGS, type DemoLanding } from "@/lib/demo";
 
@@ -41,6 +41,16 @@ export function DemoLinksAdmin({ list }: { list: DemoVisitorList }) {
     setFullName("");
     setEmail("");
     router.refresh();
+  }
+
+  async function copyContent() {
+    setBusy("content");
+    setError(null);
+    setNotice(null);
+    const r = await copyContentToDemo();
+    setBusy(null);
+    if (r.ok) setNotice(r.notice);
+    else setError(r.error);
   }
 
   async function copy(link: string) {
@@ -152,6 +162,18 @@ export function DemoLinksAdmin({ list }: { list: DemoVisitorList }) {
               <VisitorTable visitors={ended} busy={busy} copied={copied} />
             </>
           )}
+
+          <h3>Training and legislation</h3>
+          <p className="card__meta">
+            The demo shows the same Council Training (only the first module open) and answers from the same legislation
+            library. Both copy themselves after you publish a module or index a library entry. Use this to copy everything
+            now.
+          </p>
+          <p>
+            <button type="button" className="button button-secondary" disabled={busy !== null} onClick={copyContent} data-testid="demo-copy-content">
+              {busy === "content" ? "Copying…" : "Copy training and legislation to the demo"}
+            </button>
+          </p>
         </>
       )}
     </section>

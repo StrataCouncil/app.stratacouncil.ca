@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { StrataSphereNav } from "@/components/StrataSphereNav";
 import { GettingStarted, type GettingStartedStep } from "@/components/GettingStarted";
+import { IS_DEMO } from "@/lib/demo";
 import { getCorporationRoster } from "@/lib/data/roster";
 import { getStrataAccess } from "@/lib/data/strata";
 import { listMeetings, type MeetingRecord } from "@/lib/data/meetings";
@@ -56,8 +57,9 @@ export default async function OverviewPage({ params }: { params: Promise<{ corpI
   const jurisdiction = jurisdictions.find((j) => j.code === corp.jurisdiction)?.label ?? corp.jurisdiction;
 
   // Getting started, for the strata's own admin (not a visiting Super Admin).
+  // Not in the demo (lib/demo.ts): its strata is already set up.
   let steps: GettingStartedStep[] | null = null;
-  if (roster?.isAdmin && !access.superAdminOnly) {
+  if (roster?.isAdmin && !access.superAdminOnly && !IS_DEMO) {
     const others = members.filter((m) => m.userId !== roster.currentUserId).length + roster.invites.length;
     steps = [
       {

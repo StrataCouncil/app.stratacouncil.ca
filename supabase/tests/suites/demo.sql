@@ -62,7 +62,11 @@ select pg_temp.expect('opening the link twice makes one strata',
   and (select count(*) from strata_corporations where strata_plan_number like 'DEMO-%') = 1);
 select pg_temp.expect('the visitor row records it',
   (select corporation_id = (select corp from v) and user_id = '00000000-0000-0000-0000-0000000000f1' from demo_visitors));
-select pg_temp.expect('once set up, no one claims it again', not demo_claim_setup('dddddddd-0000-0000-0000-000000000001'));
+select pg_temp.expect('while it''s being filled, no one else claims it', not demo_claim_setup('dddddddd-0000-0000-0000-000000000001'));
+update demo_visitors set setup_started_at = now() - interval '3 minutes';
+select pg_temp.expect('a fill that was cut off can be taken over', demo_claim_setup('dddddddd-0000-0000-0000-000000000001'));
+update demo_visitors set setup_started_at = null;
+select pg_temp.expect('once filled, no one claims it again', not demo_claim_setup('dddddddd-0000-0000-0000-000000000001'));
 select pg_temp.expect('one lot per unit', (select count(*) = 24 from owners_and_council where corporation_id = (select corp from v)));
 
 set role authenticated;

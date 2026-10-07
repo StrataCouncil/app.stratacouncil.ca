@@ -21,6 +21,9 @@ export const DEMO_LANDINGS: { value: DemoLanding; label: string }[] = [
   { value: "training", label: "Council Training" },
 ];
 
+/** Where demo visitors go to make a real account. */
+export const SIGNUP_URL = "https://app.stratacouncil.ca/signup";
+
 /** Where demo links point. Read on the live site, which makes them. */
 export const DEMO_URL = (process.env.DEMO_APP_URL || "https://demo.stratacouncil.ca").replace(/\/+$/, "");
 
@@ -80,4 +83,26 @@ export function demoDayLabel(expiresAt: Date) {
     month: "long",
     day: "numeric",
   });
+}
+
+export interface DemoModuleRow {
+  id: string;
+  track_id: string;
+  order_index: number;
+  published_version: number;
+}
+
+/**
+ * The one Council Training module demo visitors may take: the first
+ * published module, in learning order (tracks, then modules, by their
+ * order). The rest show as coming soon (lib/demo-mirror.ts).
+ */
+export function demoOpenModule<M extends DemoModuleRow>(tracks: { id: string; order_index: number }[], modules: M[]): M | null {
+  for (const t of [...tracks].sort((a, b) => a.order_index - b.order_index)) {
+    const first = modules
+      .filter((m) => m.track_id === t.id && m.published_version > 0)
+      .sort((a, b) => a.order_index - b.order_index)[0];
+    if (first) return first;
+  }
+  return null;
 }

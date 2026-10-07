@@ -4,7 +4,7 @@ import { SiteFooter } from "@/components/SiteFooter";
 import { Logo } from "@/components/Logo";
 import { getCurrentProfile } from "@/lib/data/profile";
 import { getConnectedCorporations } from "@/lib/data/corporations";
-import { IS_DEMO } from "@/lib/demo";
+import { IS_DEMO, SIGNUP_URL } from "@/lib/demo";
 
 /**
  * Top-level app shell (doc03 "Screen layout — two levels, not one flat
@@ -40,6 +40,9 @@ export async function AppShell({
               <strong>Demo.</strong> Your strata and everyone in it are fictional, and nothing is emailed. Try anything: it&rsquo;s
               all cleared at midnight.
             </span>
+            <a href={SIGNUP_URL} className="demo-banner__cta" data-testid="demo-signup">
+              Create your free account
+            </a>
           </div>
         </div>
       )}

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { APP_URL } from "@/lib/app-url";
+import { IS_DEMO } from "@/lib/demo";
 import { MailtrapSendError, sendTransactionalEmail } from "@/lib/email/mailtrap";
 import { notifyUser } from "@/lib/email/notify";
 import { corporationInviteEmail, joinRequestApprovedEmail } from "@/lib/email/templates";
@@ -205,7 +206,8 @@ export async function sendInvite(corporationId: string, rawEmail: string): Promi
     return fail("The invite was saved, but the email didn't send. Use Resend to try again.");
   }
 
-  return { ok: true, notice: `Invite sent to ${email}.` };
+  // The demo (lib/demo.ts) emails no one: the invite just waits as pending.
+  return { ok: true, notice: IS_DEMO ? `Invite saved for ${email}. It's pending (this is the demo, so no email was sent).` : `Invite sent to ${email}.` };
 }
 
 export async function resendInvite(corporationId: string, inviteId: string): Promise<ActionResult> {
@@ -253,7 +255,10 @@ export async function resendInvite(corporationId: string, inviteId: string): Pro
     return fail("Couldn't resend the invite. Please try again.");
   }
 
-  return { ok: true, notice: `Invite re-sent to ${invite.invited_email}.` };
+  return {
+    ok: true,
+    notice: IS_DEMO ? `Still pending for ${invite.invited_email} (this is the demo, so no email was sent).` : `Invite re-sent to ${invite.invited_email}.`,
+  };
 }
 
 export async function revokeInvite(corporationId: string, inviteId: string): Promise<ActionResult> {

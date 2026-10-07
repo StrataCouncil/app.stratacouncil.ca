@@ -1,32 +1,33 @@
 import { notFound } from "next/navigation";
 import { Logo } from "@/components/Logo";
-import { IS_DEMO } from "@/lib/demo";
+import { IS_DEMO, SIGNUP_URL } from "@/lib/demo";
 
 /**
  * The demo site's front door (lib/demo.ts): the demo opens only from a
  * personal link, so anyone without one, or whose link has ended, lands
- * here. Not part of the live site.
+ * here. Everything points to making a real account. Not part of the live
+ * site.
  */
 const MESSAGES: Record<string, { title: string; body: string }> = {
   expired: {
     title: "Your demo has ended",
     body:
-      "Demo links work until midnight (Pacific time) on the day they're sent, and everything made in the demo is cleared overnight. Thanks for trying StrataCouncil.ca! To look again, ask us for a new link.",
+      "Demo links work until midnight (Pacific time) on the day they're sent, and everything made in the demo is cleared overnight. Thanks for trying StrataCouncil.ca! Ready for the real thing? Create your free account and set up your own strata.",
   },
   unknown: {
     title: "This link doesn't work",
-    body: "Check that you opened the whole link from your email. If it still doesn't work, ask us for a new one.",
+    body: "Check that you opened the whole link from your email. Or skip the demo and create your free account.",
   },
   busy: {
     title: "We couldn't open your demo",
-    body: "Something went wrong while setting it up. Try your link again in a minute. If it keeps happening, let us know.",
+    body: "Something went wrong while setting it up. Try your link again in a minute.",
   },
 };
 
 const WELCOME = {
   title: "The StrataCouncil.ca demo",
   body:
-    "The demo opens from a personal link we email you. You'll have your own fictional strata to try everything in, as its admin, until midnight. To get a link, ask us.",
+    "The demo opens from a personal link. To use StrataCouncil.ca with your own strata, create your free account: Council Training is free, and your first meeting in Meeting Mode is too.",
 };
 
 export default async function DemoPage({ searchParams }: { searchParams: Promise<{ link?: string }> }) {
@@ -43,8 +44,8 @@ export default async function DemoPage({ searchParams }: { searchParams: Promise
         <h1>{message.title}</h1>
         <p>{message.body}</p>
         <p>
-          <a href="mailto:support@stratacouncil.ca?subject=StrataCouncil.ca%20demo" className="button button-primary">
-            Email support@stratacouncil.ca
+          <a href={SIGNUP_URL} className="button button-primary" data-testid="demo-front-door-signup">
+            Create your free account
           </a>
         </p>
       </div>

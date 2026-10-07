@@ -2,9 +2,11 @@
 
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProfile } from "@/lib/data/profile";
+import { mirrorTrainingToDemo } from "@/lib/demo-mirror";
 import { getBuilderModule, type BuilderModule } from "@/lib/data/training";
 import { canAuthor, editing, labelFor, readSlide, SLIDE_COLUMNS, staff, verifiedCitations, type AdminClient } from "@/lib/training/builder-server";
 import {
@@ -54,6 +56,18 @@ import { PhotoError, searchPhotos, trackPhotoUse, type StockPhoto } from "@/lib/
  */
 
 type Result<T = object> = ({ ok: true } & T) | { ok: false; error: string };
+
+/**
+ * The demo site shows the same tracks and modules (lib/demo-mirror.ts):
+ * after a publish or a change to tracks or modules, copy them over once
+ * this response has gone.
+ */
+function mirrorSoon() {
+  after(async () => {
+    const r = await mirrorTrainingToDemo();
+    if (!r.ok && !r.error.includes("isn't connected")) console.error("[training] demo copy:", r.error);
+  });
+}
 
 function refresh(moduleId?: string) {
   revalidatePath("/admin/training");
@@ -192,6 +206,7 @@ export async function updateModuleDetails(
     .eq("id", moduleId);
   if (error) return { ok: false, error: "Couldn't save the module details." };
   refresh(moduleId);
+  mirrorSoon();
   return { ok: true };
 }
 
@@ -203,6 +218,7 @@ export async function updateTrackDetails(trackId: string, input: { title: string
   const { error } = await supabase.from("training_tracks").update({ title, description: input.description.trim().slice(0, 1000) }).eq("id", trackId);
   if (error) return { ok: false, error: "Couldn't save the track details." };
   refresh();
+  mirrorSoon();
   return { ok: true };
 }
 
@@ -233,6 +249,7 @@ async function setTrackCover(trackId: string, cover: { src: string; alt: string;
   const old = (track.cover as { path?: unknown } | null)?.path;
   if (typeof old === "string" && old !== cover.path && old.startsWith(`${trackId}/cover-`)) await removeFiles(admin, [old]);
   refresh();
+  mirrorSoon();
   return { ok: true };
 }
 
@@ -265,6 +282,7 @@ export async function updateTrackCoverAlt(trackId: string, alt: string): Promise
   const { error } = await admin.from("training_tracks").update({ cover: { ...(track.cover as object), alt: alt.slice(0, 500) } }).eq("id", trackId);
   if (error) return { ok: false, error: "Couldn't save the description." };
   refresh();
+  mirrorSoon();
   return { ok: true };
 }
 
@@ -279,6 +297,7 @@ export async function removeTrackCover(trackId: string): Promise<Result> {
   const old = (track.cover as { path?: unknown } | null)?.path;
   if (typeof old === "string" && old.startsWith(`${trackId}/cover-`)) await removeFiles(admin, [old]);
   refresh();
+  mirrorSoon();
   return { ok: true };
 }
 
@@ -301,6 +320,7 @@ export async function addModule(trackId: string, title: string): Promise<Result<
     .single();
   if (error || !data) return { ok: false, error: "Couldn't add the module." };
   refresh();
+  mirrorSoon();
   return { ok: true, id: data.id };
 }
 
@@ -318,6 +338,7 @@ export async function moveModule(moduleId: string, direction: -1 | 1): Promise<R
   [order[i], order[j]] = [order[j], order[i]];
   for (const [index, id] of order.entries()) await supabase.from("training_modules").update({ order_index: index + 1 }).eq("id", id);
   refresh();
+  mirrorSoon();
   return { ok: true };
 }
 
@@ -339,6 +360,7 @@ export async function deleteModule(moduleId: string): Promise<Result> {
   if (error) return { ok: false, error: "Couldn't delete the module." };
   await removeFiles(admin, files);
   refresh();
+  mirrorSoon();
   return { ok: true };
 }
 
@@ -1002,6 +1024,7 @@ export async function publishModule(moduleId: string): Promise<Result<{ version:
   // Files only the previous published copy used can go now.
   await tidyModuleFolder(admin, mod.track_id as string, moduleId);
   refresh(moduleId);
+  mirrorSoon();
   return { ok: true, version: data as number };
 }
 

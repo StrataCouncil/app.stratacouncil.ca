@@ -1,5 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { DemoLanding } from "@/lib/demo";
+import { MANAGEMENT_LOGOS_BUCKET } from "@/lib/data/management";
+import { buildDemoStrata } from "@/lib/demo-kit/build";
+import { DOCUMENTS_BUCKET } from "@/lib/documents";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
@@ -27,6 +30,9 @@ export type OpenDemoResult =
   | { ok: true; corporationId: string; email: string; userId: string; landing: DemoLanding }
   | { ok: false; reason: "unknown" | "expired" | "busy" };
 
+/** Profile photos (app/account/actions.ts), filed under the person's id. */
+const AVATARS_BUCKET = "avatars";
+
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /**
@@ -51,7 +57,9 @@ export async function openDemoLink(token: string): Promise<OpenDemoResult> {
   if (!visitor) return { ok: false, reason: "unknown" };
   if (Date.parse(visitor.expires_at) <= Date.now()) return { ok: false, reason: "expired" };
 
-  let ready = visitor.corporation_id && visitor.user_id ? visitor : null;
+  // Ready once the strata is made and filled (setup_started_at cleared).
+  const isReady = (v: DemoVisitorRow | null) => Boolean(v?.corporation_id && v.user_id && !v.setup_started_at);
+  let ready = isReady(visitor) ? visitor : null;
   if (!ready) {
     const { data: claimed, error: claimError } = await admin.rpc("demo_claim_setup", { p_visitor_id: visitor.id });
     if (claimError) {
@@ -59,28 +67,35 @@ export async function openDemoLink(token: string): Promise<OpenDemoResult> {
       return { ok: false, reason: "busy" };
     }
     if (claimed === true) {
+      let corporationId: string | null = null;
       try {
+        // A strata from a setup that was cut off is started again.
+        if (visitor.corporation_id) await discardStrata(admin, visitor.id, visitor.corporation_id);
         const userId = await visitorAccount(admin, visitor);
-        const { data: corporationId, error } = await admin.rpc("demo_create_strata", {
+        const { data, error } = await admin.rpc("demo_create_strata", {
           p_visitor_id: visitor.id,
           p_user_id: userId,
         });
-        if (error || !corporationId) throw new Error(error?.message ?? "no strata");
-        ready = { ...visitor, user_id: userId, corporation_id: corporationId as string };
+        if (error || !data) throw new Error(error?.message ?? "no strata");
+        corporationId = data as string;
+        await buildDemoStrata(admin, corporationId);
+        await admin.from("demo_visitors").update({ setup_started_at: null }).eq("id", visitor.id);
+        ready = { ...visitor, user_id: userId, corporation_id: corporationId, setup_started_at: null };
       } catch (err) {
         console.error("[openDemoLink] setup failed:", err instanceof Error ? err.message : err);
+        if (corporationId) await discardStrata(admin, visitor.id, corporationId).catch(() => undefined);
         await admin.rpc("demo_claim_setup", { p_visitor_id: visitor.id, p_release: true });
         return { ok: false, reason: "busy" };
       }
     } else {
-      for (let i = 0; i < 20 && !ready; i++) {
+      for (let i = 0; i < 60 && !ready; i++) {
         await sleep(750);
         const { data } = await admin
           .from("demo_visitors")
           .select("id, token, full_name, email, expires_at, user_id, corporation_id, setup_started_at, first_opened_at, landing")
           .eq("id", visitor.id)
           .single<DemoVisitorRow>();
-        if (data?.corporation_id && data.user_id) ready = data;
+        if (isReady(data)) ready = data;
       }
       if (!ready) return { ok: false, reason: "busy" };
     }
@@ -174,6 +189,42 @@ export async function wipeExpiredVisitors(): Promise<{ wiped: number; failed: nu
   return { wiped, failed, forgotten: gone?.length ?? 0 };
 }
 
+/** A strata's rows and its stored files (documents, the management logo). */
+async function deleteStrata(admin: SupabaseClient, corporationId: string) {
+  await removeFolder(admin, DOCUMENTS_BUCKET, corporationId);
+  await removeFolder(admin, MANAGEMENT_LOGOS_BUCKET, corporationId);
+  const { error } = await admin.rpc("demo_delete_strata", { p_corporation_id: corporationId });
+  if (error) throw new Error(error.message);
+}
+
+/** A half-made strata, so its visitor's setup can start again. */
+async function discardStrata(admin: SupabaseClient, visitorId: string, corporationId: string) {
+  await deleteStrata(admin, corporationId);
+  await admin.from("demo_visitors").update({ corporation_id: null }).eq("id", visitorId);
+}
+
+/** Every file under a folder in a bucket, however deep. */
+async function removeFolder(admin: SupabaseClient, bucket: string, folder: string) {
+  const paths: string[] = [];
+  const walk = async (prefix: string) => {
+    for (let offset = 0; ; offset += 1000) {
+      const { data, error } = await admin.storage.from(bucket).list(prefix, { limit: 1000, offset });
+      if (error) throw new Error(`Listing ${bucket}/${prefix}: ${error.message}`);
+      for (const entry of data ?? []) {
+        const path = `${prefix}/${entry.name}`;
+        if (entry.id) paths.push(path);
+        else await walk(path);
+      }
+      if (!data || data.length < 1000) break;
+    }
+  };
+  await walk(folder);
+  for (let i = 0; i < paths.length; i += 500) {
+    const { error } = await admin.storage.from(bucket).remove(paths.slice(i, i + 500));
+    if (error) throw new Error(`Removing files from ${bucket}: ${error.message}`);
+  }
+}
+
 async function wipeVisitor(admin: SupabaseClient, v: { user_id: string | null; corporation_id: string | null }) {
   const people = new Set<string>();
   if (v.user_id) people.add(v.user_id);
@@ -181,8 +232,7 @@ async function wipeVisitor(admin: SupabaseClient, v: { user_id: string | null; c
     const { data: members, error: membersError } = await admin.rpc("demo_strata_people", { p_corporation_id: v.corporation_id });
     if (membersError) throw new Error(membersError.message);
     for (const id of (members ?? []) as string[]) people.add(id);
-    const { error } = await admin.rpc("demo_delete_strata", { p_corporation_id: v.corporation_id });
-    if (error) throw new Error(error.message);
+    await deleteStrata(admin, v.corporation_id);
   }
   // Someone else's still-open link may use the same account (the same
   // address, invited by another visitor): leave it until that one ends.
@@ -195,6 +245,7 @@ async function wipeVisitor(admin: SupabaseClient, v: { user_id: string | null; c
   for (const a of active ?? []) people.delete(a.user_id);
 
   for (const userId of people) {
+    await removeFolder(admin, AVATARS_BUCKET, userId);
     const { error } = await admin.rpc("demo_delete_person", { p_user_id: userId });
     if (error) throw new Error(error.message);
     const { error: authError } = await admin.auth.admin.deleteUser(userId);

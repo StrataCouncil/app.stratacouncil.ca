@@ -6,6 +6,7 @@ import { DEMO_VISITOR_COLUMNS, demoDatabase, toDemoVisitor, type DemoVisitor } f
 import { IS_DEMO, demoDayLabel, endOfDemoDay, newDemoToken, type DemoLanding } from "@/lib/demo";
 import { MailtrapSendError, sendTransactionalEmail } from "@/lib/email/mailtrap";
 import { demoInviteEmail } from "@/lib/email/templates";
+import { mirrorLegislationToDemo, mirrorTrainingToDemo } from "@/lib/demo-mirror";
 import { EMAIL_RE } from "@/lib/strata";
 
 /**
@@ -154,4 +155,23 @@ export async function endDemoLink(visitorId: string): Promise<{ ok: true } | { o
   }
   revalidatePath("/admin");
   return { ok: true };
+}
+
+/**
+ * Copies Council Training and the legislation library to the demo site
+ * now (lib/demo-mirror.ts). Both also copy themselves after a publish or
+ * an indexed library entry; this is for the first time, or to be sure.
+ */
+export async function copyContentToDemo(): Promise<{ ok: true; notice: string } | { ok: false; error: string }> {
+  if (!(await staffName())) return { ok: false, error: "Only platform staff can do this." };
+  const training = await mirrorTrainingToDemo();
+  if (!training.ok) return training;
+  const legislation = await mirrorLegislationToDemo();
+  if (!legislation.ok) return legislation;
+  return {
+    ok: true,
+    notice:
+      `Copied ${training.modules} training modules (${training.open ? `"${training.open}" open` : "none published yet"}) ` +
+      `and ${legislation.entries} legislation entries (${legislation.copied} re-indexed, ${legislation.chunks} passages) to the demo.`,
+  };
 }

@@ -50,6 +50,18 @@ alter table public.demo_visitors add column if not exists landing text not null 
 alter table public.demo_visitors drop constraint if exists demo_visitors_landing_check;
 alter table public.demo_visitors add constraint demo_visitors_landing_check check (landing in ('strata', 'training'));
 
+-- Search vectors for the fictional strata's documents, by a hash of the
+-- (PII-stripped) passage: every visitor's strata has the same documents,
+-- so each passage is sent to the embeddings service once, not per visitor.
+create table if not exists public.demo_kit_embeddings (
+  text_hash text primary key check (char_length(text_hash) = 64),
+  embedding extensions.vector(1024) not null,
+  created_at timestamptz not null default now()
+);
+alter table public.demo_kit_embeddings enable row level security;
+revoke all on public.demo_kit_embeddings from anon, authenticated;
+grant all on public.demo_kit_embeddings to service_role;
+
 create index if not exists demo_visitors_email_idx on public.demo_visitors (lower(email), expires_at desc);
 
 alter table public.demo_visitors enable row level security;
@@ -234,9 +246,11 @@ grant execute on function public.demo_create_strata(uuid, uuid) to service_role;
 
 -- Claims a visitor's first-time setup, so that two requests opening the
 -- link at once (an email client checking it, a double click) don't both
--- set up: true for the one that should go ahead. A claim more than two
--- minutes old was abandoned and can be taken over; p_release gives a
--- failed claim back.
+-- set up: true for the one that should go ahead. setup_started_at stays
+-- set until the strata is completely filled (the app clears it), so a
+-- claim more than two minutes old was cut off and can be taken over,
+-- even if its strata was already made (the app starts that one again).
+-- p_release gives a failed claim back.
 create or replace function public.demo_claim_setup(p_visitor_id uuid, p_release boolean default false)
 returns boolean
 language plpgsql
@@ -250,8 +264,10 @@ begin
   end if;
   update public.demo_visitors set setup_started_at = now()
   where id = p_visitor_id
-    and corporation_id is null
-    and (setup_started_at is null or setup_started_at < now() - interval '2 minutes');
+    and (
+      (corporation_id is null and (setup_started_at is null or setup_started_at < now() - interval '2 minutes'))
+      or (corporation_id is not null and setup_started_at < now() - interval '2 minutes')
+    );
   return found;
 end;
 $$;
