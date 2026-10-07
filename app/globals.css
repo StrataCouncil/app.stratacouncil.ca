@@ -8173,12 +8173,21 @@ a.track-card:focus-visible {
 }
 .demo-links__form {
   display: grid;
-  grid-template-columns: 1fr 1fr auto;
+  grid-template-columns: 1fr 1fr 11rem auto;
   gap: 0 1rem;
   align-items: end;
 }
 .demo-links__form .button {
   margin-bottom: 1.1rem;
+}
+.demo-links__form select {
+  font-family: inherit;
+  font-size: 0.95rem;
+  padding: 0.65em 0.85em;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--paper);
+  color: var(--ink);
 }
 @media (max-width: 720px) {
   .demo-links__form {

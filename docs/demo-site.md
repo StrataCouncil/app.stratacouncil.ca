@@ -6,7 +6,8 @@ and its own Supabase project. See `lib/demo.ts`.
 ## How it works
 
 1. In the live Super Admin console, **Demo links**: enter a person's name and
-   email. The link is emailed to them (from the live site's Mailtrap) and shown
+   email, and choose whether the link opens on the Stratasphere (their strata)
+   or Council Training. The link is emailed to them (from the live site's Mailtrap) and shown
    in the console. Someone who already has a working link today gets the same
    one again.
 2. The link (`demo.stratacouncil.ca/start/<token>`) creates their account and

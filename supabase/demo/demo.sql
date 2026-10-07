@@ -44,6 +44,12 @@ alter table public.demo_cast enable row level security;
 revoke all on public.demo_cast from anon, authenticated;
 grant all on public.demo_cast to service_role;
 
+-- Where the link opens: the visitor's strata (the Stratasphere) or
+-- Council Training. Chosen in the console; either way they get a strata.
+alter table public.demo_visitors add column if not exists landing text not null default 'strata';
+alter table public.demo_visitors drop constraint if exists demo_visitors_landing_check;
+alter table public.demo_visitors add constraint demo_visitors_landing_check check (landing in ('strata', 'training'));
+
 create index if not exists demo_visitors_email_idx on public.demo_visitors (lower(email), expires_at desc);
 
 alter table public.demo_visitors enable row level security;

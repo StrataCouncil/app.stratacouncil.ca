@@ -238,15 +238,22 @@ export function subscriptionRequestEmail(params: {
  * Admin console. The link signs the person in to their own copy of the
  * fictional strata, so it shouldn't be forwarded.
  */
-export function demoInviteEmail(params: { fullName: string; link: string; dayLabel: string }) {
+export function demoInviteEmail(params: { fullName: string; link: string; landing: "strata" | "training"; dayLabel: string }) {
   const first = params.fullName.trim().split(/\s+/)[0] || "there";
   const day = escapeHtml(params.dayLabel);
+  const training = params.landing === "training";
+  const intro = training
+    ? "Here&rsquo;s your personal link to Council Training on StrataCouncil.ca: short, practical modules on what makes an effective strata council member. You can also look around your own fictional strata, as its admin, with its council, documents, meetings and the Stratasphere&trade; AI assistant."
+    : "Here&rsquo;s your personal link to the StrataCouncil.ca demo. You&rsquo;ll be the admin of your own fictional strata, with its council, documents, meetings, minutes and the Stratasphere&trade; AI assistant, to try however you like.";
+  const introText = training
+    ? "Here's your personal link to Council Training on StrataCouncil.ca: short, practical modules on what makes an effective strata council member. You can also look around your own fictional strata, as its admin, with its council, documents, meetings and the Stratasphere AI assistant"
+    : "Here's your personal link to the StrataCouncil.ca demo. You'll be the admin of your own fictional strata, with its council, documents, meetings, minutes and the Stratasphere AI assistant, to try however you like";
   const html = wrap(`
     <p style="margin:0 0 16px;font-size:16px;color:${INK};">Hi ${escapeHtml(first)},</p>
-    <p style="margin:0 0 16px;font-size:16px;color:${INK};">Here&rsquo;s your personal link to the StrataCouncil.ca demo. You&rsquo;ll be the admin of your own fictional strata, with its council, documents, meetings, minutes and the Stratasphere&trade; AI assistant, to try however you like.</p>
-    ${button(params.link, "Open the demo")}
+    <p style="margin:0 0 16px;font-size:16px;color:${INK};">${intro}</p>
+    ${button(params.link, training ? "Open Council Training" : "Open the demo")}
     <p style="margin:16px 0 0;font-size:13px;color:${MUTED};">The link works until midnight (Pacific time) on ${day}, and everything in the demo is cleared then. It signs you in, so please don&rsquo;t forward it. Questions? Email support@stratacouncil.ca.</p>
   `);
-  const text = `Hi ${first},\n\nHere's your personal link to the StrataCouncil.ca demo. You'll be the admin of your own fictional strata, with its council, documents, meetings, minutes and the Stratasphere AI assistant, to try however you like:\n\n${params.link}\n\nThe link works until midnight (Pacific time) on ${params.dayLabel}, and everything in the demo is cleared then. It signs you in, so please don't forward it. Questions? Email support@stratacouncil.ca.`;
-  return { subject: "Your StrataCouncil.ca demo", html, text };
+  const text = `Hi ${first},\n\n${introText}:\n\n${params.link}\n\nThe link works until midnight (Pacific time) on ${params.dayLabel}, and everything in the demo is cleared then. It signs you in, so please don't forward it. Questions? Email support@stratacouncil.ca.`;
+  return { subject: training ? "Your StrataCouncil.ca Council Training link" : "Your StrataCouncil.ca demo", html, text };
 }

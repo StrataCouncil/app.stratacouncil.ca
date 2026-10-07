@@ -1,5 +1,5 @@
 import { createClient as createSupabaseClient, type SupabaseClient } from "@supabase/supabase-js";
-import { demoLink } from "@/lib/demo";
+import { demoLink, type DemoLanding } from "@/lib/demo";
 
 /**
  * The live site's view of the demo site's visitors (lib/demo.ts), for the
@@ -20,6 +20,7 @@ export interface DemoVisitor {
   fullName: string;
   email: string;
   link: string;
+  landing: DemoLanding;
   createdAt: string;
   createdByName: string;
   expiresAt: string;
@@ -34,7 +35,7 @@ export type DemoVisitorList =
   | { configured: true; visitors: DemoVisitor[]; error: string | null };
 
 export const DEMO_VISITOR_COLUMNS =
-  "id, token, full_name, email, created_at, created_by_name, expires_at, first_opened_at, last_opened_at";
+  "id, token, full_name, email, landing, created_at, created_by_name, expires_at, first_opened_at, last_opened_at";
 
 export function toDemoVisitor(row: Record<string, string | null>): DemoVisitor {
   return {
@@ -42,6 +43,7 @@ export function toDemoVisitor(row: Record<string, string | null>): DemoVisitor {
     fullName: row.full_name ?? "",
     email: row.email ?? "",
     link: demoLink(row.token!),
+    landing: row.landing === "training" ? "training" : "strata",
     createdAt: row.created_at!,
     createdByName: row.created_by_name ?? "",
     expiresAt: row.expires_at!,

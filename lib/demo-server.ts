@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { DemoLanding } from "@/lib/demo";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
@@ -19,10 +20,11 @@ export interface DemoVisitorRow {
   corporation_id: string | null;
   setup_started_at: string | null;
   first_opened_at: string | null;
+  landing: DemoLanding;
 }
 
 export type OpenDemoResult =
-  | { ok: true; corporationId: string; email: string; userId: string }
+  | { ok: true; corporationId: string; email: string; userId: string; landing: DemoLanding }
   | { ok: false; reason: "unknown" | "expired" | "busy" };
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -39,7 +41,7 @@ export async function openDemoLink(token: string): Promise<OpenDemoResult> {
   const admin = createAdminClient();
   const { data: visitor, error: lookupError } = await admin
     .from("demo_visitors")
-    .select("id, token, full_name, email, expires_at, user_id, corporation_id, setup_started_at, first_opened_at")
+    .select("id, token, full_name, email, expires_at, user_id, corporation_id, setup_started_at, first_opened_at, landing")
     .eq("token", token)
     .maybeSingle<DemoVisitorRow>();
   if (lookupError) {
@@ -75,7 +77,7 @@ export async function openDemoLink(token: string): Promise<OpenDemoResult> {
         await sleep(750);
         const { data } = await admin
           .from("demo_visitors")
-          .select("id, token, full_name, email, expires_at, user_id, corporation_id, setup_started_at, first_opened_at")
+          .select("id, token, full_name, email, expires_at, user_id, corporation_id, setup_started_at, first_opened_at, landing")
           .eq("id", visitor.id)
           .single<DemoVisitorRow>();
         if (data?.corporation_id && data.user_id) ready = data;
@@ -92,7 +94,13 @@ export async function openDemoLink(token: string): Promise<OpenDemoResult> {
     .from("demo_visitors")
     .update({ first_opened_at: visitor.first_opened_at ?? now, last_opened_at: now })
     .eq("id", visitor.id);
-  return { ok: true, corporationId: ready.corporation_id!, email: visitor.email, userId: ready.user_id! };
+  return {
+    ok: true,
+    corporationId: ready.corporation_id!,
+    email: visitor.email,
+    userId: ready.user_id!,
+    landing: visitor.landing === "training" ? "training" : "strata",
+  };
 }
 
 function stampAccount(admin: SupabaseClient, userId: string, visitor: DemoVisitorRow) {

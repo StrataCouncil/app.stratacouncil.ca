@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireSuperAdmin } from "@/lib/data/admin";
 import { DEMO_VISITOR_COLUMNS, demoDatabase, toDemoVisitor, type DemoVisitor } from "@/lib/data/demo-visitors";
-import { IS_DEMO, demoDayLabel, endOfDemoDay, newDemoToken } from "@/lib/demo";
+import { IS_DEMO, demoDayLabel, endOfDemoDay, newDemoToken, type DemoLanding } from "@/lib/demo";
 import { MailtrapSendError, sendTransactionalEmail } from "@/lib/email/mailtrap";
 import { demoInviteEmail } from "@/lib/email/templates";
 import { EMAIL_RE } from "@/lib/strata";
@@ -33,7 +33,12 @@ async function emailLink(visitor: DemoVisitor): Promise<string | null> {
   try {
     await sendTransactionalEmail({
       to: visitor.email,
-      ...demoInviteEmail({ fullName: visitor.fullName, link: visitor.link, dayLabel: demoDayLabel(new Date(visitor.expiresAt)) }),
+      ...demoInviteEmail({
+        fullName: visitor.fullName,
+        link: visitor.link,
+        landing: visitor.landing,
+        dayLabel: demoDayLabel(new Date(visitor.expiresAt)),
+      }),
     });
     return null;
   } catch (error) {
@@ -44,9 +49,10 @@ async function emailLink(visitor: DemoVisitor): Promise<string | null> {
 
 /**
  * Makes a link and emails it. Someone who already has a link that still
- * works today gets that one again (one demo strata per person per day).
+ * works today gets that one again (one demo strata per person per day),
+ * opening wherever this one was asked to.
  */
-export async function createDemoLink(input: { fullName: string; email: string }): Promise<DemoLinkResult> {
+export async function createDemoLink(input: { fullName: string; email: string; landing: DemoLanding }): Promise<DemoLinkResult> {
   const creator = await staffName();
   if (!creator) return { ok: false, error: "Only platform staff can make demo links." };
   const db = demoDatabase();
@@ -56,6 +62,7 @@ export async function createDemoLink(input: { fullName: string; email: string })
   const email = input.email.trim().toLowerCase();
   if (!fullName) return { ok: false, error: "Enter the person's name." };
   if (!EMAIL_RE.test(email) || email.length > 320) return { ok: false, error: "Enter a valid email address." };
+  const landing: DemoLanding = input.landing === "training" ? "training" : "strata";
 
   const { data: existing } = await db
     .from("demo_visitors")
@@ -69,6 +76,10 @@ export async function createDemoLink(input: { fullName: string; email: string })
   let visitor: DemoVisitor;
   if (existing) {
     visitor = toDemoVisitor(existing);
+    if (visitor.landing !== landing) {
+      await db.from("demo_visitors").update({ landing }).eq("id", visitor.id);
+      visitor = { ...visitor, landing };
+    }
   } else {
     const { data, error } = await db
       .from("demo_visitors")
@@ -76,6 +87,7 @@ export async function createDemoLink(input: { fullName: string; email: string })
         token: newDemoToken(),
         full_name: fullName,
         email,
+        landing,
         expires_at: endOfDemoDay().toISOString(),
         created_by_name: creator,
       })

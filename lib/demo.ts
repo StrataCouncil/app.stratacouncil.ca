@@ -13,6 +13,14 @@
  */
 export const IS_DEMO = process.env.DEMO_MODE === "true";
 
+/** Where a demo link opens: the visitor's strata, or Council Training. */
+export type DemoLanding = "strata" | "training";
+
+export const DEMO_LANDINGS: { value: DemoLanding; label: string }[] = [
+  { value: "strata", label: "Stratasphere" },
+  { value: "training", label: "Council Training" },
+];
+
 /** Where demo links point. Read on the live site, which makes them. */
 export const DEMO_URL = (process.env.DEMO_APP_URL || "https://demo.stratacouncil.ca").replace(/\/+$/, "");
 
