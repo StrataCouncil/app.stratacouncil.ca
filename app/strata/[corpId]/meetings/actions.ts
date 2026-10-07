@@ -30,6 +30,9 @@ import { pseudonymize } from "@/lib/pii";
 import { askClaudeJson, ClaudeRefusalError } from "@/lib/ai/claude";
 import { isGeneralMeeting } from "@/lib/meetings/rules";
 import { queueDocumentIndexing } from "@/lib/kb/queue";
+import { DEMO_EDITABLE_ITEM_ID, IS_DEMO, demoLimitFail, lockDemoAgenda, type DemoLimitFail } from "@/lib/demo";
+import { demoMeetingAgenda } from "@/lib/demo-kit/agenda";
+import { logDemoActivity, refundDemoAllowance, takeDemoAllowance } from "@/lib/demo-usage";
 
 /**
  * Meetings before they start (doc03 Stage 5a): create, edit details, build
@@ -76,11 +79,17 @@ function validateDetails(input: MeetingDetailsInput): string | null {
   return null;
 }
 
-export async function createMeeting(corpId: string, input: MeetingDetailsInput): Promise<Ok<{ id: string }> | Fail> {
+export async function createMeeting(corpId: string, input: MeetingDetailsInput): Promise<Ok<{ id: string }> | Fail | DemoLimitFail> {
   const access = await runner(corpId);
   if (!access) return { ok: false, error: "Only the secretary, the admin, or someone they've allowed can create meetings." };
+  // The demo: one council meeting per visitor, its agenda already written.
+  if (IS_DEMO) input = { ...input, type: "council" };
   const invalid = validateDetails(input);
   if (invalid) return { ok: false, error: invalid };
+  if (IS_DEMO && !(await takeDemoAllowance("meetings"))) {
+    await logDemoActivity({ kind: "limit", detail: { reason: "second meeting" } });
+    return demoLimitFail();
+  }
 
   const supabase = await createClient();
   // Blank means the chair is elected at the meeting (Meeting Mode).
@@ -97,13 +106,16 @@ export async function createMeeting(corpId: string, input: MeetingDetailsInput):
       location: input.location.trim() || null,
       chair_name: chair,
       created_by: access.userId,
+      ...(IS_DEMO ? { agenda: await demoMeetingAgenda(createAdminClient(), access.corpId) } : {}),
     })
     .select("id")
     .single();
   if (error || !data) {
     console.error("[createMeeting]", error?.code, error?.message);
+    await refundDemoAllowance("meetings");
     return { ok: false, error: "Couldn't create the meeting. Please try again." };
   }
+  await logDemoActivity({ kind: "meeting.created", detail: { meetingId: data.id, date: input.meetingDate, time: input.startTime } });
   refresh(corpId);
   return { ok: true, id: data.id };
 }
@@ -114,6 +126,7 @@ export async function updateMeetingDetails(
   input: MeetingDetailsInput
 ): Promise<Ok | Fail> {
   if (!(await runner(corpId))) return { ok: false, error: "You can't edit this meeting." };
+  if (IS_DEMO) input = { ...input, type: "council" };
   const invalid = validateDetails(input);
   if (invalid) return { ok: false, error: invalid };
   const supabase = await createClient();
@@ -172,9 +185,15 @@ export async function saveAgenda(
 ): Promise<Ok<{ updatedAt: string }> | Fail> {
   if (!(await runner(corpId))) return { ok: false, error: "You can't edit this agenda." };
   const supabase = await createClient();
+  let next = sanitizeAgenda(agenda);
+  if (IS_DEMO) {
+    const locked = await demoLockedAgenda(supabase, corpId, meetingId, next);
+    if (!locked) return { ok: false, error: "Couldn't save the agenda." };
+    next = locked;
+  }
   const { data, error } = await supabase
     .from("meetings")
-    .update({ agenda: ensureBookends(sanitizeAgenda(agenda)) })
+    .update({ agenda: ensureBookends(next) })
     .eq("id", meetingId)
     .eq("corporation_id", corpId)
     .eq("updated_at", expectedUpdatedAt)
@@ -189,8 +208,31 @@ export async function saveAgenda(
       error: "This agenda changed somewhere else since you opened it (or the meeting is being run by someone else). Reload to see the latest.",
     };
   }
+  if (IS_DEMO) {
+    const item = next.find((i) => i.id === DEMO_EDITABLE_ITEM_ID);
+    await logDemoActivity({
+      kind: "agenda.saved",
+      detail: { meetingId, item: item?.text, type: item?.type, motion: item?.motion?.text ?? "", text: [item?.background, item?.financial, item?.risks].filter(Boolean).join("\n\n") },
+    });
+  }
   refresh(corpId, meetingId);
   return { ok: true, updatedAt: data[0].updated_at };
+}
+
+/**
+ * The demo's agenda: only the one editable item (DEMO_EDITABLE_ITEM_ID)
+ * takes what the browser sent; everything else stays as it was saved, in
+ * the same order and category.
+ */
+async function demoLockedAgenda(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  corpId: string,
+  meetingId: string,
+  incoming: AgendaItem[]
+): Promise<AgendaItem[] | null> {
+  const { data } = await supabase.from("meetings").select("agenda").eq("id", meetingId).eq("corporation_id", corpId).maybeSingle();
+  if (!data) return null;
+  return lockDemoAgenda(normalizeAgenda(data.agenda), incoming);
 }
 
 export async function deleteMeeting(corpId: string, meetingId: string): Promise<Ok | Fail> {
@@ -207,6 +249,7 @@ export async function deleteMeeting(corpId: string, meetingId: string): Promise<
     return { ok: false, error: "Couldn't delete the meeting." };
   }
   if (!data?.length) return { ok: false, error: "Only meetings that haven't been launched can be deleted." };
+  await logDemoActivity({ kind: "meeting.deleted", detail: { meetingId } });
   refresh(corpId);
   return { ok: true };
 }
@@ -237,7 +280,8 @@ export async function registerAgendaAttachments(
   meetingId: string,
   itemId: string,
   files: UploadedFile[]
-): Promise<Ok<{ attachments: Attachment[] }> | Fail> {
+): Promise<Ok<{ attachments: Attachment[] }> | Fail | DemoLimitFail> {
+  if (IS_DEMO) return demoLimitFail();
   if (!(await runner(corpId))) return { ok: false, error: "You can't add attachments to this agenda." };
   const result = await registerUploadedDocuments(corpId, "agenda_attachments", files, {
     sourceType: "agenda_attachment",
@@ -267,7 +311,8 @@ export async function addLinkAttachment(
   itemId: string,
   rawUrl: string,
   label: string
-): Promise<Ok<{ attachment: Attachment }> | Fail> {
+): Promise<Ok<{ attachment: Attachment }> | Fail | DemoLimitFail> {
+  if (IS_DEMO) return demoLimitFail();
   const access = await runner(corpId);
   if (!access) return { ok: false, error: "You can't add attachments to this agenda." };
   let url: URL;
@@ -335,7 +380,8 @@ const AGENDA_SCHEMA = {
  * text goes to the AI, and swapped back in the parsed result — so the
  * agenda shows real names but none were ever sent.
  */
-export async function parseUploadedAgenda(corpId: string, formData: FormData): Promise<Ok<{ agenda: AgendaItem[] }> | Fail> {
+export async function parseUploadedAgenda(corpId: string, formData: FormData): Promise<Ok<{ agenda: AgendaItem[] }> | Fail | DemoLimitFail> {
+  if (IS_DEMO) return demoLimitFail();
   const access = await runner(corpId);
   if (!access) return { ok: false, error: "You can't edit this agenda." };
   if (!access.subscribed && access.freeMeetingUsed) {
@@ -418,13 +464,17 @@ export async function draftMotion(
   corpId: string,
   meetingId: string,
   input: { text: string; background: string; financial: string; risks: string; decisionType: DecisionType }
-): Promise<Ok<{ motionText: string }> | Fail> {
+): Promise<Ok<{ motionText: string }> | Fail | DemoLimitFail> {
   const access = await runner(corpId);
   if (!access) return { ok: false, error: "You can't edit this agenda." };
   if (!access.subscribed && access.freeMeetingUsed) {
     return { ok: false, error: "Drafting a motion uses Stratasphere AI, which needs a subscription." };
   }
   if (!input.text.trim()) return { ok: false, error: "Give the item a title first." };
+  if (IS_DEMO && !(await takeDemoAllowance("motions"))) {
+    await logDemoActivity({ kind: "limit", detail: { reason: "motion drafts" } });
+    return demoLimitFail();
+  }
 
   const supabase = await createClient();
   const { data: meeting } = await supabase
@@ -463,10 +513,15 @@ export async function draftMotion(
       schema: MOTION_SCHEMA,
     });
     const motionText = p.restore(out.motionText ?? "").trim();
-    if (!motionText) return { ok: false, error: "Stratasphere couldn't draft a motion for that item. Write it by hand." };
+    if (!motionText) {
+      await refundDemoAllowance("motions");
+      return { ok: false, error: "Stratasphere couldn't draft a motion for that item. Write it by hand." };
+    }
+    await logDemoActivity({ kind: "motion.drafted", detail: { item: input.text, motion: motionText } });
     return { ok: true, motionText };
   } catch (err) {
     console.error("[draftMotion]", err instanceof Error ? err.message : err);
+    await refundDemoAllowance("motions");
     return {
       ok: false,
       error:
@@ -513,6 +568,7 @@ export async function launchMeeting(
     if (!known) console.error("[launchMeeting]", error.code, error.message);
     return { ok: false, error: known ? error.message : "Couldn't launch the meeting.", subscriptionRequired };
   }
+  await logDemoActivity({ kind: "meeting.launched", detail: { meetingId } });
   refresh(corpId, meetingId);
   return { ok: true, result: data as string };
 }

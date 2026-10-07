@@ -4,6 +4,7 @@ import { StratasphereChat } from "@/components/StratasphereChat";
 import { getStrataAccess } from "@/lib/data/strata";
 import { listConversations } from "@/lib/data/conversations";
 import { createClient } from "@/lib/supabase/server";
+import { demoAllowanceLeft } from "@/lib/demo-usage";
 
 /**
  * Standalone Stratasphere assistant: never free, not even during the
@@ -38,7 +39,7 @@ export default async function AssistantPage({
   }
 
   const supabase = await createClient();
-  const [{ conversations, projects }, { data: corp }, { count }] = await Promise.all([
+  const [{ conversations, projects }, { data: corp }, { count }, demoLeft] = await Promise.all([
     listConversations(corpId),
     supabase.from("strata_corporations").select("building_name, legal_name").eq("strata_plan_number", corpId).maybeSingle(),
     supabase
@@ -46,6 +47,7 @@ export default async function AssistantPage({
       .select("id", { count: "exact", head: true })
       .eq("corporation_id", corpId)
       .eq("indexing_status", "indexed"),
+    demoAllowanceLeft(),
   ]);
 
   return (
@@ -57,6 +59,7 @@ export default async function AssistantPage({
         indexedDocuments={count ?? 0}
         initialConversations={conversations}
         initialProjects={projects}
+        demoLeft={demoLeft?.chat ?? null}
       />
     </>
   );

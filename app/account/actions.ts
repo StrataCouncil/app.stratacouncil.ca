@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { IS_DEMO, demoLimitFail } from "@/lib/demo";
 
 /**
  * The one real write AccountSettings makes in this pass — phone has no
@@ -40,6 +41,8 @@ const AVATAR_TYPES: Record<string, string> = { "image/jpeg": "jpg", "image/png":
  * name and phone on `profiles` (0016).
  */
 export async function uploadAvatar(formData: FormData): Promise<{ ok: true } | { ok: false; error: string }> {
+  // The demo has only its own materials (lib/demo.ts).
+  if (IS_DEMO) return demoLimitFail();
   const supabase = await createClient();
   const {
     data: { user },

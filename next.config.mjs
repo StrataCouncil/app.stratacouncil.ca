@@ -7,5 +7,7 @@ const nextConfig = {
   },
   // pdf.js (via unpdf) and mammoth are server-only and shouldn't be bundled.
   serverExternalPackages: ["unpdf", "mammoth"],
+  // The demo site's switch (lib/demo.ts), for the browser's code too.
+  env: { DEMO_MODE: process.env.DEMO_MODE ?? "" },
 };
 export default nextConfig;

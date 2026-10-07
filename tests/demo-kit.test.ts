@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { kitDates } from "../lib/demo-kit/dates.ts";
 import { ROOF, kitDocuments, levyShare, yearToDate } from "../lib/demo-kit/documents.ts";
 import { kitMeetings } from "../lib/demo-kit/meetings.ts";
+import { DEMO_EDITABLE_ITEM_ID } from "../lib/demo.ts";
 import { ANNUAL_CONTRIBUTIONS, CAST, OWNERS, TOTAL_ENTITLEMENT, ownerEmail } from "../lib/demo-kit/people.ts";
 
 const days = ["2026-10-07T18:00:00Z", "2027-01-02T08:30:00Z", "2027-03-14T12:00:00Z", "2027-07-31T23:00:00Z"].map((s) => new Date(s));
@@ -61,4 +62,17 @@ test("documents name no real plan number and no visitor", () => {
     assert.doesNotMatch(doc.text, /\b(?:BCS|EPS|LMS|VAS|VIS|KAS|NES|NWS)\s?-?\d{2,6}\b/, doc.key);
     assert.doesNotMatch(doc.text, /undefined|NaN|\[object/, doc.key);
   }
+});
+
+test("the visitor's meeting: a written agenda with one item theirs to edit", () => {
+  const upcoming = kitMeetings(kitDates(days[1])).find((m) => !m.held)!;
+  const editable = upcoming.agenda.filter((it) => it.id === DEMO_EDITABLE_ITEM_ID);
+  assert.equal(editable.length, 1);
+  assert.equal(editable[0].cat, "New Business");
+  assert.equal(editable[0].text, "Roof Repairs");
+  assert.equal(editable[0].motion?.text, "", "the motion is left for the visitor (or Stratasphere) to write");
+  assert.ok(upcoming.agenda.every((it) => !it.done && !it.motion?.outcome));
+  assert.equal(upcoming.agenda.at(-1)?.text, "Adjournment");
+  const docs = kitDocuments(kitDates(days[1]), "The Owners, Strata Plan DEMO000001");
+  assert.ok(docs.every((doc) => doc.category !== "agenda_attachments"), "no attachment waits on a meeting that doesn't exist yet");
 });

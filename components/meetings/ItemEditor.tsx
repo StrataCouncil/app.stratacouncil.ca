@@ -23,6 +23,8 @@ import {
 } from "@/lib/meetings/agenda";
 import { createDocumentUploads } from "@/app/strata/[corpId]/documents/actions";
 import { addLinkAttachment, draftMotion, registerAgendaAttachments } from "@/app/strata/[corpId]/meetings/actions";
+import { IS_DEMO } from "@/lib/demo";
+import { isDemoLimit, showDemoLimit } from "@/lib/demo-client";
 
 /**
  * Edit one agenda item: title, category, resolution type, background,
@@ -71,6 +73,7 @@ export function ItemEditor({
       decisionType: draft.motion.dt,
     });
     setBusy(null);
+    if (isDemoLimit(res)) return showDemoLimit("motion drafts");
     if (!res.ok) {
       setError(res.error);
       return;
@@ -133,6 +136,7 @@ export function ItemEditor({
 
   async function addLink() {
     if (!linkUrl.trim()) return;
+    if (IS_DEMO) return showDemoLimit("upload");
     setError(null);
     setBusy("Adding link…");
     const result = await addLinkAttachment(corpId, meetingId, draft.id, linkUrl, linkLabel);
@@ -173,7 +177,7 @@ export function ItemEditor({
           </label>
           <label className="field">
             <span>Category</span>
-            <input value={draft.cat} onChange={(e) => set("cat", e.target.value)} list="agenda-categories" maxLength={120} />
+            <input value={draft.cat} onChange={(e) => set("cat", e.target.value)} list="agenda-categories" maxLength={120} readOnly={IS_DEMO} />
             <datalist id="agenda-categories">
               {categories.map((c) => (
                 <option key={c} value={c} />

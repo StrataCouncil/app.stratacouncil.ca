@@ -274,3 +274,69 @@ $$;
 
 revoke all on function public.demo_claim_setup(uuid, boolean) from public, anon, authenticated;
 grant execute on function public.demo_claim_setup(uuid, boolean) to service_role;
+
+-- What a visitor has used of the demo's limits (lib/demo-limits.ts): the
+-- Stratasphere chat's questions, Meeting Mode's questions, the one
+-- meeting they can create, and motions drafted for it. Counted against
+-- the link, so a second device doesn't start again.
+alter table public.demo_visitors add column if not exists chat_questions int not null default 0;
+alter table public.demo_visitors add column if not exists meeting_questions int not null default 0;
+alter table public.demo_visitors add column if not exists meetings_created int not null default 0;
+alter table public.demo_visitors add column if not exists motion_drafts int not null default 0;
+
+-- Takes one of p_what if any are left (true), or gives one back
+-- (p_refund, when the question failed). Atomic, so a double click can't
+-- go over the limit.
+create or replace function public.demo_use(p_visitor_id uuid, p_what text, p_limit int, p_refund boolean default false)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_column text;
+  v_rows int;
+begin
+  v_column := case p_what
+    when 'chat' then 'chat_questions'
+    when 'meeting' then 'meeting_questions'
+    when 'meetings' then 'meetings_created'
+    when 'motions' then 'motion_drafts'
+  end;
+  if v_column is null then
+    raise exception 'Unknown demo limit %', p_what;
+  end if;
+  if p_refund then
+    execute format('update public.demo_visitors set %1$I = greatest(%1$I - 1, 0) where id = $1', v_column) using p_visitor_id;
+    return false;
+  end if;
+  execute format('update public.demo_visitors set %1$I = %1$I + 1 where id = $1 and %1$I < $2 and expires_at > now()', v_column)
+    using p_visitor_id, p_limit;
+  -- EXECUTE doesn't set FOUND.
+  get diagnostics v_rows = row_count;
+  return v_rows = 1;
+end;
+$$;
+
+revoke all on function public.demo_use(uuid, text, int, boolean) from public, anon, authenticated;
+grant execute on function public.demo_use(uuid, text, int, boolean) to service_role;
+
+-- Everything a visitor does (lib/demo-activity.ts): pages, clicks, what
+-- they asked the Stratasphere and its answers, the meeting they ran,
+-- Council Training progress, limits reached, errors. Deleted with the
+-- visitor's row (7 days after the link expired), and anything older than
+-- 7 days by the nightly clean-up.
+create table if not exists public.demo_activity (
+  id bigint generated always as identity primary key,
+  visitor_id uuid not null references public.demo_visitors(id) on delete cascade,
+  at timestamptz not null default now(),
+  kind text not null check (char_length(kind) between 1 and 60),
+  path text check (char_length(path) <= 500),
+  detail jsonb not null default '{}'::jsonb
+);
+create index if not exists demo_activity_visitor_idx on public.demo_activity (visitor_id, at);
+create index if not exists demo_activity_at_idx on public.demo_activity (at);
+
+alter table public.demo_activity enable row level security;
+revoke all on public.demo_activity from anon, authenticated;
+grant all on public.demo_activity to service_role;

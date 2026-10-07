@@ -11,6 +11,7 @@ import { chunkText } from "@/lib/kb/chunk";
 import { embed, toVectorLiteral } from "@/lib/kb/embed";
 import { loadStripContext, stripForCorporation } from "@/lib/kb/privacy";
 import { queueDocumentIndexing } from "@/lib/kb/queue";
+import { kitMinutesTitle } from "./agenda";
 import { kitDates, longDate, type KitDates } from "./dates";
 import { kitDocuments, type KitDoc } from "./documents";
 import { HARBOURLINE_LOGO_PNG_BASE64 } from "./logo";
@@ -23,8 +24,9 @@ import { BUILDING, CAST, MANAGEMENT, OWNERS, council, ownerEmail } from "./peopl
  * the council and manager, the lot roster, the management company and its
  * logo, the Library's documents (PDFs, already indexed for the
  * Stratasphere), two held council meetings with final minutes and their
- * decisions, the next meeting's agenda with attachments, the AGM's
- * resolutions in the decision ledger, and a request to join. Runs on the
+ * decisions, the AGM's resolutions in the decision ledger, and a request
+ * to join. The next meeting is the visitor's to create: its agenda fills
+ * in then (lib/demo-kit/agenda.ts). Runs on the
  * demo site with the service role, right after demo_create_strata.
  *
  * Documents go through the same PII stripping as real ones before their
@@ -115,17 +117,12 @@ export async function buildDemoStrata(admin: SupabaseClient, corpId: string, now
   // Every document gets its id up front, so meetings can point at them.
   const docs = kitDocuments(d, legalName);
   const docIds = new Map(docs.map((doc) => [doc.key, randomUUID()]));
-  const meetings = kitMeetings(d);
+  const meetings = kitMeetings(d).filter((m) => m.held);
   const meetingIds = new Map(meetings.map((m) => [m.key, randomUUID()]));
   const minutesDocIds = new Map(meetings.filter((m) => m.held).map((m) => [`minutes:${m.key}`, randomUUID()]));
   const titleOf = (key: string) =>
-    key.startsWith("minutes:") ? `Minutes - Strata Council Meeting, ${longDate(meetings.find((m) => `minutes:${m.key}` === key)!.date)}` : docs.find((doc) => doc.key === key)!.title;
+    key.startsWith("minutes:") ? kitMinutesTitle(meetings.find((m) => `minutes:${m.key}` === key)!.date) : docs.find((doc) => doc.key === key)!.title;
   const docId = (key: string) => (key.startsWith("minutes:") ? minutesDocIds.get(key)! : docIds.get(key)!);
-
-  // Attachments of the next meeting live in Agenda Attachments, tied to it.
-  const upcoming = meetings.find((m) => !m.held)!;
-  const attachedTo = new Map<string, string>();
-  for (const [itemId, keys] of Object.entries(upcoming.attachments)) for (const k of keys) if (!attachedTo.has(k)) attachedTo.set(k, itemId);
 
   const withAttachments = (m: KitMeeting): AgendaItem[] =>
     m.agenda.map((it) => ({
@@ -149,7 +146,7 @@ export async function buildDemoStrata(admin: SupabaseClient, corpId: string, now
       chair_name: m.chairName,
       agenda,
       created_by: secretary,
-      created_at: at(m.held ? addDays(m.date, -10) : addDays(d.today, -2), "10:00"),
+      created_at: at(addDays(m.date, -10), "10:00"),
       status: "DRAFT",
       attendance: {},
       attendees: [],
@@ -202,7 +199,6 @@ export async function buildDemoStrata(admin: SupabaseClient, corpId: string, now
   const files: Array<{ id: string; title: string; text: string; row: Record<string, unknown>; pdf: Uint8Array }> = [];
   for (const doc of docs) {
     const pdf = await textPdf(doc.text, `${BUILDING.name} · ${doc.title}`);
-    const attachedItem = doc.sourceType === "agenda_attachment" ? attachedTo.get(doc.key) : undefined;
     files.push({
       id: docIds.get(doc.key)!,
       title: doc.title,
@@ -215,8 +211,8 @@ export async function buildDemoStrata(admin: SupabaseClient, corpId: string, now
         source_type: doc.sourceType ?? "upload",
         doc_type: doc.docType,
         uploaded_at: at(uploadedOn(doc, d), "11:15"),
-        meeting_id: attachedItem ? meetingIds.get(upcoming.key) : null,
-        agenda_item_id: attachedItem ?? null,
+        meeting_id: null,
+        agenda_item_id: null,
       },
     });
   }

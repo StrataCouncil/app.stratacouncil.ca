@@ -19,6 +19,11 @@ import {
 import { parseUploadedAgenda, saveAgenda, saveItemNote } from "@/app/strata/[corpId]/meetings/actions";
 import { ItemEditor } from "@/components/meetings/ItemEditor";
 import { LaunchMeetingButton } from "@/components/meetings/MeetingActions";
+import { DEMO_EDITABLE_ITEM_ID, IS_DEMO } from "@/lib/demo";
+import { isDemoLimit, showDemoLimit } from "@/lib/demo-client";
+
+/** The demo's agenda is written for the visitor: only one item is theirs to edit. */
+const locked = (it: AgendaItem) => IS_DEMO && it.id !== DEMO_EDITABLE_ITEM_ID;
 
 /**
  * The agenda builder (doc01 §4): start from the meeting type's template,
@@ -92,6 +97,7 @@ export function AgendaBuilder({
     form.set("file", file);
     const result = await parseUploadedAgenda(corpId, form);
     setStatus(null);
+    if (isDemoLimit(result)) return showDemoLimit("upload");
     if (!result.ok) return setError(result.error);
     update(result.agenda);
     setStatus(`Read ${result.agenda.length} items. Check them over, then save.`);
@@ -236,10 +242,20 @@ export function AgendaBuilder({
 
   return (
     <section className="agenda-builder" data-testid="agenda-builder">
+      {IS_DEMO && (
+        <p className="sync-note" role="note" style={{ marginBottom: "1rem" }} data-testid="demo-agenda-note">
+          <span>
+            Your agenda is written and ready. Open <strong>Roof Repairs</strong> under New Business to make it your own: change
+            the details, write a motion or have Stratasphere&trade; draft one. Then save and launch the meeting.
+          </span>
+        </p>
+      )}
       <div className="agenda-builder__bar">
-        <button type="button" className="button button-secondary button-small" onClick={addCategory} data-testid="agenda-add-category">
-          Add category
-        </button>
+        {!IS_DEMO && (
+          <button type="button" className="button button-secondary button-small" onClick={addCategory} data-testid="agenda-add-category">
+            Add category
+          </button>
+        )}
         <span className="agenda-builder__state" role="status">
           {pending ? "Saving…" : dirty ? "Unsaved changes" : status}
         </span>
@@ -267,45 +283,54 @@ export function AgendaBuilder({
               onChange={(e) => renameCategory(cat.id, e.target.value)}
               aria-label="Category name"
               maxLength={120}
+              readOnly={IS_DEMO}
             />
-            <div className="agenda-row__tools">
-              <button type="button" className="icon-button" onClick={() => moveCategory(cat.id, -1)} disabled={!canMoveCat(ci, -1)} aria-label={`Move ${cat.name} up`}>
-                <Arrow up />
-              </button>
-              <button type="button" className="icon-button" onClick={() => moveCategory(cat.id, 1)} disabled={!canMoveCat(ci, 1)} aria-label={`Move ${cat.name} down`}>
-                <Arrow />
-              </button>
-              {!catHasBookend(ci) && (
-                <button type="button" className="link-button agenda-danger" onClick={() => deleteCategory(cat.id)}>
-                  Delete
+            {!IS_DEMO && (
+              <div className="agenda-row__tools">
+                <button type="button" className="icon-button" onClick={() => moveCategory(cat.id, -1)} disabled={!canMoveCat(ci, -1)} aria-label={`Move ${cat.name} up`}>
+                  <Arrow up />
                 </button>
-              )}
-            </div>
+                <button type="button" className="icon-button" onClick={() => moveCategory(cat.id, 1)} disabled={!canMoveCat(ci, 1)} aria-label={`Move ${cat.name} down`}>
+                  <Arrow />
+                </button>
+                {!catHasBookend(ci) && (
+                  <button type="button" className="link-button agenda-danger" onClick={() => deleteCategory(cat.id)}>
+                    Delete
+                  </button>
+                )}
+              </div>
+            )}
           </div>
           <ol className="agenda-items">
             {cat.items.map((it) => {
               const idx = agenda.findIndex((a) => a.id === it.id);
+              const open = () => (locked(it) ? showDemoLimit("locked agenda item") : setEditing(it));
               return (
                 <li className="agenda-item" key={it.id} data-testid={`agenda-item-${it.num}`}>
                   <span className="agenda-item__num">{it.num}.</span>
-                  <button type="button" className="agenda-item__title" onClick={() => setEditing(it)}>
+                  <button type="button" className="agenda-item__title" onClick={open}>
                     {it.text}
                     {(it.background || it.financial || it.risks || it.motion?.text) && <span className="visually-hidden"> (has details)</span>}
                   </button>
                   {it.atts.length > 0 && <span className="card__meta">{it.atts.length} attached</span>}
                   {notes[it.id] && <span className="card__meta">Note</span>}
                   <span className={`rtag rtag--${it.type.toLowerCase()}`}>{resolutionTypeShort[it.type]}</span>
+                  {IS_DEMO && !locked(it) && <span className="pill">Yours to edit</span>}
                   <div className="agenda-row__tools">
-                    <button type="button" className="icon-button" onClick={() => moveItem(it.id, -1)} disabled={!canMove(idx, -1)} aria-label={`Move ${it.text} up`}>
-                      <Arrow up />
-                    </button>
-                    <button type="button" className="icon-button" onClick={() => moveItem(it.id, 1)} disabled={!canMove(idx, 1)} aria-label={`Move ${it.text} down`}>
-                      <Arrow />
-                    </button>
-                    <button type="button" className="link-button" onClick={() => setEditing(it)}>
+                    {!IS_DEMO && (
+                      <>
+                        <button type="button" className="icon-button" onClick={() => moveItem(it.id, -1)} disabled={!canMove(idx, -1)} aria-label={`Move ${it.text} up`}>
+                          <Arrow up />
+                        </button>
+                        <button type="button" className="icon-button" onClick={() => moveItem(it.id, 1)} disabled={!canMove(idx, 1)} aria-label={`Move ${it.text} down`}>
+                          <Arrow />
+                        </button>
+                      </>
+                    )}
+                    <button type="button" className="link-button" onClick={open} data-testid={IS_DEMO && !locked(it) ? "demo-edit-item" : undefined}>
                       Edit
                     </button>
-                    {!isCallToOrder(it) && !isAdjournment(it) && (
+                    {!IS_DEMO && !isCallToOrder(it) && !isAdjournment(it) && (
                       <button type="button" className="link-button agenda-danger" onClick={() => deleteItem(it.id)} aria-label={`Delete ${it.text}`}>
                         Delete
                       </button>
@@ -315,7 +340,7 @@ export function AgendaBuilder({
               );
             })}
           </ol>
-          <QuickAdd onAdd={(text) => addItem(cat.id, text)} />
+          {!IS_DEMO && <QuickAdd onAdd={(text) => addItem(cat.id, text)} />}
         </div>
       ))}
 

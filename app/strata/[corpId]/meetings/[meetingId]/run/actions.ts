@@ -7,6 +7,8 @@ import { electedChair, normalizeAgenda, meetingTypeLabels, type AgendaItem } fro
 import { deferUnresolved, minutesSummary, type AttendanceStatus } from "@/lib/meetings/rules";
 import { buildMinutes } from "@/lib/meetings/minutes";
 import { askStratasphere, type AssistantTurn } from "@/lib/ai/stratasphere";
+import { IS_DEMO, demoLimitFail } from "@/lib/demo";
+import { logDemoActivity, refundDemoAllowance, takeDemoAllowance } from "@/lib/demo-usage";
 
 /**
  * Meeting Mode (doc01 §4): saving the running meeting, Call to Order, the
@@ -81,6 +83,7 @@ export async function callToOrder(
     return { ok: false, error: error.message.includes("already") ? error.message : "Couldn't call the meeting to order." };
   }
   const meeting = await getMeeting(corpId, meetingId);
+  await logDemoActivity({ kind: "meeting.called_to_order", detail: { meetingId, present: presentLots(clean).length } });
   return { ok: true, startedAt: meeting?.actualStartAt ?? new Date().toISOString() };
 }
 
@@ -103,6 +106,10 @@ export async function askMeetingAssistant(
   const liveAgenda = normalizeAgenda(agenda);
   const item = liveAgenda.find((i) => i.id === itemId);
   if (!item) return { ok: false as const, error: "Pick an agenda item first." };
+  if (IS_DEMO && !(await takeDemoAllowance("meeting"))) {
+    await logDemoActivity({ kind: "limit", detail: { reason: "Meeting Mode questions", question } });
+    return demoLimitFail();
+  }
   const result = await askStratasphere({
     supabase,
     corpId,
@@ -113,6 +120,11 @@ export async function askMeetingAssistant(
       .slice(-10)
       .map((t) => ({ role: t.role, content: t.content })),
     meeting: { item, agenda: liveAgenda, meetingLabel: meetingTypeLabels[meeting.type] },
+  });
+  if (!result.ok) await refundDemoAllowance("meeting");
+  await logDemoActivity({
+    kind: "stratasphere.meeting",
+    detail: result.ok ? { item: item.text, question, answer: result.text } : { item: item.text, question, failed: result.error },
   });
   // The records an answer drew on stay on the server.
   return result.ok ? { ok: true as const, text: result.text, sources: result.sources } : result;
@@ -160,6 +172,10 @@ export async function adjournMeeting(
     console.error("[adjournMeeting]", error.code, error.message);
     return { ok: false, error: error.message.includes("already") || error.message.includes("decided") ? error.message : "Couldn't adjourn the meeting." };
   }
+  await logDemoActivity({
+    kind: "meeting.adjourned",
+    detail: { meetingId, decided: agenda.filter((i) => i.done).length, deferred: agenda.filter((i) => i.deferred).length, items: agenda.length },
+  });
   revalidatePath(`/strata/${corpId}/meetings`, "layout");
   return { ok: true };
 }

@@ -36,6 +36,8 @@ import { saveItemNote } from "@/app/strata/[corpId]/meetings/actions";
 import { getDocumentDownloadUrl } from "@/app/strata/[corpId]/documents/actions";
 import { openInNewTab } from "@/lib/open-in-tab";
 import { ItemEditor } from "@/components/meetings/ItemEditor";
+import { DEMO_LIMITS, DEMO_LIMIT_MESSAGE, SIGNUP_URL } from "@/lib/demo";
+import { isDemoLimit, showDemoLimit } from "@/lib/demo-client";
 
 /**
  * Meeting Mode (doc01 §4, doc03 Stage 5a). Run by one person — whoever
@@ -69,8 +71,11 @@ export function MeetingMode(props: {
   lots: Lot[];
   isTrial: boolean;
   aiAvailable: boolean;
+  /** The demo site: questions left for Meeting Mode's Stratasphere. Null elsewhere. */
+  demoLeft?: number | null;
 }) {
   const { corpId, meetingId, type, timezone } = props;
+  const [demoLeft, setDemoLeft] = useState(props.demoLeft ?? null);
   const router = useRouter();
   const general = isGeneralMeeting(type);
 
@@ -598,6 +603,8 @@ export function MeetingMode(props: {
             agenda={agenda}
             aiAvailable={props.aiAvailable}
             isTrial={props.isTrial}
+            demoLeft={demoLeft}
+            setDemoLeft={setDemoLeft}
           />
         </aside>
       </div>
@@ -1033,6 +1040,8 @@ function Assistant(props: {
   agenda: AgendaItem[];
   aiAvailable: boolean;
   isTrial: boolean;
+  demoLeft: number | null;
+  setDemoLeft: (n: number) => void;
 }) {
   // One conversation per item, for this session only (doc02 §4b).
   const [log, setLog] = useState<Turn[]>([]);
@@ -1047,6 +1056,7 @@ function Assistant(props: {
     e.preventDefault();
     const q = text.trim();
     if (!q || !props.item || busy) return;
+    if (props.demoLeft === 0) return showDemoLimit("Meeting Mode questions");
     setText("");
     const history = log.filter((t) => !t.error).map(({ role, content }) => ({ role, content }));
     setLog((l) => [...l, { role: "user", content: q }]);
@@ -1056,6 +1066,13 @@ function Assistant(props: {
       error: "Stratasphere couldn't answer right now. Please try again.",
     }));
     setBusy(false);
+    if (isDemoLimit(result)) {
+      props.setDemoLeft(0);
+      setLog((l) => l.slice(0, -1));
+      setText(q);
+      return showDemoLimit("Meeting Mode questions");
+    }
+    if (result.ok && props.demoLeft != null) props.setDemoLeft(Math.max(props.demoLeft - 1, 0));
     setLog((l) => [...l, result.ok ? { role: "assistant", content: result.text } : { role: "assistant", content: result.error, error: true }]);
   }
 
@@ -1072,7 +1089,13 @@ function Assistant(props: {
         {log.length === 0 && (
           <p className="card__meta">
             {props.aiAvailable
-              ? `Ask about this item, your bylaws, past decisions, or meeting procedure.${props.isTrial ? " Your free meeting includes ten questions." : ""}`
+              ? `Ask about this item, your bylaws, past decisions, or meeting procedure.${
+                  props.demoLeft != null
+                    ? ` The demo includes ${DEMO_LIMITS.meeting} questions in Meeting Mode. ${props.demoLeft} left.`
+                    : props.isTrial
+                      ? " Your free meeting includes ten questions."
+                      : ""
+                }`
               : "The assistant needs a Stratasphere subscription."}
           </p>
         )}
@@ -1087,6 +1110,14 @@ function Assistant(props: {
           </div>
         )}
       </div>
+      {props.demoLeft === 0 ? (
+        <div className="demo-limit-inline" data-testid="mm-ai-demo-limit">
+          <p>{DEMO_LIMIT_MESSAGE}</p>
+          <a href={SIGNUP_URL} className="button button-primary button-small">
+            Create your free account
+          </a>
+        </div>
+      ) : (
       <form className="mm-ai__form" onSubmit={send}>
         <textarea
           rows={2}
@@ -1107,6 +1138,7 @@ function Assistant(props: {
           Ask
         </button>
       </form>
+      )}
     </div>
   );
 }

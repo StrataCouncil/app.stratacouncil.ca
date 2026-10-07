@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { demoDayLabel, demoLink, demoOpenModule, endOfDemoDay, isDemoToken, newDemoToken } from "../lib/demo.ts";
+import { DEMO_EDITABLE_ITEM_ID, demoDayLabel, demoLink, demoOpenModule, endOfDemoDay, isDemoToken, lockDemoAgenda, newDemoToken } from "../lib/demo.ts";
 
 const end = (iso: string) => endOfDemoDay(new Date(iso)).toISOString();
 
@@ -46,4 +46,21 @@ test("demo visitors get the first published module, in learning order", () => {
   );
   assert.equal(demoOpenModule(tracks, [m("cr1", "council-ready", 1, 3), m("b1", "basics", 1, 2)])?.id, "b1");
   assert.equal(demoOpenModule(tracks, [m("b1", "basics", 1, 0)]), null);
+});
+
+test("the demo's agenda: only the editable item can change", () => {
+  const item = (id: string, text: string, cat = "Business") => ({ id, catId: `c_${cat}`, cat, num: 0, text });
+  const saved = [item("a", "Call to Order", "Opening"), item("b", "Approve Agenda"), item(DEMO_EDITABLE_ITEM_ID, "Roof Repairs", "New Business"), item("z", "Adjournment")];
+  const incoming = [
+    item("a", "Renamed"),
+    item(DEMO_EDITABLE_ITEM_ID, "Roof Repairs: temporary patch", "Moved elsewhere"),
+    item("new", "Something added"),
+    item("z", "Adjournment"),
+  ];
+  const out = lockDemoAgenda(saved, incoming);
+  assert.deepEqual(out.map((i) => i.id), ["a", "b", DEMO_EDITABLE_ITEM_ID, "z"], "same items, same order");
+  assert.equal(out[0].text, "Call to Order");
+  assert.equal(out[2].text, "Roof Repairs: temporary patch");
+  assert.equal(out[2].cat, "New Business", "it stays in its category");
+  assert.deepEqual(lockDemoAgenda(saved, []), saved, "leaving it out changes nothing");
 });
