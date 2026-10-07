@@ -1,11 +1,9 @@
 import Link from "next/link";
-import { AutoRefresh } from "@/components/AutoRefresh";
 import { notFound } from "next/navigation";
+import { AdminTabs } from "@/components/AdminTabs";
 import { AppShell } from "@/components/AppShell";
-import { AdminCorporationSearch } from "@/components/AdminCorporationSearch";
-import { DemoLinksAdmin } from "@/components/DemoLinksAdmin";
-import { getDemoVisitors } from "@/lib/data/demo-visitors";
-import { getAllCorporations, getPendingCreationRequests } from "@/lib/data/admin";
+import { AutoRefresh } from "@/components/AutoRefresh";
+import { getAdminOverview } from "@/lib/data/admin-overview";
 import { getCurrentProfile } from "@/lib/data/profile";
 
 /**
@@ -14,92 +12,83 @@ import { getCurrentProfile } from "@/lib/data/profile";
  * corporation role). `AppShell`'s nav link uses the same check; this is
  * the server-side backstop for anyone who navigates here directly.
  *
- * Three jobs: personal links to the demo site (lib/demo.ts), the review
- * queue for new corporations (nothing is created until a request here is
- * approved — doc01 §4), and search across every corporation on the
- * platform, regardless of membership.
+ * Overview: what needs attention, then platform-wide numbers. The work
+ * itself is in the other tabs (components/AdminTabs.tsx).
  */
 export default async function AdminConsolePage() {
   const profile = await getCurrentProfile();
   if (!profile?.isSuperAdmin) notFound();
-
-  const [requests, corporations, demoVisitors] = await Promise.all([
-    getPendingCreationRequests(),
-    getAllCorporations(),
-    getDemoVisitors(),
-  ]);
+  const overview = await getAdminOverview();
+  if (!overview) notFound();
+  const { stratas, people, meetings, documents, stratasphere, training, demo, attention } = overview;
+  const n = (x: number) => x.toLocaleString("en-CA");
+  const usd = (x: number) => x.toLocaleString("en-CA", { style: "currency", currency: "USD" });
 
   return (
     <AppShell active="admin">
       <AutoRefresh />
       <div className="wrap page">
+        <AdminTabs active="overview" />
         <div className="page-header">
           <h1>Super Admin console</h1>
-          <p>
-            Platform-staff only. Review new corporation requests, and search
-            any corporation by Strata Plan number or building name &mdash;
-            this list isn&rsquo;t scoped to corporations you&rsquo;re a
-            connected member of.
-          </p>
+          <p>Platform-staff only. What&rsquo;s waiting on you, and how the platform is doing.</p>
         </div>
 
-        <p style={{ marginBottom: "2rem" }}>
-          <Link href="/admin/training" className="button button-secondary" data-testid="admin-training-link">
-            Council Training
-          </Link>{" "}
-          <Link href="/admin/legislation" className="button button-secondary" data-testid="admin-legislation-link">
-            Legislation Library
-          </Link>{" "}
-          <Link href="/admin/announcements" className="button button-secondary" data-testid="admin-announcements-link">
-            Announcements
-          </Link>
-        </p>
-
-        <DemoLinksAdmin list={demoVisitors} />
-
-        <h2 style={{ marginBottom: "1rem" }}>New corporation requests</h2>
-        {requests.length === 0 ? (
-          <p className="roster-notice" data-testid="admin-no-requests">
-            Nothing waiting for review.
+        <h2 style={{ marginBottom: "1rem" }}>Needs attention</h2>
+        {attention.length === 0 ? (
+          <p className="roster-notice" data-testid="admin-attention-none" style={{ marginBottom: "2.5rem" }}>
+            Nothing needs attention.
           </p>
         ) : (
-          <div className="roster-table-wrap" style={{ marginBottom: "2.5rem" }}>
-            <table className="roster-table" data-testid="admin-request-table">
-              <thead>
-                <tr>
-                  <th>Strata Plan</th>
-                  <th>Legal name</th>
-                  <th>Requested by</th>
-                  <th>Requested</th>
-                </tr>
-              </thead>
-              <tbody>
-                {requests.map((r) => (
-                  <tr key={r.id}>
-                    <td>
-                      <Link href={`/admin/requests/${r.id}`} data-testid={`admin-request-row-${r.id}`}>
-                        {r.strataPlanNumber}
-                      </Link>
-                    </td>
-                    <td>{r.legalName}</td>
-                    <td>
-                      {r.requesterName}
-                      <div className="roster-table__meta">{r.requesterEmail}</div>
-                    </td>
-                    <td>{new Date(r.requestedAt).toLocaleDateString("en-CA")}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <ul className="admin-attention" data-testid="admin-attention">
+            {attention.map((a) => (
+              <li key={a.key} data-testid={`admin-attention-${a.key}`}>
+                <Link href={a.href}>
+                  {a.count > 0 && <strong className="admin-attention__count">{n(a.count)}</strong>}
+                  <span>{a.label}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
         )}
 
-        <h2 style={{ marginBottom: "1rem" }}>Corporations</h2>
-        <AdminCorporationSearch corporations={corporations} />
+        <h2 style={{ marginBottom: "1rem" }}>Platform</h2>
+        <div className="admin-stats" data-testid="admin-overview-stats">
+          <Stat title="Stratas" main={n(stratas.total)}>
+            {n(stratas.subscribed)} subscribed{stratas.sandbox > 0 && `, ${n(stratas.sandbox)} on the Stripe sandbox`}. {n(stratas.new30)} new in
+            the last 30 days.
+          </Stat>
+          <Stat title="People" main={n(people.users)}>
+            {n(people.activeMembers)} active memberships, {n(people.invited)} invited. {n(people.new30)} new accounts in the last 30 days.
+          </Stat>
+          <Stat title="Meetings" main={`${n(meetings.held30)} held`}>
+            In the last 30 days. {n(meetings.upcoming)} coming up, {n(meetings.total)} in all.
+          </Stat>
+          <Stat title="Documents" main={n(documents.total)}>
+            {n(documents.indexed)} indexed for the Stratasphere&trade;.
+          </Stat>
+          <Stat title="Stratasphere™" main={`${n(stratasphere.questions30)} answers`}>
+            In the last 30 days, for {n(stratasphere.askers30)} {stratasphere.askers30 === 1 ? "person" : "people"}. AI cost {usd(stratasphere.cost30Usd)}.
+          </Stat>
+          <Stat title="Council Training" main={`${n(training.completions30)} modules finished`}>
+            In the last 30 days, by {n(training.learners30)} {training.learners30 === 1 ? "learner" : "learners"}. {n(training.credentials)} credentials
+            issued in all.
+          </Stat>
+          <Stat title="Demo" main={demo ? `${n(demo.today)} links today` : "Not connected"}>
+            {demo ? `${n(demo.opened)} opened so far.` : "Set DEMO_SUPABASE_URL and DEMO_SUPABASE_SERVICE_ROLE_KEY."}
+          </Stat>
+        </div>
       </div>
     </AppShell>
   );
 }
 
-// Copying training and the legislation library to the demo can take a while.
-export const maxDuration = 300;
+function Stat({ title, main, children }: { title: string; main: string; children: React.ReactNode }) {
+  return (
+    <section className="card admin-stat">
+      <h3>{title}</h3>
+      <p className="admin-stat__main">{main}</p>
+      <p className="card__meta">{children}</p>
+    </section>
+  );
+}

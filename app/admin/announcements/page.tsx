@@ -1,5 +1,5 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
+import { AdminTabs } from "@/components/AdminTabs";
 import { AppShell } from "@/components/AppShell";
 import { AnnouncementForm } from "@/components/AnnouncementForm";
 import { listAllAnnouncements } from "@/lib/data/announcements";
@@ -15,9 +15,7 @@ export default async function AnnouncementsPage() {
   return (
     <AppShell active="admin">
       <div className="wrap page">
-        <p className="roster-table__meta" style={{ marginBottom: "0.5rem" }}>
-          <Link href="/admin">Super Admin console</Link>
-        </p>
+        <AdminTabs active="announcements" />
         <div className="page-header">
           <h1>Announcements</h1>
           <p>

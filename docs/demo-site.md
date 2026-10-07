@@ -5,7 +5,7 @@ and its own Supabase project. See `lib/demo.ts`.
 
 ## How it works
 
-1. In the live Super Admin console, **Demo links**: enter a person's name and
+1. In the live Super Admin console's **Demo** tab: enter a person's name and
    email, and choose whether the link opens on the Stratasphere (their strata)
    or Council Training. The link is emailed to them (from the live site's Mailtrap) and shown
    in the console. Someone who already has a working link today gets the same
@@ -43,7 +43,7 @@ first visitor's strata calls the embeddings service.
 Council Training and the legislation library are copied from the live site
 (`lib/demo-mirror.ts`): training after every publish or track/module change
 (only the first published module is open in the demo), the library after
-every indexed entry, and both from the console's "Copy training and
+every indexed entry, and both from the Demo tab's "Copy training and
 legislation to the demo" button. The global precedent pool is never copied.
 
 In the demo: no Stripe or billing, no email (invites wait as pending), no

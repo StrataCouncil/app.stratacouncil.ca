@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { AdminTabs } from "@/components/AdminTabs";
 import { AppShell } from "@/components/AppShell";
 import { MemberAvatar } from "@/components/MemberAvatar";
 import { AdminDecisionLedger } from "@/components/AdminDecisionLedger";
@@ -92,8 +93,9 @@ export default async function AdminCorporationDetailPage({
   return (
     <AppShell active="admin">
       <div className="wrap page">
-        <Link href="/admin" className="kb-article__back">
-          &larr; Super Admin console
+        <AdminTabs active="stratas" />
+        <Link href="/admin/stratas" className="kb-article__back">
+          &larr; Stratas
         </Link>
 
         <div className="page-header">

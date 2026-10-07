@@ -1,5 +1,5 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
+import { AdminTabs } from "@/components/AdminTabs";
 import { AppShell } from "@/components/AppShell";
 import { AdminTrainingList } from "@/components/training/AdminTrainingList";
 import { getCurrentProfile } from "@/lib/data/profile";
@@ -15,9 +15,7 @@ export default async function AdminTrainingPage() {
   return (
     <AppShell active="admin">
       <div className="wrap page">
-        <Link href="/admin" className="kb-article__back">
-          &larr; Super Admin console
-        </Link>
+        <AdminTabs active="training" />
         <div className="page-header">
           <h1>Council Training</h1>
           <p>

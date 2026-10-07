@@ -1,5 +1,5 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
+import { AdminTabs } from "@/components/AdminTabs";
 import { AppShell } from "@/components/AppShell";
 import { LegislationLibrary } from "@/components/LegislationLibrary";
 import { listLegislation } from "@/lib/data/legislation";
@@ -15,9 +15,7 @@ export default async function LegislationPage() {
   return (
     <AppShell active="admin">
       <div className="wrap page">
-        <p className="roster-table__meta" style={{ marginBottom: "0.5rem" }}>
-          <Link href="/admin">Super Admin console</Link>
-        </p>
+        <AdminTabs active="legislation" />
         <div className="page-header">
           <h1>Legislation Library</h1>
           <p>
