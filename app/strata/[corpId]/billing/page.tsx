@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { canManageBilling } from "@/lib/auth/strata-admin";
+import { IS_DEMO } from "@/lib/demo";
 import { getStripe, publishableKeyFor, stripeModeFor, type StripeMode } from "@/lib/stripe/client";
 import { settlePaymentMethodUpdate } from "@/lib/stripe/payment-results";
 import { UpdatePaymentMethod } from "@/components/UpdatePaymentMethod";
@@ -101,6 +102,7 @@ export default async function BillingPage({
   searchParams: Promise<{ period?: string; plan?: string; step?: string; note?: string; subscribed?: string; update?: string }>;
 }) {
   const { corpId } = await params;
+  if (IS_DEMO) redirect(`/strata/${corpId}`);
   const { period: rawPeriod, plan: rawPlan, step: rawStep, note, subscribed: justSubscribed, update } = await searchParams;
   const chosenPlan = rawPlan === "monthly" ? "monthly" : "annual";
   // A step in the address opens the subscribe dialog (2026-10-05).

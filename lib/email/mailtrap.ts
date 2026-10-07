@@ -12,6 +12,8 @@
  * registry.npmjs.org 403, doc00).
  */
 
+import { IS_DEMO } from "@/lib/demo";
+
 const MAILTRAP_SEND_URL = "https://send.api.mailtrap.io/api/send";
 
 export class MailtrapSendError extends Error {
@@ -34,6 +36,13 @@ export async function sendTransactionalEmail(params: {
   fromEmail?: string;
   fromName?: string;
 }) {
+  // The demo site (lib/demo.ts) never emails anyone: its people are
+  // fictional, and visitors are trying things out.
+  if (IS_DEMO) {
+    console.info("[sendTransactionalEmail] demo, not sent:", params.subject);
+    return { success: true, demo: true };
+  }
+
   const apiToken = process.env.MAILTRAP_API_TOKEN;
   const senderEmail =
     params.fromEmail ?? process.env.MAILTRAP_SENDER_EMAIL ?? "noreply@stratacouncil.ca";

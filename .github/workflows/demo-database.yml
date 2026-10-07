@@ -1,0 +1,35 @@
+# Keeps the demo database (demo.stratacouncil.ca) up to date: on every
+# push to main that changes the database files, runs the migrations it
+# hasn't had yet and the demo's own tables and functions
+# (supabase/demo/apply.sh). Uses the DEMO_DATABASE_URL repository secret
+# (the demo Supabase project's Session pooler connection string).
+#
+# The live database is never touched here.
+name: Demo database
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "supabase/migrations/**"
+      - "supabase/demo/**"
+      - ".github/workflows/demo-database.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: demo-database
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    name: Run migrations on the demo database
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install psql
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client > /dev/null
+      - name: Migrations and demo tables
+        env:
+          DEMO_DATABASE_URL: ${{ secrets.DEMO_DATABASE_URL }}
+        run: bash supabase/demo/apply.sh

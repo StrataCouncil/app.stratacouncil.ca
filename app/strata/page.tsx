@@ -5,6 +5,7 @@ import { AppShell } from "@/components/AppShell";
 import { StrataSetupFlow } from "@/components/StrataSetupFlow";
 import { getConnectedCorporations } from "@/lib/data/corporations";
 import { getCurrentProfile } from "@/lib/data/profile";
+import { IS_DEMO } from "@/lib/demo";
 import { createClient } from "@/lib/supabase/server";
 import { acceptInvite, dismissRequest } from "./actions";
 
@@ -40,9 +41,11 @@ export default async function StrataSetupPage({
   const supabase = await createClient();
 
   const corporations = await getConnectedCorporations();
-  if (corporations.length > 0 && !connect) {
+  if (corporations.length > 0 && (!connect || IS_DEMO)) {
     redirect(`/strata/${corporations[0].id}`);
   }
+  // The demo (lib/demo.ts): visitors only ever have their own strata.
+  if (IS_DEMO) redirect("/demo");
 
   const {
     data: { user },

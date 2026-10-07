@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { IS_DEMO } from "@/lib/demo";
 
 /**
  * Is the signed-in user this strata's admin? Asks the database's own role
@@ -16,9 +17,11 @@ export async function isStrataAdmin(supabase: SupabaseClient, corpId: string): P
 
 /**
  * Can the signed-in user use this strata's Billing? Its admin (and Super
- * Admins), or its Manager when the admin has allowed it (0045).
+ * Admins), or its Manager when the admin has allowed it (0045). No one in
+ * the demo (lib/demo.ts): its stratas are already subscribed.
  */
 export async function canManageBilling(supabase: SupabaseClient, corpId: string): Promise<boolean> {
+  if (IS_DEMO) return false;
   const { data } = await supabase.rpc("can_manage_billing", { target_corporation_id: corpId });
   return data === true;
 }

@@ -3,6 +3,8 @@ import { AutoRefresh } from "@/components/AutoRefresh";
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { AdminCorporationSearch } from "@/components/AdminCorporationSearch";
+import { DemoLinksAdmin } from "@/components/DemoLinksAdmin";
+import { getDemoVisitors } from "@/lib/data/demo-visitors";
 import { getAllCorporations, getPendingCreationRequests } from "@/lib/data/admin";
 import { getCurrentProfile } from "@/lib/data/profile";
 
@@ -12,17 +14,19 @@ import { getCurrentProfile } from "@/lib/data/profile";
  * corporation role). `AppShell`'s nav link uses the same check; this is
  * the server-side backstop for anyone who navigates here directly.
  *
- * Two jobs: the review queue for new corporations (nothing is created
- * until a request here is approved — doc01 §4), and search across every
- * corporation on the platform, regardless of membership.
+ * Three jobs: personal links to the demo site (lib/demo.ts), the review
+ * queue for new corporations (nothing is created until a request here is
+ * approved — doc01 §4), and search across every corporation on the
+ * platform, regardless of membership.
  */
 export default async function AdminConsolePage() {
   const profile = await getCurrentProfile();
   if (!profile?.isSuperAdmin) notFound();
 
-  const [requests, corporations] = await Promise.all([
+  const [requests, corporations, demoVisitors] = await Promise.all([
     getPendingCreationRequests(),
     getAllCorporations(),
+    getDemoVisitors(),
   ]);
 
   return (
@@ -50,6 +54,8 @@ export default async function AdminConsolePage() {
             Announcements
           </Link>
         </p>
+
+        <DemoLinksAdmin list={demoVisitors} />
 
         <h2 style={{ marginBottom: "1rem" }}>New corporation requests</h2>
         {requests.length === 0 ? (

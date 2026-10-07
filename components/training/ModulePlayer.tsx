@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { completeSection } from "@/app/training/actions";
 import { SlideView, Transcript } from "@/components/training/SlideView";
-import { DemoFeedback } from "@/components/training/DemoFeedback";
 import { slideRequirements, type FurtherReading, type Objective, type PlayerContent, type PlayerSlide } from "@/lib/training/slides";
 
 type Page =
@@ -40,7 +39,6 @@ export function ModulePlayer({
   skipWaits = false,
   startScreenId,
   hrefBase = "/training",
-  demo,
 }: {
   moduleId: string;
   moduleTitle: string;
@@ -53,10 +51,8 @@ export function ModulePlayer({
   /** Author preview only: let Next through without waiting. */
   skipWaits?: boolean;
   startScreenId?: string;
-  /** Where track and module links point ("/training", or a demo link's "/demo/<token>"). */
+  /** Where track and module links point. */
   hrefBase?: string;
-  /** A demo link (0040): nothing is saved, and each slide can take a comment. */
-  demo?: { token: string };
 }) {
   const sections = content.topics;
   const pages = useMemo(() => buildPages(content), [content]);
@@ -173,7 +169,7 @@ export function ModulePlayer({
     setError(null);
     const section = sections[page.sectionIndex];
     if (lastOfSection && section && !done.has(section.id)) {
-      if (!preview && !demo) {
+      if (!preview) {
         setSaving(true);
         const r = await completeSection(moduleId, version, section.id);
         setSaving(false);
@@ -287,12 +283,6 @@ export function ModulePlayer({
           <section className="player__complete">
             <h2>{allDone ? "Module complete" : "Almost there"}</h2>
             <p>{allDone ? `You've finished "${moduleTitle}".` : "Some topics still need finishing. Pick one from the menu."}</p>
-            {demo && (
-              <>
-                <p className="card__meta">This is a preview, so nothing was saved. Tell us what you thought of the module as a whole:</p>
-                <DemoFeedback token={demo.token} moduleId={moduleId} moduleTitle={moduleTitle} screenId={null} screenTitle="The whole module" open />
-              </>
-            )}
             {credential && (
               <p className="sync-note sync-note--ok" role="status">
                 You&rsquo;ve completed {track.title}. Your circle is filled in on your training page, and councils
@@ -417,15 +407,6 @@ export function ModulePlayer({
               </button>
             </div>
             {narration && waitingOn && <p className="player__waiting player__waiting--below">{waitingOn}</p>}
-            {demo && (
-              <DemoFeedback
-                token={demo.token}
-                moduleId={moduleId}
-                moduleTitle={moduleTitle}
-                screenId={screen?.id ?? page.key}
-                screenTitle={page.title}
-              />
-            )}
           </>
         )}
       </main>

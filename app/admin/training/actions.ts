@@ -1,6 +1,6 @@
 "use server";
 
-import { randomBytes, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -1029,49 +1029,5 @@ export async function removeModuleAuthor(moduleId: string, userId: string): Prom
   const { error } = await supabase.from("training_module_authors").delete().eq("module_id", moduleId).eq("user_id", userId);
   if (error) return { ok: false, error: "Couldn't remove the author." };
   refresh(moduleId);
-  return { ok: true };
-}
-
-// ── Demo links (0040) ──────────────────────────────────────────────────
-
-/** A Council Training demo link: opens training without signing in, for outside feedback. */
-export async function createDemoLink(input: { label: string; includeDrafts: boolean; expiresInDays: number | null }): Promise<Result<{ token: string }>> {
-  const me = await staff();
-  if (!me) return { ok: false, error: "Only platform staff can make demo links." };
-  const label = input.label.trim().slice(0, 120);
-  if (!label) return { ok: false, error: "Give the link a name, e.g. who it's for." };
-  const token = randomBytes(18).toString("base64url");
-  const days = input.expiresInDays && input.expiresInDays > 0 ? Math.min(365, Math.round(input.expiresInDays)) : null;
-  const supabase = await createClient();
-  const { error } = await supabase.from("training_demo_links").insert({
-    token,
-    label,
-    include_drafts: input.includeDrafts,
-    expires_at: days ? new Date(Date.now() + days * 86_400_000).toISOString() : null,
-    created_by: me.id,
-  });
-  if (error) {
-    console.error("[createDemoLink]", error.message);
-    return { ok: false, error: "Couldn't make the link." };
-  }
-  revalidatePath("/admin/training");
-  return { ok: true, token };
-}
-
-export async function revokeDemoLink(id: string): Promise<Result> {
-  if (!(await staff())) return { ok: false, error: "Only platform staff can do this." };
-  const supabase = await createClient();
-  const { error } = await supabase.from("training_demo_links").update({ revoked_at: new Date().toISOString() }).eq("id", id);
-  if (error) return { ok: false, error: "Couldn't turn the link off." };
-  revalidatePath("/admin/training");
-  return { ok: true };
-}
-
-export async function deleteDemoFeedback(id: string): Promise<Result> {
-  if (!(await staff())) return { ok: false, error: "Only platform staff can do this." };
-  const supabase = await createClient();
-  const { error } = await supabase.from("training_feedback").delete().eq("id", id);
-  if (error) return { ok: false, error: "Couldn't remove that comment." };
-  revalidatePath("/admin/training");
   return { ok: true };
 }

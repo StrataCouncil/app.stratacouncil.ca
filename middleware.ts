@@ -1,9 +1,11 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { IS_DEMO } from "@/lib/demo";
 
 // Reachable without a session. Everything else redirects to /login.
-// /demo: Council Training demo links (0040), which check their own token.
-const PUBLIC_PATHS = ["/login", "/signup", "/auth/confirm", "/demo"];
+// /start and /demo: the demo site's personal links and the page that
+// explains them (both do nothing on the live site).
+const PUBLIC_PATHS = ["/login", "/signup", "/auth/confirm", "/start", "/demo"];
 
 function isPublicPath(pathname: string) {
   return PUBLIC_PATHS.some(
@@ -81,6 +83,8 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const publicPath = isPublicPath(pathname);
 
+  if (IS_DEMO) return demoGuard(request, supabase, user, () => response);
+
   if (!user && !publicPath) {
     const loginUrl = new URL("/login", request.url);
     return NextResponse.redirect(loginUrl);
@@ -94,6 +98,48 @@ export async function middleware(request: NextRequest) {
   // user proceeds straight through regardless of 2FA enrollment status.
 
   return response;
+}
+
+/**
+ * The demo site (lib/demo.ts). Visitors only ever arrive through their
+ * personal link (/start/<token>), so there's no sign-up or sign-in page,
+ * and a session ends at midnight Pacific with the link: the account
+ * carries the time (app_metadata.demo_expires_at, set when the link is
+ * opened). The Super Admin console and the builders aren't part of the
+ * demo.
+ */
+async function demoGuard(
+  request: NextRequest,
+  supabase: ReturnType<typeof createServerClient>,
+  user: { app_metadata?: Record<string, unknown> } | null,
+  // The response so far: the session cookie handlers replace it when they
+  // set cookies, so it's read at the end, not passed in.
+  currentResponse: () => NextResponse
+) {
+  const { pathname } = request.nextUrl;
+  const go = (path: string) => {
+    const to = NextResponse.redirect(new URL(path, request.url));
+    // Keep any cookies the session refresh (or sign-out) just set.
+    currentResponse().cookies.getAll().forEach((c) => to.cookies.set(c));
+    return to;
+  };
+
+  // A new link always gets through: it signs its visitor in afresh.
+  if (pathname === "/start" || pathname.startsWith("/start/")) return currentResponse();
+
+  if (user) {
+    const endsAt = Date.parse(String(user.app_metadata?.demo_expires_at ?? ""));
+    if (!(endsAt > Date.now())) {
+      await supabase.auth.signOut();
+      return pathname === "/demo" ? currentResponse() : go("/demo?link=expired");
+    }
+  }
+
+  if (pathname === "/login" || pathname === "/signup" || pathname.startsWith("/admin") || pathname.startsWith("/build")) {
+    return go(user ? "/" : "/demo");
+  }
+  if (!user && !isPublicPath(pathname)) return go("/demo");
+  return currentResponse();
 }
 
 export const config = {

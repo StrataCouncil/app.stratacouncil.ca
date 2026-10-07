@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import type Stripe from "stripe";
+import { IS_DEMO } from "@/lib/demo";
 import { getStripe, webhookSecrets, type StripeMode } from "@/lib/stripe/client";
 import { sameMode, syncSubscription } from "@/lib/stripe/sync";
 import { recordPaymentMethodUpdate } from "@/lib/stripe/payment-results";
@@ -78,6 +79,8 @@ async function copyInvoiceToContacts(invoice: Stripe.Invoice, mode: StripeMode) 
 }
 
 export async function POST(request: NextRequest) {
+  // The demo site (lib/demo.ts) has no Stripe account.
+  if (IS_DEMO) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const rawBody = await request.text();
   const signature = request.headers.get("stripe-signature");
   const secrets = webhookSecrets();
