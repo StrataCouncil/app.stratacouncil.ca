@@ -87,7 +87,7 @@ export async function approveCreationRequest(
     );
   }
 
-  revalidatePath("/admin");
+  revalidatePath("/admin", "layout");
   redirect(`/admin/${strataPlanNumber}`);
 }
 
@@ -115,8 +115,8 @@ export async function denyCreationRequest(requestId: string): Promise<ReviewResu
     creationRequestDeniedEmail({ strataPlanNumber: data[0].parsed_strata_plan_number ?? "your strata" })
   );
 
-  revalidatePath("/admin");
-  redirect("/admin");
+  revalidatePath("/admin", "layout");
+  redirect("/admin/stratas");
 }
 
 /**
@@ -175,6 +175,6 @@ export async function setStripeSandbox(corpId: string, sandbox: boolean): Promis
   }
   revalidatePath(`/admin/${corpId}`);
   revalidatePath(`/strata/${corpId}`, "layout");
-  revalidatePath("/admin");
+  revalidatePath("/admin", "layout");
   return { ok: true };
 }

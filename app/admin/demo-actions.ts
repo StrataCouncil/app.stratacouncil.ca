@@ -102,7 +102,7 @@ export async function createDemoLink(input: { fullName: string; email: string; l
   }
 
   const emailError = await emailLink(visitor);
-  revalidatePath("/admin");
+  revalidatePath("/admin", "layout");
   const reused = Boolean(existing);
   return {
     ok: true,
@@ -153,7 +153,7 @@ export async function endDemoLink(visitorId: string): Promise<{ ok: true } | { o
     });
     if (authError) console.error("[endDemoLink]", authError.message);
   }
-  revalidatePath("/admin");
+  revalidatePath("/admin", "layout");
   return { ok: true };
 }
 
