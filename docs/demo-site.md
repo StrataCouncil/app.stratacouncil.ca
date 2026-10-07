@@ -17,8 +17,8 @@ and its own Supabase project. See `lib/demo.ts`.
 3. At midnight their session ends (the account carries the time, checked by
    `middleware.ts`). The clean-up deletes their strata, their account and anyone
    they invited: Vercel Cron calls `/api/demo/cleanup` just after midnight, and
-   every link opened also clears anything already expired. Names and emails are
-   deleted 7 days after the link ended.
+   every link opened also clears anything already expired. Names, emails and
+   the activity log are deleted 7 days after the link ended.
 
 ## What a visitor finds
 
@@ -30,9 +30,13 @@ first opened and dated from that day:
 - The Library: bylaws, rules, budget, depreciation report summary, insurance
   summary, AGM minutes, roof assessment, contracts, letters and an incident
   report, already indexed (PII-stripped, as usual) for the Stratasphere.
-- Two held council meetings with final minutes and their decisions, the AGM's
-  resolutions in the decision ledger, and the next meeting's agenda with its
-  attachments, ready for Meeting Mode.
+- Two held council meetings with final minutes and their decisions, and the
+  AGM's resolutions in the decision ledger.
+- Their own meeting to create: one council meeting, whose agenda (the strata's
+  next meeting, with its attachments) fills in when they create it. Only New
+  Business: Roof Repairs can be edited (wording, motion, Stratasphere's
+  motion drafting); the rest is locked, on screen and on the server. Then
+  they run it in Meeting Mode and adjourn it to get their minutes.
 - Running stories to ask about: the roof replacement levy and contract, a
   visitor-parking dispute, a water leak and its deductible, an EV charger
   request and a barking dog.
@@ -46,7 +50,38 @@ Council Training and the legislation library are copied from the live site
 every indexed entry, and both from the Demo tab's "Copy training and
 legislation to the demo" button. The global precedent pool is never copied.
 
-In the demo: no Stripe or billing, no email (invites wait as pending), no
+## Limits
+
+Counted per link (`demo_visitors`, `lib/demo.ts` `DEMO_LIMITS`), across devices:
+
+- 3 questions to the Stratasphere chat, and 3 to Meeting Mode's Stratasphere.
+  A question that fails isn't counted.
+- 1 meeting created (deleting it doesn't give it back).
+- 5 motions drafted by Stratasphere, for the one editable item.
+- No uploads at all (documents, attachments, links, agendas, old minutes,
+  logos, roster files, photos): only the demo's own materials are there.
+
+Past a limit, or on a locked control, the visitor sees "Get more out of the
+Stratasphere™ by creating an account on stratacouncil.ca today!" with a
+"Create your free account" button to sign-up on the live site
+(`components/DemoGuard.tsx`).
+
+## Activity log
+
+Everything a visitor does goes in `demo_activity` (demo database): pages and
+how long each was open, clicks, messages and errors they saw, limits they
+reached, every Stratasphere question with its answer, their meeting (created,
+agenda saved with its motion, motions drafted, launched, called to order,
+adjourned, exports), documents opened or downloaded, and Council Training
+sections finished. Never what's typed into a field (Stratasphere questions are
+logged on the server). In the live console's Demo tab, each link shows its
+entries; opening it shows how far they got (time, questions, their meeting,
+training, limits and problems), where they spent their time, and the full
+timeline. Deleted 7 days after the link ended.
+
+## Also off in the demo
+
+No Stripe or billing, no email (invites wait as pending), no
 welcome checklist, no sign-up or sign-in page (the banner and the front page
 link to sign-up on the live site), no Super Admin console or builders, and no way into another
 strata. Inngest jobs run as a separate app (`stratacouncil-demo`) with `demo/`

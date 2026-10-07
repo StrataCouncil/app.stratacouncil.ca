@@ -14,6 +14,8 @@ import {
 import { getDocumentDownloadUrl } from "@/app/strata/[corpId]/documents/actions";
 import { openInNewTab } from "@/lib/open-in-tab";
 import type { StratasphereSource } from "@/lib/ai/stratasphere";
+import { DEMO_LIMITS, DEMO_LIMIT_MESSAGE, SIGNUP_URL } from "@/lib/demo";
+import { showDemoLimit } from "@/lib/demo-client";
 import type { ConversationMessage, ConversationProject, ConversationSummary } from "@/lib/data/conversations";
 
 /**
@@ -243,13 +245,17 @@ export function StratasphereChat({
   indexedDocuments,
   initialConversations,
   initialProjects,
+  demoLeft = null,
 }: {
   corpId: string;
   corpName: string;
   indexedDocuments: number;
   initialConversations: ConversationSummary[];
   initialProjects: ConversationProject[];
+  /** The demo site: questions this visitor has left (lib/demo.ts DEMO_LIMITS). Null elsewhere. */
+  demoLeft?: number | null;
 }) {
+  const [left, setLeft] = useState(demoLeft);
   const [conversations, setConversations] = useState(initialConversations);
   const [projects, setProjects] = useState(initialProjects);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -369,6 +375,7 @@ export function StratasphereChat({
   async function send(text?: string) {
     const question = (text ?? draft).trim();
     if (!question || streaming) return;
+    if (left === 0) return showDemoLimit("Stratasphere questions");
     setError("");
     setDraft("");
     setStreaming(true);
@@ -392,8 +399,14 @@ export function StratasphereChat({
         body: JSON.stringify({ corpId, conversationId, question }),
       });
       if (!res.ok || !res.body) {
-        const body = (await res.json().catch(() => null)) as { error?: string } | null;
+        const body = (await res.json().catch(() => null)) as { error?: string; demoLimit?: boolean } | null;
         settle(null);
+        if (body?.demoLimit) {
+          setLeft(0);
+          setDraft(question);
+          showDemoLimit("Stratasphere questions");
+          return;
+        }
         setError(body?.error ?? "Stratasphere couldn't answer right now. Please try again.");
         return;
       }
@@ -433,6 +446,7 @@ export function StratasphereChat({
           } else if (ev.type === "done") {
             finished = true;
             settle({ id: ev.messageId ?? `a-${Date.now()}`, content: answer, sources: ev.sources });
+            setLeft((n) => (n == null ? n : Math.max(n - 1, 0)));
           } else if (ev.type === "error") {
             finished = true;
             settle(null);
@@ -679,6 +693,14 @@ export function StratasphereChat({
           </div>
         )}
 
+        {left === 0 ? (
+          <div className="demo-limit-inline" data-testid="chat-demo-limit">
+            <p>{DEMO_LIMIT_MESSAGE}</p>
+            <a href={SIGNUP_URL} className="button button-primary button-small">
+              Create your free account
+            </a>
+          </div>
+        ) : (
         <form
           className="chat-composer"
           onSubmit={(e) => {
@@ -711,6 +733,12 @@ export function StratasphereChat({
             {streaming ? "Answering" : "Send"}
           </button>
         </form>
+        )}
+        {left != null && left > 0 && (
+          <p className="chat-disclaimer" data-testid="chat-demo-left">
+            The demo includes {DEMO_LIMITS.chat} questions. {left} left.
+          </p>
+        )}
         <p className="chat-disclaimer">
           Stratasphere explains your records and the law in general terms. It isn&rsquo;t legal advice, and it can be
           wrong: check the sources it names.

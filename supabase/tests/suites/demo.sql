@@ -21,7 +21,7 @@ create temp table before_counts (tbl text primary key, n bigint);
 do $$
 declare t record; c bigint;
 begin
-  for t in select format('%I.%I', schemaname, tablename) as name from pg_tables where schemaname = 'public' and tablename <> 'demo_visitors' loop
+  for t in select format('%I.%I', schemaname, tablename) as name from pg_tables where schemaname = 'public' and tablename not in ('demo_visitors', 'demo_activity') loop
     execute format('select count(*) from %s', t.name) into c;
     insert into before_counts values (t.name, c);
   end loop;
@@ -142,3 +142,26 @@ select pg_temp.expect('the visitor row stays (for a week)', exists (select 1 fro
 select pg_temp.expect('a real strata can''t be deleted here', pg_temp.fails($q$select demo_delete_strata('BCS-1234')$q$, 'Only a demo strata'));
 select pg_temp.expect('nor a Super Admin', pg_temp.fails($q$select demo_delete_person('00000000-0000-0000-0000-00000000000d')$q$, 'Only a visitor'));
 select pg_temp.expect('nor a fictional person', pg_temp.fails($q$select demo_delete_person('00000000-0000-0000-0000-0000000000f2')$q$, 'Only a visitor'));
+
+-- The demo's limits and the activity log.
+insert into demo_visitors (id, token, full_name, email, expires_at) values
+ ('dddddddd-0000-0000-0000-000000000002', repeat('b', 43), 'Lena Limits', 'limits@x.ca', now() + interval '1 hour'),
+ ('dddddddd-0000-0000-0000-000000000003', repeat('c', 43), 'Ed Expired', 'expired@x.ca', now() - interval '1 minute');
+select pg_temp.expect('three questions are allowed',
+  demo_use('dddddddd-0000-0000-0000-000000000002', 'chat', 3)
+  and demo_use('dddddddd-0000-0000-0000-000000000002', 'chat', 3)
+  and demo_use('dddddddd-0000-0000-0000-000000000002', 'chat', 3));
+select pg_temp.expect('a fourth is not', not demo_use('dddddddd-0000-0000-0000-000000000002', 'chat', 3));
+select pg_temp.expect('Meeting Mode counts separately', demo_use('dddddddd-0000-0000-0000-000000000002', 'meeting', 3));
+select demo_use('dddddddd-0000-0000-0000-000000000002', 'chat', 3, true);
+select pg_temp.expect('a failed question is given back', demo_use('dddddddd-0000-0000-0000-000000000002', 'chat', 3));
+select pg_temp.expect('and counted again', (select chat_questions from demo_visitors where id = 'dddddddd-0000-0000-0000-000000000002') = 3);
+select pg_temp.expect('an expired link uses nothing', not demo_use('dddddddd-0000-0000-0000-000000000003', 'meetings', 1));
+select pg_temp.expect('an unknown limit is refused', pg_temp.fails($q$select demo_use('dddddddd-0000-0000-0000-000000000002', 'billing', 1)$q$, 'Unknown demo limit'));
+select pg_temp.expect('visitors can''t use up limits themselves, or read the log',
+  not has_function_privilege('authenticated', 'public.demo_use(uuid, text, int, boolean)', 'execute')
+  and not has_table_privilege('authenticated', 'public.demo_activity', 'select')
+  and not has_table_privilege('anon', 'public.demo_activity', 'insert'));
+insert into demo_activity (visitor_id, kind, path) values ('dddddddd-0000-0000-0000-000000000002', 'view', '/training');
+delete from demo_visitors where id = 'dddddddd-0000-0000-0000-000000000002';
+select pg_temp.expect('the log goes with the visitor', not exists (select 1 from demo_activity));

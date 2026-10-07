@@ -106,3 +106,31 @@ export function demoOpenModule<M extends DemoModuleRow>(tracks: { id: string; or
   }
   return null;
 }
+
+/** Shown wherever the demo stops short of the real thing, with a link to SIGNUP_URL. */
+export const DEMO_LIMIT_MESSAGE = "Get more out of the Stratasphere™ by creating an account on stratacouncil.ca today!";
+
+/**
+ * What each visitor may use (counted in demo_visitors, supabase/demo/demo.sql):
+ * questions to the Stratasphere chat and to Meeting Mode's Stratasphere,
+ * the one meeting they create, and motions drafted for its one editable item.
+ */
+export const DEMO_LIMITS = { chat: 3, meeting: 3, meetings: 1, motions: 5 } as const;
+export type DemoLimit = keyof typeof DEMO_LIMITS;
+
+/** A server action's answer when the demo has reached a limit. */
+export type DemoLimitFail = { ok: false; error: string; demoLimit: true };
+export const demoLimitFail = (): DemoLimitFail => ({ ok: false, error: DEMO_LIMIT_MESSAGE, demoLimit: true });
+
+/** The one agenda item a visitor may edit in the meeting they create (lib/demo-kit/agenda.ts). */
+export const DEMO_EDITABLE_ITEM_ID = "i_demo_roof_repairs";
+
+/**
+ * Saving the demo's agenda: only the editable item takes what the browser
+ * sent. Every other item stays exactly as saved, in the same order; items
+ * added in the browser are dropped, and removed ones come back.
+ */
+export function lockDemoAgenda<T extends { id: string; catId: string; cat: string; num: number }>(saved: T[], incoming: T[]): T[] {
+  const edited = incoming.find((i) => i.id === DEMO_EDITABLE_ITEM_ID);
+  return saved.map((i) => (i.id === DEMO_EDITABLE_ITEM_ID && edited ? { ...edited, id: i.id, catId: i.catId, cat: i.cat, num: i.num } : i));
+}

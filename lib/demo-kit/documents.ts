@@ -560,10 +560,9 @@ Under Bylaw 9.2 and 9.3, an owner whose strata lot is the source of a loss is re
     {
       key: "statement",
       title: `Financial statement, ${monthYear(d.statementMonthStart)}`,
-      category: "agenda_attachments",
+      category: "financial_accounting",
       fileName: `Financial statement - ${monthYear(d.statementMonthStart)}.pdf`,
       docType: "financial",
-      sourceType: "agenda_attachment",
       text: `# Financial statement: ${monthYear(d.statementMonthStart)}
 ${legalName}. Prepared by ${MANAGEMENT.assistant.name}, ${MANAGEMENT.companyName}. Fiscal year ${fy}.
 
@@ -600,10 +599,9 @@ ${legalName}. Prepared by ${MANAGEMENT.assistant.name}, ${MANAGEMENT.companyName
     {
       key: "tender",
       title: "Roof tender comparison and engineer's recommendation",
-      category: "agenda_attachments",
+      category: "building_construction",
       fileName: "Roof tender comparison and recommendation.pdf",
       docType: "other",
-      sourceType: "agenda_attachment",
       text: `# Roof replacement: tender comparison and recommendation
 From ${ROOF.engineer} to the council of ${legalName}. Tender closed ${longDate(d.tenderClose)}.
 
@@ -639,10 +637,9 @@ We recommend that council award the contract to Coastline Roofing Ltd. for ${dol
     {
       key: "coastline",
       title: "Coastline Roofing proposal summary",
-      category: "agenda_attachments",
+      category: "building_construction",
       fileName: "Coastline Roofing - proposal summary.pdf",
       docType: "contract",
-      sourceType: "agenda_attachment",
       text: `# Coastline Roofing Ltd.: proposal summary
 Prepared for ${legalName}
 
@@ -659,10 +656,9 @@ Prepared for ${legalName}
     {
       key: "hearing-request",
       title: "Letter: hearing request, water damage chargeback (SL016)",
-      category: "agenda_attachments",
+      category: "correspondence",
       fileName: "Letter - hearing request SL016.pdf",
       docType: "correspondence",
-      sourceType: "agenda_attachment",
       text: `# Request for a hearing
 From ${sl016.name}, owner of unit 304 (strata lot 16)
 Date: ${longDate(d.hearingRequest)}
@@ -686,10 +682,9 @@ ${sl016.name}
     {
       key: "parking-response",
       title: "Letter: response to visitor parking notice (SL014)",
-      category: "agenda_attachments",
+      category: "correspondence",
       fileName: "Letter - response to parking notice SL014.pdf",
       docType: "correspondence",
-      sourceType: "agenda_attachment",
       text: `# Response to bylaw notice
 From ${sl014.name}, owner of strata lot 14 (unit 302)
 Date: ${longDate(d.parkingResponse)}
@@ -710,10 +705,9 @@ ${sl014.name}
     {
       key: "ev-request",
       title: "Letter: EV charger installation request (SL021)",
-      category: "agenda_attachments",
+      category: "correspondence",
       fileName: "Letter - EV charger request SL021.pdf",
       docType: "correspondence",
-      sourceType: "agenda_attachment",
       text: `# Application to install an electric vehicle charger
 From ${sl021.name}, owner of unit 403 (strata lot 21)
 Date: ${longDate(d.evRequest)}

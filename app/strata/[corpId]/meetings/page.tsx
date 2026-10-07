@@ -10,6 +10,9 @@ import { meetingStatus } from "@/lib/meetings/status";
 import { RequestSubscriptionButton } from "@/components/RequestSubscriptionButton";
 import { councilRoles } from "@/lib/strata";
 import { SubscriptionPendingNote } from "@/components/SubscriptionPendingNote";
+import { DemoLimitButton } from "@/components/DemoLimitButton";
+import { IS_DEMO } from "@/lib/demo";
+import { demoAllowanceLeft } from "@/lib/demo-usage";
 
 /**
  * Meetings. Before the free meeting is used, the first-meeting checklist
@@ -23,6 +26,8 @@ export default async function MeetingsPage({ params }: { params: Promise<{ corpI
   if (!access) notFound();
   const meetings = await listMeetings(corpId);
   const trialAvailable = !access.freeMeetingUsed;
+  // The demo: one meeting per visitor (lib/demo.ts DEMO_LIMITS).
+  const demoMeetingUsed = IS_DEMO && (await demoAllowanceLeft())?.meetings === 0;
 
   const supabase = await createClient();
   const [{ count: namedLots }, { count: documents }, { count: councilSeats }] = await Promise.all([
@@ -69,11 +74,16 @@ export default async function MeetingsPage({ params }: { params: Promise<{ corpI
                 : "Your free meeting has been used. Everything from it stays here."}
           </p>
         </div>
-        {access.canRunMeetings && (
-          <Link href={`/strata/${corpId}/meetings/new`} className="button button-primary" data-testid="start-meeting">
-            New meeting
-          </Link>
-        )}
+        {access.canRunMeetings &&
+          (demoMeetingUsed ? (
+            <DemoLimitButton reason="second meeting" className="button button-primary" testId="start-meeting">
+              New meeting
+            </DemoLimitButton>
+          ) : (
+            <Link href={`/strata/${corpId}/meetings/new`} className="button button-primary" data-testid="start-meeting">
+              New meeting
+            </Link>
+          ))}
       </div>
 
       {!access.subscribed && trialAvailable && !checklistDone && (
@@ -118,7 +128,7 @@ export default async function MeetingsPage({ params }: { params: Promise<{ corpI
         </div>
       )}
 
-      <MeetingSection title="Upcoming and in progress" meetings={upcoming} corpId={corpId} userId={access.userId} empty="No meetings scheduled." />
+      <MeetingSection title="Upcoming and in progress" meetings={upcoming} corpId={corpId} userId={access.userId} empty={IS_DEMO ? "No meetings scheduled. Press New meeting: the agenda is written for you, ready to run in Meeting Mode." : "No meetings scheduled."} />
       {past.length > 0 && <MeetingSection title="Past meetings" meetings={past} corpId={corpId} userId={access.userId} />}
     </>
   );

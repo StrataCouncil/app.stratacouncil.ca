@@ -17,6 +17,8 @@ import {
   type DocumentCategory,
 } from "@/lib/documents";
 import { queueDocumentIndexing } from "@/lib/kb/queue";
+import { IS_DEMO, demoLimitFail } from "@/lib/demo";
+import { logDemoActivity } from "@/lib/demo-usage";
 
 /**
  * Document repository actions (doc01 §4a — free for every member, always).
@@ -52,6 +54,8 @@ export async function createDocumentUploads(
   corpId: string,
   files: Array<{ name: string; size: number }>
 ): Promise<{ ok: true; tickets: UploadTicket[] } | Fail> {
+  // The demo has only its own materials (lib/demo.ts).
+  if (IS_DEMO) return demoLimitFail();
   const access = await getStrataAccess(corpId);
   if (!access) return { ok: false, error: "You're not connected to this strata." };
   if (files.length === 0) return { ok: false, error: "Choose at least one file." };
@@ -98,6 +102,8 @@ export async function registerUploadedDocuments(
   files: UploadedFile[],
   extra: { sourceType?: "upload" | "agenda_attachment" | "historic_minutes"; meetingId?: string; agendaItemId?: string } = {}
 ): Promise<{ ok: true; documentIds: string[] } | Fail> {
+  // The demo has only its own materials (lib/demo.ts).
+  if (IS_DEMO) return demoLimitFail();
   const supabase = await createClient();
   const {
     data: { user },
@@ -156,6 +162,8 @@ export async function registerDocuments(
   category: string,
   files: UploadedFile[]
 ): Promise<{ ok: true } | Fail> {
+  // The demo has only its own materials (lib/demo.ts).
+  if (IS_DEMO) return demoLimitFail();
   if (!isDocumentCategory(category) || category === "agenda_attachments") {
     return { ok: false, error: "Choose a folder." };
   }
@@ -195,6 +203,7 @@ export async function getDocumentDownloadUrl(
     console.error("[getDocumentDownloadUrl]", error?.message);
     return { ok: false, error: "Couldn't prepare the download. Please try again." };
   }
+  await logDemoActivity({ kind: view ? "document.viewed" : "document.downloaded", detail: { title: doc.title, file: doc.file_name } });
   return { ok: true, url: data.signedUrl };
 }
 

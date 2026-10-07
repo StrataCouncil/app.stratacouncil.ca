@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { copyContentToDemo, createDemoLink, endDemoLink, resendDemoLink } from "@/app/admin/demo-actions";
 import type { DemoVisitor, DemoVisitorList } from "@/lib/data/demo-visitors";
@@ -204,6 +205,7 @@ function VisitorTable({
             <th>Opens on</th>
             <th>Made</th>
             <th>Opened</th>
+            <th>Activity</th>
             {onCopy && <th aria-label="Actions" />}
           </tr>
         </thead>
@@ -220,6 +222,11 @@ function VisitorTable({
                 {v.createdByName && <div className="roster-table__meta">by {v.createdByName}</div>}
               </td>
               <td>{v.lastOpenedAt ? time(v.lastOpenedAt) : "Not yet"}</td>
+              <td>
+                <Link href={`/admin/demo/${v.id}`} data-testid={`demo-activity-link-${v.id}`}>
+                  {v.activityCount ? `${v.activityCount.toLocaleString("en-CA")} entries` : "View"}
+                </Link>
+              </td>
               {onCopy && (
                 <td className="demo-links__actions">
                   <button type="button" className="button button-secondary button-small" onClick={() => onCopy(v.link)}>

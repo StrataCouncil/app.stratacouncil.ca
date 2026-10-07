@@ -5,6 +5,7 @@ import { exportFileName, meetingDocumentName } from "@/lib/exports/filename";
 import type { MinutesContent } from "@/lib/meetings/minutes";
 import { createClient } from "@/lib/supabase/server";
 import { loadLetterhead } from "@/lib/data/management";
+import { logDemoActivity } from "@/lib/demo-usage";
 
 /** Final minutes as a PDF. Only once finalized — a draft exports as .docx. */
 export async function GET(_req: Request, { params }: { params: Promise<{ corpId: string; meetingId: string }> }) {
@@ -17,6 +18,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ corpId:
     finalizedAt: data?.minutes_finalized_at ?? null,
     letterhead: await loadLetterhead(corpId),
   });
+  await logDemoActivity({ kind: "meeting.exported", detail: { meetingId, file: "minutes.pdf" } });
   return new NextResponse(new Uint8Array(pdf), {
     headers: {
       "Content-Type": "application/pdf",

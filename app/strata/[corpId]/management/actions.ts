@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { MANAGEMENT_LOGOS_BUCKET } from "@/lib/data/management";
 import { imageSize, LOGO_TYPES, MAX_LOGO_BYTES, MAX_MANAGERS, type ManagementDetails } from "@/lib/management";
+import { IS_DEMO, demoLimitFail } from "@/lib/demo";
 
 /**
  * The Management tab: the strata's Admin or Manager edits the management
@@ -68,6 +69,8 @@ export async function createLogoUpload(
   corpId: string,
   file: { name: string; type: string; size: number }
 ): Promise<{ ok: true; path: string; token: string } | Fail> {
+  // The demo has only its own materials (lib/demo.ts).
+  if (IS_DEMO) return demoLimitFail();
   if (!(await requireManager(corpId))) return notAllowed;
   if (!(LOGO_TYPES as readonly string[]).includes(file.type)) return { ok: false, error: "Use a PNG or JPEG image for the logo." };
   if (file.size > MAX_LOGO_BYTES) return { ok: false, error: "The logo must be 2 MB or smaller." };
@@ -82,6 +85,8 @@ export async function createLogoUpload(
 
 /** After the browser uploads the logo: point the details at it, and remove the old one. */
 export async function setLogo(corpId: string, path: string): Promise<Done> {
+  // The demo has only its own materials (lib/demo.ts).
+  if (IS_DEMO) return demoLimitFail();
   const auth = await requireManager(corpId);
   if (!auth) return notAllowed;
   const [folder, file, ...rest] = path.split("/");

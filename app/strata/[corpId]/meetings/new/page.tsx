@@ -4,6 +4,8 @@ import { StrataSphereNav } from "@/components/StrataSphereNav";
 import { MeetingDetailsForm } from "@/components/meetings/MeetingDetailsForm";
 import { getStrataAccess } from "@/lib/data/strata";
 import { chairCandidates } from "@/lib/data/meetings";
+import { DEMO_LIMIT_MESSAGE, IS_DEMO, SIGNUP_URL } from "@/lib/demo";
+import { demoAllowanceLeft } from "@/lib/demo-usage";
 
 export default async function NewMeetingPage({ params }: { params: Promise<{ corpId: string }> }) {
   const { corpId } = await params;
@@ -17,7 +19,20 @@ export default async function NewMeetingPage({ params }: { params: Promise<{ cor
         &larr; All meetings
       </Link>
       <h2 style={{ marginBottom: "1rem" }}>New meeting</h2>
-      {access.canRunMeetings ? (
+      {IS_DEMO && (
+        <p className="card__meta" style={{ marginBottom: "1rem", maxWidth: 640 }}>
+          Choose a date and time. The agenda for your strata&rsquo;s next council meeting fills in for you, with its
+          attachments. You can edit its New Business item, Roof Repairs, then run the meeting in Meeting Mode.
+        </p>
+      )}
+      {IS_DEMO && (await demoAllowanceLeft())?.meetings === 0 ? (
+        <div className="card" style={{ maxWidth: 640 }} data-testid="demo-meeting-used">
+          <p>You&rsquo;ve created this demo&rsquo;s meeting. {DEMO_LIMIT_MESSAGE}</p>
+          <a href={SIGNUP_URL} className="button button-primary">
+            Create your free account
+          </a>
+        </div>
+      ) : access.canRunMeetings ? (
         <div className="card" style={{ maxWidth: 640 }}>
           <MeetingDetailsForm corpId={corpId} chairOptions={await chairCandidates(corpId)} />
         </div>

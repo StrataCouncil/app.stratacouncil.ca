@@ -2,6 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { IS_DEMO } from "@/lib/demo";
+import { logDemoActivity } from "@/lib/demo-usage";
 
 /**
  * Records a finished section (0033's complete_training_section): completes
@@ -26,5 +28,16 @@ export async function completeSection(
   revalidatePath("/training", "layout");
   revalidatePath("/");
   const r = data as { moduleComplete: boolean; credentialEarned: boolean };
+  if (IS_DEMO) {
+    const [{ data: mod }, { data: ver }] = await Promise.all([
+      supabase.from("training_modules").select("title").eq("id", moduleId).maybeSingle(),
+      supabase.from("training_module_versions").select("content").eq("module_id", moduleId).eq("version", version).maybeSingle(),
+    ]);
+    const sections = ((ver?.content as { sections?: Array<{ id: string; title?: string }> } | null)?.sections ?? []);
+    await logDemoActivity({
+      kind: "training.section",
+      detail: { module: mod?.title ?? moduleId, section: sections.find((x) => x.id === sectionId)?.title ?? sectionId, moduleComplete: Boolean(r.moduleComplete), credentialEarned: Boolean(r.credentialEarned) },
+    });
+  }
   return { ok: true, moduleComplete: Boolean(r.moduleComplete), credentialEarned: Boolean(r.credentialEarned) };
 }

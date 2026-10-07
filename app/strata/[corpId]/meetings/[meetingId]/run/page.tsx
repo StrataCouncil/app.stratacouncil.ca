@@ -4,6 +4,7 @@ import { getStrataAccess } from "@/lib/data/strata";
 import { getLotRoll, getMeeting, getMeetingNotes } from "@/lib/data/meetings";
 import { createClient } from "@/lib/supabase/server";
 import { autoPopulate } from "@/lib/meetings/agenda";
+import { demoAllowanceLeft } from "@/lib/demo-usage";
 
 export const metadata = { title: "Meeting Mode" };
 
@@ -18,11 +19,12 @@ export default async function MeetingModePage({ params }: { params: Promise<{ co
   if (meeting.launchedBy !== access.userId) redirect(`/strata/${corpId}/meetings/${meetingId}`);
 
   const supabase = await createClient();
-  const [notes, roll, { data: corp }, { data: aiAccess }] = await Promise.all([
+  const [notes, roll, { data: corp }, { data: aiAccess }, demoLeft] = await Promise.all([
     getMeetingNotes(meetingId),
     getLotRoll(corpId),
     supabase.from("strata_corporations").select("strata_plan_number, legal_name, building_name").eq("strata_plan_number", corpId).maybeSingle(),
     supabase.rpc("has_stratasphere_access", { target_corporation_id: corpId }),
+    demoAllowanceLeft(),
   ]);
 
   return (
@@ -45,6 +47,7 @@ export default async function MeetingModePage({ params }: { params: Promise<{ co
       lots={roll.lots.map(({ lot, name, isCouncil }) => ({ lot, name, isCouncil }))}
       isTrial={meeting.isTrial}
       aiAvailable={aiAccess === true}
+      demoLeft={demoLeft?.meeting ?? null}
     />
   );
 }

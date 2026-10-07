@@ -3,12 +3,14 @@ import type { AttendanceStatus } from "../meetings/rules.ts";
 import { longDate, monthYear, type KitDates } from "./dates.ts";
 import { ARREARS, LEAK, ROOF } from "./documents.ts";
 import { dollars, money } from "./people.ts";
+import { DEMO_EDITABLE_ITEM_ID } from "../demo.ts";
 
 /**
  * The demo strata's council meetings: two already held (adjourned, with
- * final minutes and their decisions in the ledger) and the next one, a
- * draft agenda with attachments for the visitor to open in Meeting Mode.
- * Built from the app's own agenda model. Pure.
+ * final minutes and their decisions in the ledger), and the next one's
+ * agenda, with attachments, which fills in when the visitor creates their
+ * meeting (lib/demo-kit/agenda.ts). Only its New Business item, Roof
+ * Repairs, can be edited. Built from the app's own agenda model. Pure.
  *
  * Movers and seconders are lots, as Meeting Mode records them:
  * SL012 president (chair), SL005 vice president, SL019 treasurer,
@@ -345,7 +347,7 @@ export function kitMeetings(d: KitDates): KitMeeting[] {
       ],
     ],
     [
-      "Roof Replacement",
+      "Business Arising",
       [
         [
           "Award the Roof Replacement Contract",
@@ -423,9 +425,27 @@ export function kitMeetings(d: KitDates): KitMeeting[] {
         ],
       ],
     ],
+    [
+      "New Business",
+      [
+        [
+          "Roof Repairs",
+          {
+            type: "FOR_DECISION",
+            background:
+              "After last week's heavy rain, the owner of unit 405 reported water staining on a bedroom ceiling. The roofer who inspected it found a lifted membrane seam near the north drain. The roof replacement won't start for several months.",
+            financial: "A temporary repair is quoted at about $2,400 plus GST, from the operating fund's repairs and maintenance budget.",
+            risks: "Further leaks could damage unit 405 and the units below before the replacement begins.",
+            motion: { text: "" },
+          },
+        ],
+      ],
+    ],
     ["Next Meeting", [["Set Next Meeting Date", {}]]],
     ["Adjournment", [["Adjournment", { motion: { text: "THAT the meeting be adjourned." } }]]],
   ]);
+  // The one item the visitor may edit keeps the same id in every copy.
+  next.agenda = next.agenda.map((it) => (it.cat === "New Business" && it.text === "Roof Repairs" ? { ...it, id: DEMO_EDITABLE_ITEM_ID } : it));
 
   return [
     {

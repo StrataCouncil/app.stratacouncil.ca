@@ -4,6 +4,8 @@ import { getStrataAccess } from "@/lib/data/strata";
 import { streamStratasphere, type AssistantTurn, type StratasphereSource } from "@/lib/ai/stratasphere";
 import { titleFromQuestion } from "@/lib/ai/conversation-title";
 import { trimHistory } from "@/lib/ai/conversation-history";
+import { DEMO_LIMIT_MESSAGE, IS_DEMO } from "@/lib/demo";
+import { demoVisitorId, logDemoActivity, refundDemoAllowance, takeDemoAllowance } from "@/lib/demo-usage";
 
 /**
  * The standalone Stratasphere assistant (doc02 §4b). Subscription only —
@@ -49,6 +51,11 @@ export async function POST(request: NextRequest) {
   if (!access) return NextResponse.json({ error: "You're not connected to this strata." }, { status: 403 });
   if (!access.subscribed) {
     return NextResponse.json({ error: "The Stratasphere assistant needs an active subscription." }, { status: 402 });
+  }
+  // The demo: three questions per visitor (lib/demo.ts DEMO_LIMITS).
+  if (IS_DEMO && !(await takeDemoAllowance("chat"))) {
+    await logDemoActivity({ kind: "limit", path: `/strata/${corpId}/assistant`, detail: { reason: "Stratasphere questions", question } });
+    return NextResponse.json({ error: DEMO_LIMIT_MESSAGE, demoLimit: true }, { status: 429 });
   }
 
   // The conversation: an existing one of the user's own, or a new one.
@@ -101,6 +108,7 @@ export async function POST(request: NextRequest) {
       .single();
     if (error || !created) {
       console.error("[stratasphere chat] create", error?.message);
+      await refundDemoAllowance("chat");
       return NextResponse.json({ error: "Couldn't start a conversation." }, { status: 500 });
     }
     conversationId = created.id as string;
@@ -113,10 +121,13 @@ export async function POST(request: NextRequest) {
     .single();
   if (qError || !asked) {
     console.error("[stratasphere chat] save question", qError?.message);
+    await refundDemoAllowance("chat");
     return NextResponse.json({ error: "Couldn't save your question." }, { status: 500 });
   }
 
   const id = conversationId;
+  // Read now: the stream below runs after the response has started.
+  const visitor = IS_DEMO ? await demoVisitorId() : null;
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       controller.enqueue(line({ type: "start", conversationId: id, title }));
@@ -125,6 +136,8 @@ export async function POST(request: NextRequest) {
         (text) => controller.enqueue(line({ type: "delta", text }))
       );
       if (!result.ok) {
+        await refundDemoAllowance("chat", visitor);
+        await logDemoActivity({ kind: "stratasphere.chat", path: `/strata/${corpId}/assistant`, detail: { question, failed: result.error } }, visitor);
         controller.enqueue(line({ type: "error", error: result.error }));
         controller.close();
         return;
@@ -137,6 +150,11 @@ export async function POST(request: NextRequest) {
         .select("id")
         .single();
       await supabase.from("conversations").update({ updated_at: new Date().toISOString() }).eq("id", id);
+      await logDemoActivity({
+        kind: "stratasphere.chat",
+        path: `/strata/${corpId}/assistant`,
+        detail: { question, answer: result.text, sources: result.sources.map(sourceName).join("; ") },
+      }, visitor);
       controller.enqueue(line({ type: "done", messageId: saved?.id ?? null, sources: result.sources }));
       controller.close();
     },

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { AccountMenu } from "@/components/AccountMenu";
+import { DemoGuard } from "@/components/DemoGuard";
 import { SiteFooter } from "@/components/SiteFooter";
 import { Logo } from "@/components/Logo";
 import { getCurrentProfile } from "@/lib/data/profile";
@@ -33,6 +34,7 @@ export async function AppShell({
 
   return (
     <>
+      {IS_DEMO && <DemoGuard />}
       {IS_DEMO && (
         <div className="demo-banner" role="note" data-testid="demo-banner">
           <div className="wrap">
