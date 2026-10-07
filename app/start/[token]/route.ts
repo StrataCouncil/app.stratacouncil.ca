@@ -8,7 +8,8 @@ import { createClient } from "@/lib/supabase/server";
 /**
  * A visitor's personal demo link (demo site only): sets up their account
  * and their own copy of the fictional strata the first time, signs them
- * in, and opens the strata. Works again (and on another device) until
+ * in, and opens the strata or Council Training (whichever the link was
+ * made for). Works again (and on another device) until
  * midnight Pacific; then /demo explains that it has ended.
  */
 export const maxDuration = 60;
@@ -43,5 +44,5 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     redirect("/demo?link=busy");
   }
 
-  redirect(`/strata/${opened.corporationId}`);
+  redirect(opened.landing === "training" ? "/training" : `/strata/${opened.corporationId}`);
 }

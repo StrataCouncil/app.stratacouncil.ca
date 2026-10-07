@@ -36,6 +36,9 @@ insert into demo_cast (user_id, part) values ('00000000-0000-0000-0000-000000000
 insert into demo_visitors (id, token, full_name, email, expires_at) values
  ('dddddddd-0000-0000-0000-000000000001', repeat('a', 43), 'Vera Visitor', 'visitor@x.ca', now() + interval '1 hour');
 
+select pg_temp.expect('a link opens on the Stratasphere unless asked otherwise', (select landing from demo_visitors) = 'strata');
+select pg_temp.expect('or Council Training, and nowhere else',
+  pg_temp.fails($q$update demo_visitors set landing = 'billing'$q$, 'demo_visitors_landing_check'));
 select pg_temp.expect('visitors can''t read the visitor list',
   not has_table_privilege('authenticated', 'public.demo_visitors', 'select'));
 select pg_temp.expect('visitors can''t run the clean-up',

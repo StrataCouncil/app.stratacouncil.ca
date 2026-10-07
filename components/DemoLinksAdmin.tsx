@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createDemoLink, endDemoLink, resendDemoLink } from "@/app/admin/demo-actions";
 import type { DemoVisitor, DemoVisitorList } from "@/lib/data/demo-visitors";
+import { DEMO_LANDINGS, type DemoLanding } from "@/lib/demo";
 
 const PACIFIC = "America/Los_Angeles";
 const time = (iso: string) =>
@@ -19,6 +20,7 @@ export function DemoLinksAdmin({ list }: { list: DemoVisitorList }) {
   const router = useRouter();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
+  const [landing, setLanding] = useState<DemoLanding>("strata");
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -30,7 +32,7 @@ export function DemoLinksAdmin({ list }: { list: DemoVisitorList }) {
     setBusy("create");
     setError(null);
     setNotice(null);
-    const r = await createDemoLink({ fullName, email });
+    const r = await createDemoLink({ fullName, email, landing });
     setBusy(null);
     if (!r.ok) return setError(r.error);
     setMade(r.visitor);
@@ -80,8 +82,8 @@ export function DemoLinksAdmin({ list }: { list: DemoVisitorList }) {
     <section className="card demo-links" data-testid="demo-links" style={{ marginBottom: "2.5rem" }}>
       <h2>Demo links</h2>
       <p className="card__meta">
-        A personal link to demo.stratacouncil.ca. The person gets their own fictional strata, as its admin, with nothing
-        emailed and no billing. Each link works until midnight (Pacific) on the day you make it, and their strata is cleared
+        A personal link to demo.stratacouncil.ca, opening on the Stratasphere or Council Training. Either way the person gets
+        their own fictional strata, as its admin, with nothing emailed and no billing. Each link works until midnight (Pacific) on the day you make it, and their strata is cleared
         overnight. Names and emails are deleted a week later.
       </p>
 
@@ -100,6 +102,16 @@ export function DemoLinksAdmin({ list }: { list: DemoVisitorList }) {
             <div className="field">
               <label htmlFor="demo-email">Email</label>
               <input id="demo-email" type="email" value={email} maxLength={320} autoComplete="off" onChange={(e) => setEmail(e.target.value)} required />
+            </div>
+            <div className="field">
+              <label htmlFor="demo-landing">Opens on</label>
+              <select id="demo-landing" value={landing} onChange={(e) => setLanding(e.target.value as DemoLanding)} data-testid="demo-links-landing">
+                {DEMO_LANDINGS.map((l) => (
+                  <option key={l.value} value={l.value}>
+                    {l.label}
+                  </option>
+                ))}
+              </select>
             </div>
             <button type="submit" className="button button-primary" disabled={busy !== null} data-testid="demo-links-create">
               {busy === "create" ? "Making the link…" : "Make link and email it"}
@@ -167,6 +179,7 @@ function VisitorTable({
         <thead>
           <tr>
             <th>Person</th>
+            <th>Opens on</th>
             <th>Made</th>
             <th>Opened</th>
             {onCopy && <th aria-label="Actions" />}
@@ -179,6 +192,7 @@ function VisitorTable({
                 {v.fullName}
                 <div className="roster-table__meta">{v.email}</div>
               </td>
+              <td>{DEMO_LANDINGS.find((l) => l.value === v.landing)?.label}</td>
               <td>
                 {time(v.createdAt)}
                 {v.createdByName && <div className="roster-table__meta">by {v.createdByName}</div>}
