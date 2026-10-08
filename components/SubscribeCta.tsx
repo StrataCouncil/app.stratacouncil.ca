@@ -6,7 +6,7 @@ import { RequestSubscriptionButton } from "@/components/RequestSubscriptionButto
 import { SubscriptionPendingNote } from "@/components/SubscriptionPendingNote";
 
 /** The "Subscribe" button on locked features. Only those who can use
- * Billing (the admin, and the Manager when allowed) get a link to it;
+ * Billing (the admin, and anyone they've given billing access to) get a link to it;
  * everyone else can ask the admin. While a subscription is pending,
  * everyone gets the pending note instead. */
 export function SubscribeCta({ testId }: { testId?: string }) {

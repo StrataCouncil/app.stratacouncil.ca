@@ -16,7 +16,7 @@ export interface StrataContextValue {
   isAdmin: boolean;
   /** Admin or Manager: sees the Management tab. */
   canManage: boolean;
-  /** The admin, or the Manager when the admin allows it: uses Billing and subscribes. */
+  /** The admin, or anyone they've given billing access to (0046): uses Billing and subscribes. */
   canBill: boolean;
 }
 

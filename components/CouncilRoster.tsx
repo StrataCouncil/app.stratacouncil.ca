@@ -1,8 +1,6 @@
 import { InviteMemberButton, RosterInvites } from "@/components/RosterInvites";
 import { RosterJoinRequests } from "@/components/RosterJoinRequests";
 import { RosterTable } from "@/components/RosterTable";
-import { ManagerBillingSwitch } from "@/components/ManagerBillingSwitch";
-import { IS_DEMO } from "@/lib/demo";
 import type { CorporationRoster } from "@/lib/data/roster";
 
 /**
@@ -45,8 +43,6 @@ export function CouncilRoster({
         currentUserId={roster.currentUserId}
         jurisdiction={roster.jurisdiction}
       />
-      {/* No billing in the demo (lib/demo.ts). */}
-      {roster.isAdmin && !IS_DEMO && <ManagerBillingSwitch corporationId={corporationId} on={roster.managersCanBill} />}
     </>
   );
 }

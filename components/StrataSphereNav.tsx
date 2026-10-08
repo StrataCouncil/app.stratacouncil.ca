@@ -29,7 +29,7 @@ const allItems: Array<{ slug: string; label: string; gated: boolean; managersOnl
   { slug: "meetings", label: "Meetings", gated: false },
   { slug: "minutes", label: "Minutes", gated: false },
   { slug: "documents", label: "Documents", gated: false },
-  // Billing: the admin, and the Manager when the admin allows it (0045); others never see the tab.
+  // Billing: the admin, and anyone they've given billing access to (0046); others never see the tab.
   { slug: "billing", label: "Billing", gated: false, billingOnly: true },
   // Only the Admin and the Manager role see this one at all.
   { slug: "management", label: "Management", gated: false, managersOnly: true },

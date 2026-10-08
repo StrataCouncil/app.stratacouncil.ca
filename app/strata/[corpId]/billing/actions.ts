@@ -32,7 +32,7 @@ async function requireAdmin(corporationId: string) {
   if (!user) throw new Error("Not signed in.");
 
   if (!(await canManageBilling(supabase, corporationId))) {
-    throw new Error("Only this strata's admin, or its Manager when the admin allows it, can manage billing.");
+    throw new Error("Only this strata's admin, or someone they've given billing access to, can manage billing.");
   }
   return user;
 }

@@ -8594,25 +8594,6 @@ a.track-card:focus-visible {
   color: #fff;
 }
 
-/* Council card: the admin's switch for the Manager's billing access (0045). */
-.manager-billing {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.75rem;
-  margin-top: 1rem;
-  padding: 0.85rem 1rem;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-lg);
-}
-.manager-billing .permission-switch {
-  flex-shrink: 0;
-  margin-top: 0.1rem;
-}
-.manager-billing__label {
-  font-weight: 600;
-}
-
 /* Super Admin console: tabs and the Overview's attention list */
 .admin-tabs {
   margin-bottom: 2rem;

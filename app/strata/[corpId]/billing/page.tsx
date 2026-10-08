@@ -17,6 +17,7 @@ import { firstPaymentState, type FirstPayment } from "@/lib/stripe/first-payment
 import { syncSubscription } from "@/lib/stripe/sync";
 import type { BillingAddress } from "@/lib/billing-address";
 import { BillingSteps, type BillingStep } from "@/components/BillingSteps";
+import { DemoBilling } from "@/components/DemoBilling";
 import { COMPANY_LEGAL_NAME, STATEMENT_DESCRIPTOR } from "@/lib/company";
 import {
   changePlan,
@@ -102,7 +103,7 @@ export default async function BillingPage({
   searchParams: Promise<{ period?: string; plan?: string; step?: string; note?: string; subscribed?: string; update?: string }>;
 }) {
   const { corpId } = await params;
-  if (IS_DEMO) redirect(`/strata/${corpId}`);
+  if (IS_DEMO) return demoBilling(corpId);
   const { period: rawPeriod, plan: rawPlan, step: rawStep, note, subscribed: justSubscribed, update } = await searchParams;
   const chosenPlan = rawPlan === "monthly" ? "monthly" : "annual";
   // A step in the address opens the subscribe dialog (2026-10-05).
@@ -123,8 +124,8 @@ export default async function BillingPage({
     .eq("role", "admin");
   const adminCorpIds = (adminRows ?? []).map((r) => r.corporation_id as string);
   // No billing information at all for anyone but this strata's admin, or
-  // its Manager when the admin allows it (0045). A Super Admin is admin of
-  // every strata (0021).
+  // someone the admin has given billing access to (0046). A Super Admin is
+  // admin of every strata (0021).
   if (!adminCorpIds.includes(corpId)) {
     if (!(await canManageBilling(supabase, corpId))) redirect(`/strata/${corpId}`);
     adminCorpIds.push(corpId);
@@ -272,7 +273,8 @@ export default async function BillingPage({
       <div className="page-header" style={{ marginBottom: "1.75rem" }}>
         <h2 style={{ margin: 0 }}>Billing for {corp.building_name ?? corp.legal_name}</h2>
         <p className="card__meta" style={{ marginTop: "0.35rem" }}>
-          {corpId} &middot; Each strata has its own payment method, billing contacts and subscription &middot; Admin, and the Manager if the admin allows it
+          {corpId} &middot; Each strata has its own payment method, billing contacts and subscription &middot; The admin, and
+          anyone the admin gives billing access to
         </p>
       </div>
 
@@ -415,7 +417,7 @@ export default async function BillingPage({
           </div>
           <p className="card__meta">
             Charges appear on your statement as {STATEMENT_DESCRIPTOR.toUpperCase()}: StrataCouncil.ca is a product of{" "}
-            {COMPANY_LEGAL_NAME}.
+            {COMPANY_LEGAL_NAME.endsWith(".") ? COMPANY_LEGAL_NAME : `${COMPANY_LEGAL_NAME}.`}
           </p>
           {paymentMethod ? (
             <>
@@ -679,5 +681,31 @@ export default async function BillingPage({
         </div>
       </div>
     </>
+  );
+}
+
+/**
+ * The demo site: the same people see Billing (the admin, and anyone they
+ * switch on), with made-up details (components/DemoBilling.tsx).
+ */
+async function demoBilling(corpId: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+  const [{ data: allowed }, { data: corp }] = await Promise.all([
+    supabase.rpc("can_manage_billing", { target_corporation_id: corpId }),
+    supabase.from("strata_corporations").select("building_name, legal_name, address, unit_count").eq("strata_plan_number", corpId).maybeSingle(),
+  ]);
+  if (allowed !== true || !corp) redirect(`/strata/${corpId}`);
+  return (
+    <DemoBilling
+      corpId={corpId}
+      name={corp.building_name ?? corp.legal_name}
+      address={corp.address ?? ""}
+      unitCount={corp.unit_count}
+      visitorEmail={user.email ?? ""}
+    />
   );
 }
