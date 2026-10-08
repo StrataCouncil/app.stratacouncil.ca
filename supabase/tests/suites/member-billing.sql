@@ -51,6 +51,8 @@ update corporation_memberships set status = 'active', can_manage_billing = false
 where corporation_id = 'BCS-1234' and user_id = '00000000-0000-0000-0000-00000000000f';
 insert into corporation_role_assignments (corporation_id, role, user_id)
 values ('BCS-1234', 'manager', '00000000-0000-0000-0000-00000000000f') on conflict do nothing;
+-- (0047 removed the old setting; put it back to replay the carry-over.)
+alter table strata_corporations add column if not exists managers_can_bill boolean not null default false;
 update strata_corporations set managers_can_bill = true where strata_plan_number = 'BCS-1234';
 \i supabase/migrations/0046_member_billing.sql
 select pg_temp.expect('the Manager keeps billing access',

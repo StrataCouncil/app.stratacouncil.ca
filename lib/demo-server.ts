@@ -4,6 +4,7 @@ import { MANAGEMENT_LOGOS_BUCKET } from "@/lib/data/management";
 import { buildDemoStrata } from "@/lib/demo-kit/build";
 import { DOCUMENTS_BUCKET } from "@/lib/documents";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { removeFolder } from "@/lib/storage-admin";
 
 /**
  * The demo site's side of a visitor (lib/demo.ts): opening a personal
@@ -206,29 +207,7 @@ async function discardStrata(admin: SupabaseClient, visitorId: string, corporati
   await admin.from("demo_visitors").update({ corporation_id: null }).eq("id", visitorId);
 }
 
-/** Every file under a folder in a bucket, however deep. */
-async function removeFolder(admin: SupabaseClient, bucket: string, folder: string) {
-  const paths: string[] = [];
-  const walk = async (prefix: string) => {
-    for (let offset = 0; ; offset += 1000) {
-      const { data, error } = await admin.storage.from(bucket).list(prefix, { limit: 1000, offset });
-      if (error) throw new Error(`Listing ${bucket}/${prefix}: ${error.message}`);
-      for (const entry of data ?? []) {
-        const path = `${prefix}/${entry.name}`;
-        if (entry.id) paths.push(path);
-        else await walk(path);
-      }
-      if (!data || data.length < 1000) break;
-    }
-  };
-  await walk(folder);
-  for (let i = 0; i < paths.length; i += 500) {
-    const { error } = await admin.storage.from(bucket).remove(paths.slice(i, i + 500));
-    if (error) throw new Error(`Removing files from ${bucket}: ${error.message}`);
-  }
-}
-
-async function wipeVisitor(admin: SupabaseClient, v: { user_id: string | null; corporation_id: string | null }) {
+export async function wipeVisitor(admin: SupabaseClient, v: { user_id: string | null; corporation_id: string | null }) {
   const people = new Set<string>();
   if (v.user_id) people.add(v.user_id);
   if (v.corporation_id) {

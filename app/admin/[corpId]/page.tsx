@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AdminTabs } from "@/components/AdminTabs";
 import { AppShell } from "@/components/AppShell";
+import { DeleteStrataCard } from "@/components/AdminDangerDelete";
 import { MemberAvatar } from "@/components/MemberAvatar";
 import { AdminDecisionLedger } from "@/components/AdminDecisionLedger";
 import { signAvatarPaths } from "@/lib/data/avatars";
@@ -252,6 +253,8 @@ export default async function AdminCorporationDetailPage({
         />
           </>
         )}
+
+        <DeleteStrataCard corpId={corporation.strataPlanNumber} name={corporation.buildingName ?? corporation.legalName} />
       </div>
     </AppShell>
   );

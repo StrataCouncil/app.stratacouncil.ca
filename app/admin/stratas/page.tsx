@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { AdminCorporationSearch } from "@/components/AdminCorporationSearch";
 import { AdminTabs } from "@/components/AdminTabs";
 import { AppShell } from "@/components/AppShell";
+import { DeleteAccountCard } from "@/components/AdminDangerDelete";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { getAllCorporations, getPendingCreationRequests } from "@/lib/data/admin";
 import { getCurrentProfile } from "@/lib/data/profile";
@@ -13,7 +14,8 @@ import { getCurrentProfile } from "@/lib/data/profile";
  * doc01 §4), and search across every corporation regardless of
  * membership.
  */
-export default async function AdminStratasPage() {
+export default async function AdminStratasPage({ searchParams }: { searchParams: Promise<{ deleted?: string }> }) {
+  const { deleted } = await searchParams;
   const profile = await getCurrentProfile();
   if (!profile?.isSuperAdmin) notFound();
 
@@ -31,6 +33,12 @@ export default async function AdminStratasPage() {
             this list isn&rsquo;t scoped to corporations you&rsquo;re a connected member of.
           </p>
         </div>
+
+        {deleted && (
+          <p className="sync-note" role="status" style={{ marginBottom: "1.5rem" }} data-testid="strata-deleted">
+            <span>{deleted} is deleted, with its records and files.</span>
+          </p>
+        )}
 
         <h2 style={{ marginBottom: "1rem" }}>New corporation requests</h2>
         {requests.length === 0 ? (
@@ -71,6 +79,8 @@ export default async function AdminStratasPage() {
 
         <h2 style={{ marginBottom: "1rem" }}>Corporations</h2>
         <AdminCorporationSearch corporations={corporations} />
+
+        <DeleteAccountCard />
       </div>
     </AppShell>
   );
