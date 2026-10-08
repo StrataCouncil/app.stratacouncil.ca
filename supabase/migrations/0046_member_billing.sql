@@ -17,17 +17,25 @@
 
 alter table public.corporation_memberships add column if not exists can_manage_billing boolean not null default false;
 
-update public.corporation_memberships m
-set can_manage_billing = true
-from public.corporation_role_assignments r, public.strata_corporations c
-where r.corporation_id = m.corporation_id
-  and r.user_id = m.user_id
-  and r.role = 'manager'
-  and c.strata_plan_number = m.corporation_id
-  and c.managers_can_bill
-  and m.status = 'active';
-
-update public.strata_corporations set managers_can_bill = false where managers_can_bill;
+-- (Only while the old setting exists: 0047 removes it.)
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'strata_corporations' and column_name = 'managers_can_bill'
+  ) then
+    update public.corporation_memberships m
+    set can_manage_billing = true
+    from public.corporation_role_assignments r, public.strata_corporations c
+    where r.corporation_id = m.corporation_id
+      and r.user_id = m.user_id
+      and r.role = 'manager'
+      and c.strata_plan_number = m.corporation_id
+      and c.managers_can_bill
+      and m.status = 'active';
+    update public.strata_corporations set managers_can_bill = false where managers_can_bill;
+  end if;
+end $$;
 
 create or replace function public.can_manage_billing(target_corporation_id text)
 returns boolean

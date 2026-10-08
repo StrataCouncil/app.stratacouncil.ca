@@ -57,7 +57,7 @@ Counted per link (`demo_visitors`, `lib/demo.ts` `DEMO_LIMITS`), across devices:
 - 3 questions to the Stratasphere chat, and 3 to Meeting Mode's Stratasphere.
   A question that fails isn't counted.
 - 1 meeting created (deleting it doesn't give it back).
-- 5 motions drafted by Stratasphere, for the one editable item.
+- 3 motions drafted by Stratasphere, for the one editable item.
 - No uploads at all (documents, attachments, links, agendas, old minutes,
   logos, roster files, photos): only the demo's own materials are there.
 

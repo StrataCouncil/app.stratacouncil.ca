@@ -8,6 +8,7 @@ import { MailtrapSendError, sendTransactionalEmail } from "@/lib/email/mailtrap"
 import { demoInviteEmail } from "@/lib/email/templates";
 import { mirrorLegislationToDemo, mirrorTrainingToDemo } from "@/lib/demo-mirror";
 import { EMAIL_RE } from "@/lib/strata";
+import { wipeVisitor } from "@/lib/demo-server";
 
 /**
  * Personal demo links (lib/demo.ts), made from the live site's Super
@@ -153,6 +154,36 @@ export async function endDemoLink(visitorId: string): Promise<{ ok: true } | { o
     });
     if (authError) console.error("[endDemoLink]", authError.message);
   }
+  revalidatePath("/admin", "layout");
+  return { ok: true };
+}
+
+/**
+ * Deletes a link and everything from it now, rather than waiting for the
+ * clean-up: the visitor's strata and files, their account (and anyone they
+ * invited), the link itself and its activity log.
+ */
+export async function deleteDemoLink(visitorId: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!(await staffName())) return { ok: false, error: "Only platform staff can do this." };
+  const db = demoDatabase();
+  if (!db) return { ok: false, error: NOT_CONNECTED };
+  // Ended first, so the visitor's own account is no longer "in use" by a working link.
+  const { data: visitor, error } = await db
+    .from("demo_visitors")
+    .update({ expires_at: new Date(Date.now() - 1000).toISOString() })
+    .eq("id", visitorId)
+    .select("id, user_id, corporation_id")
+    .maybeSingle();
+  if (error) return { ok: false, error: "Couldn't reach the demo database." };
+  if (!visitor) return { ok: false, error: "That link no longer exists." };
+  try {
+    await wipeVisitor(db, visitor);
+  } catch (err) {
+    console.error("[deleteDemoLink]", err instanceof Error ? err.message : err);
+    return { ok: false, error: "Couldn't delete everything from that link. Try again." };
+  }
+  const { error: deleteError } = await db.from("demo_visitors").delete().eq("id", visitorId);
+  if (deleteError) return { ok: false, error: "The strata and account are gone, but the link couldn't be removed. Try again." };
   revalidatePath("/admin", "layout");
   return { ok: true };
 }

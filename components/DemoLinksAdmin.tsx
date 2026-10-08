@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { copyContentToDemo, createDemoLink, endDemoLink, resendDemoLink } from "@/app/admin/demo-actions";
+import { copyContentToDemo, createDemoLink, deleteDemoLink, endDemoLink, resendDemoLink } from "@/app/admin/demo-actions";
 import type { DemoVisitor, DemoVisitorList } from "@/lib/data/demo-visitors";
 import { DEMO_LANDINGS, type DemoLanding } from "@/lib/demo";
 
@@ -85,6 +85,19 @@ export function DemoLinksAdmin({ list }: { list: DemoVisitorList }) {
     router.refresh();
   }
 
+  async function remove(v: DemoVisitor) {
+    if (!window.confirm(`Delete ${v.fullName}'s demo link and everything from it (their demo strata, account and activity log)? This can't be undone.`)) return;
+    setBusy(v.id);
+    setError(null);
+    setNotice(null);
+    const r = await deleteDemoLink(v.id);
+    setBusy(null);
+    if (!r.ok) return setError(r.error);
+    if (made?.id === v.id) setMade(null);
+    setNotice(`${v.fullName}'s link and everything from it are deleted.`);
+    router.refresh();
+  }
+
   const visitors = list.configured ? list.visitors : [];
   const today = visitors.filter((v) => v.active);
   const ended = visitors.filter((v) => !v.active);
@@ -154,13 +167,13 @@ export function DemoLinksAdmin({ list }: { list: DemoVisitorList }) {
           {today.length === 0 ? (
             <p className="card__meta">No links working right now.</p>
           ) : (
-            <VisitorTable visitors={today} busy={busy} copied={copied} onCopy={copy} onResend={resend} onEnd={end} />
+            <VisitorTable visitors={today} busy={busy} copied={copied} onCopy={copy} onResend={resend} onEnd={end} onDelete={remove} />
           )}
 
           {ended.length > 0 && (
             <>
               <h3>Ended (last 7 days)</h3>
-              <VisitorTable visitors={ended} busy={busy} copied={copied} />
+              <VisitorTable visitors={ended} busy={busy} copied={copied} onDelete={remove} />
             </>
           )}
 
@@ -188,6 +201,7 @@ function VisitorTable({
   onCopy,
   onResend,
   onEnd,
+  onDelete,
 }: {
   visitors: DemoVisitor[];
   busy: string | null;
@@ -195,6 +209,7 @@ function VisitorTable({
   onCopy?: (link: string) => void;
   onResend?: (v: DemoVisitor) => void;
   onEnd?: (v: DemoVisitor) => void;
+  onDelete?: (v: DemoVisitor) => void;
 }) {
   return (
     <div className="roster-table-wrap">
@@ -206,7 +221,7 @@ function VisitorTable({
             <th>Made</th>
             <th>Opened</th>
             <th>Activity</th>
-            {onCopy && <th aria-label="Actions" />}
+            {(onCopy || onDelete) && <th aria-label="Actions" />}
           </tr>
         </thead>
         <tbody>
@@ -227,17 +242,32 @@ function VisitorTable({
                   {v.activityCount ? `${v.activityCount.toLocaleString("en-CA")} entries` : "View"}
                 </Link>
               </td>
-              {onCopy && (
+              {(onCopy || onDelete) && (
                 <td className="demo-links__actions">
-                  <button type="button" className="button button-secondary button-small" onClick={() => onCopy(v.link)}>
-                    {copied === v.link ? "Copied" : "Copy link"}
-                  </button>
-                  <button type="button" className="button button-secondary button-small" disabled={busy !== null} onClick={() => onResend?.(v)}>
-                    {busy === v.id ? "…" : "Resend"}
-                  </button>
-                  <button type="button" className="button button-secondary button-small" disabled={busy !== null} onClick={() => onEnd?.(v)}>
-                    End now
-                  </button>
+                  {onCopy && (
+                    <>
+                      <button type="button" className="button button-secondary button-small" onClick={() => onCopy(v.link)}>
+                        {copied === v.link ? "Copied" : "Copy link"}
+                      </button>
+                      <button type="button" className="button button-secondary button-small" disabled={busy !== null} onClick={() => onResend?.(v)}>
+                        {busy === v.id ? "…" : "Resend"}
+                      </button>
+                      <button type="button" className="button button-secondary button-small" disabled={busy !== null} onClick={() => onEnd?.(v)}>
+                        End now
+                      </button>
+                    </>
+                  )}
+                  {onDelete && (
+                    <button
+                      type="button"
+                      className="button button-secondary button-small agenda-danger"
+                      disabled={busy !== null}
+                      onClick={() => onDelete(v)}
+                      data-testid={`demo-delete-${v.id}`}
+                    >
+                      Delete
+                    </button>
+                  )}
                 </td>
               )}
             </tr>

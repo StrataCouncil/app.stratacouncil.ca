@@ -115,7 +115,7 @@ export const DEMO_LIMIT_MESSAGE = "Get more out of the Stratasphere™ by creati
  * questions to the Stratasphere chat and to Meeting Mode's Stratasphere,
  * the one meeting they create, and motions drafted for its one editable item.
  */
-export const DEMO_LIMITS = { chat: 3, meeting: 3, meetings: 1, motions: 5 } as const;
+export const DEMO_LIMITS = { chat: 3, meeting: 3, meetings: 1, motions: 3 } as const;
 export type DemoLimit = keyof typeof DEMO_LIMITS;
 
 /** A server action's answer when the demo has reached a limit. */
