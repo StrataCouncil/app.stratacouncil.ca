@@ -81,7 +81,7 @@ timeline. Deleted 7 days after the link ended.
 
 ## Also off in the demo
 
-No Stripe or billing, no email (invites wait as pending), no
+No Stripe (Billing shows a made-up annual plan paid by pre-authorized debit, and its buttons show the sign-up message), no email (invites wait as pending), no
 welcome checklist, no sign-up or sign-in page (the banner and the front page
 link to sign-up on the live site), no Super Admin console or builders, and no way into another
 strata. Inngest jobs run as a separate app (`stratacouncil-demo`) with `demo/`

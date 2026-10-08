@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import {
   removeMember,
   saveMemberRoles,
+  setBillingPermission,
   setMeetingPermission,
   setMemberLot,
 } from "@/app/strata/[corpId]/roster-actions";
@@ -142,6 +143,13 @@ export function RosterTable({
     });
   }
 
+  function toggleBilling(member: RosterMember, value: boolean) {
+    startTransition(async () => {
+      const result = await setBillingPermission(corporationId, member.userId, value);
+      setError(member.userId, result.ok ? null : result.error);
+    });
+  }
+
   function togglePermission(member: RosterMember, value: boolean) {
     startTransition(async () => {
       const result = await setMeetingPermission(corporationId, member.userId, value);
@@ -177,6 +185,7 @@ export function RosterTable({
             <th>Strata lot</th>
             <th>Roles</th>
             <th data-center="true">Runs meetings</th>
+            <th data-center="true">Billing</th>
             {tracks.map((t) => (
               <th key={t.code} data-center="true" className="roster-table__training-head">
                 <abbr title={`${t.title} training`}>{t.abbr}</abbr>
@@ -398,6 +407,28 @@ export function RosterTable({
                         <span className="permission-switch__thumb" aria-hidden="true" />
                       </button>
                       {via && <div className="roster-table__meta">via {via}</div>}
+                    </td>
+                  );
+                })()}
+                {(() => {
+                  // The admin has billing through the role itself (0046).
+                  const value = isAdminHolder || member.canManageBilling;
+                  return (
+                    <td data-center="true">
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={value}
+                        aria-label={`${member.fullName}: can use billing`}
+                        title={isAdminHolder ? "Included with the Admin role" : undefined}
+                        className="permission-switch"
+                        disabled={!isAdmin || !active || isAdminHolder || pending}
+                        onClick={() => toggleBilling(member, !value)}
+                        data-testid={`can_manage_billing-${member.userId}`}
+                      >
+                        <span className="permission-switch__thumb" aria-hidden="true" />
+                      </button>
+                      {isAdminHolder && <div className="roster-table__meta">via Admin</div>}
                     </td>
                   );
                 })()}

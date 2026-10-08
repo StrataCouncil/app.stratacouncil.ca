@@ -351,16 +351,6 @@ export async function saveMemberRoles(
   return { ok: true };
 }
 
-/** Let the strata's Manager use Billing, or not (0045). Admin only. */
-export async function setManagersCanBill(corporationId: string, value: boolean): Promise<ActionResult> {
-  const supabase = await createClient();
-  const { error } = await supabase.rpc("set_managers_can_bill", { p_corporation_id: corporationId, p_on: value });
-  if (error) return dbError(error, "Couldn't change billing access.");
-  refresh(corporationId);
-  revalidatePath(`/strata/${corporationId}`, "layout");
-  return { ok: true };
-}
-
 export async function setMeetingPermission(
   corporationId: string,
   userId: string,
@@ -377,6 +367,27 @@ export async function setMeetingPermission(
   if (error) return dbError(error, "Couldn't update meeting permissions.");
   if (!data?.length) return fail("Only this strata's admin can change meeting permissions.");
   refresh(corporationId);
+  return { ok: true };
+}
+
+/**
+ * The "Billing" switch beside a member (0046): when on, they can use the
+ * strata's Billing alongside the admin. Only the admin can change it (the
+ * update matches nothing for anyone else).
+ */
+export async function setBillingPermission(corporationId: string, userId: string, value: boolean): Promise<ActionResult> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("corporation_memberships")
+    .update({ can_manage_billing: value })
+    .eq("corporation_id", corporationId)
+    .eq("user_id", userId)
+    .eq("status", "active")
+    .select("user_id");
+  if (error) return dbError(error, "Couldn't change billing access.");
+  if (!data?.length) return fail("Only this strata's admin can change who has billing.");
+  refresh(corporationId);
+  revalidatePath(`/strata/${corporationId}`, "layout");
   return { ok: true };
 }
 

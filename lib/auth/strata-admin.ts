@@ -17,8 +17,9 @@ export async function isStrataAdmin(supabase: SupabaseClient, corpId: string): P
 
 /**
  * Can the signed-in user use this strata's Billing? Its admin (and Super
- * Admins), or its Manager when the admin has allowed it (0045). No one in
- * the demo (lib/demo.ts): its stratas are already subscribed.
+ * Admins), or anyone the admin has switched on (0046). No one in the demo
+ * (lib/demo.ts): nothing there reaches Stripe, and its Billing page is
+ * made up (components/DemoBilling.tsx).
  */
 export async function canManageBilling(supabase: SupabaseClient, corpId: string): Promise<boolean> {
   if (IS_DEMO) return false;
