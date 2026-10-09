@@ -250,7 +250,10 @@ Paragraph text. **Bold** words.
 | Header | Header |
 | cell   | cell   |
 :::summary The first 30 minutes
-:::important  :::warning  :::note  :::sample Title
+:::important Title   guidance (green)
+:::warning Title     caution (red)
+:::sample Title      text to copy
+:::fineprint         a disclaimer, small print
 (close each box with a line of :::)`}</pre>
             </details>
           </div>
