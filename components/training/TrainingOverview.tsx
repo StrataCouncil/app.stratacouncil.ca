@@ -8,7 +8,7 @@ import { formatMinutes, lockedBehind, minutesLeft, nextModule, trackStatus, type
  * Council Training overview (0035). The core (Strata Basics, then Council
  * Ready) and the specialty tracks (Treasurer, Secretary, after Council
  * Ready), with the next module up front and the learner's progress beside
- * it. Completion shows as the filled circles on Council & Roles.
+ * it. A finished track appears as a certification on the learner's profile in the Stratasphere.
  */
 /** The overview itself, from the learner's tracks (also used by previews). */
 export function TrainingOverview({
@@ -99,7 +99,7 @@ export function TrainingOverview({
               </div>
             </dl>
             <p className="training-panel__note">
-              A filled circle means the track is complete. Your council sees the same circles on Council &amp; Roles.
+              A filled circle means the track is complete. Your certification appears on your profile in the Stratasphere.
             </p>
           </section>
 

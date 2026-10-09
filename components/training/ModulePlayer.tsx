@@ -285,8 +285,8 @@ export function ModulePlayer({
             <p>{allDone ? `You've finished "${moduleTitle}".` : "Some topics still need finishing. Pick one from the menu."}</p>
             {credential && (
               <p className="sync-note sync-note--ok" role="status">
-                You&rsquo;ve completed {track.title}. Your circle is filled in on your training page, and councils
-                you&rsquo;re connected to can see it on Council &amp; Roles.
+                You&rsquo;ve completed {track.title}. Your certification appears on your profile in the
+                Stratasphere.
               </p>
             )}
             {!preview && (
