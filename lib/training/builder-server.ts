@@ -55,15 +55,23 @@ export function labelFor(documentTitle: string, label: string) {
 /** Only sections that exist in the library, labelled the library's way. */
 export async function verifiedCitations(chunkIds: string[]): Promise<Citation[]> {
   const ids = [...new Set(chunkIds)].slice(0, 8);
-  if (!ids.length) return [];
+  const labels = await libraryLabels(ids);
+  return ids.flatMap((id) => (labels.has(id) ? [{ chunkId: id, label: labels.get(id)! }] : []));
+}
+
+/** The library's current label for each section that still exists (so a renamed document shows its new name). */
+export async function libraryLabels(chunkIds: string[]): Promise<Map<string, string>> {
+  const ids = [...new Set(chunkIds)];
+  const out = new Map<string, string>();
+  if (!ids.length) return out;
   const admin = createAdminClient();
   const { data: chunks } = await admin.from("knowledge_chunks").select("id, title, legislation_document_id").in("id", ids).eq("scope", "legislation");
   const docIds = [...new Set((chunks ?? []).map((c) => c.legislation_document_id as string))];
   const { data: docs } = docIds.length ? await admin.from("legislation_documents").select("id, title").in("id", docIds) : { data: [] };
   const docBy = new Map((docs ?? []).map((d) => [d.id as string, d.title as string]));
-  return ids.flatMap((id) => {
-    const c = (chunks ?? []).find((x) => x.id === id);
-    const doc = c ? docBy.get(c.legislation_document_id as string) : undefined;
-    return c && doc ? [{ chunkId: id, label: labelFor(doc, (c.title as string | null) ?? "") }] : [];
-  });
+  for (const c of chunks ?? []) {
+    const doc = docBy.get(c.legislation_document_id as string);
+    if (doc) out.set(c.id as string, labelFor(doc, (c.title as string | null) ?? ""));
+  }
+  return out;
 }

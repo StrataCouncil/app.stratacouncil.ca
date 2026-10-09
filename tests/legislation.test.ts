@@ -185,6 +185,8 @@ test("suggested names from file names", async () => {
   assert.equal(titleFromFileName("strata-property-regulation.txt"), "Strata Property Regulation");
   assert.equal(titleFromFileName("Personal_Information_Protection_Act.pdf"), "Personal Information Protection Act");
   assert.equal(titleFromFileName("guide-to-the-strata-property-act.pdf"), "Guide to the Strata Property Act");
+  assert.equal(titleFromFileName("1780853222429-working-with-strata-management-company.pdf"), "Working With Strata Management Company");
+  assert.equal(titleFromFileName("2024 Strata Guide.pdf"), "2024 Strata Guide");
   assert.equal(guessKind("Strata Property Regulation"), "regulation");
   assert.equal(guessKind("Real Estate Services Act"), "act");
   assert.equal(guessKind("CHOA bulletin on depreciation reports"), "guidance");

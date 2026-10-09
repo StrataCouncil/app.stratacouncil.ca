@@ -8,7 +8,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProfile } from "@/lib/data/profile";
 import { mirrorTrainingToDemo } from "@/lib/demo-mirror";
 import { getBuilderModule, type BuilderModule } from "@/lib/data/training";
-import { canAuthor, editing, labelFor, readSlide, SLIDE_COLUMNS, staff, verifiedCitations, type AdminClient } from "@/lib/training/builder-server";
+import { canAuthor, editing, labelFor, readSlide, SLIDE_COLUMNS, staff, libraryLabels, verifiedCitations, type AdminClient } from "@/lib/training/builder-server";
 import {
   buildPlayerContent,
   coverOf,
@@ -1059,7 +1059,10 @@ export async function publishModule(moduleId: string): Promise<Result<{ version:
   ]);
   if (!mod) return { ok: false, error: "Module not found." };
   const info = { title: mod.title as string, objectives: normalizeObjectives(mod.objectives), furtherReading: normalizeFurtherReading(mod.further_reading) };
-  const slides = toSlides((rows ?? []) as SlideRow[], (media ?? []) as MediaRow[]);
+  const raw = toSlides((rows ?? []) as SlideRow[], (media ?? []) as MediaRow[]);
+  // Sources go out under the library's current names.
+  const labels = await libraryLabels(raw.flatMap((s) => s.citations.map((c) => c.chunkId)));
+  const slides = raw.map((s) => ({ ...s, citations: s.citations.map((c) => ({ ...c, label: labels.get(c.chunkId) ?? c.label })) }));
   const problems = publishProblems(info, slides);
   if (problems.length) return { ok: false, error: problems.join(" ") };
   const content = buildPlayerContent(info, slides);

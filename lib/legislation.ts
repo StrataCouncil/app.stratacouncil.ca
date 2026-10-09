@@ -20,10 +20,12 @@ export function isLegislationKind(v: string): v is LegislationKind {
 
 const SMALL_WORDS = new Set(["a", "an", "and", "as", "at", "by", "for", "in", "of", "on", "or", "the", "to"]);
 
-/** "real-estate-services-act.txt" -> "Real Estate Services Act". Words already capitalised are left alone. */
+/** "real-estate-services-act.txt" -> "Real Estate Services Act". Words already capitalised are left alone; a leading number ID is dropped. */
 export function titleFromFileName(name: string) {
   const words = name
     .replace(/\.[^.]+$/, "")
+    // Download timestamps and IDs ("1780853222429-working-with-…").
+    .replace(/^\d{6,}[\s_\-]+/, "")
     .replace(/[_\-]+/g, " ")
     .replace(/\s+/g, " ")
     .trim()

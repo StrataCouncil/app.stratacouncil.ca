@@ -13,6 +13,8 @@ import { bodyParts, videoSource, type Accordion, type FlipCards, type KnowledgeC
  */
 export function SlideView({ slide, onDone }: { slide: PlayerSlide; onDone?: () => void }) {
   const v = slide.visual;
+  // Two passages of the same section share a label; name it once.
+  const sources = [...new Set(slide.citations)];
   const layout = v ? (v.kind === "video" && slide.layout === "photo" ? "right" : slide.layout) : "text";
   const style = layout === "photo" && v ? { backgroundImage: `url("${v.url.replace(/"/g, "%22")}")` } : undefined;
   return (
@@ -25,9 +27,9 @@ export function SlideView({ slide, onDone }: { slide: PlayerSlide; onDone?: () =
             <ElementView element={slide.element} id={slide.id} onDone={onDone} />
           </div>
         )}
-        {slide.citations.length > 0 && (
+        {sources.length > 0 && (
           <p className="slide__sources">
-            <span>Source{slide.citations.length > 1 ? "s" : ""}:</span> {slide.citations.join("; ")}
+            <span>Source{sources.length > 1 ? "s" : ""}:</span> {sources.join("; ")}
           </p>
         )}
       </div>
@@ -139,7 +141,8 @@ function Cards({ el, onDone }: { el: FlipCards; onDone?: () => void }) {
   const { open, seen, toggle, left } = useSeen(items.map((i) => i.id), onDone);
   return (
     <div>
-      <div className="lesson-cards">
+      {/* Four cards sit 2 x 2; otherwise up to three across. */}
+      <div className="lesson-cards" style={{ "--cards-across": items.length === 4 ? 2 : Math.min(3, Math.max(1, items.length)) } as React.CSSProperties}>
         {items.map((i) => (
           <button
             key={i.id}
