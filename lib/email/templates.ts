@@ -27,7 +27,7 @@ function wrap(bodyHtml: string) {
           <table role="presentation" width="480" cellpadding="0" cellspacing="0" style="max-width:480px;width:100%;">
             <tr>
               <td style="padding-bottom:24px;">
-                <img src="${ASSET_BASE}/stratacouncil-lockup.png" width="200" height="36" alt="StrataCouncil.ca" style="display:block;border:0;font-size:18px;font-weight:600;color:${INK};" />
+                <img src="${ASSET_BASE}/stratacouncil-lockup.png" width="211" height="32" alt="StrataCouncil.ca" style="display:block;border:0;font-size:18px;font-weight:600;color:${INK};" />
               </td>
             </tr>
             <tr>
