@@ -528,27 +528,6 @@ export const knowledgeResources: KnowledgeResource[] = [
     ],
   },
   {
-    id: "kb5",
-    kind: "emergency_playbook",
-    title: "Flood or water damage emergency response",
-    summary: "A pipe bursts or a unit floods — the first hour matters. Who to call, what to shut off, and how to document it for insurance.",
-    body: [
-      "The first hour after a flood determines how much damage spreads and how clean the insurance claim ends up being. Shut off the water source for the affected riser or unit — not the whole building unless truly necessary — and call your emergency restoration contractor immediately rather than waiting for the next business day.",
-      "Photograph everything before cleanup starts; insurers will ask for it and it's much harder to reconstruct after the fact. Notify both your insurer and the affected owners' insurers within 24 hours. And don't wait for a council vote to authorize mitigation — the president or manager has standing authority to act immediately in a genuine emergency; waiting for a quorum while water spreads is the costliest mistake corporations make here.",
-    ],
-    jurisdictionLevel: "provincial",
-    jurisdiction: "BC",
-    tags: ["emergency", "water damage", "insurance"],
-    updatedAt: "Sep 2026",
-    checklist: [
-      "Shut off the water source for the affected riser or unit, not the whole building unless necessary",
-      "Call your emergency restoration contractor immediately, not next business day",
-      "Photograph everything before cleanup starts",
-      "Notify your insurer and the affected owners' insurers within 24 hours",
-    ],
-    commonMistakes: "Waiting for a council vote before authorizing emergency mitigation — the president or manager can and should act immediately.",
-  },
-  {
     id: "kb6",
     kind: "emergency_playbook",
     title: "Fire alarm activation protocol",
