@@ -32,9 +32,13 @@ function toPlan(rows: Array<{ tbl: string; n: number }> | null): DeletePlanRow[]
   return (rows ?? []).map((r) => ({ table: label(r.tbl), rows: Number(r.n) })).sort((a, b) => b.rows - a.rows || a.table.localeCompare(b.table));
 }
 
-/** The database's own words for a refusal (an active subscription, a member still in a strata). */
+/**
+ * The database's own words: a refusal (an active subscription, a member
+ * still in a strata) or what went wrong. Only platform staff see these.
+ */
 function refusal(message: string | undefined, fallback: string) {
-  return message && !/permission|function/i.test(message) ? message : fallback;
+  if (message) console.error("[delete-actions]", message);
+  return message ? `${fallback} The database says: ${message}` : fallback;
 }
 
 /** A strata's stored files: its documents (and its Strata Plan), and its management logo. */
