@@ -6183,8 +6183,13 @@ abbr.role-tag--short {
 }
 .lesson-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 0.75rem;
+  /* At most --cards-across per row (set from the card count), fewer when there isn't room. */
+  --gap: 0.75rem;
+  grid-template-columns: repeat(
+    auto-fill,
+    minmax(min(100%, max(180px, calc((100% - (var(--cards-across, 3) - 1) * var(--gap)) / var(--cards-across, 3)))), 1fr)
+  );
+  gap: var(--gap);
 }
 .lesson-card {
   min-height: 150px;
