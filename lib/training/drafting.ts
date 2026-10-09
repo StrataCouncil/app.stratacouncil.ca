@@ -16,12 +16,19 @@
 import type { LibraryPassage } from "./library.ts";
 import {
   bloomLabels,
+  ACTIVITIES,
+  BLOOM_LEVELS,
+  OBJECTIVES_MAX,
+  normalizeBlueprint,
+  normalizeFurtherReading,
+  normalizeObjectives,
   type BlueprintStep,
   type Bloom,
   countWords,
   ITEM_WORDS_MAX,
   newId,
   SLIDE_WORDS_MAX,
+  type FurtherReading,
   type Objective,
   type SlideElement,
 } from "./slides.ts";
@@ -314,4 +321,98 @@ export function draftProblems(d: DraftedSlide, planned: OutlineSlide, names: str
   const stray = strayNames(all, names);
   if (stray.length) out.push(`Use only the names ${names.join(" and ")}, not ${stray.join(", ")}.`);
   return out;
+}
+
+// ── Paste a blueprint ──────────────────────────────────────────────────
+//
+// An author's own module outline (objectives, sections, takeaways, a
+// knowledge check), pasted into the builder and turned into the module's
+// settings: title, summary, length, objectives, blueprint steps and
+// further reading. Nothing is invented: it only reorganizes the outline.
+
+export const PASTE_MAX_CHARS = 30000;
+
+export const PASTE_SYSTEM = `You turn a training author's outline for one Council Training module (BC strata councils) into the fields of the module builder. Reorganize; never invent. Keep the author's own wording wherever a field allows it.
+
+Fields:
+- title: the module's title, without any "Module 1 —" numbering.
+- summary: one or two sentences on what the module is for, from the author's stated goal (at most 600 characters).
+- estimatedMinutes: the author's estimate as a whole number (the middle of a range), or 0 if none is given.
+- objectives: exactly ${OBJECTIVES_MAX} or fewer learning objectives. If the outline has more, merge related ones into broader objectives, each a single sentence starting with a measurable verb, covering everything the originals covered. Give each a Bloom level (${BLOOM_LEVELS.join(", ")}) matching its verb.
+- originalObjectives: the outline's objectives exactly as written, in order (empty if there were ${OBJECTIVES_MAX} or fewer).
+- blueprint: one step per lesson section, in the outline's order. topic: the section's heading, without numbering or timings. teach: everything the section says to cover, its examples, tables (as short lines), and its key takeaway, in plain sentences or "- " bullets, at most 1400 characters; carry over the author's guidance that shapes how it's taught (for example "introductory references, not a legal deep dive"). activity: one of ${ACTIVITIES.join(", ")}: "flip_cards" for a set of terms or pairs to compare, "accordion" for a list of roles, bodies or items to explore one by one, "knowledge_check" only for a step that is the outline's quiz or check questions (put the questions in teach), otherwise "none". A wrap-up or "things to remember" section is its own step with activity "none".
+- furtherReading: the official sources the outline names or links (for example the Strata Property Act on BC Laws), each with a title, an https URL only if the outline gives one or it is the well-known official page, and a short note. At most 6. Empty if none.`;
+
+export function pasteBlueprintRequest(text: string) {
+  return `The author's outline:\n\n<outline>\n${text.slice(0, PASTE_MAX_CHARS)}\n</outline>`;
+}
+
+export const pasteBlueprintSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["title", "summary", "estimatedMinutes", "objectives", "originalObjectives", "blueprint", "furtherReading"],
+  properties: {
+    title: { type: "string" },
+    summary: { type: "string" },
+    estimatedMinutes: { type: "integer" },
+    objectives: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["text", "bloom"],
+        properties: { text: { type: "string" }, bloom: { type: "string", enum: [...BLOOM_LEVELS] } },
+      },
+    },
+    originalObjectives: { type: "array", items: { type: "string" } },
+    blueprint: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["topic", "teach", "activity"],
+        properties: { topic: { type: "string" }, teach: { type: "string" }, activity: { type: "string", enum: [...ACTIVITIES] } },
+      },
+    },
+    furtherReading: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["title", "url", "note"],
+        properties: { title: { type: "string" }, url: { type: "string" }, note: { type: "string" } },
+      },
+    },
+  },
+} as const;
+
+export interface PastedBlueprint {
+  title: string;
+  summary: string;
+  estimatedMinutes: number | null;
+  objectives: Objective[];
+  /** The outline's own objectives, when they were merged into fewer. */
+  originalObjectives: string[];
+  blueprint: BlueprintStep[];
+  furtherReading: FurtherReading[];
+}
+
+/** The AI's reply, held to the builder's own limits. */
+export function normalizePastedBlueprint(raw: unknown): PastedBlueprint {
+  const x = (raw ?? {}) as Record<string, unknown>;
+  const text = (v: unknown, n: number) => (typeof v === "string" ? v.replace(/\s+$/g, "").trim().slice(0, n) : "");
+  const minutes = Number(x.estimatedMinutes);
+  return {
+    title: text(x.title, 200).replace(/^module\s*\d+\s*[-—–:]\s*/i, ""),
+    summary: text(x.summary, 1000),
+    estimatedMinutes: Number.isFinite(minutes) && minutes > 0 ? Math.min(600, Math.round(minutes)) : null,
+    objectives: normalizeObjectives(x.objectives).filter((o) => o.text.trim()),
+    originalObjectives: (Array.isArray(x.originalObjectives) ? x.originalObjectives : [])
+      .map((o) => text(o, 300))
+      .filter(Boolean)
+      .slice(0, 12),
+    blueprint: normalizeBlueprint(x.blueprint),
+    // Only https links reach learners.
+    furtherReading: normalizeFurtherReading(x.furtherReading).map((r) => (/^https:\/\//i.test(r.url) ? r : { ...r, url: "" })),
+  };
 }

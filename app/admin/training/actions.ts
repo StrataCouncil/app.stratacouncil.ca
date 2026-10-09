@@ -442,6 +442,55 @@ export async function deleteSlide(moduleId: string, token: string, slideId: stri
   return { ok: true };
 }
 
+/**
+ * A pasted blueprint, reviewed by the author (drafting-actions.ts
+ * readPastedBlueprint), becomes the module: its title, summary, length,
+ * objectives, blueprint and further reading are replaced, and every
+ * slide goes, ready to be written again with Draft with AI. Learners'
+ * published copy is untouched until the module is published again.
+ */
+export async function applyPastedBlueprint(
+  moduleId: string,
+  token: string,
+  input: {
+    title: string;
+    summary: string;
+    estimatedMinutes: number | null;
+    objectives: Objective[];
+    blueprint: BlueprintStep[];
+    furtherReading: FurtherReading[];
+  }
+): Promise<Result> {
+  const e = await editing(moduleId, token);
+  if (!e.ok) return e;
+  const title = String(input.title ?? "").trim().slice(0, 200);
+  if (!title) return { ok: false, error: "The blueprint needs a title." };
+  const blueprint = normalizeBlueprint(input.blueprint);
+  if (!blueprint.length) return { ok: false, error: "The blueprint has no steps." };
+  const minutes = Number(input.estimatedMinutes);
+  const { error } = await e.admin
+    .from("training_modules")
+    .update({
+      title,
+      summary: String(input.summary ?? "").trim().slice(0, 1000),
+      estimated_minutes: Number.isFinite(minutes) && minutes > 0 ? Math.max(1, Math.min(600, Math.round(minutes))) : null,
+      objectives: normalizeObjectives(input.objectives),
+      blueprint,
+      further_reading: normalizeFurtherReading(input.furtherReading),
+    })
+    .eq("id", moduleId);
+  if (error) {
+    console.error("[applyPastedBlueprint]", error.message);
+    return { ok: false, error: "Couldn't save the blueprint." };
+  }
+  const { error: slidesError } = await e.admin.from("training_slides").delete().eq("module_id", moduleId);
+  if (slidesError) return { ok: false, error: "The blueprint is saved, but the old slides couldn't be deleted. Use Delete all slides." };
+  await tidyModuleFolder(e.admin, e.trackId, moduleId);
+  refresh(moduleId);
+  mirrorSoon();
+  return { ok: true };
+}
+
 /** Start the module over: every slide and its files go (learners' published copy is untouched). */
 export async function deleteAllSlides(moduleId: string, token: string): Promise<Result> {
   const e = await editing(moduleId, token);
