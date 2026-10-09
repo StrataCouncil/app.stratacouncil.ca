@@ -149,7 +149,7 @@ begin
   end if;
   -- Nothing it made inside a strata (documents, meetings, invites) goes with it.
   create temp table if not exists platform_delete_plan (tbl text, n bigint, stratas text) on commit drop;
-  delete from platform_delete_plan;
+  truncate platform_delete_plan;
   insert into platform_delete_plan
     select * from public.platform_delete_rows('public.profiles'::regclass, format('id = %L', p_user_id), true);
   select string_agg(distinct x.s, ', ') into v_stratas
