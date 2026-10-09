@@ -1,5 +1,7 @@
+import { notFound } from "next/navigation";
 import { StrataSphereNav } from "@/components/StrataSphereNav";
-import { KnowledgeLibrary } from "@/components/KnowledgeLibrary";
+import { KnowledgeLibrary, type LibraryCard } from "@/components/KnowledgeLibrary";
+import { listPublishedLibrary } from "@/lib/data/library";
 import { getStrataAccess } from "@/lib/data/strata";
 import { knowledgeResources } from "@/lib/placeholder-data";
 
@@ -21,7 +23,22 @@ export default async function GuidesPage({
   params: Promise<{ corpId: string }>;
 }) {
   const { corpId } = await params;
-  const subscribed = (await getStrataAccess(corpId))?.subscribed ?? false;
+  const access = await getStrataAccess(corpId);
+  if (!access) notFound();
+  const subscribed = access.subscribed;
+  const published = await listPublishedLibrary();
+  const cards: LibraryCard[] = [
+    ...published.map((r) => ({
+      id: r.id,
+      kind: r.kind,
+      title: r.title,
+      summary: r.summary,
+      tags: r.tags,
+      jurisdictionLevel: "provincial" as const,
+      jurisdiction: "BC",
+    })),
+    ...knowledgeResources.map((r) => ({ ...r, sample: true })),
+  ];
 
   return (
     <>
@@ -34,7 +51,7 @@ export default async function GuidesPage({
         policy templates with a Stratasphere&trade; subscription.
       </p>
       <KnowledgeLibrary
-        resources={knowledgeResources}
+        resources={cards}
         corpId={corpId}
         subscribed={subscribed}
       />

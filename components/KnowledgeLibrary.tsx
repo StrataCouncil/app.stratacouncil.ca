@@ -31,6 +31,10 @@ const kinds = Object.keys(knowledgeResourceKindLabels) as KnowledgeResourceKind[
  * tall as an article rather than an index entry, working against the
  * "index you scan, then click into" structure this is meant to be.
  *
+ * Published Library items (0049) come first; the sample articles from
+ * placeholder-data.ts follow, each with a "Sample" pill, until they're
+ * replaced.
+ *
  * Client-side filtering only — this is a few dozen records, not a
  * corpus that needs real search infrastructure. Matches against title,
  * summary and tags, case-insensitively.
@@ -44,12 +48,17 @@ const kinds = Object.keys(knowledgeResourceKindLabels) as KnowledgeResourceKind[
  * actual content-maintenance view is ever built, it belongs on its own
  * admin-only screen, not layered onto the library members browse.
  */
+/** A card in the list: a published Library item, or one of the sample articles. */
+export type LibraryCard = Pick<KnowledgeResource, "id" | "kind" | "title" | "summary" | "tags" | "jurisdictionLevel" | "jurisdiction"> & {
+  sample?: boolean;
+};
+
 export function KnowledgeLibrary({
   resources,
   corpId,
   subscribed,
 }: {
-  resources: KnowledgeResource[];
+  resources: LibraryCard[];
   corpId: string;
   subscribed: boolean;
 }) {
@@ -124,9 +133,14 @@ export function KnowledgeLibrary({
                     {knowledgeResourceKindLabels[r.kind]}
                   </span>
                   <div className="kb-card__meta-row-right">
+                    {r.sample && (
+                      <span className="pill pill--sample" title="A sample article, not yet reviewed">
+                        Sample
+                      </span>
+                    )}
                     {locked && (
                       <span className="kb-lock-badge" title="Requires a Stratasphere™ subscription">
-                        &#128274; Subscription
+                        Subscription
                       </span>
                     )}
                     {r.jurisdictionLevel === "federal" && (
