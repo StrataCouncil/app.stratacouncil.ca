@@ -85,11 +85,11 @@ export function TrackPath({
           </span>
           <div className="path__card">
             <div>
-              <div className="path__title">{track.title} complete</div>
+              <div className="path__title">{track.title} Complete</div>
               <div className="path__meta">
                 {track.credential
                   ? `Completed ${new Date(track.credential.issuedAt).toLocaleDateString("en-CA", { year: "numeric", month: "long", day: "numeric" })}. Your council sees a filled circle on Council & Roles.`
-                  : "When every module above is done, your circle fills in here and on Council & Roles."}
+                  : `Complete all modules in this track to finish ${track.title}.`}
               </div>
             </div>
           </div>
