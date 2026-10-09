@@ -545,7 +545,7 @@ export function buildPlayerContent(m: ModuleForPublishing, slides: Slide[]): Pla
       narration: s.narration ? { url: s.narration.url, script: s.narrationScript.trim() } : null,
       music: s.music?.url ? { url: s.music.url } : null,
       element: s.element,
-      citations: s.citations.map((c) => c.label),
+      citations: [...new Set(s.citations.map((c) => c.label))],
     });
   }
   return {
