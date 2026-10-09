@@ -16,6 +16,8 @@ const PAPER = "#f8f6f1";
 // header's wordmark) and components/TrickfilmLogo.tsx. Alt text stands in
 // when a client blocks images.
 const ASSET_BASE = "https://app.stratacouncil.ca/email";
+// Mail apps cache images by address, so a changed image gets a new file
+// name: an old copy shown at the new size comes out stretched.
 
 function wrap(bodyHtml: string) {
   return `<!doctype html>
@@ -27,7 +29,7 @@ function wrap(bodyHtml: string) {
           <table role="presentation" width="480" cellpadding="0" cellspacing="0" style="max-width:480px;width:100%;">
             <tr>
               <td style="padding-bottom:24px;">
-                <img src="${ASSET_BASE}/stratacouncil-lockup.png" width="211" height="32" alt="StrataCouncil.ca" style="display:block;border:0;font-size:18px;font-weight:600;color:${INK};" />
+                <img src="${ASSET_BASE}/stratacouncil-logo-2026.png" width="211" height="32" alt="StrataCouncil.ca" style="display:block;border:0;font-size:18px;font-weight:600;color:${INK};" />
               </td>
             </tr>
             <tr>
