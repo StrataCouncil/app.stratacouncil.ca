@@ -8909,12 +8909,16 @@ a.track-card:focus-visible {
   letter-spacing: 0;
   text-transform: none;
 }
-.lib-box--important {
-  border-left-color: var(--accent);
-  background: rgba(180, 96, 47, 0.06);
+/* Two colours: red for caution, green for guidance (important and note
+   look the same). A sample is a sheet of paper to copy; fine print is no box. */
+.lib-box--important,
+.lib-box--note {
+  border-left-color: var(--free);
+  background: var(--free-bg);
 }
-.lib-box--important .lib-box__title {
-  color: var(--accent-dark, #8f4b24);
+.lib-box--important .lib-box__title,
+.lib-box--note .lib-box__title {
+  color: var(--free);
 }
 .lib-box--warning {
   border-left-color: var(--danger);
@@ -8923,15 +8927,21 @@ a.track-card:focus-visible {
 .lib-box--warning .lib-box__title {
   color: var(--danger);
 }
-.lib-box--note {
-  border-left-color: var(--muted);
-}
 .lib-box--sample {
-  border-left-color: var(--free);
-  background: var(--free-bg);
+  border: 1.5px dashed var(--muted);
+  background: var(--surface);
 }
 .lib-box--sample .lib-box__title {
-  color: var(--free);
+  color: var(--muted);
+}
+.lib-box--fineprint {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  font-size: 0.85rem;
+  line-height: 1.55;
+  color: var(--muted);
 }
 
 .lib-disclaimer {

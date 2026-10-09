@@ -123,3 +123,9 @@ test("the AI's reply never supplies sources, and every claim has a query", () =>
   assert.deepEqual(t.item.sources, []);
   assert.deepEqual(t.claims, [{ statement: "An owner must allow emergency entry.", query: "An owner must allow emergency entry." }]);
 });
+
+test("a disclaimer can be fine print", () => {
+  assert.deepEqual(parseMarkup(":::fineprint\nNot legal advice.\n:::"), [
+    { type: "box", tone: "fineprint", title: null, blocks: [{ type: "paragraph", text: "Not legal advice." }] },
+  ]);
+});

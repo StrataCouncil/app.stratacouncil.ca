@@ -20,6 +20,7 @@ const BOX_LABELS: Record<BoxTone, string | null> = {
   warning: "Caution",
   note: "Note",
   sample: "Sample",
+  fineprint: null,
 };
 
 function Inline({ text }: { text: string }) {

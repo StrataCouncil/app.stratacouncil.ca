@@ -25,7 +25,7 @@ Markup (the only formatting allowed)
 - Paragraphs are plain lines, separated by a blank line.
 - "- item" for bullets, "1. item" for numbered steps, "[ ] item" for checklist items (a printed checklist, nothing to tick on screen).
 - Tables: "| Column | Column |" rows, the first row being the header.
-- Boxes, opened by a line ":::tone Optional title" and closed by a line ":::". Tones: summary (the quick-reference box), important, warning (things not to do, hazards), note, sample (a sample notice or message to copy). Boxes don't nest.
+- Boxes, opened by a line ":::tone Optional title" and closed by a line ":::". Tones: summary (the quick-reference box), important (guidance: instructions, notes, a recommended next step), warning (cautions: hazards, things not to do, legal risks), sample (a sample notice or message to copy), fineprint (a disclaimer, shown as small print; at most one, right after the introduction). Don't use any other tone. Boxes don't nest.
 - "**bold**" for a short lead-in, sparingly. No links, no images, no emoji, no other Markdown.
 
 Also return

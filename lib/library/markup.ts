@@ -11,6 +11,7 @@
  *   |---|---|                                     the dashes line is optional)
  *   :::summary The first 30 minutes               a box, until a line with :::
  *   :::important   :::warning   :::note   :::sample Notice to owners
+ *   :::fineprint                                  small print, no box (a disclaimer)
  *   **bold** works anywhere in a line.
  *
  * Pure, so the console's preview and the members' page read it the same way.
@@ -18,7 +19,7 @@
 
 export const MARKUP_MAX_CHARS = 60000;
 
-export const BOX_TONES = ["summary", "important", "warning", "note", "sample"] as const;
+export const BOX_TONES = ["summary", "important", "warning", "note", "sample", "fineprint"] as const;
 export type BoxTone = (typeof BOX_TONES)[number];
 
 export type Block =
