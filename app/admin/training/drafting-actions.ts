@@ -8,9 +8,15 @@ import {
   draftProblems,
   namesForSlides,
   normalizeOutline,
+  normalizePastedBlueprint,
   numberSources,
   outlineRequest,
   outlineSchema,
+  PASTE_MAX_CHARS,
+  PASTE_SYSTEM,
+  pasteBlueprintRequest,
+  pasteBlueprintSchema,
+  type PastedBlueprint,
   slideRequest,
   slideSchema,
   toDraftedSlide,
@@ -87,6 +93,33 @@ async function sources(chunkIds: string[]) {
 function aiError(e: unknown, what: string) {
   console.error(`[${what}]`, e instanceof Error ? e.message : e);
   return { ok: false as const, error: "The AI didn't finish. Try again in a moment." };
+}
+
+/**
+ * Read an author's pasted module outline into the builder's fields, for
+ * the author to review before applying it (actions.ts
+ * applyPastedBlueprint). Only the outline goes to the AI. Nothing is saved.
+ */
+export async function readPastedBlueprint(moduleId: string, token: string, text: string): Promise<Result<{ blueprint: PastedBlueprint }>> {
+  const e = await editing(moduleId, token);
+  if (!e.ok) return e;
+  const outline = String(text ?? "").trim();
+  if (outline.length < 40) return { ok: false, error: "Paste the module's outline first." };
+  if (outline.length > PASTE_MAX_CHARS) return { ok: false, error: `That's longer than ${PASTE_MAX_CHARS.toLocaleString("en-CA")} characters. Paste one module at a time.` };
+  try {
+    const raw = await askClaudeJson<unknown>({
+      system: PASTE_SYSTEM,
+      messages: [{ role: "user", content: pasteBlueprintRequest(outline) }],
+      schema: pasteBlueprintSchema,
+      effort: "medium",
+      maxTokens: 10000,
+    });
+    const blueprint = normalizePastedBlueprint(raw);
+    if (!blueprint.title || !blueprint.blueprint.length) return { ok: false, error: "The AI couldn't find a module in that outline. Check it and try again." };
+    return { ok: true, blueprint };
+  } catch (err) {
+    return aiError(err, "readPastedBlueprint");
+  }
 }
 
 /** Plan the slides: topics, titles and the point each teaches. Nothing is saved. */

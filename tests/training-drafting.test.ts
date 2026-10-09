@@ -5,6 +5,7 @@ import {
   EXAMPLE_NAMES,
   namesForSlides,
   normalizeOutline,
+  normalizePastedBlueprint,
   numberSources,
   outlineRequest,
   slideRequest,
@@ -112,4 +113,46 @@ test("the outline follows the blueprint, in order, and nothing else", () => {
   const slide = slideRequest({ module: { title: "M", objectives: [] }, outline: [planned()], index: 0, written: [], names: ["Wei", "Rosa"] });
   assert.match(slide, /use only these first names: Wei and Rosa/);
   assert.match(slide, /It teaches only this: Hallways are common property\./);
+});
+
+test("a pasted outline is held to the builder's limits", () => {
+  const b = normalizePastedBlueprint({
+    title: "Module 1 — What Is a Strata Corporation?",
+    summary: "  What a strata is.  ",
+    estimatedMinutes: 17.4,
+    objectives: [
+      { text: "Define a strata corporation", bloom: "remember" },
+      { text: "Explain who owns what", bloom: "understand" },
+      { text: "Describe the council's role", bloom: "nonsense" },
+      { text: "A fourth", bloom: "apply" },
+    ],
+    originalObjectives: ["One", "Two", "", "Three"],
+    blueprint: [
+      { topic: "Owning together", teach: "Owners share common property.", activity: "flip_cards" },
+      { topic: "Quiz", teach: "Three questions.", activity: "slideshow" },
+    ],
+    furtherReading: [
+      { title: "Strata Property Act", url: "https://www.bclaws.gov.bc.ca/", note: "" },
+      { title: "Old link", url: "http://example.com/", note: "" },
+    ],
+  });
+  assert.equal(b.title, "What Is a Strata Corporation?");
+  assert.equal(b.summary, "What a strata is.");
+  assert.equal(b.estimatedMinutes, 17);
+  assert.equal(b.objectives.length, 3);
+  assert.equal(b.objectives[2].text, "Describe the council's role");
+  assert.ok(["remember", "understand", "apply", "analyze", "evaluate", "create"].includes(b.objectives[2].bloom));
+  assert.deepEqual(b.originalObjectives, ["One", "Two", "Three"]);
+  assert.equal(b.blueprint[0].activity, "flip_cards");
+  assert.equal(b.blueprint[1].activity, "none");
+  assert.equal(b.furtherReading[0].url, "https://www.bclaws.gov.bc.ca/");
+  assert.equal(b.furtherReading[1].url, "");
+});
+
+test("a pasted outline with nothing usable comes back empty", () => {
+  const b = normalizePastedBlueprint("not an object");
+  assert.equal(b.title, "");
+  assert.equal(b.estimatedMinutes, null);
+  assert.deepEqual(b.blueprint, []);
+  assert.deepEqual(b.objectives, []);
 });

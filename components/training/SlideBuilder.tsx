@@ -42,6 +42,7 @@ import {
 } from "@/app/admin/training/actions";
 import { ModulePlayer } from "@/components/training/ModulePlayer";
 import { DraftWithAI } from "@/components/training/DraftWithAI";
+import { PasteBlueprint } from "@/components/training/PasteBlueprint";
 import { PhotoCreditLine, PhotoPicker } from "@/components/training/PhotoPicker";
 import { Modal } from "@/components/Modal";
 import type { BuilderModule, Checkout } from "@/lib/data/training";
@@ -601,6 +602,22 @@ export function SlideBuilder({
           {/* Kept mounted while you look at the slides it's writing, so the outline and progress aren't lost. */}
           {editing && token && (
             <div className="builder__canvas" hidden={!(mode === "edit" && (selected === "settings" || !slide))}>
+              <PasteBlueprint
+                moduleId={initial.id}
+                token={token}
+                slideCount={slides.length}
+                beforeRead={flush}
+                onApplied={async () => {
+                  pending.current.clear();
+                  settingsPending.current = false;
+                  const fresh = await loadBuilderModule(initial.id);
+                  if (fresh.ok) load(fresh.module);
+                  else setSlides([]);
+                  setSelected("settings");
+                  router.refresh();
+                }}
+                onError={(e) => (e.startsWith(LOST) ? lose(e) : setAlert(e))}
+              />
               <DraftWithAI
                 moduleId={initial.id}
                 token={token}
