@@ -11,13 +11,17 @@
  * Usage: <Logo /> inherits color from its parent. Set `color` in CSS on
  * that parent (or pass a className) to switch it between --ink on light
  * backgrounds and white on dark ones.
+ *
+ * The viewBox is cropped to the mark itself, so its box is the mark's
+ * size. Beside the wordmark it's 1.51em tall with a 0.33em gap (the
+ * brand lockup: the wordmark's capitals are 47% of the mark's height).
  */
 export function Logo({ className }: { className?: string }) {
   return (
     <svg
       className={className}
       xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 192.7 188.28"
+      viewBox="24.32 21.8 144.36 144.38"
       fill="currentColor"
       role="img"
       aria-label="StrataCouncil"

@@ -160,21 +160,25 @@ button {
   padding-bottom: 0.75rem;
 }
 
+/* The brand lockup: mark 1.51em tall, 0.33em gap, so the wordmark's
+   capitals are 47% of the mark's height (see components/Logo.tsx). */
 .app-header__brand {
   display: inline-flex;
   align-items: center;
-  gap: 0.6em;
+  gap: 0.33em;
   text-decoration: none;
   font-family: var(--font-fraunces), Georgia, serif;
   font-weight: 600;
-  font-size: 1.15rem;
+  font-size: 1.2rem;
+  line-height: 1;
   color: inherit;
   flex: none;
 }
 
 .app-header__mark {
-  width: 32px;
-  height: 32px;
+  width: 1.51em;
+  height: 1.51em;
+  flex: none;
 }
 
 .app-nav {
@@ -2150,12 +2154,12 @@ button.chat-source:hover {
   padding: 2.5rem;
 }
 
-/* Logo and wordmark, at the header's proportions (32px mark : 1.15rem text). */
+/* Logo and wordmark, in the brand lockup's proportions (see .app-header__brand). */
 .auth-card__brand {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.6em;
+  gap: 0.33em;
   margin-bottom: 1.5rem;
   color: var(--ink);
   text-decoration: none;
@@ -2165,8 +2169,8 @@ button.chat-source:hover {
 }
 
 .auth-card__mark {
-  width: 40px;
-  height: 40px;
+  width: 1.51em;
+  height: 1.51em;
   flex: none;
   color: var(--ink);
 }
