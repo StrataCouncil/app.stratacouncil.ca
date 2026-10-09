@@ -88,7 +88,7 @@ export function TrackPath({
               <div className="path__title">{track.title} Complete</div>
               <div className="path__meta">
                 {track.credential
-                  ? `Completed ${new Date(track.credential.issuedAt).toLocaleDateString("en-CA", { year: "numeric", month: "long", day: "numeric" })}. Your council sees a filled circle on Council & Roles.`
+                  ? `Completed ${new Date(track.credential.issuedAt).toLocaleDateString("en-CA", { year: "numeric", month: "long", day: "numeric" })}. Your certification appears on your profile in the Stratasphere.`
                   : `Complete all modules in this track to finish ${track.title}.`}
               </div>
             </div>
