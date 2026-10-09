@@ -13,6 +13,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
  *   publish, and from the console. Slides' pictures, narration and music
  *   stay where they are (the public training-media bucket on the live
  *   project), so the published content is copied as is.
+ * - The Library (0049): published playbooks, guides and templates, after
+ *   each publish, unpublish or delete. Drafts stay on the live site.
  * - The legislation library: each entry and its search index, so the demo
  *   Stratasphere answers from the same law. Runs after an entry is
  *   indexed, and from the console. Only legislation is copied: the global
@@ -175,4 +177,25 @@ export async function mirrorLegislationToDemo(): Promise<MirrorResult<{ entries:
     if (doneErr) return fail("finishing an entry", doneErr.message);
   }
   return { ok: true, entries: entries.length, copied: changed.length, chunks };
+}
+
+/** Published Library items, as published; the demo has nothing else. */
+export async function mirrorLibraryToDemo(): Promise<MirrorResult<{ items: number }>> {
+  const db = databases();
+  if (!db) return { ok: false, error: NOT_CONNECTED };
+  const { live, demo } = db;
+  const { data, error } = await live
+    .from("library_resources")
+    .select("id, kind, title, summary, tags, published, published_at, created_at, updated_at")
+    .not("published", "is", null);
+  if (error || !data) return fail("reading the Library", error?.message ?? "no rows");
+  const ids = data.map((r) => r.id as string);
+  const del = demo.from("library_resources").delete();
+  const { error: dErr } = await (ids.length ? del.not("id", "in", notIn(ids)) : del.not("id", "is", null));
+  if (dErr) return fail("removing old Library items", dErr.message);
+  if (data.length) {
+    const { error: uErr } = await demo.from("library_resources").upsert(data);
+    if (uErr) return fail("Library items", uErr.message);
+  }
+  return { ok: true, items: data.length };
 }

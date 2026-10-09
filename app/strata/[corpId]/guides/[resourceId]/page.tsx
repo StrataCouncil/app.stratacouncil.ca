@@ -2,7 +2,10 @@ import { SubscribeCta } from "@/components/SubscribeCta";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { StrataSphereNav } from "@/components/StrataSphereNav";
+import { LibraryArticle } from "@/components/library/LibraryArticle";
+import { getPublishedLibraryItem, listPublishedLibrary, type PublishedLibraryEntry } from "@/lib/data/library";
 import { getStrataAccess } from "@/lib/data/strata";
+import { isUuid } from "@/lib/library/library";
 import {
   isTemplateLocked,
   knowledgeResourceKindLabels,
@@ -34,10 +37,17 @@ export default async function KnowledgeResourcePage({
   params: Promise<{ corpId: string; resourceId: string }>;
 }) {
   const { corpId, resourceId } = await params;
+  const access = await getStrataAccess(corpId);
+  if (!access) notFound();
+  if (isUuid(resourceId)) {
+    const item = await getPublishedLibraryItem(resourceId);
+    if (!item) notFound();
+    return <LibraryItemPage item={item} corpId={corpId} subscribed={access.subscribed} />;
+  }
   const resource = knowledgeResources.find((r) => r.id === resourceId);
   if (!resource) notFound();
 
-  const subscribed = (await getStrataAccess(corpId))?.subscribed ?? false;
+  const subscribed = access.subscribed;
   const locked = isTemplateLocked(resource, subscribed);
   const related = relatedKnowledgeResources(resource, knowledgeResources);
 
@@ -56,9 +66,12 @@ export default async function KnowledgeResourcePage({
               {knowledgeResourceKindLabels[resource.kind]}
             </span>
             <div className="kb-card__meta-row-right">
+              <span className="pill pill--sample" title="A sample article, not yet reviewed">
+                Sample
+              </span>
               {locked && (
                 <span className="kb-lock-badge" title="Requires a Stratasphere™ subscription">
-                  &#128274; Subscription
+                  Subscription
                 </span>
               )}
               {resource.jurisdictionLevel === "federal" && (
@@ -75,6 +88,10 @@ export default async function KnowledgeResourcePage({
           <h1 className="kb-article__title">{resource.title}</h1>
           <p className="kb-article__summary">{resource.summary}</p>
           <span className="card__meta">Updated {resource.updatedAt}</span>
+          <p className="lib-sample-note" data-testid="sample-note">
+            This is a sample article. It hasn&rsquo;t been reviewed yet, so check anything you rely on against your bylaws and
+            the legislation.
+          </p>
 
           {locked ? (
             <div className="lock-panel" style={{ marginTop: "1.75rem" }} data-testid="template-lock-panel">
@@ -154,6 +171,93 @@ export default async function KnowledgeResourcePage({
                     <span className="kb-sidebar-list__kind">
                       {knowledgeResourceKindLabels[r.kind]}
                     </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </aside>
+      </div>
+    </>
+  );
+}
+
+/** A published Library item (0049). Templates are for subscribers. */
+async function LibraryItemPage({ item, corpId, subscribed }: { item: PublishedLibraryEntry; corpId: string; subscribed: boolean }) {
+  const locked = isTemplateLocked(item, subscribed);
+  const others = (await listPublishedLibrary()).filter((r) => r.id !== item.id);
+  const related = others
+    .map((r) => ({ r, score: r.tags.filter((t) => item.tags.includes(t)).length + (r.kind === item.kind ? 0.5 : 0) }))
+    .filter((x) => x.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 4)
+    .map((x) => x.r);
+  const updated = new Date(item.publishedAt).toLocaleDateString("en-CA", { year: "numeric", month: "long", day: "numeric" });
+
+  return (
+    <>
+      <StrataSphereNav active="guides" />
+
+      <Link href={`/strata/${corpId}/guides`} className="kb-article__back">
+        &larr; Knowledge library
+      </Link>
+
+      <div className="kb-article">
+        <article className="kb-article__main" data-testid="library-item">
+          <div className="kb-card__meta-row" style={{ marginBottom: "0.6rem" }}>
+            <span className={`kb-card__kind kb-card__kind--${item.kind}`}>{knowledgeResourceKindLabels[item.kind]}</span>
+            <div className="kb-card__meta-row-right">
+              {locked && (
+                <span className="kb-lock-badge" title="Requires a Stratasphere™ subscription">
+                  Subscription
+                </span>
+              )}
+              <span className="pill pill--locked">BC</span>
+            </div>
+          </div>
+
+          <h1 className="kb-article__title">{item.title}</h1>
+          <p className="kb-article__summary">{item.summary}</p>
+          <span className="card__meta">Updated {updated}</span>
+
+          {locked ? (
+            <div className="lock-panel" style={{ marginTop: "1.75rem" }} data-testid="template-lock-panel">
+              <h2>This template requires a subscription</h2>
+              <p>
+                Policy templates are the one part of the Library that&rsquo;s behind Stratasphere&trade;. Playbooks and guides
+                stay free for every connected member.
+              </p>
+              <SubscribeCta testId="template-subscribe-cta" />
+            </div>
+          ) : (
+            <LibraryArticle markup={item.markup} />
+          )}
+
+          <p className="lib-disclaimer">
+            General information for BC strata corporations, not legal advice. Your own bylaws, insurance policy and
+            agreements may differ; check them, and get professional advice for your situation.
+          </p>
+        </article>
+
+        <aside className="kb-article__sidebar">
+          {item.sources.length > 0 && (
+            <div className="kb-sidebar-block">
+              <h3>Legislation referenced</h3>
+              <ul className="kb-sidebar-list">
+                {item.sources.map((s) => (
+                  <li key={s.chunkId}>{s.label}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {related.length > 0 && (
+            <div className="kb-sidebar-block">
+              <h3>Related</h3>
+              <ul className="kb-sidebar-list kb-sidebar-list--links">
+                {related.map((r) => (
+                  <li key={r.id}>
+                    <Link href={`/strata/${corpId}/guides/${r.id}`}>{r.title}</Link>
+                    <span className="kb-sidebar-list__kind">{knowledgeResourceKindLabels[r.kind]}</span>
                   </li>
                 ))}
               </ul>
