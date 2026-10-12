@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Fraunces, Work_Sans } from "next/font/google";
+import { IS_DEMO } from "@/lib/demo";
 import "./globals.css";
 
 const fraunces = Fraunces({
@@ -16,7 +17,8 @@ const workSans = Work_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "StrataCouncil.ca — App",
+  // Link previews (Messages and others) drop a "StrataCouncil.ca —" prefix, so the demo says what it is.
+  title: IS_DEMO ? "StrataCouncil.ca Demo" : "StrataCouncil.ca — App",
   description: "Council Training and Stratasphere™ governance tools for BC strata councils.",
 };
 
