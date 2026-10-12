@@ -12,7 +12,7 @@ const MESSAGES: Record<string, { title: string; body: string }> = {
   expired: {
     title: "Your demo has ended",
     body:
-      "Demo links work until midnight (Pacific time) on the day they're sent, and everything made in the demo is cleared overnight. Thanks for trying StrataCouncil.ca! Ready for the real thing? Create your free account and set up your own strata.",
+      "Demo links work for three days after the day they're sent, until midnight (Pacific time), and everything made in the demo is cleared then. Thanks for trying StrataCouncil.ca! Ready for the real thing? Create your free account and set up your own strata.",
   },
   unknown: {
     title: "This link doesn't work",

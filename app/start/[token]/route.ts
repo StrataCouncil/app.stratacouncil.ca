@@ -9,8 +9,8 @@ import { createClient } from "@/lib/supabase/server";
  * A visitor's personal demo link (demo site only): sets up their account
  * and their own copy of the fictional strata the first time, signs them
  * in, and opens the strata or Council Training (whichever the link was
- * made for). Works again (and on another device) until
- * midnight Pacific; then /demo explains that it has ended.
+ * made for). Works again (and on another device) until it ends
+ * (lib/demo.ts, demoLinkEnds); then /demo explains that it has ended.
  */
 export const maxDuration = 60;
 

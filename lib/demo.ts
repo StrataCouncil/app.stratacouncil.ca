@@ -3,7 +3,8 @@
  * time with DEMO_MODE=true and its own Supabase project. Each visitor
  * arrives through a personal link made in the live site's Super Admin
  * console, gets their own copy of a fictional strata as its admin, and
- * loses it at midnight Pacific, when the link stops working.
+ * loses it when the link stops working: midnight Pacific, three days after
+ * the day it was made (DEMO_LINK_DAYS).
  *
  * In the demo: nothing goes through Stripe (every demo strata is already
  * subscribed), no email is sent, nobody can sign up or sign in except
@@ -58,23 +59,31 @@ function pacificParts(at: Date) {
   return { year: get("year"), month: get("month"), day: get("day"), hour: get("hour"), minute: get("minute") };
 }
 
+/** Days a demo link works after the day it's made: one made Monday works until Thursday ends. */
+export const DEMO_LINK_DAYS = 3;
+
 /**
- * Midnight at the end of `now`'s day in British Columbia, as an instant:
- * when a link made at `now` stops working. Midnight Pacific is 07:00 UTC
- * in summer (PDT) and 08:00 UTC in winter (PST); daylight saving changes
- * at 2 a.m., so midnight is never skipped or doubled.
+ * Midnight at the end of `now`'s day in British Columbia, `extraDays`
+ * later, as an instant. Midnight Pacific is 07:00 UTC in summer (PDT) and
+ * 08:00 UTC in winter (PST); daylight saving changes at 2 a.m., so
+ * midnight is never skipped or doubled.
  */
-export function endOfDemoDay(now: Date = new Date()): Date {
+export function endOfDemoDay(now: Date = new Date(), extraDays = 0): Date {
   const today = pacificParts(now);
   for (const utcHour of [7, 8]) {
-    const candidate = new Date(Date.UTC(today.year, today.month - 1, today.day + 1, utcHour));
+    const candidate = new Date(Date.UTC(today.year, today.month - 1, today.day + 1 + extraDays, utcHour));
     const p = pacificParts(candidate);
     if (p.hour === 0 && p.minute === 0) return candidate;
   }
   throw new Error("Couldn't work out midnight Pacific.");
 }
 
-/** "Tuesday, October 7" for the day a link works. */
+/** When a link made at `now` stops working: midnight Pacific, DEMO_LINK_DAYS after the day it's made. */
+export function demoLinkEnds(now: Date = new Date()): Date {
+  return endOfDemoDay(now, DEMO_LINK_DAYS);
+}
+
+/** "Tuesday, October 7": the last day a link works. */
 export function demoDayLabel(expiresAt: Date) {
   // The day that ends at expiresAt: a minute before it.
   return new Date(expiresAt.getTime() - 60_000).toLocaleDateString("en-CA", {

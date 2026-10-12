@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { DEMO_EDITABLE_ITEM_ID, demoDayLabel, demoLink, demoOpenModule, endOfDemoDay, isDemoToken, lockDemoAgenda, newDemoToken } from "../lib/demo.ts";
+import { DEMO_EDITABLE_ITEM_ID, demoDayLabel, demoLink, demoLinkEnds, demoOpenModule, endOfDemoDay, isDemoToken, lockDemoAgenda, newDemoToken } from "../lib/demo.ts";
 
 const end = (iso: string) => endOfDemoDay(new Date(iso)).toISOString();
 
@@ -17,6 +17,19 @@ test("a demo link works until midnight Pacific on the day it was made", () => {
   // The days the clocks change.
   assert.equal(end("2026-03-08T12:00:00Z"), "2026-03-09T07:00:00.000Z");
   assert.equal(end("2026-11-01T12:00:00Z"), "2026-11-02T08:00:00.000Z");
+});
+
+test("a demo link works for three days after the day it was made", () => {
+  const ends = (iso: string) => demoLinkEnds(new Date(iso)).toISOString();
+  // Made Wednesday afternoon (PDT): works until Saturday ends.
+  assert.equal(ends("2026-10-07T22:00:00Z"), "2026-10-11T07:00:00.000Z");
+  assert.equal(demoDayLabel(new Date(ends("2026-10-07T22:00:00Z"))), "Saturday, October 10");
+  // Made a minute before midnight: still counted from that day.
+  assert.equal(ends("2026-10-08T06:59:00Z"), "2026-10-11T07:00:00.000Z");
+  // Across the end of daylight saving (Nov 1): midnight moves to 08:00 UTC.
+  assert.equal(ends("2026-10-30T20:00:00Z"), "2026-11-03T08:00:00.000Z");
+  // Across the start of daylight saving (Mar 8).
+  assert.equal(ends("2026-03-06T20:00:00Z"), "2026-03-10T07:00:00.000Z");
 });
 
 test("the day is named in Pacific time", () => {

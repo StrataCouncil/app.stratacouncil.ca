@@ -127,7 +127,7 @@ export async function getAdminOverview(): Promise<AdminOverview | null> {
   };
 }
 
-/** Links still open today, and how many of them have been opened. */
+/** Links still working, and how many of them have been opened. */
 async function demoToday(): Promise<AdminOverview["demo"]> {
   const db = demoDatabase();
   if (!db) return null;

@@ -8203,6 +8203,11 @@ a.track-card:focus-visible {
 .demo-links__form .button {
   margin-bottom: 1.1rem;
 }
+.demo-links__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 0.5rem;
+}
 .demo-links__form select {
   font-family: inherit;
   font-size: 0.95rem;

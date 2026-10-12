@@ -74,7 +74,7 @@ export default async function AdminConsolePage() {
             In the last 30 days, by {n(training.learners30)} {training.learners30 === 1 ? "learner" : "learners"}. {n(training.credentials)} credentials
             issued in all.
           </Stat>
-          <Stat title="Demo" main={demo ? `${n(demo.today)} links today` : "Not connected"}>
+          <Stat title="Demo" main={demo ? `${n(demo.today)} links working` : "Not connected"}>
             {demo ? `${n(demo.opened)} opened so far.` : "Set DEMO_SUPABASE_URL and DEMO_SUPABASE_SERVICE_ROLE_KEY."}
           </Stat>
         </div>
