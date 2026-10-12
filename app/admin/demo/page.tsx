@@ -19,7 +19,7 @@ export default async function AdminDemoPage() {
           <h1>Demo</h1>
           <p>
             Send someone a personal link to demo.stratacouncil.ca. Each link opens on the Stratasphere&trade; or on Council
-            Training, gives them a strata of their own, and stops working at midnight Pacific on the day it was made.
+            Training, gives them a strata of their own, and stops working at midnight Pacific three days after the day it was made.
           </p>
         </div>
         <DemoLinksAdmin list={demoVisitors} />

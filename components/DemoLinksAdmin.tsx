@@ -14,8 +14,10 @@ const time = (iso: string) =>
 /**
  * Super Admin console: personal links to the demo site
  * (demo.stratacouncil.ca, lib/demo.ts). Each person gets their own copy of
- * the fictional strata, as its admin, until midnight Pacific. The link is
- * emailed to them and shown here, in case the email goes astray.
+ * the fictional strata, as its admin, until the link ends (midnight
+ * Pacific, three days after the day it's made). The link is shown here,
+ * and emailed to them too unless staff choose Create link to send it
+ * themselves.
  */
 export function DemoLinksAdmin({ list }: { list: DemoVisitorList }) {
   const router = useRouter();
@@ -28,16 +30,18 @@ export function DemoLinksAdmin({ list }: { list: DemoVisitorList }) {
   const [made, setMade] = useState<DemoVisitor | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
 
-  async function create(e: React.FormEvent) {
+  async function create(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setBusy("create");
+    // "Create link" makes the link only; "Make link and email it" sends it too.
+    const send = (e.nativeEvent as SubmitEvent).submitter?.getAttribute("value") !== "link-only";
+    setBusy(send ? "create" : "create-only");
     setError(null);
     setNotice(null);
-    const r = await createDemoLink({ fullName, email, landing });
+    const r = await createDemoLink({ fullName, email, landing, send });
     setBusy(null);
     if (!r.ok) return setError(r.error);
     setMade(r.visitor);
-    if (r.emailed) setNotice(r.notice);
+    if (!send || r.emailed) setNotice(r.notice);
     else setError(r.notice);
     setFullName("");
     setEmail("");
@@ -107,8 +111,9 @@ export function DemoLinksAdmin({ list }: { list: DemoVisitorList }) {
       <h2>Demo links</h2>
       <p className="card__meta">
         A personal link to demo.stratacouncil.ca, opening on the Stratasphere or Council Training. Either way the person gets
-        their own fictional strata, as its admin, with nothing emailed and no billing. Each link works until midnight (Pacific) on the day you make it, and their strata is cleared
-        overnight. Names and emails are deleted a week later.
+        their own fictional strata, as its admin, with nothing emailed and no billing. Each link works until midnight (Pacific) three days after the day you make it (one
+        made Monday works until Thursday ends), and their strata is cleared overnight then. Names and emails are deleted a week
+        later. Choose Create link to send the link from your own email; nothing is emailed from the app.
       </p>
 
       {!list.configured ? (
@@ -137,9 +142,14 @@ export function DemoLinksAdmin({ list }: { list: DemoVisitorList }) {
                 ))}
               </select>
             </div>
-            <button type="submit" className="button button-primary" disabled={busy !== null} data-testid="demo-links-create">
-              {busy === "create" ? "Making the link…" : "Make link and email it"}
-            </button>
+            <div className="demo-links__buttons">
+              <button type="submit" value="link-only" className="button button-secondary" disabled={busy !== null} data-testid="demo-links-create-only">
+                {busy === "create-only" ? "Making the link…" : "Create link"}
+              </button>
+              <button type="submit" value="email" className="button button-primary" disabled={busy !== null} data-testid="demo-links-create">
+                {busy === "create" ? "Making the link…" : "Make link and email it"}
+              </button>
+            </div>
           </form>
 
           {error && (
@@ -163,7 +173,7 @@ export function DemoLinksAdmin({ list }: { list: DemoVisitorList }) {
           )}
           {list.error && <p className="form-alert">{list.error}</p>}
 
-          <h3>Today</h3>
+          <h3>Working now</h3>
           {today.length === 0 ? (
             <p className="card__meta">No links working right now.</p>
           ) : (

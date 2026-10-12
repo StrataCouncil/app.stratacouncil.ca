@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireSuperAdmin } from "@/lib/data/admin";
 import { DEMO_VISITOR_COLUMNS, demoDatabase, toDemoVisitor, type DemoVisitor } from "@/lib/data/demo-visitors";
-import { IS_DEMO, demoDayLabel, endOfDemoDay, newDemoToken, type DemoLanding } from "@/lib/demo";
+import { IS_DEMO, demoDayLabel, demoLinkEnds, newDemoToken, type DemoLanding } from "@/lib/demo";
 import { MailtrapSendError, sendTransactionalEmail } from "@/lib/email/mailtrap";
 import { demoInviteEmail } from "@/lib/email/templates";
 import { mirrorLegislationToDemo, mirrorTrainingToDemo } from "@/lib/demo-mirror";
@@ -13,8 +13,9 @@ import { wipeVisitor } from "@/lib/demo-server";
 /**
  * Personal demo links (lib/demo.ts), made from the live site's Super
  * Admin console: the person's name and email go into the demo database,
- * the link is emailed to them, and it's shown here too. A link works until
- * midnight Pacific on the day it was made.
+ * and the link is shown here, emailed to them too unless staff will send
+ * it themselves. A link works until midnight Pacific three days after the
+ * day it was made.
  */
 
 export type DemoLinkResult =
@@ -50,11 +51,12 @@ async function emailLink(visitor: DemoVisitor): Promise<string | null> {
 }
 
 /**
- * Makes a link and emails it. Someone who already has a link that still
- * works today gets that one again (one demo strata per person per day),
- * opening wherever this one was asked to.
+ * Makes a link, and emails it unless `send` is false (staff will send it
+ * from their own email). Someone who already has a link that still works
+ * gets that one again (one demo strata per person at a time), opening
+ * wherever this one was asked to.
  */
-export async function createDemoLink(input: { fullName: string; email: string; landing: DemoLanding }): Promise<DemoLinkResult> {
+export async function createDemoLink(input: { fullName: string; email: string; landing: DemoLanding; send?: boolean }): Promise<DemoLinkResult> {
   const creator = await staffName();
   if (!creator) return { ok: false, error: "Only platform staff can make demo links." };
   const db = demoDatabase();
@@ -90,7 +92,7 @@ export async function createDemoLink(input: { fullName: string; email: string; l
         full_name: fullName,
         email,
         landing,
-        expires_at: endOfDemoDay().toISOString(),
+        expires_at: demoLinkEnds().toISOString(),
         created_by_name: creator,
       })
       .select(DEMO_VISITOR_COLUMNS)
@@ -102,9 +104,23 @@ export async function createDemoLink(input: { fullName: string; email: string; l
     visitor = toDemoVisitor(data);
   }
 
+  const reused = Boolean(existing);
+  const until = `It works until midnight (Pacific) on ${demoDayLabel(new Date(visitor.expiresAt))}.`;
+  if (input.send === false) {
+    revalidatePath("/admin", "layout");
+    return {
+      ok: true,
+      visitor,
+      emailed: false,
+      reused,
+      notice: reused
+        ? `${visitor.email} already has a working link, so here it is again. Nothing was emailed. ${until}`
+        : `Link ready for ${visitor.email}. Nothing was emailed: copy it and send it yourself. ${until}`,
+    };
+  }
+
   const emailError = await emailLink(visitor);
   revalidatePath("/admin", "layout");
-  const reused = Boolean(existing);
   return {
     ok: true,
     visitor,
@@ -113,8 +129,8 @@ export async function createDemoLink(input: { fullName: string; email: string; l
     notice:
       emailError ??
       (reused
-        ? `${visitor.email} already had a link for today, so we emailed that one again.`
-        : `Emailed to ${visitor.email}. It works until midnight tonight (Pacific).`),
+        ? `${visitor.email} already had a working link, so we emailed that one again. ${until}`
+        : `Emailed to ${visitor.email}. ${until}`),
   };
 }
 

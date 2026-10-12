@@ -28,7 +28,7 @@ export interface DemoVisitor {
   expiresAt: string;
   firstOpenedAt: string | null;
   lastOpenedAt: string | null;
-  /** Still works (before midnight Pacific on the day it was made). */
+  /** Still works (before midnight Pacific, three days after the day it was made). */
   active: boolean;
   /** Entries in the visitor's activity log (lib/demo-activity.ts), when read. */
   activityCount?: number;

@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { AdminTabs } from "@/components/AdminTabs";
 import { AppShell } from "@/components/AppShell";
 import { getDemoActivity } from "@/lib/data/demo-visitors";
-import { DEMO_LANDINGS, DEMO_LIMITS } from "@/lib/demo";
+import { DEMO_LANDINGS, DEMO_LIMITS, demoDayLabel } from "@/lib/demo";
 import { demoPageName, describeDemoEvent, duration, summarizeDemoActivity } from "@/lib/demo-activity";
 import { getCurrentProfile } from "@/lib/data/profile";
 
@@ -60,7 +60,7 @@ function Timeline({ visitor, events, truncated }: Extract<Awaited<ReturnType<typ
         <h1>{visitor.fullName}</h1>
         <p>
           {visitor.email} &middot; opens on {DEMO_LANDINGS.find((l) => l.value === visitor.landing)?.label} &middot;{" "}
-          {visitor.active ? "link still works today" : "link has ended"}
+          {visitor.active ? `link works until the end of ${demoDayLabel(new Date(visitor.expiresAt))}` : "link has ended"}
         </p>
       </div>
 
