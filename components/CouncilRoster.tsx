@@ -38,6 +38,7 @@ export function CouncilRoster({
       <RosterTable
         corporationId={corporationId}
         members={roster.members}
+        uninvited={roster.uninvited}
         lots={roster.lots}
         isAdmin={roster.isAdmin}
         currentUserId={roster.currentUserId}

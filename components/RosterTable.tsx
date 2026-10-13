@@ -4,11 +4,12 @@ import { useState, useTransition } from "react";
 import {
   removeMember,
   saveMemberRoles,
+  sendInvite,
   setBillingPermission,
   setMeetingPermission,
   setMemberLot,
 } from "@/app/strata/[corpId]/roster-actions";
-import type { RosterMember } from "@/lib/data/roster";
+import type { RosterMember, UninvitedCouncilMember } from "@/lib/data/roster";
 import { trainingTrackColumns as tracks } from "@/lib/training/tracks";
 import { Modal } from "@/components/Modal";
 import {
@@ -57,6 +58,7 @@ const REMOVE_CONFIRM_PHRASE = "remove council member";
 export function RosterTable({
   corporationId,
   members,
+  uninvited = [],
   lots,
   isAdmin,
   currentUserId,
@@ -64,6 +66,8 @@ export function RosterTable({
 }: {
   corporationId: string;
   members: RosterMember[];
+  /** Council members typed on the Owners page, with no account yet (0051). */
+  uninvited?: UninvitedCouncilMember[];
   lots: string[];
   isAdmin: boolean;
   currentUserId: string;
@@ -238,7 +242,13 @@ export function RosterTable({
                   )}
                 </td>
                 <td className="roster-table__roles-cell">
-                  {member.roles.length === 0 ? (
+                  {member.roles.length === 0 && member.invitedCouncilRole ? (
+                    <span className="role-tag" title="On accepting the invite">
+                      {member.invitedCouncilRole in corporationRoleLabels
+                        ? corporationRoleLabels[member.invitedCouncilRole as CorporationRole]
+                        : "Council"}
+                    </span>
+                  ) : member.roles.length === 0 ? (
                     <span className="roster-table__na">&mdash;</span>
                   ) : (
                     member.roles.map((role) => (
@@ -449,6 +459,9 @@ export function RosterTable({
               </tr>
             );
           })}
+          {uninvited.map((c) => (
+            <UninvitedRow key={c.lotNumber} corporationId={corporationId} member={c} isAdmin={isAdmin} />
+          ))}
         </tbody>
       </table>
       <p className="roster-table__legend">
@@ -462,5 +475,107 @@ export function RosterTable({
         . A filled circle means the track is complete.
       </p>
     </div>
+  );
+}
+
+/**
+ * A council member typed on the Owners page who has no account yet
+ * (0051): counts as council for meetings already. The admin can invite
+ * them from here when their lot has an email; accepting ties them to the
+ * lot with its council role.
+ */
+function UninvitedRow({
+  corporationId,
+  member,
+  isAdmin,
+}: {
+  corporationId: string;
+  member: UninvitedCouncilMember;
+  isAdmin: boolean;
+}) {
+  const [confirming, setConfirming] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+  const role = member.role && member.role in corporationRoleLabels ? corporationRoleLabels[member.role as CorporationRole] : "Council";
+
+  function invite() {
+    if (!member.email) return;
+    setError(null);
+    startTransition(async () => {
+      const result = await sendInvite(corporationId, member.email!, member.lotNumber);
+      if (result.ok) {
+        setConfirming(false);
+        setNotice(result.notice ?? `Invite sent to ${member.email}.`);
+      } else {
+        setError(result.error);
+      }
+    });
+  }
+
+  return (
+    <tr data-testid={`uninvited-row-${member.lotNumber}`}>
+      <td>
+        <div className="roster-member">
+          <MemberAvatar name={member.name} url={null} />
+          <div>
+            {member.name}
+            {member.email && <div className="roster-table__meta">{member.email}</div>}
+            <span className="pill pill--locked">Not invited yet</span>
+          </div>
+        </div>
+      </td>
+      <td>{member.lotNumber}</td>
+      <td className="roster-table__roles-cell">
+        <span className="role-tag">{role}</span>
+        {isAdmin &&
+          (member.email ? (
+            <div className="roster-table__row-actions">
+              <button
+                type="button"
+                className="roster-table__edit-roles"
+                onClick={() => setConfirming(true)}
+                data-testid={`invite-lot-${member.lotNumber}`}
+              >
+                Invite
+              </button>
+            </div>
+          ) : (
+            <div className="roster-table__meta">Add an email for {member.lotNumber} on Owners to invite</div>
+          ))}
+        {notice && <p className="roster-table__meta" role="status">{notice}</p>}
+        {confirming && (
+          <Modal title={`Invite ${member.name}?`} onClose={() => setConfirming(false)} testId={`invite-lot-confirm-${member.lotNumber}`}>
+            <p>
+              An invitation goes to <strong>{member.email}</strong>. When they accept, they&rsquo;re tied to{" "}
+              {member.lotNumber} as {role === "Council" ? "a council member" : role}, so nothing else needs setting here.
+            </p>
+            <p className="card__meta">Wrong address? Fix it on Owners first, then invite.</p>
+            {error && (
+              <p className="roster-invites__error" role="alert">
+                {error}
+              </p>
+            )}
+            <div className="role-editor__actions">
+              <button type="button" className="button button-secondary" onClick={() => setConfirming(false)} disabled={pending}>
+                Cancel
+              </button>
+              <button type="button" className="button button-primary" onClick={invite} disabled={pending} data-testid={`invite-lot-send-${member.lotNumber}`}>
+                {pending ? "Sending…" : "Send invite"}
+              </button>
+            </div>
+          </Modal>
+        )}
+      </td>
+      <td data-center="true">
+        <span className="roster-table__na">&mdash;</span>
+      </td>
+      <td data-center="true">
+        <span className="roster-table__na">&mdash;</span>
+      </td>
+      {tracks.map((t) => (
+        <td key={t.code} data-center="true" />
+      ))}
+    </tr>
   );
 }
