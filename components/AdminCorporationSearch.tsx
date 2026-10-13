@@ -6,6 +6,7 @@ import type { AdminCorporation } from "@/lib/data/admin";
 
 const subscriptionLabels: Record<AdminCorporation["subscriptionStatus"], string> = {
   active: "Stratasphere™ active",
+  complimentary: "Complimentary",
   none: "Free tier",
   deactivated: "Deactivated",
 };
@@ -75,7 +76,7 @@ export function AdminCorporationSearch({ corporations }: { corporations: AdminCo
                   <td>{c.jurisdiction}</td>
                   <td data-center="true">{c.unitCount}</td>
                   <td>
-                    <span className={`pill ${c.subscriptionStatus === "active" ? "" : "pill--locked"}`}>
+                    <span className={`pill ${c.subscriptionStatus === "active" || c.subscriptionStatus === "complimentary" ? "" : "pill--locked"}`}>
                       {subscriptionLabels[c.subscriptionStatus]}
                     </span>
                     {c.stripeSandbox && <span className="pill stripe-mode__pill" style={{ marginLeft: "0.35rem" }}>Sandbox</span>}

@@ -147,6 +147,8 @@ export default async function BillingPage({
   // Sandbox stratas bill through Stripe test mode (0029).
   const stripeMode = await stripeModeFor(corpId);
   const subscribed = sub?.status === "active";
+  // Complimentary access (0050): on without Stripe, set from the console.
+  const complimentary = subscribed && Boolean(sub?.complimentary_at);
   // A first payment Stripe is still processing (usually a pre-authorized
   // debit, a few business days): neither subscribed nor not (0030).
   const pending = !subscribed && Boolean(sub?.stripe_subscription_id) && sub?.stripe_status === "incomplete";
@@ -218,7 +220,7 @@ export default async function BillingPage({
   // A payment-method update waiting on micro-deposits shows its link here;
   // one verified since is put to use now (lib/stripe/payment-results).
   const updateVerify =
-    subscribed && sub?.stripe_customer_id
+    subscribed && !complimentary && sub?.stripe_customer_id
       ? await settlePaymentMethodUpdate(
           getStripe(stripeMode),
           sub.stripe_customer_id,
@@ -251,6 +253,7 @@ export default async function BillingPage({
     .map((c) => {
       const s = subsByCorp.get(c.strata_plan_number);
       const active = s?.status === "active";
+      const comp = active && Boolean(s?.complimentary_at);
       const cPending = !active && Boolean(s?.stripe_subscription_id) && s?.stripe_status === "incomplete";
       const cInterval = (s?.billing_interval as "monthly" | "annual" | undefined) ?? "monthly";
       return {
@@ -258,9 +261,9 @@ export default async function BillingPage({
         name: (c.building_name ?? c.legal_name) as string,
         address: c.address as string,
         lots: c.unit_count as number,
-        status: active ? "Active" : cPending ? "Pending" : s?.status === "deactivated" && s.activated_at ? "Deactivated" : "Not subscribed",
+        status: comp ? "Complimentary" : active ? "Active" : cPending ? "Pending" : s?.status === "deactivated" && s.activated_at ? "Deactivated" : "Not subscribed",
         activated: active && s?.activated_at ? (s.activated_at as string).slice(0, 10) : null,
-        monthly: active ? calculateBilling(c.unit_count, cInterval).subtotal : null,
+        monthly: active && !comp ? calculateBilling(c.unit_count, cInterval).subtotal : null,
       };
     });
   const totalMonthly = corpRows.reduce((sum, r) => sum + (r.monthly ?? 0), 0);
@@ -400,13 +403,31 @@ export default async function BillingPage({
         </div>
       )}
 
-      {subscribed && update === "payment" && (
+      {complimentary && (
+        <div className="card billing-section" data-testid="billing-complimentary">
+          <div className="billing-card__head">
+            <h3>Stratasphere&trade; subscription</h3>
+            <span className="billing-tag billing-tag--ok">Complimentary</span>
+          </div>
+          <p>
+            {corp.building_name ?? corp.legal_name} has complimentary access to the Stratasphere&trade; from
+            StrataCouncil.ca{sub?.complimentary_at ? `, since ${fmtDate(sub.complimentary_at as string)}` : ""}. Meeting
+            Mode and the Stratasphere&trade; assistant are on, with no payment method and no charges.
+          </p>
+          <p className="card__meta">
+            If complimentary access ends, the strata&rsquo;s admin can subscribe here. Questions? Email
+            support@stratacouncil.ca.
+          </p>
+        </div>
+      )}
+
+      {subscribed && !complimentary && update === "payment" && (
         <BillingDialog closeHref={`/strata/${corpId}/billing`} title="Update payment method">
           <UpdatePaymentMethod corpId={corpId} publishableKey={publishableKey} />
         </BillingDialog>
       )}
 
-      {subscribed && (
+      {subscribed && !complimentary && (
       <div className="billing-grid">
         <div className="card" data-testid="billing-payment-method-card">
           <div className="billing-card__head">
@@ -577,6 +598,7 @@ export default async function BillingPage({
 
       )}
 
+      {!(complimentary && !sub?.stripe_customer_id) && (
       <div className="card billing-section" data-testid="billing-statements-card">
         <div className="billing-card__head">
           <h3>Account statements</h3>
@@ -623,6 +645,7 @@ export default async function BillingPage({
           </div>
         )}
       </div>
+      )}
 
       <div className="card billing-section" data-testid="billing-corporations-card">
         <h3>Admin Stratas</h3>
@@ -659,7 +682,7 @@ export default async function BillingPage({
                   <td data-center="true">{r.lots}</td>
                   <td>
                     <span
-                      className={`billing-tag ${r.status === "Active" ? "billing-tag--ok" : r.status === "Deactivated" ? "billing-tag--off" : r.status === "Pending" ? "billing-tag--pending" : "billing-tag--warn"}`}
+                      className={`billing-tag ${r.status === "Active" || r.status === "Complimentary" ? "billing-tag--ok" : r.status === "Deactivated" ? "billing-tag--off" : r.status === "Pending" ? "billing-tag--pending" : "billing-tag--warn"}`}
                     >
                       {r.status}
                     </span>

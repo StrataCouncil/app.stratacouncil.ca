@@ -8,6 +8,7 @@ import { AdminDecisionLedger } from "@/components/AdminDecisionLedger";
 import { signAvatarPaths } from "@/lib/data/avatars";
 import { getAllCorporations } from "@/lib/data/admin";
 import { getStrataDashboard } from "@/lib/data/admin-dashboard";
+import { ComplimentarySwitch } from "@/components/ComplimentarySwitch";
 import { StripeModeSwitch } from "@/components/StripeModeSwitch";
 import { documentCategoryLabels, isDocumentCategory } from "@/lib/documents";
 import { getCurrentProfile } from "@/lib/data/profile";
@@ -102,6 +103,7 @@ export default async function AdminCorporationDetailPage({
         <div className="page-header">
           <span className="pill pill--locked">{corporation.strataPlanNumber}</span>
           {dash?.stripe.sandbox && <span className="pill stripe-mode__pill" style={{ marginLeft: "0.4rem" }}>Sandbox</span>}
+          {dash?.subscription.complimentaryAt && <span className="pill" style={{ marginLeft: "0.4rem" }}>Complimentary</span>}
           <h1 style={{ marginTop: "0.6rem" }}>{corporation.buildingName ?? corporation.legalName}</h1>
           <p>{corporation.address}</p>
           <p style={{ marginTop: "1rem" }}>
@@ -132,6 +134,12 @@ export default async function AdminCorporationDetailPage({
               hasCustomer={dash.stripe.hasCustomer}
               hasSubscription={dash.stripe.hasSubscription}
             />
+            <ComplimentarySwitch
+              corpId={corpId}
+              since={dash.subscription.complimentaryAt}
+              by={dash.subscription.complimentaryBy}
+              hasStripeSubscription={dash.stripe.hasSubscription && dash.subscription.status === "active"}
+            />
             <div className="admin-stats" data-testid="admin-dashboard">
               <Stat title="People" main={`${dash.people.active} active`}>
                 {dash.people.invited ? `${dash.people.invited} invited · ` : ""}
@@ -158,7 +166,7 @@ export default async function AdminCorporationDetailPage({
               </Stat>
               <Stat
                 title="Subscription"
-                main={dash.subscription.status === "active" ? "Active" : dash.subscription.status === "deactivated" ? "Deactivated" : "Not subscribed"}
+                main={dash.subscription.complimentaryAt ? "Complimentary" : dash.subscription.status === "active" ? "Active" : dash.subscription.status === "deactivated" ? "Deactivated" : "Not subscribed"}
               >
                 {dash.subscription.interval ? `${dash.subscription.interval === "annual" ? "Annual" : "Monthly"} · ` : ""}
                 {dash.subscription.activatedAt ? `since ${day(dash.subscription.activatedAt)} · ` : ""}

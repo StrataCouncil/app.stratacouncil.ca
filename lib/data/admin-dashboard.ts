@@ -22,7 +22,16 @@ export interface StrataDashboard {
   meetings: { total: number; draft: number; live: number; adjourned: number; noQuorum: number; lastHeldAt: string | null; nextDate: string | null };
   decisions: { total: number; lastDecidedAt: string | null };
   conversations: number;
-  subscription: { status: string; interval: string | null; activatedAt: string | null; periodEnd: string | null; freeMeetingUsed: boolean };
+  subscription: {
+    status: string;
+    interval: string | null;
+    activatedAt: string | null;
+    periodEnd: string | null;
+    freeMeetingUsed: boolean;
+    /** Complimentary access (0050): when it was switched on, and by whom. */
+    complimentaryAt: string | null;
+    complimentaryBy: string | null;
+  };
   /** Stripe test mode (0029), and whether Stripe IDs are on file. */
   stripe: { sandbox: boolean; hasCustomer: boolean; hasSubscription: boolean };
   usage: {
@@ -58,7 +67,7 @@ export async function getStrataDashboard(corpId: string): Promise<StrataDashboar
     usage,
   ] = await Promise.all([
     admin.from("strata_corporations").select("created_at, free_meeting_used, stripe_sandbox").eq("strata_plan_number", corpId).maybeSingle(),
-    admin.from("subscriptions").select("status, billing_interval, activated_at, current_period_end, stripe_customer_id, stripe_subscription_id").eq("corporation_id", corpId).maybeSingle(),
+    admin.from("subscriptions").select("status, billing_interval, activated_at, current_period_end, stripe_customer_id, stripe_subscription_id, complimentary_at, complimentary_by").eq("corporation_id", corpId).maybeSingle(),
     admin.from("corporation_memberships").select("status").eq("corporation_id", corpId),
     count(admin.from("corporation_invites").select("id", { count: "exact", head: true }).eq("corporation_id", corpId).eq("status", "pending")),
     count(admin.from("corporation_join_requests").select("id", { count: "exact", head: true }).eq("corporation_id", corpId).eq("status", "pending")),
@@ -120,6 +129,8 @@ export async function getStrataDashboard(corpId: string): Promise<StrataDashboar
       activatedAt: sub.data?.activated_at ?? null,
       periodEnd: sub.data?.current_period_end ?? null,
       freeMeetingUsed: Boolean(corp.data?.free_meeting_used),
+      complimentaryAt: (sub.data?.complimentary_at as string | null) ?? null,
+      complimentaryBy: (sub.data?.complimentary_by as string | null) ?? null,
     },
     stripe: {
       sandbox: Boolean(corp.data?.stripe_sandbox),
