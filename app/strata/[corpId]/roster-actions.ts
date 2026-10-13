@@ -121,13 +121,39 @@ async function findProfileByEmail(email: string) {
   return data;
 }
 
-export async function sendInvite(corporationId: string, rawEmail: string): Promise<ActionResult> {
+/**
+ * Invites someone to the strata. With `lotNumber` (Council, a council
+ * member typed on the Owners page, 0051), the invite carries that lot:
+ * the invited membership holds it, and accepting ties the new member to
+ * it with the lot's council role.
+ */
+export async function sendInvite(corporationId: string, rawEmail: string, lotNumber?: string): Promise<ActionResult> {
   const ctx = await requireAdmin(corporationId);
   if (!ctx) return fail("Only this strata's admin can send invites.");
   const { supabase, user } = ctx;
 
   const email = rawEmail.trim().toLowerCase();
   if (!EMAIL_RE.test(email)) return fail("Enter a valid email address.");
+
+  if (lotNumber) {
+    const [{ data: lot }, { data: taken }] = await Promise.all([
+      supabase
+        .from("owners_and_council")
+        .select("is_council_member")
+        .eq("corporation_id", corporationId)
+        .eq("lot_number", lotNumber)
+        .maybeSingle(),
+      supabase
+        .from("corporation_memberships")
+        .select("user_id")
+        .eq("corporation_id", corporationId)
+        .eq("lot_number", lotNumber)
+        .in("status", ["active", "invited"])
+        .limit(1),
+    ]);
+    if (!lot?.is_council_member) return fail(`${lotNumber} isn't marked as a council lot on Owners.`);
+    if (taken?.length) return fail(`Someone is already tied to ${lotNumber}, or invited from it.`);
+  }
 
   const existingProfile = await findProfileByEmail(email);
   if (existingProfile) {
@@ -176,6 +202,7 @@ export async function sendInvite(corporationId: string, rawEmail: string): Promi
         corporation_id: corporationId,
         status: "invited",
         invited_by: user.id,
+        ...(lotNumber ? { lot_number: lotNumber } : {}),
       },
       { onConflict: "user_id,corporation_id" }
     );
@@ -281,7 +308,7 @@ export async function revokeInvite(corporationId: string, inviteId: string): Pro
   if (profile) {
     await supabase
       .from("corporation_memberships")
-      .update({ status: "removed" })
+      .update({ status: "removed", lot_number: null })
       .eq("corporation_id", corporationId)
       .eq("user_id", profile.id)
       .eq("status", "invited");

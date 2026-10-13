@@ -1,6 +1,6 @@
 import { getCredentialsFor } from "@/lib/data/training";
 import { createClient } from "@/lib/supabase/server";
-import { isCorporationRole, type CorporationRole } from "@/lib/strata";
+import { EMAIL_RE, isCorporationRole, type CorporationRole } from "@/lib/strata";
 import { isStrataAdmin } from "@/lib/auth/strata-admin";
 import { signAvatarPaths } from "@/lib/data/avatars";
 
@@ -34,6 +34,21 @@ export interface RosterMember {
   avatarUrl: string | null;
   /** Council Training credentials held (track codes). */
   credentials: string[];
+  /** Invited from a council lot (0051): the council role they'll get on accepting ("council" when the lot has none). */
+  invitedCouncilRole?: string;
+}
+
+/**
+ * A council member typed on the Owners page (a lot marked as council)
+ * with no account yet: shown on Council as "Not invited yet", and
+ * invitable from there when the lot has an email (0051).
+ */
+export interface UninvitedCouncilMember {
+  lotNumber: string;
+  name: string;
+  role: string | null;
+  /** The council email, else the owner's email, if either is valid. */
+  email: string | null;
 }
 
 export interface PendingInvite {
@@ -57,6 +72,8 @@ export interface CorporationRoster {
   isAdmin: boolean;
   jurisdiction: string;
   members: RosterMember[];
+  /** Council lots from the Owners page with no member tied to them yet. */
+  uninvited: UninvitedCouncilMember[];
   /** Every strata lot on the roster, for tying members to their lot. */
   lots: string[];
   invites: PendingInvite[];
@@ -83,7 +100,11 @@ export async function getCorporationRoster(
       .select("jurisdiction")
       .eq("strata_plan_number", corporationId)
       .maybeSingle(),
-    supabase.from("owners_and_council").select("lot_number").eq("corporation_id", corporationId).order("lot_number"),
+    supabase
+      .from("owners_and_council")
+      .select("lot_number, full_name, email, is_council_member, council_member_name, council_email, role")
+      .eq("corporation_id", corporationId)
+      .order("lot_number"),
   ]);
 
   for (const [label, result] of [
@@ -130,6 +151,32 @@ export async function getCorporationRoster(
       credentials: [],
     })
   );
+  // Council lots typed on the Owners page. A member tied to the lot (or
+  // invited from it) takes its place; an invited member with no name yet
+  // shows the typed one.
+  const lotRows = (lots.data ?? []) as {
+    lot_number: string;
+    full_name: string | null;
+    email: string | null;
+    is_council_member: boolean;
+    council_member_name: string | null;
+    council_email: string | null;
+    role: string | null;
+  }[];
+  const takenLots = new Set(members.map((m) => m.lotNumber).filter(Boolean));
+  const typedName = (l: (typeof lotRows)[number]) => (l.council_member_name || l.full_name || "").trim();
+  for (const m of members) {
+    const lot = m.status === "invited" && m.lotNumber ? lotRows.find((l) => l.lot_number === m.lotNumber) : null;
+    if (lot && (m.fullName === m.email || m.fullName === "Unnamed member") && typedName(lot)) m.fullName = typedName(lot);
+    if (lot?.is_council_member) m.invitedCouncilRole = lot.role ?? "council";
+  }
+  const uninvited: UninvitedCouncilMember[] = lotRows
+    .filter((l) => l.is_council_member && !takenLots.has(l.lot_number))
+    .map((l) => {
+      const email = [l.council_email, l.email].map((e) => (e ?? "").trim()).find((e) => EMAIL_RE.test(e)) ?? null;
+      return { lotNumber: l.lot_number, name: typedName(l) || l.lot_number, role: l.role, email };
+    });
+
   const credentials = await getCredentialsFor(members.map((m) => m.userId));
   for (const m of members) m.credentials = [...(credentials.get(m.userId) ?? [])];
 
@@ -181,7 +228,8 @@ export async function getCorporationRoster(
     isAdmin,
     jurisdiction: corporation.data?.jurisdiction ?? "",
     members,
-    lots: (lots.data ?? []).map((l) => l.lot_number as string),
+    uninvited,
+    lots: lotRows.map((l) => l.lot_number),
     invites,
     joinRequests,
   };
