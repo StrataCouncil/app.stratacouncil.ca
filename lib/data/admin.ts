@@ -32,7 +32,7 @@ export interface AdminCorporation {
   address: string;
   jurisdiction: string;
   unitCount: number;
-  subscriptionStatus: "active" | "deactivated" | "none";
+  subscriptionStatus: "active" | "complimentary" | "deactivated" | "none";
   freeMeetingUsed: boolean;
   createdAt: string;
   /** Billing through Stripe test mode (0029). */
@@ -48,11 +48,11 @@ export async function getAllCorporations(): Promise<AdminCorporation[]> {
       .from("strata_corporations")
       .select("strata_plan_number, building_name, legal_name, address, jurisdiction, unit_count, free_meeting_used, created_at, stripe_sandbox")
       .order("strata_plan_number"),
-    admin.from("subscriptions").select("corporation_id, status"),
+    admin.from("subscriptions").select("corporation_id, status, complimentary_at"),
   ]);
   if (error) console.error("[getAllCorporations]", error.message);
 
-  const statusByCorp = new Map((subs ?? []).map((s) => [s.corporation_id, s.status]));
+  const statusByCorp = new Map((subs ?? []).map((s) => [s.corporation_id, s.complimentary_at ? "complimentary" : s.status]));
 
   return (corps ?? []).map((c) => ({
     id: c.strata_plan_number,
@@ -62,7 +62,7 @@ export async function getAllCorporations(): Promise<AdminCorporation[]> {
     address: c.address,
     jurisdiction: c.jurisdiction,
     unitCount: c.unit_count,
-    subscriptionStatus: (statusByCorp.get(c.strata_plan_number) as "active" | "deactivated" | undefined) ?? "none",
+    subscriptionStatus: (statusByCorp.get(c.strata_plan_number) as AdminCorporation["subscriptionStatus"] | undefined) ?? "none",
     freeMeetingUsed: c.free_meeting_used,
     createdAt: c.created_at,
     stripeSandbox: Boolean(c.stripe_sandbox),

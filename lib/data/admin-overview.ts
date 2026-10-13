@@ -17,7 +17,8 @@ export interface AttentionItem {
 }
 
 export interface AdminOverview {
-  stratas: { total: number; subscribed: number; sandbox: number; new30: number };
+  /** subscribed counts paying stratas only; complimentary (0050) is counted apart. */
+  stratas: { total: number; subscribed: number; complimentary: number; sandbox: number; new30: number };
   people: { users: number; activeMembers: number; invited: number; new30: number };
   meetings: { held30: number; upcoming: number; total: number };
   documents: { total: number; indexed: number };
@@ -47,6 +48,7 @@ export async function getAdminOverview(): Promise<AdminOverview | null> {
     corpsSandbox,
     corpsNew,
     subscribed,
+    complimentary,
     paymentPending,
     users,
     usersNew,
@@ -69,7 +71,8 @@ export async function getAdminOverview(): Promise<AdminOverview | null> {
     count(admin.from("strata_corporations").select("strata_plan_number", head), "stratas"),
     count(admin.from("strata_corporations").select("strata_plan_number", head).eq("stripe_sandbox", true), "sandbox"),
     count(admin.from("strata_corporations").select("strata_plan_number", head).gte("created_at", since30), "new stratas"),
-    count(admin.from("subscriptions").select("corporation_id", head).eq("status", "active"), "subscribed"),
+    count(admin.from("subscriptions").select("corporation_id", head).eq("status", "active").is("complimentary_at", null), "subscribed"),
+    count(admin.from("subscriptions").select("corporation_id", head).not("complimentary_at", "is", null), "complimentary"),
     count(
       admin.from("subscriptions").select("corporation_id", head).neq("status", "active").eq("stripe_status", "incomplete"),
       "payment pending"
@@ -108,7 +111,7 @@ export async function getAdminOverview(): Promise<AdminOverview | null> {
   if (!demo) attention.push({ key: "demo", count: 0, label: "The demo database isn't connected", href: "/admin/demo" });
 
   return {
-    stratas: { total: corps, subscribed, sandbox: corpsSandbox, new30: corpsNew },
+    stratas: { total: corps, subscribed, complimentary, sandbox: corpsSandbox, new30: corpsNew },
     people: { users, activeMembers, invited, new30: usersNew },
     meetings: { held30, upcoming, total: meetingsTotal },
     documents: { total: docsTotal, indexed: docsIndexed },

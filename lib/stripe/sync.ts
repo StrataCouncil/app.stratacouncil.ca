@@ -62,9 +62,16 @@ export async function syncSubscription(sub: Stripe.Subscription, mode: StripeMod
 
   const { data: existing } = await admin
     .from("subscriptions")
-    .select("committed_until, activated_at, billing_interval, stripe_subscription_id, pending_interval")
+    .select("committed_until, activated_at, billing_interval, stripe_subscription_id, pending_interval, complimentary_at")
     .eq("corporation_id", corporationId)
     .maybeSingle();
+
+  // Complimentary access (0050) isn't Stripe's to change: a late event
+  // from an old subscription mustn't switch it off.
+  if (existing?.complimentary_at) {
+    console.warn(`[syncSubscription] ${sub.id}: ${corporationId} has complimentary access; Stripe event not applied.`);
+    return false;
+  }
 
   const status = mapStatus(sub.status);
   const billingInterval =

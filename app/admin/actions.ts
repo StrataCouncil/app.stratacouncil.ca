@@ -133,7 +133,7 @@ export async function setStripeSandbox(corpId: string, sandbox: boolean): Promis
 
   const { data: sub } = await admin
     .from("subscriptions")
-    .select("status, stripe_subscription_id")
+    .select("status, stripe_subscription_id, complimentary_at")
     .eq("corporation_id", corpId)
     .maybeSingle();
   if (sub?.stripe_subscription_id && sub.status === "active") {
@@ -141,6 +141,9 @@ export async function setStripeSandbox(corpId: string, sandbox: boolean): Promis
       ok: false,
       error: "This strata has a running Stripe subscription. Cancel it in Stripe first, then switch.",
     };
+  }
+  if (sub?.complimentary_at) {
+    return { ok: false, error: "This strata has complimentary access. Switch that off first, then switch." };
   }
 
   if (sub) {
@@ -173,6 +176,62 @@ export async function setStripeSandbox(corpId: string, sandbox: boolean): Promis
     console.error("[setStripeSandbox]", error.message);
     return { ok: false, error: "Couldn't switch billing mode." };
   }
+  revalidatePath(`/admin/${corpId}`);
+  revalidatePath(`/strata/${corpId}`, "layout");
+  revalidatePath("/admin", "layout");
+  return { ok: true };
+}
+
+/**
+ * Complimentary Stratasphere access (0050): switch a strata's
+ * subscription on without Stripe, or off again. Super Admins only. On,
+ * the subscription reads as active (no card, no charges) and the Billing
+ * page says Complimentary. Off ends access straight away; the strata can
+ * then subscribe and pay like any other. Refused while a Stripe
+ * subscription is running, which has to be cancelled in Stripe first.
+ */
+export async function setComplimentary(corpId: string, on: boolean): Promise<{ ok: true } | { ok: false; error: string }> {
+  const auth = await requireSuperAdmin();
+  if (!auth) return { ok: false, error: "Super Admins only." };
+  const admin = createAdminClient();
+
+  const { data: sub } = await admin
+    .from("subscriptions")
+    .select("status, stripe_subscription_id, complimentary_at")
+    .eq("corporation_id", corpId)
+    .maybeSingle();
+
+  if (on) {
+    if (sub?.complimentary_at) return { ok: true };
+    if (sub?.stripe_subscription_id && sub.status === "active") {
+      return { ok: false, error: "This strata has a running Stripe subscription. Cancel it in Stripe first, then make it complimentary." };
+    }
+    const { data: me } = await auth.supabase.from("profiles").select("full_name").eq("id", auth.user.id).single();
+    const { error } = await admin.from("subscriptions").upsert(
+      {
+        corporation_id: corpId,
+        status: "active",
+        complimentary_at: new Date().toISOString(),
+        complimentary_by: (me?.full_name as string) || "Super Admin",
+      },
+      { onConflict: "corporation_id" }
+    );
+    if (error) {
+      console.error("[setComplimentary] on", error.message);
+      return { ok: false, error: "Couldn't switch on complimentary access." };
+    }
+  } else {
+    if (!sub?.complimentary_at) return { ok: true };
+    const { error } = await admin
+      .from("subscriptions")
+      .update({ status: "deactivated", complimentary_at: null, complimentary_by: null })
+      .eq("corporation_id", corpId);
+    if (error) {
+      console.error("[setComplimentary] off", error.message);
+      return { ok: false, error: "Couldn't switch off complimentary access." };
+    }
+  }
+
   revalidatePath(`/admin/${corpId}`);
   revalidatePath(`/strata/${corpId}`, "layout");
   revalidatePath("/admin", "layout");

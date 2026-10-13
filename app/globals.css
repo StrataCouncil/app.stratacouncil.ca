@@ -1079,6 +1079,10 @@ button {
   border-color: #b42318;
   border-width: 2px;
 }
+.stripe-mode--complimentary {
+  border-color: var(--free);
+  border-width: 2px;
+}
 .stripe-mode__head {
   display: flex;
   justify-content: space-between;

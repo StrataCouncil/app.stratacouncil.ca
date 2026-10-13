@@ -55,7 +55,7 @@ export default async function AdminConsolePage() {
         <h2 style={{ marginBottom: "1rem" }}>Platform</h2>
         <div className="admin-stats" data-testid="admin-overview-stats">
           <Stat title="Stratas" main={n(stratas.total)}>
-            {n(stratas.subscribed)} subscribed{stratas.sandbox > 0 && `, ${n(stratas.sandbox)} on the Stripe sandbox`}. {n(stratas.new30)} new in
+            {n(stratas.subscribed)} subscribed{stratas.complimentary > 0 && `, ${n(stratas.complimentary)} complimentary`}{stratas.sandbox > 0 && `, ${n(stratas.sandbox)} on the Stripe sandbox`}. {n(stratas.new30)} new in
             the last 30 days.
           </Stat>
           <Stat title="People" main={n(people.users)}>

@@ -216,10 +216,10 @@ export async function changePlan(corporationId: string, newInterval: BillingInte
   const admin = createAdminClient();
   const { data: sub } = await admin
     .from("subscriptions")
-    .select("status, stripe_subscription_id, billing_interval, committed_until, activated_at, cancel_at, pending_interval")
+    .select("status, stripe_subscription_id, billing_interval, committed_until, activated_at, cancel_at, pending_interval, complimentary_at")
     .eq("corporation_id", corporationId)
     .maybeSingle();
-  if (!sub?.stripe_subscription_id || sub.status !== "active") throw new Error("No active subscription to change.");
+  if (!sub?.stripe_subscription_id || sub.status !== "active" || sub.complimentary_at) throw new Error("No active subscription to change.");
   if (sub.billing_interval === newInterval || sub.pending_interval === newInterval) return;
   if (sub.cancel_at) throw new Error("This subscription is set to cancel, so the plan can't be switched.");
 
@@ -329,11 +329,12 @@ export async function cancelSubscription(corporationId: string) {
   const admin = createAdminClient();
   const { data: sub } = await admin
     .from("subscriptions")
-    .select("stripe_subscription_id, billing_interval, committed_until, activated_at, stripe_schedule_id")
+    .select("stripe_subscription_id, billing_interval, committed_until, activated_at, stripe_schedule_id, complimentary_at")
     .eq("corporation_id", corporationId)
     .maybeSingle();
 
-  if (!sub?.stripe_subscription_id) {
+  // Complimentary access (0050) is switched off from the console, not here.
+  if (!sub?.stripe_subscription_id || sub.complimentary_at) {
     throw new Error("No active subscription to cancel.");
   }
   if (sub.stripe_schedule_id) await releasePendingSwitch(corporationId);
