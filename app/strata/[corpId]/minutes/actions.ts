@@ -6,7 +6,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getStrataAccess } from "@/lib/data/strata";
 import { DOCUMENTS_BUCKET } from "@/lib/documents";
 import { extractDocumentText } from "@/lib/kb/extract";
-import { loadStripContext, stripForCorporation } from "@/lib/kb/privacy";
+import { loadStripContext } from "@/lib/kb/privacy";
+import { pseudonymize } from "@/lib/pii";
 import { askClaudeJson, ClaudeRefusalError } from "@/lib/ai/claude";
 import { registerUploadedDocuments, type UploadedFile } from "@/app/strata/[corpId]/documents/actions";
 import { IS_DEMO, demoLimitFail } from "@/lib/demo";
@@ -113,23 +114,39 @@ export async function analyzeHistoricMinutes(corpId: string, file: UploadedFile)
     return { ok: false, error: `Those minutes are for ${found[0]}, not ${access.corpId}. Nothing was saved.` };
   }
 
+  // Names and personal details go to the AI as numbered references and
+  // come back as the original words (lib/pii pseudonymize), so nothing
+  // personal leaves, and a heading the filter mistook for a name ("Electric
+  // Vehicle Charging Policy") isn't left as "[name redacted]".
   const ctx = await loadStripContext(admin, access.corpId);
-  const stripped = stripForCorporation(extracted.text.slice(0, 120000), ctx);
+  const p = pseudonymize(extracted.text.slice(0, 120000), ctx.people);
+  const lotByName = new Map(
+    ctx.people.filter((x) => x.lotNumber).map((x) => [x.name.trim().toLowerCase().replace(/\s+/g, " "), x.lotNumber as string])
+  );
+  const asLot = (raw: string) => {
+    const v = p.restore(raw).trim();
+    if (LOT.test(v)) return v.toUpperCase().replace(/[\s-]/g, "");
+    return lotByName.get(v.toLowerCase().replace(/\s+/g, " ")) ?? "";
+  };
   try {
     const result = await askClaudeJson<Omit<HistoricAnalysis, "planNumber">>({
       effort: "medium",
       maxTokens: 32000,
       system:
         "You read the minutes of a BC strata corporation's meeting and list every motion that was decided or deferred. " +
-        "Use only what the minutes say. Movers and seconders appear as strata lot numbers (e.g. SL004) or placeholders; copy them exactly, or leave them empty. " +
+        "Use only what the minutes say. Names and personal details appear as references like [REF-3]: copy a reference exactly wherever it belongs, and never guess what it stands for. " +
+        "Movers and seconders appear as strata lot numbers (e.g. SL004) or references; copy them exactly, or leave them empty. " +
         "Vote counts are digits or empty. The summary is one sentence on what was decided.",
-      messages: [{ role: "user", content: `Minutes:\n\n${stripped}` }],
+      messages: [{ role: "user", content: `Minutes:\n\n${p.text}` }],
       schema: SCHEMA,
     });
     const decisions = (result.decisions ?? []).slice(0, 200).map((d) => ({
       ...d,
-      mover: LOT.test(d.mover.trim()) ? d.mover.trim().toUpperCase().replace(/[\s-]/g, "") : "",
-      seconder: LOT.test(d.seconder.trim()) ? d.seconder.trim().toUpperCase().replace(/[\s-]/g, "") : "",
+      title: p.restore(d.title),
+      summary: p.restore(d.summary),
+      motionText: p.restore(d.motionText),
+      mover: asLot(d.mover),
+      seconder: asLot(d.seconder),
       votesFor: /^\d+$/.test(d.votesFor) ? d.votesFor : "",
       votesAgainst: /^\d+$/.test(d.votesAgainst) ? d.votesAgainst : "",
       votesAbstain: /^\d+$/.test(d.votesAbstain) ? d.votesAbstain : "",

@@ -121,3 +121,16 @@ test("pseudonymize keeps lot refs and plan numbers as they are", () => {
 test("pseudonymize leaves unknown references in a reply alone", () => {
   assert.equal(pseudonymize("nothing here", []).restore("[REF-9] stays"), "[REF-9] stays");
 });
+
+test("electric vehicle charging is a topic, not a name", () => {
+  const text = "The proposed Electric Vehicle Charging Policy was deferred. EV Charger Installation quote received.";
+  assert.equal(stripPII(text), text);
+});
+
+test("a heading the filter mistakes for a name comes back whole after pseudonymizing", () => {
+  const p = pseudonymize("Zephyrine Quillfeather Policy was deferred. Moved by Sally Chen.", [{ name: "Sally Chen", lotNumber: "SL004" }]);
+  assert.doesNotMatch(p.text, /Zephyrine|Quillfeather|Sally|Chen/);
+  const refs = p.text.match(/\[REF-\d+\]/g) ?? [];
+  assert.equal(p.restore(`${refs[0]} Policy`), "Zephyrine Quillfeather Policy");
+  assert.equal(p.restore(refs[1]), "Sally Chen");
+});

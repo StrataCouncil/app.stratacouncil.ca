@@ -27,6 +27,7 @@ import { registerUploadedDocuments, type UploadedFile } from "@/app/strata/[corp
 import { extractDocumentText } from "@/lib/kb/extract";
 import { loadStripContext } from "@/lib/kb/privacy";
 import { pseudonymize } from "@/lib/pii";
+import { agendaVersion } from "@/lib/meetings/agenda-version";
 import { askClaudeJson, ClaudeRefusalError } from "@/lib/ai/claude";
 import { isGeneralMeeting } from "@/lib/meetings/rules";
 import { queueDocumentIndexing } from "@/lib/kb/queue";
@@ -173,18 +174,43 @@ function sanitizeAgenda(raw: unknown): AgendaItem[] {
 }
 
 /**
- * Save the whole agenda. `expectedUpdatedAt` guards against two people
- * editing the same draft at once: if the meeting changed since this
- * editor loaded it, nothing is written and the editor is told to reload.
+ * Save the whole agenda. `expectedVersion` (lib/meetings/agenda-version)
+ * is the agenda as this editor loaded or last saved it: if the agenda
+ * itself has changed since (another tab, another person), nothing is
+ * written and the editor is told, with the choice to keep its version
+ * (`overwrite`). Changes to the meeting's details don't count. Only a
+ * draft that nobody has launched can be saved here.
  */
 export async function saveAgenda(
   corpId: string,
   meetingId: string,
   agenda: unknown,
-  expectedUpdatedAt: string
-): Promise<Ok<{ updatedAt: string }> | Fail> {
+  expectedVersion: string,
+  opts: { overwrite?: boolean } = {}
+): Promise<Ok<{ version: string }> | (Fail & { conflict?: boolean })> {
   if (!(await runner(corpId))) return { ok: false, error: "You can't edit this agenda." };
   const supabase = await createClient();
+  const { data: current, error: readError } = await supabase
+    .from("meetings")
+    .select("agenda, status, launched_by")
+    .eq("id", meetingId)
+    .eq("corporation_id", corpId)
+    .maybeSingle();
+  if (readError || !current) {
+    if (readError) console.error("[saveAgenda] read", readError.code, readError.message);
+    return { ok: false, error: "Couldn't save the agenda." };
+  }
+  if (current.status !== "DRAFT" || current.launched_by) {
+    return { ok: false, error: "This meeting has been launched, so its agenda can't be changed here any more." };
+  }
+  if (!opts.overwrite && agendaVersion(current.agenda) !== expectedVersion) {
+    return {
+      ok: false,
+      conflict: true,
+      error: "This agenda was changed somewhere else (another tab, or another person) since you opened it.",
+    };
+  }
+
   let next = sanitizeAgenda(agenda);
   if (IS_DEMO) {
     const locked = await demoLockedAgenda(supabase, corpId, meetingId, next);
@@ -196,17 +222,15 @@ export async function saveAgenda(
     .update({ agenda: ensureBookends(next) })
     .eq("id", meetingId)
     .eq("corporation_id", corpId)
-    .eq("updated_at", expectedUpdatedAt)
-    .select("updated_at");
+    .eq("status", "DRAFT")
+    .is("launched_by", null)
+    .select("agenda");
   if (error) {
     console.error("[saveAgenda]", error.code, error.message);
     return { ok: false, error: "Couldn't save the agenda." };
   }
   if (!data?.length) {
-    return {
-      ok: false,
-      error: "This agenda changed somewhere else since you opened it (or the meeting is being run by someone else). Reload to see the latest.",
-    };
+    return { ok: false, error: "This meeting has been launched, so its agenda can't be changed here any more." };
   }
   if (IS_DEMO) {
     const item = next.find((i) => i.id === DEMO_EDITABLE_ITEM_ID);
@@ -216,7 +240,7 @@ export async function saveAgenda(
     });
   }
   refresh(corpId, meetingId);
-  return { ok: true, updatedAt: data[0].updated_at };
+  return { ok: true, version: agendaVersion(data[0].agenda) };
 }
 
 /**

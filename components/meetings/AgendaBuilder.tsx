@@ -36,7 +36,7 @@ export function AgendaBuilder({
   meetingId,
   meetingType,
   initialAgenda,
-  initialUpdatedAt,
+  initialVersion,
   initialNotes,
   aiAvailable,
   launch,
@@ -45,7 +45,8 @@ export function AgendaBuilder({
   meetingId: string;
   meetingType: MeetingType;
   initialAgenda: AgendaItem[];
-  initialUpdatedAt: string;
+  /** The agenda's fingerprint as loaded (lib/meetings/agenda-version). */
+  initialVersion: string;
   initialNotes: Record<string, string>;
   aiAvailable: boolean;
   /** Present when the viewer may launch this meeting. */
@@ -54,7 +55,8 @@ export function AgendaBuilder({
   const router = useRouter();
   const [agenda, setAgenda] = useState<AgendaItem[]>(initialAgenda);
   const [notes, setNotes] = useState(initialNotes);
-  const [updatedAt, setUpdatedAt] = useState(initialUpdatedAt);
+  const [version, setVersion] = useState(initialVersion);
+  const [conflict, setConflict] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [editing, setEditing] = useState<AgendaItem | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -77,16 +79,27 @@ export function AgendaBuilder({
     setStatus(null);
   }, []);
 
-  function save() {
+  function save(overwrite = false) {
     setError(null);
     startTransition(async () => {
-      const result = await saveAgenda(corpId, meetingId, agenda, updatedAt);
-      if (!result.ok) return setError(result.error);
-      setUpdatedAt(result.updatedAt);
+      const result = await saveAgenda(corpId, meetingId, agenda, version, { overwrite });
+      if (!result.ok) {
+        // Your changes stay on screen either way; nothing is lost.
+        setConflict(Boolean("conflict" in result && result.conflict));
+        return setError(result.error);
+      }
+      setVersion(result.version);
+      setConflict(false);
       setDirty(false);
       setStatus("Agenda saved.");
       router.refresh();
     });
+  }
+
+  function discardAndReload() {
+    if (!window.confirm("Discard your unsaved changes to this agenda and load the saved one?")) return;
+    setDirty(false);
+    window.setTimeout(() => window.location.reload(), 0);
   }
 
   async function upload(file: File | undefined) {
@@ -262,7 +275,7 @@ export function AgendaBuilder({
         <button
           type="button"
           className={`button ${dirty ? "button-primary" : "button-secondary"}`}
-          onClick={save}
+          onClick={() => save()}
           disabled={pending || !dirty}
           data-testid="agenda-save"
         >
@@ -272,7 +285,21 @@ export function AgendaBuilder({
           <LaunchMeetingButton corpId={corpId} meetingId={meetingId} agendaSaved={!dirty && !pending} {...launch} />
         )}
       </div>
-      {error && <p className="form-error" role="alert">{error}</p>}
+      {error && !conflict && <p className="form-error" role="alert">{error}</p>}
+      {conflict && (
+        <div className="billing-outcome billing-outcome--attention" role="alert" data-testid="agenda-conflict">
+          <strong>{error}</strong>
+          <p>Your changes are still here and nothing has been lost. Keep your version to save it over the other one, or load the saved agenda instead.</p>
+          <div className="billing-outcome__actions">
+            <button type="button" className="button button-primary" onClick={() => save(true)} disabled={pending} data-testid="agenda-keep-mine">
+              {pending ? "Saving…" : "Keep my version"}
+            </button>
+            <button type="button" className="button button-secondary" onClick={discardAndReload} disabled={pending} data-testid="agenda-load-saved">
+              Load the saved agenda
+            </button>
+          </div>
+        </div>
+      )}
 
       {cats.map((cat, ci) => (
         <div className="agenda-cat" key={cat.id} data-testid={`agenda-cat-${ci}`}>
