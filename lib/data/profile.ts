@@ -51,6 +51,15 @@ export async function getCurrentProfile(): Promise<CurrentProfile | null> {
   }
   if (!profile) return null;
 
+  // Super Admin powers need a two-step-verified session (0053). The
+  // database's is_super_admin() checks the session as well as the flag, so
+  // ask it rather than trusting the flag on its own.
+  let isSuperAdmin = false;
+  if (profile.is_super_admin) {
+    const { data } = await supabase.rpc("is_super_admin");
+    isSuperAdmin = data === true;
+  }
+
   const { data: factors, error: mfaError } = await supabase.auth.mfa.listFactors();
   if (mfaError) {
     console.error("[getCurrentProfile] mfa.listFactors() error:", mfaError.message);
@@ -72,7 +81,7 @@ export async function getCurrentProfile(): Promise<CurrentProfile | null> {
     fullName: profile.full_name,
     email: profile.email ?? user.email ?? "",
     phone: profile.phone,
-    isSuperAdmin: profile.is_super_admin,
+    isSuperAdmin,
     twoFactorEnabled,
     avatarUrl,
   };

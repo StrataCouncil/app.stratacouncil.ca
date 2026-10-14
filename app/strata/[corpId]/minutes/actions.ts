@@ -86,7 +86,9 @@ export async function analyzeHistoricMinutes(corpId: string, file: UploadedFile)
     return { ok: false, error: "Reading decisions out of minutes uses Stratasphere AI, which needs a subscription. You can still upload them under Documents." };
   }
   const parts = file.path.split("/");
-  if (parts.length !== 3 || parts[0] !== access.corpId) return { ok: false, error: "That upload doesn't belong to this strata." };
+  if (parts.length !== 3 || parts[0] !== access.corpId || parts.some((x) => !x || x === "..")) {
+    return { ok: false, error: "That upload doesn't belong to this strata." };
+  }
 
   const admin = createAdminClient();
   const { data: blob, error } = await admin.storage.from(DOCUMENTS_BUCKET).download(file.path);

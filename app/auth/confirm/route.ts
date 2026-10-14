@@ -2,6 +2,7 @@ import { type EmailOtpType } from "@supabase/supabase-js";
 import { redirect } from "next/navigation";
 import { type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { safeNext } from "@/lib/safe-next";
 
 /**
  * Lands the click from the magic-link email `sendOtp()` sends (doc03
@@ -16,10 +17,12 @@ import { createClient } from "@/lib/supabase/server";
  * invite — needs to survive the auth round-trip).
  */
 export async function GET(request: NextRequest) {
-  const { searchParams, origin } = new URL(request.url);
+  const { searchParams } = new URL(request.url);
   const token_hash = searchParams.get("token_hash");
   const type = searchParams.get("type") as EmailOtpType | null;
-  const next = searchParams.get("next") ?? "/";
+  // Only a path on this site: a link with "next=https://…" mustn't sign
+  // someone in and then send them elsewhere.
+  const next = safeNext(searchParams.get("next"));
 
   if (token_hash && type) {
     const supabase = await createClient();

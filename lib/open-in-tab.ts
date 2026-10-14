@@ -1,3 +1,5 @@
+import { isWebUrl } from "@/lib/web-url";
+
 /**
  * Open a link that has to be fetched first (a signed document URL) in a new
  * tab. The tab is opened straight away, inside the click, so browsers don't
@@ -13,6 +15,10 @@ export async function openInNewTab(
     if (!result.ok) {
       tab?.close();
       return result;
+    }
+    if (!isWebUrl(result.url)) {
+      tab?.close();
+      return { ok: false, error: "That link isn't a web address." };
     }
     if (tab) {
       tab.opener = null;

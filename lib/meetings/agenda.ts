@@ -4,6 +4,7 @@
  * agenda — every one of them bookended with Call to Order and
  * Adjournment. Pure; shared by server and browser.
  */
+import { isWebUrl } from "../web-url.ts";
 
 export const meetingTypes = ["council", "agm", "sgm", "committee"] as const;
 export type MeetingType = (typeof meetingTypes)[number];
@@ -411,7 +412,8 @@ export function normalizeAgenda(raw: unknown): AgendaItem[] {
         deferred: Boolean(r.deferred),
         consensus: Boolean(r.consensus) || undefined,
         minutesSummary: String(r.minutesSummary ?? ""),
-        atts: Array.isArray(r.atts) ? (r.atts as Attachment[]) : [],
+        // A link that isn't a web address is dropped (lib/web-url.ts).
+        atts: Array.isArray(r.atts) ? (r.atts as Attachment[]).filter((a) => a?.kind !== "link" || isWebUrl(a.url)) : [],
         nextMeeting: (r.nextMeeting as AgendaItem["nextMeeting"]) ?? undefined,
         addedDuringMeeting: Boolean(r.addedDuringMeeting) || undefined,
         nominee: typeof r.nominee === "string" && r.nominee.trim() ? r.nominee.slice(0, 200) : undefined,

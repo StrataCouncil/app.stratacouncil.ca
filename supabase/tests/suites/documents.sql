@@ -41,3 +41,14 @@ select pg_temp.expect_error($q$insert into documents (corporation_id, category, 
 
 set test.uid = '00000000-0000-0000-0000-00000000000b';  -- Bob, admin
 select pg_temp.expect('admin sees both documents', (select count(*) = 2 from documents));
+
+-- 0054: a link must be a web address, and a file must be in this strata's folder.
+set test.uid = '00000000-0000-0000-0000-00000000000c';  -- Cara, plain member
+insert into documents (corporation_id, category, title, source_type, url, uploaded_by)
+  values ('BCS-1234', 'agenda_attachments', 'site', 'link', 'https://example.com/page', '00000000-0000-0000-0000-00000000000c');
+select pg_temp.expect('web link saved', (select count(*) = 1 from documents where title = 'site'));
+select pg_temp.expect_error($q$insert into documents (corporation_id, category, title, source_type, url, uploaded_by) values ('BCS-1234', 'agenda_attachments', 'x', 'link', 'javascript:alert(document.cookie)', '00000000-0000-0000-0000-00000000000c')$q$, 'documents_link_is_web');
+select pg_temp.expect_error($q$insert into documents (corporation_id, category, title, source_type, url, uploaded_by) values ('BCS-1234', 'agenda_attachments', 'x', 'link', 'data:text/html,<script>1</script>', '00000000-0000-0000-0000-00000000000c')$q$, 'documents_link_is_web');
+select pg_temp.expect_error($q$insert into documents (corporation_id, category, title, storage_path, uploaded_by) values ('BCS-1234', 'insurance', 'x', 'corporation-documents/BCS-9999/u/secret.pdf', '00000000-0000-0000-0000-00000000000c')$q$, 'row-level security');
+select pg_temp.expect_error($q$insert into documents (corporation_id, category, title, storage_path, uploaded_by) values ('BCS-1234', 'insurance', 'x', 'strata-plans/someone/plan.pdf', '00000000-0000-0000-0000-00000000000c')$q$, 'row-level security');
+select pg_temp.expect_error($q$insert into documents (corporation_id, category, title, storage_path, uploaded_by) values ('BCS-1234', 'insurance', 'x', 'corporation-documents/BCS-1234/../BCS-9999/u/secret.pdf', '00000000-0000-0000-0000-00000000000c')$q$, 'row-level security');

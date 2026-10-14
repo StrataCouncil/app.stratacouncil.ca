@@ -19,6 +19,7 @@ import {
 import { queueDocumentIndexing } from "@/lib/kb/queue";
 import { IS_DEMO, demoLimitFail } from "@/lib/demo";
 import { logDemoActivity } from "@/lib/demo-usage";
+import { isWebUrl } from "@/lib/web-url";
 
 /**
  * Document repository actions (doc01 §4a — free for every member, always).
@@ -190,7 +191,9 @@ export async function getDocumentDownloadUrl(
     .eq("corporation_id", corpId)
     .maybeSingle();
   if (!doc) return { ok: false, error: "That document isn't available." };
-  if (doc.source_type === "link" && doc.url) return { ok: true, url: doc.url };
+  if (doc.source_type === "link") {
+    return isWebUrl(doc.url) ? { ok: true, url: doc.url } : { ok: false, error: "That link isn't a web address." };
+  }
   if (!doc.storage_path) return { ok: false, error: "That document has no file." };
 
   const slash = doc.storage_path.indexOf("/");
