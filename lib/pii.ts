@@ -107,6 +107,8 @@ const VOCABULARY = new Set(
   business old new unfinished action actions update updates review reviews summary overview
   building buildings construction maintenance repair repairs replacement replace project projects roof
   roofing envelope parkade parking stall stalls storage locker lockers bike bicycle rack elevator elevators
+  vehicle vehicles charging charger chargers ev evs station stations battery batteries solar energy power
+  heat pump pumps meter meters metering panel panels outlet outlets infrastructure
   boiler boilers plumbing electric electrical mechanical hvac fire code codes safety alarm alarms sprinkler
   sprinklers window windows door doors balcony balconies deck decks patio patios garden gardens
   landscaping landscape pool gym lobby hallway hallways amenity amenities room rooms garage gate gates

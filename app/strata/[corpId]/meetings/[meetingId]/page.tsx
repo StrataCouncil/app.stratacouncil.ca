@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { StrataSphereNav } from "@/components/StrataSphereNav";
 import { AgendaBuilder } from "@/components/meetings/AgendaBuilder";
+import { agendaVersion } from "@/lib/meetings/agenda-version";
 import { AgendaView } from "@/components/meetings/AgendaView";
 import { DeleteMeetingButton, EditMeetingDetailsButton } from "@/components/meetings/MeetingActions";
 import { getStrataAccess } from "@/lib/data/strata";
@@ -100,7 +101,7 @@ export default async function MeetingPage({ params }: { params: Promise<{ corpId
           meetingId={meetingId}
           meetingType={meeting.type}
           initialAgenda={meeting.agenda}
-          initialUpdatedAt={meeting.updatedAt}
+          initialVersion={agendaVersion(meeting.agenda)}
           initialNotes={notes}
           aiAvailable={access.subscribed || trialAvailable}
           launch={{ subscribed: access.subscribed, trialAvailable, isAdmin: access.isAdmin }}
