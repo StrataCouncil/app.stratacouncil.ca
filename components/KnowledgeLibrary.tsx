@@ -31,9 +31,9 @@ const kinds = Object.keys(knowledgeResourceKindLabels) as KnowledgeResourceKind[
  * tall as an article rather than an index entry, working against the
  * "index you scan, then click into" structure this is meant to be.
  *
- * Published Library items (0049) come first; the sample articles from
- * placeholder-data.ts follow, each with a "Sample" pill, until they're
- * replaced.
+ * Published Library items (0049) come first; the placeholder articles
+ * from placeholder-data.ts follow, greyed out with a lock and "Coming
+ * soon", and don't open: their content hasn't been written or reviewed.
  *
  * Client-side filtering only — this is a few dozen records, not a
  * corpus that needs real search infrastructure. Matches against title,
@@ -119,6 +119,28 @@ export function KnowledgeLibrary({
       ) : (
         <div className="grid-cards kb-grid" data-testid="knowledge-results">
           {filtered.map((r) => {
+            if (r.sample) {
+              return (
+                <div className="card kb-card kb-card--soon" aria-disabled="true" key={r.id} data-testid={`knowledge-card-${r.id}`}>
+                  <div className="kb-card__meta-row">
+                    <span className={`kb-card__kind kb-card__kind--${r.kind}`}>{knowledgeResourceKindLabels[r.kind]}</span>
+                    <div className="kb-card__meta-row-right">
+                      <span className="pill pill--locked kb-card__soon" title="Being written. It'll open here once it's ready.">
+                        <svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true" focusable="false">
+                          <path
+                            fill="currentColor"
+                            d="M5 7V5a3 3 0 0 1 6 0v2h.5A1.5 1.5 0 0 1 13 8.5v5a1.5 1.5 0 0 1-1.5 1.5h-7A1.5 1.5 0 0 1 3 13.5v-5A1.5 1.5 0 0 1 4.5 7H5Zm1.5 0h3V5a1.5 1.5 0 0 0-3 0v2Z"
+                          />
+                        </svg>
+                        Coming soon
+                      </span>
+                    </div>
+                  </div>
+                  <h3>{r.title}</h3>
+                  <p>{r.summary}</p>
+                </div>
+              );
+            }
             const locked = isTemplateLocked(r, subscribed);
             return (
               <Link
@@ -133,11 +155,6 @@ export function KnowledgeLibrary({
                     {knowledgeResourceKindLabels[r.kind]}
                   </span>
                   <div className="kb-card__meta-row-right">
-                    {r.sample && (
-                      <span className="pill pill--sample" title="A sample article, not yet reviewed">
-                        Sample
-                      </span>
-                    )}
                     {locked && (
                       <span className="kb-lock-badge" title="Requires a Stratasphere™ subscription">
                         Subscription
