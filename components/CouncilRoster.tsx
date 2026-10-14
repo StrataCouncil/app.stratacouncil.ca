@@ -4,7 +4,7 @@ import { RosterTable } from "@/components/RosterTable";
 import type { CorporationRoster } from "@/lib/data/roster";
 
 /**
- * Council & Roles (doc01 §1, §3), backed by real data from
+ * The Council page (doc01 §1, §3), backed by real data from
  * `getCorporationRoster()` (lib/data/roster.ts). No shared client state
  * any more: every change is a Server Action that writes through RLS and
  * revalidates the page, so an approved join request or accepted invite

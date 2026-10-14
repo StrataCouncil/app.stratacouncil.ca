@@ -43,7 +43,7 @@ function splitTiming(text: string): [string, string | null] {
   return m ? [m[1].trim(), m[2].trim()] : [text.trim(), null];
 }
 
-export function slugify(text: string): string {
+function slugify(text: string): string {
   return text
     .toLowerCase()
     .replace(/\*\*/g, "")

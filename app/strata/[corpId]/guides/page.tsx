@@ -3,12 +3,12 @@ import { StrataSphereNav } from "@/components/StrataSphereNav";
 import { KnowledgeLibrary, type LibraryCard } from "@/components/KnowledgeLibrary";
 import { listPublishedLibrary } from "@/lib/data/library";
 import { getStrataAccess } from "@/lib/data/strata";
-import { knowledgeResources } from "@/lib/placeholder-data";
+import { knowledgeResources } from "@/lib/library/catalogue";
 
 /**
  * The Knowledge Library — jurisdiction-scoped (doc01 §3b), free with one
  * exception: policy templates require a Stratasphere™ subscription (see
- * `isTemplateLocked` in placeholder-data.ts). Leads the Stratasphere™ nav
+ * `isTemplateLocked` in lib/library/catalogue.ts). Leads the Stratasphere™ nav
  * on purpose: this is the thing a brand-new council member gets immediate
  * value from, before anything else here means much to them. Playbooks,
  * policy templates, operational guides, financial insights, legislation

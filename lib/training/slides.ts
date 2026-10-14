@@ -207,7 +207,7 @@ export function newId(prefix = "i") {
 }
 const idOf = (v: unknown, prefix: string) => (typeof v === "string" && /^[\w-]{1,40}$/.test(v) ? v : newId(prefix));
 
-export function safeHref(href: unknown): string | null {
+function safeHref(href: unknown): string | null {
   if (typeof href !== "string") return null;
   const h = href.trim();
   if (/^mailto:[^\s]+$/i.test(h)) return h;
@@ -285,7 +285,7 @@ export function normalizeFurtherReading(raw: unknown): FurtherReading[] {
 }
 
 /** Only https links go to learners. */
-export function isReadingUrl(url: string): boolean {
+function isReadingUrl(url: string): boolean {
   try {
     return new URL(url).protocol === "https:";
   } catch {

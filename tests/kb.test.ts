@@ -86,3 +86,10 @@ for (const [label, url] of [
     await assert.rejects(fetchLink(url), LinkFetchError);
   });
 }
+
+test("control characters a database can't store are removed", async () => {
+  const bytes = new TextEncoder().encode("August\u0000 FY27\u0007 Financials\n\tTotals");
+  const r = await extractDocumentText(bytes, "mail.txt", "text/plain");
+  assert.equal(r.status, "ok");
+  if (r.status === "ok") assert.equal(r.text, "August FY27 Financials\nTotals");
+});

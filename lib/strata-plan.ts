@@ -6,7 +6,7 @@
  */
 
 /** "EPS-9048" → "EPS9048", the form the plan and the legal name use. */
-export function compactPlanNumber(normalized: string) {
+function compactPlanNumber(normalized: string) {
   return normalized.replace("-", "");
 }
 

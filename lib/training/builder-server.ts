@@ -22,7 +22,7 @@ export async function canAuthor(moduleId: string) {
   return data === true;
 }
 
-export const NOT_YOURS = "You're not editing this module any more: it was checked in from another window, or released by a Super Admin. Reload to see the latest.";
+const NOT_YOURS = "You're not editing this module any more: it was checked in from another window, or released by a Super Admin. Reload to see the latest.";
 
 /**
  * The module, if it's checked out to the signed-in person in this window.

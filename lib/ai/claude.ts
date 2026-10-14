@@ -9,7 +9,7 @@ import type { TokenUsage } from "@/lib/ai/pricing";
  * the API re-runs it on Anthropic's recommended fallback model inside the
  * same call instead of returning a refusal.
  */
-export const CLAUDE_MODEL = "claude-opus-5-5";
+const CLAUDE_MODEL = "claude-opus-5-5";
 
 let client: Anthropic | null = null;
 function anthropic() {

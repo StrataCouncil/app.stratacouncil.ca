@@ -5,9 +5,8 @@ import { isStrataAdmin } from "@/lib/auth/strata-admin";
 import { signAvatarPaths } from "@/lib/data/avatars";
 
 /**
- * Real replacement for lib/placeholder-data.ts's `roster` /
- * `corporationInvites` / `corporationJoinRequests` mocks on Council &
- * Roles (doc01 §1, §3). Everything goes through the signed-in user's
+ * Members, invites and join requests for the Council page
+ * (doc01 §1, §3). Everything goes through the signed-in user's
  * RLS-scoped client:
  *
  *   - members: `corporation_member_directory()` (0010) — memberships

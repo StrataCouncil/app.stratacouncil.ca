@@ -45,6 +45,9 @@ export async function extractDocumentText(bytes: Uint8Array, fileName: string, m
 
 function normalize(text: string) {
   return text
+    // Control characters (a null in particular, common in PDFs printed from
+    // mail apps) can't be stored in a text column.
+    .replace(/[\u0000-\u0008\u000b\u000e-\u001f\u007f]/g, "")
     .replace(/\r\n?/g, "\n")
     .replace(/[ \t\f\v]+/g, " ")
     .replace(/ *\n */g, "\n")

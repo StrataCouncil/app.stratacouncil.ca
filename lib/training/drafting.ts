@@ -94,7 +94,7 @@ Rules:
 - No emoji, no exclamation marks.`;
 
 /** How deep each Bloom level goes, so a basics module doesn't reach for lawsuits. */
-export const BLOOM_DEPTH: Record<Bloom, string> = {
+const BLOOM_DEPTH: Record<Bloom, string> = {
   remember: "name and recognize the basic terms and facts",
   understand: "say what something is and why it matters, in their own words",
   apply: "use a rule or step in an everyday council situation",

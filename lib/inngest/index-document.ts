@@ -22,7 +22,7 @@ import { DOCUMENT_INDEX_EVENT, inngest } from "@/lib/inngest/client";
  * Nothing unstripped is ever sent to Voyage or Anthropic.
  */
 
-export const DOC_TYPES = [
+const DOC_TYPES = [
   "bylaws",
   "strata-plan",
   "minutes",
@@ -101,7 +101,8 @@ export const indexDocument = inngest.createFunction(
         await admin.from("documents").update({ indexing_status: "needs_text" }).eq("id", documentId);
         return { status: "stopped" as const };
       }
-      await admin.from("documents").update({ document_text: result.text }).eq("id", documentId);
+      const { error: saveError } = await admin.from("documents").update({ document_text: result.text }).eq("id", documentId);
+      if (saveError) throw new Error(`Couldn't save the document's text: ${saveError.message}`);
       return { status: "ok" as const };
     });
 
@@ -114,10 +115,11 @@ export const indexDocument = inngest.createFunction(
         .select("id, corporation_id, title, document_text")
         .eq("id", documentId)
         .single();
-      const corpId = doc!.corporation_id as string;
+      if (!doc?.document_text) throw new Error("The document's text wasn't saved. Select Re-index to try again.");
+      const corpId = doc.corporation_id as string;
       const ctx = await loadStripContext(admin, corpId);
-      const stripped = stripForCorporation(doc!.document_text as string, ctx);
-      const title = stripForCorporation(doc!.title ?? "", ctx);
+      const stripped = stripForCorporation(doc.document_text as string, ctx);
+      const title = stripForCorporation(doc.title ?? "", ctx);
 
       const docType = await classify(stripped).catch(() => "other");
 
@@ -138,7 +140,7 @@ export const indexDocument = inngest.createFunction(
       }));
 
       if (subscribed) {
-        const globalChunks = chunkText(stripForGlobal(doc!.document_text as string, ctx));
+        const globalChunks = chunkText(stripForGlobal(doc.document_text as string, ctx));
         const globalVectors = await embed(globalChunks, "document");
         rows.push(
           ...globalChunks.map((chunk, i) => ({

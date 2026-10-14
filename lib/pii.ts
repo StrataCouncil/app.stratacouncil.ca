@@ -51,7 +51,7 @@ export interface KnownPerson {
   lotNumber?: string | null;
 }
 
-export const PII_PLACEHOLDER = {
+const PII_PLACEHOLDER = {
   name: "[name redacted]",
   member: "[Council Member]",
   email: "[email redacted]",

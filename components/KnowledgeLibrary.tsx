@@ -7,7 +7,7 @@ import {
   knowledgeResourceKindLabels,
   type KnowledgeResource,
   type KnowledgeResourceKind,
-} from "@/lib/placeholder-data";
+} from "@/lib/library/catalogue";
 
 const kinds = Object.keys(knowledgeResourceKindLabels) as KnowledgeResourceKind[];
 
@@ -32,7 +32,7 @@ const kinds = Object.keys(knowledgeResourceKindLabels) as KnowledgeResourceKind[
  * "index you scan, then click into" structure this is meant to be.
  *
  * Published Library items (0049) come first; the placeholder articles
- * from placeholder-data.ts follow, greyed out with a lock and "Coming
+ * from lib/library/catalogue.ts follow, greyed out with a lock and "Coming
  * soon", and don't open: their content hasn't been written or reviewed.
  *
  * Client-side filtering only — this is a few dozen records, not a

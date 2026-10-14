@@ -12,7 +12,7 @@ import { EMAIL_RE, isCorporationRole } from "@/lib/strata";
 import { isStrataAdmin } from "@/lib/auth/strata-admin";
 
 /**
- * Server Actions behind Council & Roles (doc01 §1, §3). Authorization is
+ * Server Actions behind the Council page (doc01 §1, §3). Authorization is
  * RLS (0005) and the admin-checking RPCs (0010) — every write here goes
  * through the signed-in user's own client, so a non-admin calling these
  * directly gets a database refusal, not a silent success.

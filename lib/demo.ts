@@ -26,9 +26,9 @@ export const DEMO_LANDINGS: { value: DemoLanding; label: string }[] = [
 export const SIGNUP_URL = "https://app.stratacouncil.ca/signup";
 
 /** Where demo links point. Read on the live site, which makes them. */
-export const DEMO_URL = (process.env.DEMO_APP_URL || "https://demo.stratacouncil.ca").replace(/\/+$/, "");
+const DEMO_URL = (process.env.DEMO_APP_URL || "https://demo.stratacouncil.ca").replace(/\/+$/, "");
 
-export const DEMO_TIME_ZONE = "America/Los_Angeles";
+const DEMO_TIME_ZONE = "America/Los_Angeles";
 
 /** The visitor's sign-in link. */
 export function demoLink(token: string) {
@@ -60,7 +60,7 @@ function pacificParts(at: Date) {
 }
 
 /** Days a demo link works after the day it's made: one made Monday works until Thursday ends. */
-export const DEMO_LINK_DAYS = 3;
+const DEMO_LINK_DAYS = 3;
 
 /**
  * Midnight at the end of `now`'s day in British Columbia, `extraDays`

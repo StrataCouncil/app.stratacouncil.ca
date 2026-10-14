@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createLibraryItem } from "@/app/admin/library/actions";
 import { LIBRARY_KINDS } from "@/lib/library/library";
-import { knowledgeResourceKindLabels, type KnowledgeResourceKind } from "@/lib/placeholder-data";
+import { knowledgeResourceKindLabels, type KnowledgeResourceKind } from "@/lib/library/catalogue";
 
 /** Starts a Library item and opens its editor. */
 export function NewLibraryItem() {

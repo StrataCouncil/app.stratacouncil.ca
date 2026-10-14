@@ -21,7 +21,7 @@ import { hasPostalCode } from "@/lib/postal";
  *   1. lookupStrata — SP# first, always. A match routes into the join
  *      flow (no upload at all); no match routes into creation.
  *   2a. requestToJoin — self-serve `corporation_join_requests` row; the
- *       corporation's admin approves or denies it from Council & Roles.
+ *       corporation's admin approves or denies it from the Council page.
  *   2b. createStrataPlanUpload + submitCreationRequest — upload the Strata
  *       Plan, enter its identity fields, attest, and leave a pending
  *       `corporation_creation_requests` row for Super Admin review. No

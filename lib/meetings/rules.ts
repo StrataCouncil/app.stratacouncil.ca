@@ -69,7 +69,7 @@ export function evaluateVote(m: Pick<Motion, "for" | "against" | "abstain" | "dt
   return { cast, total, needed, passing };
 }
 
-export const decisionTypeMinutesLabels: Record<DecisionType, string> = {
+const decisionTypeMinutesLabels: Record<DecisionType, string> = {
   MAJORITY: "Majority",
   THREE_QUARTER: "Three-Quarter (3/4)",
   EIGHTY_PERCENT: "80%",

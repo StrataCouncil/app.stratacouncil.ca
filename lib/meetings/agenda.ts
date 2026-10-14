@@ -183,7 +183,7 @@ const info = (text: string): TemplateItem => ({ text, type: "FOR_INFORMATION" })
 const approve = (text: string, dt: DecisionType = "MAJORITY"): TemplateItem => ({ text, type: "FOR_APPROVAL", dt });
 
 /** Order of business per the BC Standard Bylaws (s.28) and good meeting practice. */
-export const agendaTemplates: Record<MeetingType, TemplateCat[]> = {
+const agendaTemplates: Record<MeetingType, TemplateCat[]> = {
   agm: [
     { name: "Opening", items: [info("Call to Order")] },
     { name: "Credentials", items: [info("Certify Proxies and Issue Voting Cards"), info("Determine Quorum")] },

@@ -1,4 +1,4 @@
-import { knowledgeResourceKindLabels } from "../placeholder-data.ts";
+import { knowledgeResourceKindLabels } from "./catalogue.ts";
 import { LIBRARY_KINDS, PASTE_MAX_CHARS, CLAIMS_MAX, normalizeItem, normalizeKind, type PublishedLibraryItem } from "./library.ts";
 
 /**
