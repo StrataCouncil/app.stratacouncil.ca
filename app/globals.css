@@ -8782,6 +8782,17 @@ a.track-card:focus-visible {
 
 /* ── The Library (0049): items read in each strata's Knowledge Library ── */
 
+.kb-card--soon {
+  cursor: default;
+  opacity: 0.55;
+  background: var(--paper);
+}
+.kb-card--soon:hover {
+  border-color: var(--line);
+}
+.kb-card__soon svg {
+  margin-right: 0.1em;
+}
 .pill--sample {
   background: #f6ead9;
   color: #8a5a1c;
