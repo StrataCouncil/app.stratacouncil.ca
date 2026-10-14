@@ -6,7 +6,8 @@ import { createClient } from "@/lib/supabase/server";
  * across every corporation, including tables whose RLS is member-scoped
  * (`subscriptions`) or self-scoped (`profiles` — a requester's name), so
  * these use the service-role client — but only after `requireSuperAdmin()`
- * has checked `profiles.is_super_admin` for the signed-in user. Every
+ * has confirmed the signed-in user is a Super Admin in a two-step-verified
+ * session (`is_super_admin()`, 0053). Every
  * export here calls it first; none of them trust the page to have.
  */
 export async function requireSuperAdmin() {
@@ -16,12 +17,11 @@ export async function requireSuperAdmin() {
   } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const { data } = await supabase
-    .from("profiles")
-    .select("is_super_admin")
-    .eq("id", user.id)
-    .single();
-  return data?.is_super_admin ? { supabase, user } : null;
+  // The database's is_super_admin() also requires a two-step-verified
+  // session (0053). Callers go on to use the service-role client, which
+  // skips the database's own checks, so this one has to hold.
+  const { data } = await supabase.rpc("is_super_admin");
+  return data === true ? { supabase, user } : null;
 }
 
 export interface AdminCorporation {
