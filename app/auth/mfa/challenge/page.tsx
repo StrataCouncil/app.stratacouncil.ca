@@ -82,7 +82,7 @@ export default function MfaChallengePage() {
     if (!factorId || !challengeId) return;
     setError(null);
     setPending(true);
-    const result = await verifyTotpChallenge(factorId, challengeId, code);
+    const result = await verifyTotpChallenge(factorId, code);
     setPending(false);
     if (result.status === "error") {
       setError(result.message);

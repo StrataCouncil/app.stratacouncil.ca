@@ -161,14 +161,16 @@ export async function startTotpChallenge(): Promise<
   };
 }
 
-/** Verifies a returning-session challenge code — elevates this session to aal2. */
-export async function verifyTotpChallenge(
-  factorId: string,
-  challengeId: string,
-  code: string
-): Promise<MfaActionResult> {
+/**
+ * Verifies a returning-session code — elevates this session to aal2.
+ * The challenge is opened here, in the same request as the check:
+ * Supabase refuses a check that comes from a different address than its
+ * challenge ("Challenge and verify IP addresses mismatch"), and on Vercel
+ * two separate server requests can leave from different addresses.
+ */
+export async function verifyTotpChallenge(factorId: string, code: string): Promise<MfaActionResult> {
   const supabase = await createClient();
-  const { error } = await supabase.auth.mfa.verify({ factorId, challengeId, code });
+  const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId, code });
   if (error) {
     return { status: "error", message: error.message };
   }
