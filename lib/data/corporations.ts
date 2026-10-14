@@ -1,11 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
 
 /**
- * Real replacement for lib/placeholder-data.ts's `currentCorporation` /
- * `connectedCorporations` mocks. Reads the signed-in user's actual
- * `corporation_memberships` rows (status = 'active') joined against
- * `strata_corporations` and `subscriptions`, rather than always returning
- * the same hardcoded corporation regardless of who's signed in.
+ * The signed-in user's stratas: their `corporation_memberships` rows
+ * (status = 'active') joined against `strata_corporations` and
+ * `subscriptions`.
  *
  * Deliberately narrow — this is the identity/billing pass, not the full
  * roster/invites/join-request rebuild. Three plain queries instead of a

@@ -52,7 +52,7 @@ export function isDocumentCategory(value: string): value is DocumentCategory {
 /** What the upload picker accepts. */
 export const acceptedExtensions = ["pdf", "doc", "docx", "txt", "jpg", "jpeg", "png", "xlsx", "csv"] as const;
 /** What the indexer can read text out of; the rest are stored for reference only. */
-export const indexableExtensions = ["pdf", "docx", "txt"] as const;
+const indexableExtensions = ["pdf", "docx", "txt"] as const;
 
 export const MAX_DOCUMENT_BYTES = 50 * 1024 * 1024;
 export const MAX_FILES_PER_UPLOAD = 20;

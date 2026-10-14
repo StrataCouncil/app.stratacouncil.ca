@@ -4,7 +4,7 @@ import { AdminTabs } from "@/components/AdminTabs";
 import { AppShell } from "@/components/AppShell";
 import { NewLibraryItem } from "@/components/library/NewLibraryItem";
 import { listLibraryDrafts } from "@/lib/data/library";
-import { knowledgeResourceKindLabels } from "@/lib/placeholder-data";
+import { knowledgeResourceKindLabels } from "@/lib/library/catalogue";
 
 /**
  * The Library (0049): playbooks, guides and templates for every strata,

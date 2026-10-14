@@ -14,7 +14,7 @@ import {
 import { LibraryArticle } from "@/components/library/LibraryArticle";
 import { LIBRARY_KINDS, PASTE_MAX_CHARS, publishProblems, type LibraryDraft, type LibrarySource } from "@/lib/library/library";
 import { MARKUP_MAX_CHARS } from "@/lib/library/markup";
-import { knowledgeResourceKindLabels, type KnowledgeResourceKind } from "@/lib/placeholder-data";
+import { knowledgeResourceKindLabels, type KnowledgeResourceKind } from "@/lib/library/catalogue";
 
 type Hit = LibrarySource & { snippet: string };
 

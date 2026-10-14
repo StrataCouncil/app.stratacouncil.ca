@@ -28,7 +28,7 @@ const REMOVE_CONFIRM_PHRASE = "remove council member";
 
 
 /**
- * Council & Roles roster, read from `corporation_memberships` +
+ * The Council page roster, read from `corporation_memberships` +
  * `corporation_role_assignments` (lib/data/roster.ts). Everyone connected
  * sees it; only the admin gets the controls.
  *

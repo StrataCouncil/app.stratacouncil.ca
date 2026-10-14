@@ -50,7 +50,7 @@ const published = (t: { modules: ProgressModule[] }) => t.modules.filter((m) => 
 const started = (t: { modules: ProgressModule[] }) => t.modules.some((m) => m.completed || m.completedSections > 0);
 
 /** Every published module in the track is done (true when nothing is published yet). */
-export function prerequisiteMet(track: ProgressTrack): boolean {
+function prerequisiteMet(track: ProgressTrack): boolean {
   return Boolean(track.credential) || published(track).every((m) => m.completed);
 }
 

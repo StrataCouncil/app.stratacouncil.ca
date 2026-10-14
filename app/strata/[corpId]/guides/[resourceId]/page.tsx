@@ -10,7 +10,7 @@ import {
   isTemplateLocked,
   knowledgeResourceKindLabels,
   knowledgeResources,
-} from "@/lib/placeholder-data";
+} from "@/lib/library/catalogue";
 
 /**
  * A single Knowledge Library resource, as its own page — the "click a
@@ -28,7 +28,7 @@ import {
  * entirely. Browsing the paywall is part of the incentive.
  *
  * `reviewStatus` is a data field only, not shown anywhere on this page —
- * see the note on `reviewStatus` in placeholder-data.ts for why.
+ * see the note on `reviewStatus` in lib/library/catalogue.ts for why.
  */
 export default async function KnowledgeResourcePage({
   params,

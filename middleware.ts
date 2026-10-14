@@ -27,8 +27,7 @@ function isPublicPath(pathname: string) {
  * 2FA is enforced here for Super Admins only (0053, 2026-10-14): their
  * account reaches every strata, so it needs an authenticator app (free;
  * no SMS). For everyone else it was reversed 2026-09-29 (doc00 changelog, doc01
- * §2, doc03 Stage 2/2a). A magic-link session is sufficient on its own;
- * nothing redirects to /auth/mfa/enroll or /auth/mfa/challenge any more.
+ * §2, doc03 Stage 2/2a): a magic-link session is sufficient on its own.
  * This is a deliberate, temporary call: 2FA (TOTP, built and working —
  * lib/auth/mfa.ts, the enroll/challenge screens, backup codes, all of it)
  * adds real setup friction to a free-tier signup funnel with zero revenue

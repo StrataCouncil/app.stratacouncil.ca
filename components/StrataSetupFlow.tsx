@@ -22,7 +22,7 @@ import { hasPostalCode } from "@/lib/postal";
  * first, then one of two paths.
  *
  *   - Already on the platform → request to join. No upload, no form —
- *     the corporation's admin approves it from Council & Roles.
+ *     the corporation's admin approves it from the Council page.
  *   - Not on the platform → upload the Strata Plan, enter its identity
  *     fields, attest, submit for Super Admin review. Nothing is created
  *     until that review approves it.

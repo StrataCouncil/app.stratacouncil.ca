@@ -50,7 +50,6 @@ export const CAST: CastMember[] = [
 ];
 
 export const council = () => CAST.filter((c) => c.part === "council");
-export const castByKey = (key: string) => CAST.find((c) => c.key === key)!;
 
 export type OwnerType = "owner_occupant" | "owner_absentee";
 

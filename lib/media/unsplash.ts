@@ -33,7 +33,7 @@ function headers() {
   return { Authorization: `Client-ID ${k}`, "Accept-Version": "v1" };
 }
 
-export function withUtm(url: string) {
+function withUtm(url: string) {
   return url + (url.includes("?") ? "&" : "?") + UTM;
 }
 

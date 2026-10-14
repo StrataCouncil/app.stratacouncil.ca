@@ -2,10 +2,8 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
- * Real replacement for lib/placeholder-data.ts's `currentProfile` mock.
- * Reads the signed-in user's actual `profiles` row plus their real MFA
- * enrollment status (Supabase Auth's own factor list — doc01 §2), rather
- * than a hardcoded object every page previously imported.
+ * The signed-in user's `profiles` row plus their MFA enrollment status
+ * (Supabase Auth's own factor list — doc01 §2).
  *
  * Logs rather than silently swallowing errors — a Server Component
  * returning null here renders a quiet "not signed in" state with no

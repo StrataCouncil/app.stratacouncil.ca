@@ -25,7 +25,7 @@ export const rosterFields = [
 export type RosterField = (typeof rosterFields)[number];
 
 /** CSV header → field, in template column order (doc02 §2a's table). */
-export const rosterColumns: { header: string; field: "lot_number" | RosterField }[] = [
+const rosterColumns: { header: string; field: "lot_number" | RosterField }[] = [
   { header: "Strata Lot", field: "lot_number" },
   { header: "Owner Name", field: "full_name" },
   { header: "Email", field: "email" },

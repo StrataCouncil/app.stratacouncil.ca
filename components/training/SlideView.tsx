@@ -51,7 +51,7 @@ export function SlideView({ slide, onDone }: { slide: PlayerSlide; onDone?: () =
   );
 }
 
-export function SlideText({ body }: { body: string }) {
+function SlideText({ body }: { body: string }) {
   const parts = bodyParts(body);
   if (!parts.length) return null;
   return (
@@ -83,7 +83,7 @@ function Video({ url, title }: { url: string; title: string }) {
   );
 }
 
-export function ElementView({ element, id, onDone }: { element: SlideElement; id: string; onDone?: () => void }) {
+function ElementView({ element, id, onDone }: { element: SlideElement; id: string; onDone?: () => void }) {
   switch (element.type) {
     case "knowledge_check":
       return <Check el={element} id={id} onDone={onDone} />;

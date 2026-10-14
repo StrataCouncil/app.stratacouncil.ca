@@ -1,4 +1,4 @@
-import { knowledgeResourceKindLabels, type KnowledgeResourceKind } from "../placeholder-data.ts";
+import { knowledgeResourceKindLabels, type KnowledgeResourceKind } from "./catalogue.ts";
 import { MARKUP_MAX_CHARS } from "./markup.ts";
 
 /**
@@ -8,7 +8,7 @@ import { MARKUP_MAX_CHARS } from "./markup.ts";
 
 export const LIBRARY_KINDS = Object.keys(knowledgeResourceKindLabels) as KnowledgeResourceKind[];
 export const PASTE_MAX_CHARS = 40000;
-export const SOURCES_MAX = 20;
+const SOURCES_MAX = 20;
 export const CLAIMS_MAX = 15;
 
 /** A Legislation Library section an item cites. */

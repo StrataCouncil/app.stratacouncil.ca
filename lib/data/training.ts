@@ -58,8 +58,7 @@ export interface TrainingTrack {
   cover: ModuleCover | null;
 }
 
-export const trackSlug = (code: string) => code.replace(/_/g, "-");
-export const trackCode = (slug: string) => slug.replace(/-/g, "_");
+const trackSlug = (code: string) => code.replace(/_/g, "-");
 
 /** Every track with its modules and the signed-in learner's progress and credentials. */
 export async function getTrainingTracks(): Promise<TrainingTrack[]> {
@@ -117,7 +116,7 @@ export async function getTrainingTracks(): Promise<TrainingTrack[]> {
   });
 }
 
-export function toCover(raw: unknown): ModuleCover | null {
+function toCover(raw: unknown): ModuleCover | null {
   if (!raw || typeof raw !== "object") return null;
   const c = raw as Record<string, unknown>;
   if (typeof c.src !== "string" || !c.src) return null;
@@ -303,20 +302,6 @@ export async function getAllModuleAuthors() {
     (out[a.module_id as string] ??= []).push({ userId: a.user_id as string, name: p?.full_name || p?.email || "Unknown", email: p?.email ?? "" });
   }
   return out;
-}
-
-/** Authors assigned to a module (Super Admin view). */
-export async function getModuleAuthors(moduleId: string) {
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("training_module_authors")
-    .select("user_id, added_at, profile:profiles!training_module_authors_user_id_fkey(full_name, email)")
-    .eq("module_id", moduleId)
-    .order("added_at");
-  return (data ?? []).map((a) => {
-    const p = (Array.isArray(a.profile) ? a.profile[0] : a.profile) as { full_name: string | null; email: string | null } | null;
-    return { userId: a.user_id as string, name: p?.full_name || p?.email || "Unknown", email: p?.email ?? "" };
-  });
 }
 
 /** The modules the signed-in user is assigned to author (the /build workspace). */

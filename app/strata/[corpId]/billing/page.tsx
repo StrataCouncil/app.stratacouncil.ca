@@ -30,22 +30,19 @@ import {
 /**
  * Billing — admin-only (doc01 §7 item 7: subscribing is admin-gated, no
  * exception, same pattern as meeting creation). Non-admins never see any
- * billing information: they are sent back to Council & Roles.
+ * billing information: they are sent back to the Council page.
  *
  * Layout: payment method and subscription side by side, then Account
  * Statements (invoices from Stripe for a chosen period), then every strata
  * this user administers with its monthly cost and the total. Not part of the
  * Stratasphere™ sub-nav (`StrataSphereNav`) since it isn't a content tab
  * every connected member should land on — it's reached from the "Admin"
- * entry point on Council & Roles instead. The parent layout
+ * entry point on the Council page instead. The parent layout
  * (`../layout.tsx`) already supplies the corp identity header and the
  * wrap/page shell, so this only renders its own content.
  *
- * Wired to real data (doc04 §7a-style server-only mutation path — see
- * ./actions.ts) rather than lib/placeholder-data.ts's mock subscription.
- * corpId is read from the URL and used directly, rather than always
- * rendering `currentCorporation`, since a real signed-in admin could be
- * viewing any strata they administer.
+ * Server-only mutations (doc04 §7a — see ./actions.ts). corpId is read
+ * from the URL, since an admin could be viewing any strata they administer.
  */
 type StatementRow = {
   id: string;
