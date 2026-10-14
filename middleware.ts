@@ -24,7 +24,9 @@ function isPublicPath(pathname: string) {
  * a signed-in user hitting /login or /signup is sent straight to the
  * dashboard instead of being shown the form again.
  *
- * 2FA is NOT enforced here — reversed 2026-09-29 (doc00 changelog, doc01
+ * 2FA is enforced here for Super Admins only (0053, 2026-10-14): their
+ * account reaches every strata, so it needs an authenticator app (free;
+ * no SMS). For everyone else it was reversed 2026-09-29 (doc00 changelog, doc01
  * §2, doc03 Stage 2/2a). A magic-link session is sufficient on its own;
  * nothing redirects to /auth/mfa/enroll or /auth/mfa/challenge any more.
  * This is a deliberate, temporary call: 2FA (TOTP, built and working —
@@ -94,8 +96,21 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/", request.url));
   }
 
-  // MFA gate intentionally not wired in — see the comment above. A signed-in
-  // user proceeds straight through regardless of 2FA enrollment status.
+  // Two-step verification for platform staff (0053). Everyone else goes
+  // straight through, as above. A Super Admin is sent to set up an
+  // authenticator app, then asked for its code each sign-in; the database
+  // also withholds Super Admin powers until the session has it (aal2).
+  if (user && !pathname.startsWith("/auth/")) {
+    const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    if (aal?.currentLevel !== "aal2") {
+      const { data: profile } = await supabase.from("profiles").select("is_super_admin").eq("id", user.id).maybeSingle();
+      if (profile?.is_super_admin) {
+        const to = NextResponse.redirect(new URL(aal?.nextLevel === "aal2" ? "/auth/mfa/challenge" : "/auth/mfa/enroll", request.url));
+        response.cookies.getAll().forEach((c) => to.cookies.set(c));
+        return to;
+      }
+    }
+  }
 
   return response;
 }

@@ -55,6 +55,13 @@ export async function startTotpEnrollment(): Promise<
 > {
   const supabase = await createClient();
 
+  // A setup started earlier and never finished (the page reloaded) would
+  // block this one; clear it first.
+  const { data: existing } = await supabase.auth.mfa.listFactors();
+  for (const f of existing?.all ?? []) {
+    if (f.factor_type === "totp" && f.status !== "verified") await supabase.auth.mfa.unenroll({ factorId: f.id });
+  }
+
   const { data: enrollData, error: enrollError } = await supabase.auth.mfa.enroll({
     factorType: "totp",
     issuer: "StrataCouncil.ca",
@@ -181,6 +188,16 @@ export async function verifyBackupCode(rawCode: string): Promise<MfaActionResult
   } = await supabase.auth.getUser();
   if (!user) {
     return { status: "error", message: "Not signed in." };
+  }
+  // Platform staff need the authenticator itself: a backup code can't give
+  // the database the verified session Super Admin powers require (0053).
+  const { data: staff } = await supabase.from("profiles").select("is_super_admin").eq("id", user.id).maybeSingle();
+  if (staff?.is_super_admin) {
+    return {
+      status: "error",
+      message:
+        "Platform staff sign in with the authenticator app only. If you've lost it, remove the authenticator from your account in Supabase (Authentication, Users), then sign in again to set up a new one.",
+    };
   }
 
   const normalized = rawCode.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
