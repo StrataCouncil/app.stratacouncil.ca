@@ -17,9 +17,10 @@ const workSans = Work_Sans({
 });
 
 export const metadata: Metadata = {
-  // Link previews (Messages and others) drop a "StrataCouncil.ca —" prefix, so the demo says what it is.
-  title: IS_DEMO ? "StrataCouncil.ca Demo" : "StrataCouncil.ca — App",
-  description: "Council Training and Stratasphere™ governance tools for BC strata councils.",
+  // Link previews (Messages and others) show the title under the image, so
+  // it's the plain name (the demo says what it is).
+  title: IS_DEMO ? "StrataCouncil.ca Demo" : "StrataCouncil.ca",
+  description: "Council training and Stratasphere™ governance tools for BC strata councils.",
   // The preview image is app/opengraph-image.png (the logo); this makes X show it large too.
   twitter: { card: "summary_large_image" },
 };
