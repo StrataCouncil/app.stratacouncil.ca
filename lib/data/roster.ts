@@ -39,15 +39,20 @@ export interface RosterMember {
 }
 
 /**
- * A council member typed on the Owners page (a lot marked as council)
- * with no account yet: shown on Council as "Not invited yet", and
- * invitable from there when the lot has an email (0051).
+ * Someone listed but with no account yet, shown on Council as "Not
+ * invited yet" and invitable from there when they have an email: a
+ * council member typed on the Owners page (a lot marked as council,
+ * 0051), or a manager listed on the Management tab (0052).
  */
 export interface UninvitedCouncilMember {
-  lotNumber: string;
+  kind: "council" | "manager";
+  /** Unique on the page: the lot, or "manager-<n>". */
+  key: string;
+  /** The council lot; null for a manager. */
+  lotNumber: string | null;
   name: string;
   role: string | null;
-  /** The council email, else the owner's email, if either is valid. */
+  /** Council: the council email, else the owner's. Manager: their email. Only if valid. */
   email: string | null;
 }
 
@@ -72,7 +77,7 @@ export interface CorporationRoster {
   isAdmin: boolean;
   jurisdiction: string;
   members: RosterMember[];
-  /** Council lots from the Owners page with no member tied to them yet. */
+  /** Council lots from Owners and managers from Management with no account here yet. */
   uninvited: UninvitedCouncilMember[];
   /** Every strata lot on the roster, for tying members to their lot. */
   lots: string[];
@@ -89,7 +94,7 @@ export async function getCorporationRoster(
   } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const [directory, roles, corporation, lots] = await Promise.all([
+  const [directory, roles, corporation, lots, management] = await Promise.all([
     supabase.rpc("corporation_member_directory", { p_corporation_id: corporationId }),
     supabase
       .from("corporation_role_assignments")
@@ -105,6 +110,7 @@ export async function getCorporationRoster(
       .select("lot_number, full_name, email, is_council_member, council_member_name, council_email, role")
       .eq("corporation_id", corporationId)
       .order("lot_number"),
+    supabase.from("strata_management").select("managers").eq("corporation_id", corporationId).maybeSingle(),
   ]);
 
   for (const [label, result] of [
@@ -174,8 +180,37 @@ export async function getCorporationRoster(
     .filter((l) => l.is_council_member && !takenLots.has(l.lot_number))
     .map((l) => {
       const email = [l.council_email, l.email].map((e) => (e ?? "").trim()).find((e) => EMAIL_RE.test(e)) ?? null;
-      return { lotNumber: l.lot_number, name: typedName(l) || l.lot_number, role: l.role, email };
+      return { kind: "council", key: l.lot_number, lotNumber: l.lot_number, name: typedName(l) || l.lot_number, role: l.role, email };
     });
+
+  // Managers listed on the Management tab. One with an account here (by
+  // email) is a member row already; one invited shows the Manager tag.
+  const memberEmails = new Map(members.map((m) => [m.email.toLowerCase(), m]));
+  const listed = (Array.isArray(management.data?.managers) ? management.data.managers : []) as {
+    name?: string;
+    email?: string;
+  }[];
+  listed.forEach((mg, i) => {
+    const name = (mg.name ?? "").trim();
+    const email = (mg.email ?? "").trim();
+    if (!name && !email) return;
+    const member = email ? memberEmails.get(email.toLowerCase()) : undefined;
+    if (member) {
+      if (member.status === "invited" && member.roles.length === 0) {
+        member.invitedCouncilRole = "manager";
+        if (name && (member.fullName === member.email || member.fullName === "Unnamed member")) member.fullName = name;
+      }
+      return;
+    }
+    uninvited.push({
+      kind: "manager",
+      key: `manager-${i}`,
+      lotNumber: null,
+      name: name || email,
+      role: "manager",
+      email: EMAIL_RE.test(email) ? email : null,
+    });
+  });
 
   const credentials = await getCredentialsFor(members.map((m) => m.userId));
   for (const m of members) m.credentials = [...(credentials.get(m.userId) ?? [])];
