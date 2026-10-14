@@ -460,7 +460,7 @@ export function RosterTable({
             );
           })}
           {uninvited.map((c) => (
-            <UninvitedRow key={c.lotNumber} corporationId={corporationId} member={c} isAdmin={isAdmin} />
+            <UninvitedRow key={c.key} corporationId={corporationId} member={c} isAdmin={isAdmin} />
           ))}
         </tbody>
       </table>
@@ -503,7 +503,11 @@ function UninvitedRow({
     if (!member.email) return;
     setError(null);
     startTransition(async () => {
-      const result = await sendInvite(corporationId, member.email!, member.lotNumber);
+      const result = await sendInvite(
+        corporationId,
+        member.email!,
+        member.kind === "manager" ? { asManager: true } : { lotNumber: member.lotNumber ?? undefined }
+      );
       if (result.ok) {
         setConfirming(false);
         setNotice(result.notice ?? `Invite sent to ${member.email}.`);
@@ -514,7 +518,7 @@ function UninvitedRow({
   }
 
   return (
-    <tr data-testid={`uninvited-row-${member.lotNumber}`}>
+    <tr data-testid={`uninvited-row-${member.key}`}>
       <td>
         <div className="roster-member">
           <MemberAvatar name={member.name} url={null} />
@@ -525,7 +529,7 @@ function UninvitedRow({
           </div>
         </div>
       </td>
-      <td>{member.lotNumber}</td>
+      <td>{member.lotNumber ?? <span className="roster-table__na">&mdash;</span>}</td>
       <td className="roster-table__roles-cell">
         <span className="role-tag">{role}</span>
         {isAdmin &&
@@ -535,22 +539,26 @@ function UninvitedRow({
                 type="button"
                 className="roster-table__edit-roles"
                 onClick={() => setConfirming(true)}
-                data-testid={`invite-lot-${member.lotNumber}`}
+                data-testid={`invite-lot-${member.key}`}
               >
                 Invite
               </button>
             </div>
           ) : (
-            <div className="roster-table__meta">Add an email for {member.lotNumber} on Owners to invite</div>
+            <div className="roster-table__meta">
+              {member.kind === "manager" ? "Add their email on Management to invite" : `Add an email for ${member.lotNumber} on Owners to invite`}
+            </div>
           ))}
         {notice && <p className="roster-table__meta" role="status">{notice}</p>}
         {confirming && (
-          <Modal title={`Invite ${member.name}?`} onClose={() => setConfirming(false)} testId={`invite-lot-confirm-${member.lotNumber}`}>
+          <Modal title={`Invite ${member.name}?`} onClose={() => setConfirming(false)} testId={`invite-lot-confirm-${member.key}`}>
             <p>
-              An invitation goes to <strong>{member.email}</strong>. When they accept, they&rsquo;re tied to{" "}
-              {member.lotNumber} as {role === "Council" ? "a council member" : role}, so nothing else needs setting here.
+              An invitation goes to <strong>{member.email}</strong>.{" "}
+              {member.kind === "manager"
+                ? "When they accept, they become this strata's Manager: no strata lot, and not counted at council meetings."
+                : `When they accept, they're tied to ${member.lotNumber} as ${role === "Council" ? "a council member" : role}, so nothing else needs setting here.`}
             </p>
-            <p className="card__meta">Wrong address? Fix it on Owners first, then invite.</p>
+            <p className="card__meta">Wrong address? Fix it on {member.kind === "manager" ? "Management" : "Owners"} first, then invite.</p>
             {error && (
               <p className="roster-invites__error" role="alert">
                 {error}
@@ -560,7 +568,7 @@ function UninvitedRow({
               <button type="button" className="button button-secondary" onClick={() => setConfirming(false)} disabled={pending}>
                 Cancel
               </button>
-              <button type="button" className="button button-primary" onClick={invite} disabled={pending} data-testid={`invite-lot-send-${member.lotNumber}`}>
+              <button type="button" className="button button-primary" onClick={invite} disabled={pending} data-testid={`invite-lot-send-${member.key}`}>
                 {pending ? "Sending…" : "Send invite"}
               </button>
             </div>

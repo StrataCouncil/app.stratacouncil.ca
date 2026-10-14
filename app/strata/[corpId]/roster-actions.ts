@@ -122,12 +122,18 @@ async function findProfileByEmail(email: string) {
 }
 
 /**
- * Invites someone to the strata. With `lotNumber` (Council, a council
- * member typed on the Owners page, 0051), the invite carries that lot:
- * the invited membership holds it, and accepting ties the new member to
- * it with the lot's council role.
+ * Invites someone to the strata. From a "Not invited yet" row on Council:
+ * with `lotNumber` (a council member typed on the Owners page, 0051) the
+ * invited membership holds that lot, and accepting ties the new member to
+ * it with the lot's council role; with `asManager` (a manager listed on
+ * the Management tab, 0052) accepting makes them the Manager.
  */
-export async function sendInvite(corporationId: string, rawEmail: string, lotNumber?: string): Promise<ActionResult> {
+export async function sendInvite(
+  corporationId: string,
+  rawEmail: string,
+  opts: { lotNumber?: string; asManager?: boolean } = {}
+): Promise<ActionResult> {
+  const { lotNumber, asManager } = opts;
   const ctx = await requireAdmin(corporationId);
   if (!ctx) return fail("Only this strata's admin can send invites.");
   const { supabase, user } = ctx;
@@ -172,7 +178,12 @@ export async function sendInvite(corporationId: string, rawEmail: string, lotNum
   // the pending-invite unique index (0010) catches duplicates.
   const { data: invite, error: inviteError } = await supabase
     .from("corporation_invites")
-    .insert({ corporation_id: corporationId, invited_email: email, invited_by: user.id })
+    .insert({
+      corporation_id: corporationId,
+      invited_email: email,
+      invited_by: user.id,
+      ...(asManager ? { invited_role: "manager" } : {}),
+    })
     .select("id")
     .single();
   if (inviteError) {
