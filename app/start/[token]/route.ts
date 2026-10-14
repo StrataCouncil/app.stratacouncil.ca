@@ -32,6 +32,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const { token } = await params;
   if (!isDemoToken(token)) return goTo(request, "/demo?link=unknown");
   // The token is only letters, digits, "-" and "_" (isDemoToken), so it's safe in the page as is.
+  const image = new URL("/opengraph-image.png", request.url).href;
   const html = `<!doctype html>
 <html lang="en">
 <head>
@@ -44,6 +45,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 <meta property="og:title" content="${PREVIEW_TITLE}">
 <meta property="og:description" content="${PREVIEW_DESCRIPTION}">
 <meta property="og:site_name" content="StrataCouncil.ca">
+<meta property="og:image" content="${image}">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
 <style>
 body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#f8f6f1;color:#1b2a41;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
 main{text-align:center;padding:24px}
