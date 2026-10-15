@@ -17,7 +17,7 @@ import {
 } from "@/lib/legislation";
 
 /**
- * The legislation library (doc04 §5), Super Admins only. Upload works like
+ * The Knowledge Base (doc04 §5), Super Admins only. Upload works like
  * the document repository: signed upload URLs into the private
  * `legislation` bucket, then rows written through the Super Admin's own
  * client (RLS checks is_super_admin) and queued for indexing.
@@ -25,7 +25,7 @@ import {
 
 type Fail = { ok: false; error: string };
 type Done = { ok: true } | Fail;
-const notAllowed: Fail = { ok: false, error: "Only Super Admins can manage the Legislation Library." };
+const notAllowed: Fail = { ok: false, error: "Only Super Admins can manage the Knowledge Base." };
 
 function extensionOf(name: string) {
   const dot = name.lastIndexOf(".");

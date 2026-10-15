@@ -3,7 +3,7 @@ import { IS_DEMO } from "@/lib/demo";
 
 /**
  * Background jobs (doc04 §4/§11): indexing strata documents and the
- * legislation library. Events are sent
+ * Knowledge Base. Events are sent
  * with INNGEST_EVENT_KEY; Inngest calls back into /api/inngest, verified
  * with INNGEST_SIGNING_KEY. Locally, `npx inngest-cli dev` stands in for
  * both.

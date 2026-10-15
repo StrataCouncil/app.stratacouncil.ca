@@ -1,5 +1,5 @@
 /**
- * The legislation library (Super Admin): shared between the upload screen
+ * The Knowledge Base (Super Admin): shared between the upload screen
  * and its server actions.
  */
 export type LegislationKind = "act" | "regulation" | "guidance";

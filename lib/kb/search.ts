@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { embed, toVectorLiteral } from "@/lib/kb/embed";
 
 /**
- * Semantic search over the knowledge base for one corporation (doc02 §3):
+ * Semantic search over one corporation's indexed passages (doc02 §3):
  * its own chunks, the global precedent pool, and legislation. Runs through
  * the signed-in user's client so match_knowledge_chunks enforces
  * membership and Stratasphere access itself. The query must already be

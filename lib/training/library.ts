@@ -1,5 +1,5 @@
 /**
- * The Legislation Library as Council Training's source (0037, 0041). Pure,
+ * The Knowledge Base as Council Training's source (0037, 0041). Pure,
  * so it can be tested without a database. Library passages are one per Act
  * or Regulation section (or a plain chunk of a guidance document), each
  * opening with its citation, e.g. "Strata Property Act, section 45: Notice

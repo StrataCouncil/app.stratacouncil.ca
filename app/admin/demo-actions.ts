@@ -205,7 +205,7 @@ export async function deleteDemoLink(visitorId: string): Promise<{ ok: true } | 
 }
 
 /**
- * Copies Council Training and the legislation library to the demo site
+ * Copies Council Training and the Knowledge Base to the demo site
  * now (lib/demo-mirror.ts). Both also copy themselves after a publish or
  * an indexed library entry; this is for the first time, or to be sure.
  */

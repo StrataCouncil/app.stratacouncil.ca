@@ -8,7 +8,7 @@ import { knowledgeResourceKindLabels } from "@/lib/library/catalogue";
 
 /**
  * The Library (0049): playbooks, guides and templates for every strata,
- * written here and published to each strata's Knowledge Library. The
+ * written here and published to each strata's Library. The
  * sample articles stay there, labelled "Sample", until they're replaced.
  */
 export default async function LibraryAdminPage() {
@@ -24,7 +24,7 @@ export default async function LibraryAdminPage() {
           <h1>Library</h1>
           <p>
             Playbooks, guides and templates for every strata. Paste a draft and the AI puts it in the Library&rsquo;s format
-            and flags the legal statements to check against the Legislation Library. Members see an item once it&rsquo;s
+            and flags the legal statements to check against the Knowledge Base. Members see an item once it&rsquo;s
             published. Templates are for subscribers.
           </p>
         </div>

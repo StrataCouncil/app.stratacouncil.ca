@@ -6,7 +6,7 @@
 -- Kept:
 --   - Super Admin accounts (profiles.is_super_admin), with their profile
 --     and two-factor setup. They lose every strata connection.
---   - The legislation library: its entries and their indexed passages
+--   - The Knowledge Base: its entries and their indexed passages
 --     (knowledge_chunks with scope 'legislation').
 --
 -- Removed: every strata and everything in it (members, roles, invites,
@@ -29,7 +29,7 @@ delete from public.conversation_messages;
 delete from public.conversations;
 delete from public.conversation_projects;
 
--- The knowledge base, except the legislation library.
+-- Indexed passages, except the Knowledge Base's.
 delete from public.knowledge_chunks where scope <> 'legislation';
 
 -- Stratas, documents and requests point at each other; unlink them first.

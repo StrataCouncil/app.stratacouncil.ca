@@ -44,7 +44,7 @@ first opened and dated from that day:
 Search vectors for the documents are kept (`demo_kit_embeddings`), so only the
 first visitor's strata calls the embeddings service.
 
-Council Training and the legislation library are copied from the live site
+Council Training and the Knowledge Base are copied from the live site
 (`lib/demo-mirror.ts`): training after every publish or track/module change
 (only the first published module is open in the demo), the library after
 every indexed entry, and both from the Demo tab's "Copy training and

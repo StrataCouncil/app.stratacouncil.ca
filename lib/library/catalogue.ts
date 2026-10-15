@@ -6,7 +6,7 @@
  */
 
 /**
- * The Knowledge Library (doc01 §3b's `playbooks`/`templates` tables,
+ * The Library (doc01 §3b's `playbooks`/`templates` tables,
  * unified into one searchable set here rather than two separate lists —
  * a new council member doesn't think in schema tables, they think "I
  * need to know X"). Free the moment a user is connected to a

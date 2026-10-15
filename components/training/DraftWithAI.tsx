@@ -14,7 +14,7 @@ const elementName = (e: OutlineElement) => (e === "none" ? "Nothing" : elementLa
 /**
  * Create slides with AI, in three steps the author controls (shown as a
  * step tracker, so it's always clear what comes next):
- * 1. choose the Legislation Library sections to work from;
+ * 1. choose the Knowledge Base sections to work from;
  * 2. get an outline, and edit it;
  * 3. write the slides, one at a time, each added after the existing slides
  *    and saved as it's made. Nothing existing is changed.
@@ -62,7 +62,7 @@ export function DraftWithAI({
   }
 
   async function findSources() {
-    setBusy("Searching the Legislation Library…");
+    setBusy("Searching the Knowledge Base…");
     setError(null);
     await beforeDraft();
     const r = await suggestSources(moduleId);
@@ -151,7 +151,7 @@ export function DraftWithAI({
         })}
       </ol>
       <p className="card__meta">
-        The AI follows the blueprint above, step by step, and teaches nothing outside it. It works only from Legislation Library
+        The AI follows the blueprint above, step by step, and teaches nothing outside it. It works only from Knowledge Base
         sections you approve, and only adds new slides after the ones already here; it never changes a slide that exists. Check every
         slide before publishing.
       </p>
@@ -177,7 +177,7 @@ export function DraftWithAI({
       {step === "sources" && (
         <div className="be-stack">
           <p className="card__meta">
-            <strong>Step 1 of 3: choose sources.</strong> The Legislation Library sections to work from. Untick anything off-topic, or
+            <strong>Step 1 of 3: choose sources.</strong> The Knowledge Base sections to work from. Untick anything off-topic, or
             search for more. {chosen.size} chosen.
           </p>
           <ul className="builder__hits">

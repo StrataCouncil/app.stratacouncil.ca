@@ -79,7 +79,7 @@ export function stripForGlobal(text: string, ctx: StripContext) {
 const PLAN_NUMBER = /\b(?:BCS|EPS|LMS|VAS|VIS|KAS|NES|NWS|EPP|BCP|LMP|VIP|KAP)\s?-?\d{2,6}\b/g;
 
 /**
- * For guidance in the legislation library (bulletins, guides, tribunal
+ * For guidance in the Knowledge Base (bulletins, guides, tribunal
  * decisions): the strict pass, with no roster to lean on and plan numbers
  * removed, since a decision names the strata it's about. Acts and
  * regulations aren't stripped: they're public law with no personal

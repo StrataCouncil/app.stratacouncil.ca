@@ -105,7 +105,7 @@ export async function getAdminOverview(): Promise<AdminOverview | null> {
     { key: "requests", count: requests, label: "new corporation requests to review", href: "/admin/stratas" },
     { key: "payment", count: paymentPending, label: "subscriptions waiting on a payment to go through", href: "/admin/stratas" },
     { key: "documents", count: docsProblems, label: "strata documents that couldn't be indexed (failed, or need text)", href: "/admin/stratas" },
-    { key: "legislation", count: legislationProblems, label: "Legislation Library entries that couldn't be indexed", href: "/admin/legislation" },
+    { key: "legislation", count: legislationProblems, label: "Knowledge Base entries that couldn't be indexed", href: "/admin/legislation" },
     { key: "review", count: review, label: "training modules ready for review", href: "/admin/training" },
   ].filter((a) => a.count > 0);
   if (!demo) attention.push({ key: "demo", count: 0, label: "The demo database isn't connected", href: "/admin/demo" });

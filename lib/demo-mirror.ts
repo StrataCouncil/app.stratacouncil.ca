@@ -15,7 +15,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
  *   project), so the published content is copied as is.
  * - The Library (0049): published playbooks, guides and templates, after
  *   each publish, unpublish or delete. Drafts stay on the live site.
- * - The legislation library: each entry and its search index, so the demo
+ * - The Knowledge Base: each entry and its search index, so the demo
  *   Stratasphere answers from the same law. Runs after an entry is
  *   indexed, and from the console. Only legislation is copied: the global
  *   precedent pool (from real stratas' documents) never leaves the live

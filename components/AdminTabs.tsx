@@ -7,7 +7,7 @@ const TABS: Array<{ key: AdminTab; label: string; href: string }> = [
   { key: "stratas", label: "Stratas", href: "/admin/stratas" },
   { key: "training", label: "Council Training", href: "/admin/training" },
   { key: "library", label: "Library", href: "/admin/library" },
-  { key: "legislation", label: "Legislation Library", href: "/admin/legislation" },
+  { key: "legislation", label: "Knowledge Base", href: "/admin/legislation" },
   { key: "announcements", label: "Announcements", href: "/admin/announcements" },
   { key: "demo", label: "Demo", href: "/admin/demo" },
 ];

@@ -1615,7 +1615,7 @@ function Citations({
       <div className="builder__block-head">
         <span className="builder__block-type">Sources</span>
       </div>
-      <p className="card__meta">The Legislation Library sections this slide relies on. Only sections in the library can be chosen.</p>
+      <p className="card__meta">The Knowledge Base sections this slide relies on. Only sections in the Knowledge Base can be chosen.</p>
       {slide.citations.length > 0 && (
         <ul className="builder__citations">
           {slide.citations.map((c) => (
@@ -1635,14 +1635,14 @@ function Citations({
           void search();
         }}
       >
-        <input className="be-grow" value={query} maxLength={300} placeholder='Section number ("45") or words ("notice of general meetings")' onChange={(e) => setQuery(e.target.value)} aria-label="Search the library" />
+        <input className="be-grow" value={query} maxLength={300} placeholder='Section number ("45") or words ("notice of general meetings")' onChange={(e) => setQuery(e.target.value)} aria-label="Search the Knowledge Base" />
         <button className="button button-secondary button-small" disabled={busy || !query.trim()}>
           {busy ? "Searching…" : "Search"}
         </button>
       </form>
       {hits && (
         <ul className="builder__hits">
-          {hits.length === 0 && <li className="card__meta">Nothing in the library matches. Try other words.</li>}
+          {hits.length === 0 && <li className="card__meta">Nothing in the Knowledge Base matches. Try other words.</li>}
           {hits.map((h) => {
             const added = slide.citations.some((c) => c.chunkId === h.chunkId);
             return (

@@ -15,7 +15,7 @@ import { IS_DEMO } from "@/lib/demo";
 /**
  * Stratasphere™ is desktop-only — the governance tools (roster tables,
  * documents, meeting mode) assume real screen space — except the
- * Knowledge Library, which works on phones (see `ScreenGate`).
+ * Library, which works on phones (see `ScreenGate`).
  *
  * Now checks the real `corporation_memberships` table for this corpId
  * instead of always rendering the hardcoded `currentCorporation` mock —

@@ -37,13 +37,13 @@ Use separate browsers or private windows so you can be signed in as two people a
 
 ## 3. Super Admin console
 
-- [ ] As **Super Admin**, open the console. Overview lists the request under Needs attention, with the platform numbers below. The tabs (Overview, Stratas, Council Training, Legislation Library, Announcements, Demo) are on every console page.
+- [ ] As **Super Admin**, open the console. Overview lists the request under Needs attention, with the platform numbers below. The tabs (Overview, Stratas, Council Training, Knowledge Base, Announcements, Demo) are on every console page.
 - [ ] Stratas tab: the request is listed. Open it, check the details, approve.
 - [ ] **Admin** gets an approval email, and the strata now appears in their strata list.
 - [ ] Stratas tab search finds the strata by plan number and by building name.
 - [ ] **Open strata** (or "Open this strata as its admin" on its page) opens the strata. A banner says you aren't a member and that changes are real.
 - [ ] You can see everything an admin sees (Council & Roles, roster, documents, meetings, billing), and you **don't** appear in its roster.
-- [ ] Legislation library: your Acts show "Indexed: N sections". Upload one more file (any guidance PDF). It goes from "Waiting to index" to "Indexed" by itself within a minute or two.
+- [ ] Knowledge Base: your Acts show "Indexed: N sections". Upload one more file (any guidance PDF). It goes from "Waiting to index" to "Indexed" by itself within a minute or two.
 
 ## 4. Council & Roles
 
@@ -126,7 +126,7 @@ Start a **new conversation** for each test below.
 
 ## 11. Phones
 
-- [ ] On a phone, the Knowledge Library works. The other strata screens show the "use a larger screen" notice.
+- [ ] On a phone, the Library works. The other strata screens show the "use a larger screen" notice.
 
 ## 12. Removing a member
 

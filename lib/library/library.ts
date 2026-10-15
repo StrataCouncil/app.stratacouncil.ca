@@ -11,7 +11,7 @@ export const PASTE_MAX_CHARS = 40000;
 const SOURCES_MAX = 20;
 export const CLAIMS_MAX = 15;
 
-/** A Legislation Library section an item cites. */
+/** A Knowledge Base section an item cites. */
 export interface LibrarySource {
   chunkId: string;
   label: string;
