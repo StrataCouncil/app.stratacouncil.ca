@@ -483,6 +483,9 @@ export interface ModuleForPublishing {
   title: string;
   objectives: Objective[];
   furtherReading: FurtherReading[];
+  /** Background music for the introduction and summary pages (0055). */
+  introMusic?: { url: string } | null;
+  outroMusic?: { url: string } | null;
 }
 
 /** Problems to fix before publishing. Empty means ready. */
@@ -520,6 +523,9 @@ export type PlayerContent = {
   format: "slides";
   objectives: Objective[];
   furtherReading: FurtherReading[];
+  /** Background music on the introduction and summary pages. */
+  introMusic: { url: string } | null;
+  outroMusic: { url: string } | null;
   topics: Topic[];
 };
 
@@ -552,6 +558,8 @@ export function buildPlayerContent(m: ModuleForPublishing, slides: Slide[]): Pla
     format: "slides",
     objectives: m.objectives.filter((o) => o.text.trim()),
     furtherReading: m.furtherReading.filter((r) => r.title.trim() && isReadingUrl(r.url)),
+    introMusic: m.introMusic?.url ? { url: m.introMusic.url } : null,
+    outroMusic: m.outroMusic?.url ? { url: m.outroMusic.url } : null,
     topics,
   };
 }
@@ -590,8 +598,15 @@ export function normalizePlayerContent(raw: unknown): PlayerContent | null {
     format: "slides",
     objectives: normalizeObjectives(r.objectives),
     furtherReading: normalizeFurtherReading(r.furtherReading).filter((f) => f.title.trim() && isReadingUrl(f.url)),
+    introMusic: musicOf(r.introMusic),
+    outroMusic: musicOf(r.outroMusic),
     topics: topics.filter((t) => t.slides.length),
   };
+}
+
+function musicOf(v: unknown): { url: string } | null {
+  const url = safeMediaUrl((v as { url?: unknown } | null)?.url);
+  return url ? { url } : null;
 }
 
 export type ModuleCover = { src: string; alt: string; credit: PhotoCredit | null };

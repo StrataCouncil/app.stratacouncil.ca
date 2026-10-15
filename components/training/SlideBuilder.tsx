@@ -36,6 +36,7 @@ import {
   deleteMusic,
   listMusic,
   setSlideMusic,
+  setModuleMusic,
   type EarlierNarration,
   type MusicTrack,
   type LibraryHit,
@@ -45,7 +46,7 @@ import { DraftWithAI } from "@/components/training/DraftWithAI";
 import { PasteBlueprint } from "@/components/training/PasteBlueprint";
 import { PhotoCreditLine, PhotoPicker } from "@/components/training/PhotoPicker";
 import { Modal } from "@/components/Modal";
-import type { BuilderModule, Checkout } from "@/lib/data/training";
+import type { BuilderModule, Checkout, ModuleMusic } from "@/lib/data/training";
 import type { Voice } from "@/lib/media/elevenlabs";
 import {
   ACTIVITIES,
@@ -111,6 +112,8 @@ export function SlideBuilder({
   const [blueprint, setBlueprint] = useState<BlueprintStep[]>(initial.blueprint);
   const [reading, setReading] = useState<FurtherReading[]>(initial.furtherReading);
   const [voice, setVoice] = useState<Voiced>(initial.voice);
+  const [introMusic, setIntroMusic] = useState<ModuleMusic | null>(initial.introMusic);
+  const [outroMusic, setOutroMusic] = useState<ModuleMusic | null>(initial.outroMusic);
   const [defaultVoice, setDefaultVoiceState] = useState<Voiced>(initialDefaultVoice);
   const [selected, setSelected] = useState<string>(initial.slides[0]?.id ?? "settings");
   const [mode, setMode] = useState<"edit" | "preview">("edit");
@@ -148,6 +151,8 @@ export function SlideBuilder({
     setBlueprint(m.blueprint);
     setReading(m.furtherReading);
     setVoice(m.voice);
+    setIntroMusic(m.introMusic);
+    setOutroMusic(m.outroMusic);
     setReadyAt(m.readyForReviewAt);
     setSelected((sel) => (sel === "settings" || m.slides.some((s) => s.id === sel) ? sel : (m.slides[0]?.id ?? "settings")));
   }, []);
@@ -390,7 +395,10 @@ export function SlideBuilder({
   }
 
   // ── Publish / review ──
-  const moduleInfo = useMemo(() => ({ title: initial.title, objectives, furtherReading: reading }), [initial.title, objectives, reading]);
+  const moduleInfo = useMemo(
+    () => ({ title: initial.title, objectives, furtherReading: reading, introMusic, outroMusic }),
+    [initial.title, objectives, reading, introMusic, outroMusic]
+  );
   const problems = useMemo(() => publishProblems(moduleInfo, slides), [moduleInfo, slides]);
   const [showProblems, setShowProblems] = useState(false);
 
@@ -581,6 +589,11 @@ export function SlideBuilder({
                 onReading={(r) => changeSettings(() => setReading(r))}
                 onVoice={(v) => changeSettings(() => setVoice(v))}
                 onDefaultVoice={setDefaultVoiceState}
+                token={token}
+                introMusic={introMusic}
+                outroMusic={outroMusic}
+                onMusic={(page, m) => (page === "intro" ? setIntroMusic(m) : setOutroMusic(m))}
+                onError={(e) => (e.startsWith(LOST) ? lose(e) : setAlert(e))}
               />
             </fieldset>
           ) : (
@@ -1468,6 +1481,127 @@ function Music({
   );
 }
 
+/**
+ * Music for the introduction and summary pages, which the player builds
+ * from the objectives (so they have no slide to put it on). Chosen from the
+ * same library as slide music; add new tracks from any slide.
+ */
+function PageMusic({
+  moduleId,
+  token,
+  intro,
+  outro,
+  onMusic,
+  onError,
+}: {
+  moduleId: string;
+  token: string | null;
+  intro: ModuleMusic | null;
+  outro: ModuleMusic | null;
+  onMusic: (page: "intro" | "outro", m: ModuleMusic | null) => void;
+  onError: (e: string) => void;
+}) {
+  const [picking, setPicking] = useState<"intro" | "outro" | null>(null);
+  const [library, setLibrary] = useState<MusicTrack[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  const pages = [
+    { page: "intro" as const, label: "Module introduction", music: intro },
+    { page: "outro" as const, label: "Summary", music: outro },
+  ];
+
+  const fail = (e: string) => {
+    setProblem(e);
+    if (e.startsWith(LOST)) onError(e);
+  };
+
+  async function choose(page: "intro" | "outro") {
+    setProblem(null);
+    const r = await listMusic(moduleId);
+    if (!r.ok) return fail(r.error);
+    setLibrary(r.tracks);
+    setPicking(page);
+  }
+
+  async function use(page: "intro" | "outro", trackId: string | null) {
+    if (!token) return;
+    setBusy(true);
+    const r = await setModuleMusic(moduleId, token, page, trackId);
+    setBusy(false);
+    if (!r.ok) return fail(r.error);
+    onMusic(page, r.music);
+    setPicking(null);
+  }
+
+  const current = picking === "intro" ? intro : picking === "outro" ? outro : null;
+
+  return (
+    <section className="builder__block" data-testid="page-music">
+      <div className="builder__block-head">
+        <span className="builder__block-type">Introduction and summary music</span>
+      </div>
+      <p className="card__meta">
+        Background music for the first page (the learning objectives) and the last (the summary). Chosen from the music library;
+        to add a track, create or upload it from any slide&rsquo;s Background music.
+      </p>
+      <div className="be-stack">
+        {pages.map(({ page, label, music }) => (
+          <div key={page} className="be-row">
+            <strong>{label}:</strong>
+            {music ? (
+              <>
+                <span>{music.title}</span>
+                <audio src={music.url} controls preload="none" aria-label={`${label} music`} />
+              </>
+            ) : (
+              <span className="card__meta">None.</span>
+            )}
+            <button type="button" className="button button-secondary button-small" disabled={busy} onClick={() => choose(page)}>
+              Choose from the library
+            </button>
+            {music && (
+              <button type="button" className="text-action" disabled={busy} onClick={() => use(page, null)}>
+                Set to none
+              </button>
+            )}
+          </div>
+        ))}
+        {problem && (
+          <p className="form-error" role="alert">
+            {problem}
+          </p>
+        )}
+      </div>
+      {picking && library && (
+        <Modal title={picking === "intro" ? "Music for the introduction" : "Music for the summary"} onClose={() => setPicking(null)} wide>
+          {library.length === 0 ? (
+            <p>The library is empty. Create or upload a track from a slide&rsquo;s Background music first.</p>
+          ) : (
+            <ul className="builder__hits">
+              {library.map((t) => (
+                <li key={t.id}>
+                  <div>
+                    <strong>{t.title}</strong>
+                    <p className="card__meta">
+                      {t.source === "upload" ? "Uploaded" : "Created with ElevenLabs"}
+                      {t.durationSeconds ? ` · ${t.durationSeconds} s` : ""}
+                      {t.description ? ` · ${t.description}` : ""}
+                    </p>
+                  </div>
+                  <audio src={t.url} controls preload="none" aria-label={`Preview ${t.title}`} />
+                  <button type="button" className="button button-primary button-small" disabled={busy || current?.id === t.id} onClick={() => use(picking, t.id)}>
+                    {current?.id === t.id ? "Chosen" : "Use"}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Modal>
+      )}
+    </section>
+  );
+}
+
 // ── Interactive element ──────────────────────────────────────────────────
 
 function ElementEditor({ element, onChange }: { element: SlideElement | null; onChange: (e: SlideElement | null) => void }) {
@@ -1683,6 +1817,11 @@ function Settings({
   onReading,
   onVoice,
   onDefaultVoice,
+  token,
+  introMusic,
+  outroMusic,
+  onMusic,
+  onError,
 }: {
   moduleId: string;
   objectives: Objective[];
@@ -1696,6 +1835,11 @@ function Settings({
   onReading: (r: FurtherReading[]) => void;
   onVoice: (v: Voiced) => void;
   onDefaultVoice: (v: Voiced) => void;
+  token: string | null;
+  introMusic: ModuleMusic | null;
+  outroMusic: ModuleMusic | null;
+  onMusic: (page: "intro" | "outro", m: ModuleMusic | null) => void;
+  onError: (e: string) => void;
 }) {
   return (
     <div className="builder__canvas">
@@ -1752,6 +1896,8 @@ function Settings({
           </p>
         </div>
       </section>
+
+      <PageMusic moduleId={moduleId} token={token} intro={introMusic} outro={outroMusic} onMusic={onMusic} onError={onError} />
 
       <BlueprintEditor steps={blueprint} onChange={onBlueprint} />
 

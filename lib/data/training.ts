@@ -248,8 +248,18 @@ export interface BuilderModule {
   blueprint: BlueprintStep[];
   furtherReading: FurtherReading[];
   voice: { id: string; name: string } | null;
+  /** Background music on the introduction and summary pages (0055). */
+  introMusic: ModuleMusic | null;
+  outroMusic: ModuleMusic | null;
   checkout: Checkout | null;
   slides: Slide[];
+}
+
+export type ModuleMusic = { id: string; title: string; url: string };
+
+function moduleMusic(v: unknown): ModuleMusic | null {
+  const m = (Array.isArray(v) ? v[0] : v) as { id?: string; title?: string; url?: string } | null | undefined;
+  return m?.id && m.url ? { id: m.id, title: m.title ?? "Music", url: m.url } : null;
 }
 
 /** A module and its slides for the builder. RLS returns nothing unless the reader may build it. */
@@ -260,7 +270,7 @@ export async function getBuilderModule(moduleId: string): Promise<BuilderModule 
     supabase
       .from("training_modules")
       .select(
-        `id, title, summary, estimated_minutes, published_version, published_at, ready_for_review_at, objectives, blueprint, further_reading, voice, ${CHECKOUT_COLUMNS}, track:training_tracks(id, code, title)`
+        `id, title, summary, estimated_minutes, published_version, published_at, ready_for_review_at, objectives, blueprint, further_reading, voice, ${CHECKOUT_COLUMNS}, track:training_tracks(id, code, title), intro:training_music!training_modules_intro_music_id_fkey(id, title, url), outro:training_music!training_modules_outro_music_id_fkey(id, title, url)`
       )
       .eq("id", moduleId)
       .maybeSingle(),
@@ -284,6 +294,8 @@ export async function getBuilderModule(moduleId: string): Promise<BuilderModule 
     blueprint: normalizeBlueprint(mod.blueprint),
     furtherReading: normalizeFurtherReading(mod.further_reading),
     voice: normalizeVoice(mod.voice),
+    introMusic: moduleMusic(mod.intro),
+    outroMusic: moduleMusic(mod.outro),
     checkout: toCheckout(mod as unknown as CheckoutRow),
     slides: toSlides((slides ?? []) as SlideRow[], (media ?? []) as MediaRow[]),
   };

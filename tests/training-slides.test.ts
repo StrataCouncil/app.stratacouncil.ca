@@ -137,6 +137,17 @@ test("slides group into topics; a slide with no topic joins the one before", () 
   assert.equal(normalizePlayerContent({ sections: [] }), null);
 });
 
+test("the introduction and summary pages can have their own music", () => {
+  const content = buildPlayerContent({ ...info, introMusic: { url: "https://x.test/intro.mp3" }, outroMusic: null }, [slide()]);
+  assert.deepEqual(content.introMusic, { url: "https://x.test/intro.mp3" });
+  assert.equal(content.outroMusic, null);
+  assert.deepEqual(normalizePlayerContent(JSON.parse(JSON.stringify(content))), content);
+  // Copies published before this have none; an unsafe address is dropped.
+  const { introMusic: _i, outroMusic: _o, ...older } = content;
+  assert.equal(normalizePlayerContent(older)!.introMusic, null);
+  assert.equal(normalizePlayerContent({ ...content, outroMusic: { url: "javascript:alert(1)" } })!.outroMusic, null);
+});
+
 test("database rows become slides, in order, with their media", () => {
   const rows = [
     { id: "b", position: 2, topic: "", title: "B", body: "", layout: "left", narration_script: "", narration_voiced: "", element: null, citations: [] },

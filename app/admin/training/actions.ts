@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProfile } from "@/lib/data/profile";
 import { mirrorTrainingToDemo } from "@/lib/demo-mirror";
-import { getBuilderModule, type BuilderModule } from "@/lib/data/training";
+import { getBuilderModule, type BuilderModule, type ModuleMusic } from "@/lib/data/training";
 import { canAuthor, editing, labelFor, readSlide, SLIDE_COLUMNS, staff, libraryLabels, verifiedCitations, type AdminClient } from "@/lib/training/builder-server";
 import {
   buildPlayerContent,
@@ -904,6 +904,27 @@ export async function addUploadedMusic(
   return { ok: true, track: { id: row.id as string, title, description: "", source: "upload", url, durationSeconds: null, uses: put.ok ? 1 : 0 }, media: put.ok ? put.media : null };
 }
 
+/** Put a library track on the module's introduction or summary page (or none). */
+export async function setModuleMusic(moduleId: string, token: string, page: "intro" | "outro", musicId: string | null): Promise<Result<{ music: ModuleMusic | null }>> {
+  const e = await editing(moduleId, token);
+  if (!e.ok) return e;
+  let music: ModuleMusic | null = null;
+  if (musicId) {
+    const { data: track } = await e.admin.from("training_music").select("id, title, url").eq("id", musicId).maybeSingle();
+    if (!track) return { ok: false, error: "That track isn't in the library any more." };
+    music = { id: track.id as string, title: track.title as string, url: track.url as string };
+  }
+  const { error } = await e.admin
+    .from("training_modules")
+    .update(page === "intro" ? { intro_music_id: music?.id ?? null } : { outro_music_id: music?.id ?? null })
+    .eq("id", moduleId);
+  if (error) {
+    console.error("[setModuleMusic]", error.message);
+    return { ok: false, error: "Couldn't change the music." };
+  }
+  return { ok: true, music };
+}
+
 /** Remove a track from the library: its file is deleted, and it comes off every slide using it. */
 export async function deleteMusic(moduleId: string, token: string, musicId: string): Promise<Result> {
   const e = await editing(moduleId, token);
@@ -1053,12 +1074,25 @@ export async function publishModule(moduleId: string): Promise<Result<{ version:
   if (await heldByOther(moduleId, me.id)) return { ok: false, error: "Someone is editing this module. Publish once they've checked it in." };
   const admin = createAdminClient();
   const [{ data: mod }, { data: rows }, { data: media }] = await Promise.all([
-    admin.from("training_modules").select("title, track_id, objectives, further_reading").eq("id", moduleId).maybeSingle(),
+    admin
+      .from("training_modules")
+      .select("title, track_id, objectives, further_reading, intro:training_music!training_modules_intro_music_id_fkey(url), outro:training_music!training_modules_outro_music_id_fkey(url)")
+      .eq("id", moduleId)
+      .maybeSingle(),
     admin.from("training_slides").select(SLIDE_COLUMNS).eq("module_id", moduleId),
     admin.from("training_media").select("id, slide_id, role, kind, source, url, alt, credit").eq("module_id", moduleId),
   ]);
   if (!mod) return { ok: false, error: "Module not found." };
-  const info = { title: mod.title as string, objectives: normalizeObjectives(mod.objectives), furtherReading: normalizeFurtherReading(mod.further_reading) };
+  const urlOf = (v: unknown) => ((Array.isArray(v) ? v[0] : v) as { url?: string } | null)?.url;
+  const intro = urlOf(mod.intro);
+  const outro = urlOf(mod.outro);
+  const info = {
+    title: mod.title as string,
+    objectives: normalizeObjectives(mod.objectives),
+    furtherReading: normalizeFurtherReading(mod.further_reading),
+    introMusic: intro ? { url: intro } : null,
+    outroMusic: outro ? { url: outro } : null,
+  };
   const raw = toSlides((rows ?? []) as SlideRow[], (media ?? []) as MediaRow[]);
   // Sources go out under the library's current names.
   const labels = await libraryLabels(raw.flatMap((s) => s.citations.map((c) => c.chunkId)));
