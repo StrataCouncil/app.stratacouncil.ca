@@ -259,3 +259,40 @@ export function chunkLegislation(
     sections: 0,
   };
 }
+
+/**
+ * Re-indexing replaces an entry's passages, but training slides and Library
+ * items cite passages by id. Each new passage keeps the id of an old one with
+ * the same title (in order), so a citation survives a re-index as long as
+ * its section is still there. A document without sections titles every
+ * passage with the document's own name, so after a rename those passages
+ * keep the old ids by position instead. Returns the id to reuse for each
+ * new passage, or null for a new one.
+ */
+export function carryChunkIds(
+  previous: { id: string; title: string | null; chunk_index: number }[],
+  titles: (string | null)[],
+  documentTitle: string
+) {
+  const ordered = [...previous].sort((a, b) => a.chunk_index - b.chunk_index);
+  const used = new Set<string>();
+  const byTitle = new Map<string, string[]>();
+  for (const p of ordered) {
+    const key = (p.title ?? "").trim();
+    byTitle.set(key, [...(byTitle.get(key) ?? []), p.id]);
+  }
+  const ids = titles.map((t) => {
+    const id = byTitle.get((t ?? "").trim())?.shift() ?? null;
+    if (id) used.add(id);
+    return id;
+  });
+  const sectionless = previous.length > 0 && titles.every((t) => (t ?? "").trim() === documentTitle.trim());
+  if (!sectionless) return ids;
+  return ids.map((id, i) => {
+    if (id) return id;
+    const old = ordered.find((p) => p.chunk_index === i && !used.has(p.id));
+    if (!old) return null;
+    used.add(old.id);
+    return old.id;
+  });
+}
