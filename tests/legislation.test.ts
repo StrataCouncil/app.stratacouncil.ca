@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { chunkLegislation, detectCurrentTo, parseSections } from "../lib/kb/legislation.ts";
+import { carryChunkIds, chunkLegislation, detectCurrentTo, parseSections } from "../lib/kb/legislation.ts";
 
 // Shaped like a BC Laws Act: a contents page, then Parts, headings above
 // sections, subsections, and wrapped lines that start with numbers.
@@ -200,4 +200,25 @@ test("file names lose download IDs and stray spaces", async () => {
   assert.equal(cleanFileName("real-estate-development-marketing-act .txt"), "real-estate-development-marketing-act.txt");
   assert.equal(cleanFileName("2024 Strata Guide.pdf"), "2024 Strata Guide.pdf");
   assert.equal(cleanFileName("1780078972497.pdf"), "1780078972497.pdf");
+});
+
+test("re-indexing keeps the ids citations point at", () => {
+  const previous = [
+    { id: "a", title: "s. 3 Responsibilities of strata corporation", chunk_index: 0 },
+    { id: "b", title: "s. 4 Strata corporation functions through council", chunk_index: 1 },
+    { id: "c", title: "s. 4 Strata corporation functions through council", chunk_index: 2 },
+    { id: "d", title: "s. 5 Repealed", chunk_index: 3 },
+  ];
+  // Sections keep their ids, in order; a removed section's id goes, a new one gets none.
+  assert.deepEqual(
+    carryChunkIds(previous, ["s. 3 Responsibilities of strata corporation", "s. 4 Strata corporation functions through council", "s. 4 Strata corporation functions through council", "s. 6 New"], "Strata Property Act"),
+    ["a", "b", "c", null]
+  );
+  // A document without sections, renamed: its passages keep their ids by position.
+  const guide = [
+    { id: "g1", title: "1778180606239 BC Strata Meetings Guide", chunk_index: 0 },
+    { id: "g2", title: "1778180606239 BC Strata Meetings Guide", chunk_index: 1 },
+  ];
+  assert.deepEqual(carryChunkIds(guide, ["BC Strata Meetings Guide", "BC Strata Meetings Guide", "BC Strata Meetings Guide"], "BC Strata Meetings Guide"), ["g1", "g2", null]);
+  assert.deepEqual(carryChunkIds([], ["s. 1"], "Act"), [null]);
 });

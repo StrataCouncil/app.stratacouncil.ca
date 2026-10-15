@@ -2,7 +2,7 @@ import { NonRetriableError } from "inngest";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { embed, toVectorLiteral } from "@/lib/kb/embed";
 import { extractDocumentText } from "@/lib/kb/extract";
-import { chunkLegislation, detectCurrentTo } from "@/lib/kb/legislation";
+import { carryChunkIds, chunkLegislation, detectCurrentTo } from "@/lib/kb/legislation";
 import { stripForLibrary } from "@/lib/kb/privacy";
 import { LEGISLATION_INDEX_EVENT, inngest } from "@/lib/inngest/client";
 import { LEGISLATION_BUCKET } from "@/lib/legislation";
@@ -86,7 +86,11 @@ export const indexLegislation = inngest.createFunction(
         chunks.map((c) => c.text),
         "document"
       );
+      // Keep the ids slides and Library items cite, where the section survives.
+      const { data: previous } = await admin.from("knowledge_chunks").select("id, title, chunk_index").eq("legislation_document_id", id);
+      const ids = carryChunkIds(previous ?? [], chunks.map((c) => c.title), doc.title as string);
       const rows = chunks.map((c, i) => ({
+        ...(ids[i] ? { id: ids[i] } : {}),
         scope: "legislation",
         legislation_document_id: id,
         source_act: doc.title,
