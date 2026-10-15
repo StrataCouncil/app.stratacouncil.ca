@@ -5,10 +5,10 @@ export type AdminTab = "overview" | "stratas" | "training" | "library" | "legisl
 const TABS: Array<{ key: AdminTab; label: string; href: string }> = [
   { key: "overview", label: "Overview", href: "/admin" },
   { key: "stratas", label: "Stratas", href: "/admin/stratas" },
-  { key: "training", label: "Council Training", href: "/admin/training" },
-  { key: "library", label: "Library", href: "/admin/library" },
-  { key: "legislation", label: "Knowledge Base", href: "/admin/legislation" },
   { key: "announcements", label: "Announcements", href: "/admin/announcements" },
+  { key: "library", label: "Library", href: "/admin/library" },
+  { key: "training", label: "Council Training", href: "/admin/training" },
+  { key: "legislation", label: "Knowledge Base", href: "/admin/legislation" },
   { key: "demo", label: "Demo", href: "/admin/demo" },
 ];
 

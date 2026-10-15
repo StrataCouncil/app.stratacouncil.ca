@@ -37,7 +37,7 @@ Use separate browsers or private windows so you can be signed in as two people a
 
 ## 3. Super Admin console
 
-- [ ] As **Super Admin**, open the console. Overview lists the request under Needs attention, with the platform numbers below. The tabs (Overview, Stratas, Council Training, Knowledge Base, Announcements, Demo) are on every console page.
+- [ ] As **Super Admin**, open the console. Overview lists the request under Needs attention, with the platform numbers below. The tabs (Overview, Stratas, Announcements, Library, Council Training, Knowledge Base, Demo) are on every console page.
 - [ ] Stratas tab: the request is listed. Open it, check the details, approve.
 - [ ] **Admin** gets an approval email, and the strata now appears in their strata list.
 - [ ] Stratas tab search finds the strata by plan number and by building name.
