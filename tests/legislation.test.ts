@@ -192,3 +192,12 @@ test("suggested names from file names", async () => {
   assert.equal(guessKind("CHOA bulletin on depreciation reports"), "guidance");
   assert.equal(guessKind("Guide to the Strata Property Act"), "guidance");
 });
+
+test("file names lose download IDs and stray spaces", async () => {
+  const { cleanFileName } = await import("../lib/legislation.ts");
+  assert.equal(cleanFileName("1777746631583_OIPC.pdf"), "OIPC.pdf");
+  assert.equal(cleanFileName("1780448260846_Civil-Resolution-Tribunal-Standard-Rules.pdf"), "Civil-Resolution-Tribunal-Standard-Rules.pdf");
+  assert.equal(cleanFileName("real-estate-development-marketing-act .txt"), "real-estate-development-marketing-act.txt");
+  assert.equal(cleanFileName("2024 Strata Guide.pdf"), "2024 Strata Guide.pdf");
+  assert.equal(cleanFileName("1780078972497.pdf"), "1780078972497.pdf");
+});

@@ -9,6 +9,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { queueLegislationIndexing } from "@/lib/kb/queue";
 
 import {
+  cleanFileName,
   isLegislationKind,
   LEGISLATION_BUCKET,
   LEGISLATION_EXTENSIONS,
@@ -100,7 +101,7 @@ export async function registerLegislation(entries: NewLegislation[]): Promise<Do
     short_name: e.shortName.trim().slice(0, 30) || null,
     kind: e.kind as LegislationKind,
     current_to: cleanDate(e.currentTo),
-    file_name: e.fileName.slice(0, 300),
+    file_name: cleanFileName(e.fileName).slice(0, 300),
     mime_type: e.type || null,
     size_bytes: e.size,
     storage_path: e.path,

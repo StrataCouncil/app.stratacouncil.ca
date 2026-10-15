@@ -20,12 +20,23 @@ export function isLegislationKind(v: string): v is LegislationKind {
 
 const SMALL_WORDS = new Set(["a", "an", "and", "as", "at", "by", "for", "in", "of", "on", "or", "the", "to"]);
 
+/**
+ * A file name as it's kept and offered for download: without a leading
+ * download timestamp or ID ("1780853222429_OIPC.pdf" -> "OIPC.pdf") or
+ * stray spaces before the extension.
+ */
+export function cleanFileName(name: string) {
+  const cleaned = name
+    .trim()
+    .replace(/^\d{6,}[\s_\-]+/, "")
+    .replace(/\s+(\.[^.\s]+)$/, "$1");
+  return cleaned || name.trim();
+}
+
 /** "real-estate-services-act.txt" -> "Real Estate Services Act". Words already capitalised are left alone; a leading number ID is dropped. */
 export function titleFromFileName(name: string) {
-  const words = name
+  const words = cleanFileName(name)
     .replace(/\.[^.]+$/, "")
-    // Download timestamps and IDs ("1780853222429-working-with-…").
-    .replace(/^\d{6,}[\s_\-]+/, "")
     .replace(/[_\-]+/g, " ")
     .replace(/\s+/g, " ")
     .trim()
