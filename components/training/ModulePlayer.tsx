@@ -98,6 +98,7 @@ export function ModulePlayer({
 
   const page = pages[Math.min(index, pages.length - 1)];
   const screen = page?.kind === "screen" ? page.screen : null;
+  const pageMusic = screen ? screen.music : page?.kind === "intro" ? content.introMusic : page?.kind === "recap" ? content.outroMusic : null;
   const required = useMemo(() => (screen ? slideRequirements(screen) : []), [screen]);
   // What's been finished on the current screen; tied to the screen so moving on starts fresh.
   const [sat, setSat] = useState<{ at: number; ids: Set<string> }>({ at: index, ids: new Set() });
@@ -318,7 +319,7 @@ export function ModulePlayer({
             </div>
 
             {/* Keyed by the track, so slides that share music keep playing it without a break. */}
-            {screen?.music && settings.music && <SlideMusic key={screen.music.url} url={screen.music.url} />}
+            {pageMusic && settings.music && <SlideMusic key={pageMusic.url} url={pageMusic.url} />}
 
             {captions && narration && (
               <div className="player__captions">
