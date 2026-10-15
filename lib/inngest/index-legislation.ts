@@ -9,7 +9,7 @@ import { LEGISLATION_BUCKET } from "@/lib/legislation";
 import { mirrorLegislationToDemo } from "@/lib/demo-mirror";
 
 /**
- * Index one legislation library entry (doc04 §5): read the file on our own
+ * Index one Knowledge Base entry (doc04 §5): read the file on our own
  * servers, split Acts and regulations by section, embed, and replace the
  * entry's chunks. Guidance is PII-stripped first; Acts and regulations are
  * public law and go as written (see stripForLibrary).

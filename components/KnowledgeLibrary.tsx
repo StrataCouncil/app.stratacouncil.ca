@@ -12,7 +12,7 @@ import {
 const kinds = Object.keys(knowledgeResourceKindLabels) as KnowledgeResourceKind[];
 
 /**
- * The Knowledge Library — search + filter over the full playbook/
+ * The Library — search + filter over the full playbook/
  * template/guide/insight/legislation set (doc01 §3b), not six separate
  * lists. A new council member searching "noise complaint" or "reserve
  * fund" shouldn't have to guess which content type it lives under.

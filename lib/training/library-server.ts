@@ -3,7 +3,7 @@ import { embed, toVectorLiteral } from "@/lib/kb/embed";
 import { mergeHits, type LibraryPassage } from "@/lib/training/library";
 
 /**
- * Searching the Legislation Library for Council Training (0037). Server
+ * Searching the Knowledge Base for Council Training (0037). Server
  * only, with the service role: the search function isn't open to learners
  * or councils. Queries are an author's search for a section to cite (course
  * wording, no personal information) and go to Voyage to be embedded.

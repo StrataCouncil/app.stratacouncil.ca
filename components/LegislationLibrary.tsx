@@ -22,7 +22,7 @@ import {
 } from "@/lib/legislation";
 
 /**
- * The legislation library (Super Admin). Upload Acts, regulations and
+ * The Knowledge Base (Super Admin). Upload Acts, regulations and
  * guidance; each is indexed in the background and from then on is what
  * Stratasphere quotes and cites for questions of law. Nothing about the
  * law comes from the model's memory, so what's here is the whole of it.
@@ -158,7 +158,7 @@ function EntryRow({ e, onError }: { e: LegislationEntry; onError: (m: string) =>
           className="link-button agenda-danger"
           disabled={busy}
           onClick={() => {
-            if (window.confirm(`Remove "${e.title}" from the library? Stratasphere will stop citing it.`)) run(deleteLegislation(e.id));
+            if (window.confirm(`Remove "${e.title}" from the Knowledge Base? Stratasphere will stop citing it.`)) run(deleteLegislation(e.id));
           }}
         >
           Delete
@@ -237,7 +237,7 @@ export function LegislationLibrary({ entries }: { entries: LegislationEntry[] })
       <section className="legis-upload">
         <div className="legis-upload__head">
           <div>
-            <h2>Add to the library</h2>
+            <h2>Add to the Knowledge Base</h2>
             <p className="roster-table__meta">
               PDF, Word (.docx), HTML or text. Text versions from BC Laws index best: Acts and regulations are split by
               section so answers can cite them. &ldquo;Current to&rdquo; is read from the file when left blank.
@@ -331,11 +331,11 @@ export function LegislationLibrary({ entries }: { entries: LegislationEntry[] })
         )}
       </section>
 
-      <h2 style={{ margin: "2rem 0 1rem" }}>In the library</h2>
+      <h2 style={{ margin: "2rem 0 1rem" }}>In the Knowledge Base</h2>
       {entries.length === 0 ? (
         <p className="roster-notice">
           Nothing yet. Until legislation is added, Stratasphere tells people it can&rsquo;t answer questions of law from
-          its library.
+          the Knowledge Base.
         </p>
       ) : (
         <div className="roster-table-wrap">

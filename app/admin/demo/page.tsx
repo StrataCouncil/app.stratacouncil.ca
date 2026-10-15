@@ -28,5 +28,5 @@ export default async function AdminDemoPage() {
   );
 }
 
-// Copying training and the legislation library to the demo can take a while.
+// Copying training and the Knowledge Base to the demo can take a while.
 export const maxDuration = 300;

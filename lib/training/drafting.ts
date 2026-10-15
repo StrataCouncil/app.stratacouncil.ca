@@ -6,7 +6,7 @@
  *
  * Two steps, both started by the author with the module checked out:
  * 1. An outline: topics and slide titles, from the module's objectives
- *    and the Legislation Library sections the author approved.
+ *    and the Knowledge Base sections the author approved.
  * 2. Slides, written one at a time from the outline and added after the
  *    module's existing slides. Nothing existing is ever changed.
  *

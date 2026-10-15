@@ -14,7 +14,7 @@ export async function queueDocumentIndexing(documentIds: string[]) {
   }
 }
 
-/** The same, for legislation library entries (Super Admin uploads). */
+/** The same, for Knowledge Base entries (Super Admin uploads). */
 export async function queueLegislationIndexing(legislationIds: string[]) {
   if (legislationIds.length === 0) return;
   try {

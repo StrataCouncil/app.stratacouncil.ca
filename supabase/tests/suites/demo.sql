@@ -2,7 +2,7 @@
 -- twice (it runs on every deploy), on top of every migration: a visitor's
 -- strata is created subscribed with them as admin, and deleting it leaves
 -- every table exactly as it was, while other stratas, the fictional
--- people and the legislation library are untouched.
+-- people and the Knowledge Base are untouched.
 \set ON_ERROR_STOP 1
 \i supabase/demo/demo.sql
 \i supabase/demo/demo.sql

@@ -93,7 +93,7 @@ export async function saveLibraryDraft(id: string, input: unknown): Promise<Resu
   return { ok: true, draft };
 }
 
-/** Legislation Library sections for a statement: the sections it names, if any are in the library, otherwise by meaning. */
+/** Knowledge Base sections for a statement: the sections it names, if any are in the library, otherwise by meaning. */
 async function sectionsFor(text: string, limit: number): Promise<Hit[]> {
   const byNumber = await passagesForCitations([text]);
   const found = byNumber.length ? byNumber : await searchLibrary([text], { perQuery: limit, threshold: 0.3, limit });
@@ -159,7 +159,7 @@ export async function tidyLibraryDraft(id: string, text: string): Promise<Result
   return { ok: true, draft };
 }
 
-/** Search the Legislation Library for a section to cite ("98", "Standard Bylaw 7" or words). */
+/** Search the Knowledge Base for a section to cite ("98", "Standard Bylaw 7" or words). */
 export async function searchLibrarySections(query: string): Promise<Result<{ hits: Hit[] }>> {
   if (!(await requireSuperAdmin())) return NOT_STAFF;
   const q = String(query ?? "").trim().slice(0, 300);
@@ -169,11 +169,11 @@ export async function searchLibrarySections(query: string): Promise<Result<{ hit
     return { ok: true, hits: await sectionsFor(numberOnly ? `s. ${q.replace(/[^\d.]/g, "")}` : q, 10) };
   } catch (e) {
     console.error("[searchLibrarySections]", e instanceof Error ? e.message : e);
-    return { ok: false, error: "The library search didn't work. Try again." };
+    return { ok: false, error: "The Knowledge Base search didn't work. Try again." };
   }
 }
 
-/** Publishes the saved draft, with each source under the Legislation Library's current name. */
+/** Publishes the saved draft, with each source under the Knowledge Base's current name. */
 export async function publishLibraryItem(id: string): Promise<Result<{ draft: LibraryDraft }>> {
   if (!(await requireSuperAdmin())) return NOT_STAFF;
   if (!isUuid(id)) return { ok: false, error: "Item not found." };

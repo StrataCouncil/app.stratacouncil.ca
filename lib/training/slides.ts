@@ -5,7 +5,7 @@
  * ordered list of slides, and optional further reading. A slide has a
  * topic (slides on the same topic sit together in the player's menu), a
  * title, 40 to 50 words of text, one picture or video, narration, at most
- * one interactive element, and the Legislation Library sections it relies
+ * one interactive element, and the Knowledge Base sections it relies
  * on.
  *
  * This file is the one definition of that shape: the builder edits it, the
@@ -85,7 +85,7 @@ export const elementLabels: Record<ElementType, string> = {
   flip_cards: "Flip cards",
 };
 
-/** A Legislation Library section, as the library labels it ("Strata Property Act, s. 45 Notice of general meetings"). */
+/** A Knowledge Base section, as the library labels it ("Strata Property Act, s. 45 Notice of general meetings"). */
 export type Citation = { chunkId: string; label: string };
 
 /** Who took a stock photo, linked as Unsplash requires. */

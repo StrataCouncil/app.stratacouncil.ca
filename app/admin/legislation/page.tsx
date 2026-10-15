@@ -5,7 +5,7 @@ import { LegislationLibrary } from "@/components/LegislationLibrary";
 import { listLegislation } from "@/lib/data/legislation";
 
 /**
- * The legislation library (doc04 §5): Super Admins only. Everything
+ * The Knowledge Base (doc04 §5): Super Admins only. Everything
  * Stratasphere says about the law comes from what's loaded here.
  */
 export default async function LegislationPage() {
@@ -17,7 +17,7 @@ export default async function LegislationPage() {
       <div className="wrap page">
         <AdminTabs active="legislation" />
         <div className="page-header">
-          <h1>Legislation Library</h1>
+          <h1>Knowledge Base</h1>
           <p>
             BC Acts, regulations and official guidance that Stratasphere quotes and cites for every strata on the
             platform. It explains the law only from what&rsquo;s here, never from memory, so keep each entry current:

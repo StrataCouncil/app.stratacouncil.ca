@@ -9,7 +9,7 @@ import { loadStripContext, stripForCorporation, stripForGlobal } from "@/lib/kb/
 import { DOCUMENT_INDEX_EVENT, inngest } from "@/lib/inngest/client";
 
 /**
- * Index one document into the knowledge base (doc02 §1, doc04 §5):
+ * Index one document into the search index (doc02 §1, doc04 §5):
  *
  *   1. extract — read the file (or fetch the link once) on our own
  *      servers, store the raw text on the document row, which only the

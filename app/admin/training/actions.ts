@@ -1004,7 +1004,7 @@ export async function searchStockPhotos(moduleId: string, query: string, page = 
   }
 }
 
-// ── Citations: Legislation Library sections only ───────────────────────
+// ── Citations: Knowledge Base sections only ───────────────────────
 
 export interface LibraryHit extends Citation {
   snippet: string;
@@ -1028,7 +1028,7 @@ export async function searchCitations(moduleId: string, query: string): Promise<
     };
   } catch (e) {
     console.error("[searchCitations]", e instanceof Error ? e.message : e);
-    return { ok: false, error: "The library search didn't work. Try again." };
+    return { ok: false, error: "The Knowledge Base search didn't work. Try again." };
   }
 }
 

@@ -13,7 +13,7 @@ import {
 } from "@/lib/library/catalogue";
 
 /**
- * A single Knowledge Library resource, as its own page — the "click a
+ * A single Library resource, as its own page — the "click a
  * headline, get an article with a related-reading sidebar" reading Jeremy
  * asked for, not a modal or an expanding card. Each resource already had
  * everything a list view needs (`summary`, `checklist`, tags); this page

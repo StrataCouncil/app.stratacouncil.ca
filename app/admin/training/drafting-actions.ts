@@ -78,7 +78,7 @@ export async function suggestSources(moduleId: string): Promise<Result<{ hits: S
     };
   } catch (e) {
     console.error("[suggestSources]", e instanceof Error ? e.message : e);
-    return { ok: false, error: "The library search didn't work. Try again." };
+    return { ok: false, error: "The Knowledge Base search didn't work. Try again." };
   }
 }
 
@@ -130,7 +130,7 @@ export async function draftOutline(moduleId: string, token: string, chunkIds: st
   if (!m) return { ok: false, error: "Module not found." };
   if (!m.objectives.length) return { ok: false, error: "Add the module's learning objectives first." };
   if (!m.blueprint.length) return { ok: false, error: "Fill in the module's blueprint first." };
-  if (!chunkIds.length) return { ok: false, error: "Choose at least one Legislation Library section to work from." };
+  if (!chunkIds.length) return { ok: false, error: "Choose at least one Knowledge Base section to work from." };
   try {
     const [src, { data: existing }] = await Promise.all([
       sources(chunkIds),

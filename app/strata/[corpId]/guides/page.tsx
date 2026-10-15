@@ -6,7 +6,7 @@ import { getStrataAccess } from "@/lib/data/strata";
 import { knowledgeResources } from "@/lib/library/catalogue";
 
 /**
- * The Knowledge Library — jurisdiction-scoped (doc01 §3b), free with one
+ * The Library — jurisdiction-scoped (doc01 §3b), free with one
  * exception: policy templates require a Stratasphere™ subscription (see
  * `isTemplateLocked` in lib/library/catalogue.ts). Leads the Stratasphere™ nav
  * on purpose: this is the thing a brand-new council member gets immediate

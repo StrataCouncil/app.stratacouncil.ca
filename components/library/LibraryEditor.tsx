@@ -21,7 +21,7 @@ type Hit = LibrarySource & { snippet: string };
 /**
  * Editing one Library item (0049): paste a draft for the AI to put in the
  * Library's markup, edit it with a live preview, check the statements it
- * flagged against the Legislation Library, cite sections, then publish.
+ * flagged against the Knowledge Base, cite sections, then publish.
  */
 export function LibraryEditor({ initial }: { initial: LibraryDraft }) {
   const router = useRouter();
@@ -100,12 +100,12 @@ export function LibraryEditor({ initial }: { initial: LibraryDraft }) {
     setBusy(null);
     if (!r.ok) return setError(r.error);
     load(r.draft);
-    setNotice("Published. Every strata's Knowledge Library has it now.");
+    setNotice("Published. Every strata's Library has it now.");
     router.refresh();
   }
 
   async function unpublish() {
-    if (!window.confirm("Take this item out of every strata's Knowledge Library? The draft stays here.")) return;
+    if (!window.confirm("Take this item out of every strata's Library? The draft stays here.")) return;
     setBusy("Unpublishing…");
     const r = await unpublishLibraryItem(draft.id);
     setBusy(null);
@@ -116,7 +116,7 @@ export function LibraryEditor({ initial }: { initial: LibraryDraft }) {
   }
 
   async function remove() {
-    if (!window.confirm(`Delete "${title || "this item"}"${draft.publishedAt ? ", and take it out of every strata's Knowledge Library" : ""}? This can't be undone.`)) return;
+    if (!window.confirm(`Delete "${title || "this item"}"${draft.publishedAt ? ", and take it out of every strata's Library" : ""}? This can't be undone.`)) return;
     setBusy("Deleting…");
     const r = await deleteLibraryItem(draft.id);
     if (!r.ok) {

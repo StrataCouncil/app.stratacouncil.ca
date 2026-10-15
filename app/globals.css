@@ -3886,7 +3886,7 @@ li[data-done="true"] .checklist__mark {
   padding: 0 0.5rem;
 }
 
-/* The Knowledge Library stays usable on phones (ScreenGate). */
+/* The Library stays usable on phones (ScreenGate). */
 @media (max-width: 899px) {
   .screen-gate-content--mobile-ok {
     display: block;
@@ -4362,7 +4362,7 @@ abbr.role-tag--short {
   gap: 1rem;
 }
 
-/* Legislation library (Super Admin) */
+/* Knowledge Base (Super Admin) */
 
 .legis-upload {
   border: 1px solid var(--line);
@@ -6806,7 +6806,7 @@ a.track-card:focus-visible {
 
 /* AI module builder: library passages for a curriculum module (0037) */
 
-/* Module builder: fact check against the Legislation Library (0037) */
+/* Module builder: fact check against the Knowledge Base (0037) */
 
 /* A split screen with the picture on the left */
 .player__screen[data-layout="split"][data-side="left"] {
@@ -7434,7 +7434,7 @@ a.track-card:focus-visible {
   font-size: 0.9rem;
 }
 
-/* ── The Library (0049): items read in each strata's Knowledge Library ── */
+/* ── The Library (0049): items read in each strata's Library ── */
 
 .kb-card--soon {
   cursor: default;
