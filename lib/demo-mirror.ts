@@ -186,7 +186,7 @@ export async function mirrorLibraryToDemo(): Promise<MirrorResult<{ items: numbe
   const { live, demo } = db;
   const { data, error } = await live
     .from("library_resources")
-    .select("id, kind, title, summary, tags, published, published_at, created_at, updated_at")
+    .select("id, kind, title, summary, tags, published, published_at, order_index, created_at, updated_at")
     .not("published", "is", null);
   if (error || !data) return fail("reading the Library", error?.message ?? "no rows");
   const ids = data.map((r) => r.id as string);

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AdminTabs } from "@/components/AdminTabs";
 import { AppShell } from "@/components/AppShell";
+import { LibraryMoveButtons } from "@/components/library/LibraryMoveButtons";
 import { NewLibraryItem } from "@/components/library/NewLibraryItem";
 import { listLibraryDrafts } from "@/lib/data/library";
 import { knowledgeResourceKindLabels } from "@/lib/library/catalogue";
@@ -25,7 +26,7 @@ export default async function LibraryAdminPage() {
           <p>
             Playbooks, guides and templates for every strata. Paste a draft and the AI puts it in the Library&rsquo;s format
             and flags the legal statements to check against the Knowledge Base. Members see an item once it&rsquo;s
-            published. Templates are for subscribers.
+            published. Templates are for subscribers. Members see items in the order below; use the arrows to move them.
           </p>
         </div>
 
@@ -44,10 +45,11 @@ export default async function LibraryAdminPage() {
                 <th scope="col">Kind</th>
                 <th scope="col">Status</th>
                 <th scope="col">Edited</th>
+                <th scope="col" aria-label="Order" />
               </tr>
             </thead>
             <tbody>
-              {items.map((i) => (
+              {items.map((i, index) => (
                 <tr key={i.id}>
                   <td>
                     <Link href={`/admin/library/${i.id}`}>{i.title || "Untitled"}</Link>
@@ -63,6 +65,9 @@ export default async function LibraryAdminPage() {
                     )}
                   </td>
                   <td className="card__meta">{fmt(i.updatedAt)}</td>
+                  <td>
+                    <LibraryMoveButtons id={i.id} first={index === 0} last={index === items.length - 1} />
+                  </td>
                 </tr>
               ))}
             </tbody>
