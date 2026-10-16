@@ -351,7 +351,6 @@ function ModuleSettings({
               updateModuleDetails(module.id, {
                 title: String(f.get("title")),
                 summary: String(f.get("summary")),
-                estimatedMinutes: Number(f.get("minutes")) || null,
               }),
             true
           );
@@ -365,10 +364,13 @@ function ModuleSettings({
           <span>Summary (shown on the track page)</span>
           <textarea name="summary" rows={2} defaultValue={module.summary} maxLength={1000} />
         </label>
-        <label className="field">
-          <span>Estimated minutes</span>
-          <input name="minutes" type="number" min={1} max={600} defaultValue={module.estimatedMinutes ?? ""} />
-        </label>
+        <div className="field">
+          <span>Estimated time</span>
+          <p className="card__meta">
+            {module.estimatedMinutes ? `${module.estimatedMinutes} min. ` : ""}Worked out each time the module is published, from its narration,
+            reading and activities.
+          </p>
+        </div>
         <button className="button button-primary button-small" style={{ alignSelf: "flex-start" }} disabled={pending}>
           Save details
         </button>

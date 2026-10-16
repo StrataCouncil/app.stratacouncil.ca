@@ -9,6 +9,8 @@ import { getCurrentProfile } from "@/lib/data/profile";
 import { mirrorTrainingToDemo } from "@/lib/demo-mirror";
 import { getBuilderModule, type BuilderModule, type ModuleMusic } from "@/lib/data/training";
 import { canAuthor, editing, labelFor, readSlide, SLIDE_COLUMNS, staff, libraryLabels, verifiedCitations, type AdminClient } from "@/lib/training/builder-server";
+import { audioDurationSeconds } from "@/lib/media/audio-duration";
+import { estimateMinutes } from "@/lib/training/estimate";
 import {
   buildPlayerContent,
   coverOf,
@@ -187,22 +189,37 @@ export async function saveModuleSettings(
   return { ok: true };
 }
 
-/** Title, summary and length (Super Admins, from the training list). Not while someone else is editing. */
-export async function updateModuleDetails(
-  moduleId: string,
-  input: { title: string; summary: string; estimatedMinutes: number | null }
-): Promise<Result> {
+/**
+ * Each slide's narration length in seconds, by slide id. Audio made before
+ * lengths were kept (0056), or uploaded, is measured now and the length
+ * saved, so it's only read once.
+ */
+async function narrationLengths(admin: AdminClient, moduleId: string): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  const { data } = await admin.from("training_media").select("id, slide_id, path, duration_seconds").eq("module_id", moduleId).eq("role", "narration");
+  for (const m of data ?? []) {
+    let seconds = m.duration_seconds === null ? null : Number(m.duration_seconds);
+    if (seconds === null && m.path) {
+      const { data: file } = await admin.storage.from(MEDIA_BUCKET).download(m.path as string);
+      seconds = file ? audioDurationSeconds(await file.arrayBuffer()) : null;
+      if (seconds !== null) await admin.from("training_media").update({ duration_seconds: seconds }).eq("id", m.id);
+    }
+    if (seconds !== null && Number.isFinite(seconds)) out.set(m.slide_id as string, seconds);
+  }
+  return out;
+}
+
+/** Title and summary (Super Admins, from the training list). Not while someone else is editing. The length is worked out on publish. */
+export async function updateModuleDetails(moduleId: string, input: { title: string; summary: string }): Promise<Result> {
   const me = await staff();
   if (!me) return { ok: false, error: "Only platform staff can edit training." };
   if (await heldByOther(moduleId, me.id)) return { ok: false, error: "Someone is editing this module. Try again once they've checked it in." };
   const title = input.title.trim().slice(0, 200);
   if (!title) return { ok: false, error: "Give the module a title." };
-  const minutes =
-    input.estimatedMinutes && Number.isFinite(input.estimatedMinutes) ? Math.max(1, Math.min(600, Math.round(input.estimatedMinutes))) : null;
   const supabase = await createClient();
   const { error } = await supabase
     .from("training_modules")
-    .update({ title, summary: input.summary.trim().slice(0, 1000), estimated_minutes: minutes })
+    .update({ title, summary: input.summary.trim().slice(0, 1000) })
     .eq("id", moduleId);
   if (error) return { ok: false, error: "Couldn't save the module details." };
   refresh(moduleId);
@@ -563,12 +580,12 @@ async function setMedia(
   trackId: string,
   moduleId: string,
   slideId: string,
-  m: { role: "visual" | "narration"; kind: "image" | "video" | "audio"; source: "upload" | "unsplash" | "link"; path: string | null; url: string; alt: string; credit: unknown; bytes?: number | null }
+  m: { role: "visual" | "narration"; kind: "image" | "video" | "audio"; source: "upload" | "unsplash" | "link"; path: string | null; url: string; alt: string; credit: unknown; bytes?: number | null; durationSeconds?: number | null }
 ): Promise<Media> {
   await admin.from("training_media").delete().eq("slide_id", slideId).eq("role", m.role);
   const { data, error } = await admin
     .from("training_media")
-    .insert({ slide_id: slideId, module_id: moduleId, role: m.role, kind: m.kind, source: m.source, path: m.path, url: m.url, alt: m.alt.slice(0, 500), credit: m.credit ?? null, bytes: m.bytes ?? null })
+    .insert({ slide_id: slideId, module_id: moduleId, role: m.role, kind: m.kind, source: m.source, path: m.path, url: m.url, alt: m.alt.slice(0, 500), credit: m.credit ?? null, bytes: m.bytes ?? null, duration_seconds: m.durationSeconds ?? null })
     .select("id, slide_id, role, kind, source, url, alt, credit")
     .single();
   if (error || !data) throw new Error(error?.message ?? "insert failed");
@@ -754,7 +771,16 @@ export async function generateNarration(
     }
     const url = e.admin.storage.from(MEDIA_BUCKET).getPublicUrl(path).data.publicUrl;
     await e.admin.from("training_slides").update({ narration_script: text, narration_voiced: text, updated_at: new Date().toISOString() }).eq("id", slideId);
-    const media = await setMedia(e.admin, e.trackId, moduleId, slideId, { role: "narration", kind: "audio", source: "upload", path, url, alt: "", credit: null });
+    const media = await setMedia(e.admin, e.trackId, moduleId, slideId, {
+      role: "narration",
+      kind: "audio",
+      source: "upload",
+      path,
+      url,
+      alt: "",
+      credit: null,
+      durationSeconds: audioDurationSeconds(audio),
+    });
     return { ok: true, media, voiced: text };
   } catch (err) {
     if (err instanceof NarrationError) return { ok: false, error: err.message };
@@ -1100,13 +1126,14 @@ export async function publishModule(moduleId: string): Promise<Result<{ version:
   const problems = publishProblems(info, slides);
   if (problems.length) return { ok: false, error: problems.join(" ") };
   const content = buildPlayerContent(info, slides);
+  const minutes = estimateMinutes(content, await narrationLengths(admin, moduleId));
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("publish_training_module", { p_module_id: moduleId, p_content: content });
   if (error) {
     console.error("[publishModule]", error.message);
     return { ok: false, error: error.code === "P0001" ? error.message : "Couldn't publish." };
   }
-  await admin.from("training_modules").update({ cover: coverOf(content) }).eq("id", moduleId);
+  await admin.from("training_modules").update({ cover: coverOf(content), estimated_minutes: minutes }).eq("id", moduleId);
   // Files only the previous published copy used can go now.
   await tidyModuleFolder(admin, mod.track_id as string, moduleId);
   refresh(moduleId);
