@@ -3,6 +3,8 @@
  * ELEVENLABS_API_KEY, is restricted to Text to Speech and reading voices).
  * Only narration scripts are sent: course text, never anyone's details.
  */
+import { forSpeech } from "./pronunciation.ts";
+
 const API = "https://api.elevenlabs.io/v1";
 const MODEL = process.env.ELEVENLABS_MODEL_ID || "eleven_multilingual_v2";
 
@@ -77,7 +79,7 @@ export async function speak(text: string, voiceId: string): Promise<ArrayBuffer>
     fetch(`${API}/text-to-speech/${voiceId}?output_format=mp3_44100_64`, {
       method: "POST",
       headers: { "xi-api-key": key(), "Content-Type": "application/json", Accept: "audio/mpeg" },
-      body: JSON.stringify({ text, model_id: MODEL }),
+      body: JSON.stringify({ text: forSpeech(text), model_id: MODEL }),
       cache: "no-store",
       signal: AbortSignal.timeout(120_000),
     });
