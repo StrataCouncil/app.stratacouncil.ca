@@ -1,14 +1,17 @@
 import {
   AlignmentType,
-  BorderStyle,
   Document,
+  Footer,
   HeadingLevel,
   LevelFormat,
+  LineRuleType,
   Packer,
+  PageNumber,
   Paragraph,
   Table,
   TableCell,
   TableRow,
+  TabStopType,
   TextRun,
   WidthType,
 } from "docx";
@@ -20,7 +23,7 @@ import { inlineParts, parseMarkup, type Block } from "../library/markup.ts";
  *
  * For the strata corporation, not its manager: the strata's name and plan
  * number are filled in, there's no management letterhead (a policy can
- * outlast the brokerage relationship), and an "Activated" line is left
+ * outlast the brokerage relationship), and "Activated" and "Version" lines are left
  * blank for council to complete on approval or revision. Boxes (summary,
  * notes, cautions, samples, fine print) are guidance for whoever adapts
  * the template, so they stay in the Library and out of the policy. No
@@ -28,9 +31,13 @@ import { inlineParts, parseMarkup, type Block } from "../library/markup.ts";
  * is the strata's own.
  */
 
-const INK = "1B2A41";
-const MUTED = "555555";
-const FONT = "Calibri";
+// After a council's own policies (Alterations Policy, EPS9048): Arial,
+// blue section headings, grey subheadings, the policy's name and page
+// number in the footer.
+const BLUE = "0B5394";
+const GREY = "434343";
+const FONT = "Arial";
+const BODY = 22; // 11 pt
 
 export interface PolicyExportInput {
   corporation: { planNumber: string; name: string };
@@ -54,66 +61,61 @@ export function fillPlaceholders(text: string, corporation: { planNumber: string
     .replace(/\[\s*(?:name\s+of\s+(?:the\s+)?strata(?:\s+corporation)?|strata(?:\s+corporation)?(?:'s)?\s+name|strata\s+corporation)\s*\]/gi, corporation.name);
 }
 
-const runs = (text: string, opts: { size?: number; color?: string } = {}) =>
+const runs = (text: string) =>
   inlineParts(text).map(
-    (p) =>
-      new TextRun({
-        text: typeof p === "string" ? p : p.bold,
-        bold: typeof p === "string" ? undefined : true,
-        font: FONT,
-        size: opts.size,
-        color: opts.color,
-      })
+    (p) => new TextRun({ text: typeof p === "string" ? p : p.bold, bold: typeof p === "string" ? undefined : true, font: FONT })
   );
 
 const cell = (text: string, header: boolean) =>
   new TableCell({
-    shading: header ? { fill: "EEF1F5" } : undefined,
+    shading: header ? { fill: "EEF3F8" } : undefined,
     margins: { top: 60, bottom: 60, left: 100, right: 100 },
-    children: [new Paragraph({ children: header ? [new TextRun({ text: text.replace(/\*\*/g, ""), bold: true, font: FONT })] : runs(text) })],
+    children: [new Paragraph({ spacing: { after: 0 }, children: header ? [new TextRun({ text: text.replace(/\*\*/g, ""), bold: true, font: FONT })] : runs(text) })],
   });
+
+/** Space after a paragraph, a list or a table; list items sit close together. */
+const GAP = 200;
 
 function body(blocks: Block[], fill: (s: string) => string): Array<Paragraph | Table> {
   const out: Array<Paragraph | Table> = [];
   let numbered = 0;
-  for (const b of blocks) {
+  blocks.forEach((b, index) => {
     switch (b.type) {
       case "heading":
         out.push(
           new Paragraph({
             heading: b.level === 2 ? HeadingLevel.HEADING_1 : HeadingLevel.HEADING_2,
-            spacing: { before: b.level === 2 ? 280 : 200, after: 80 },
-            children: runs(fill(b.text)),
+            keepNext: true,
+            children: [new TextRun({ text: fill(b.text).replace(/\*\*/g, ""), font: FONT })],
           })
         );
         break;
-      case "paragraph":
-        out.push(new Paragraph({ spacing: { after: 120 }, children: runs(fill(b.text)) }));
+      case "paragraph": {
+        // A lead-in line ("Owners must submit:") sits right above its list.
+        const leadIn = blocks[index + 1]?.type === "list";
+        out.push(new Paragraph({ spacing: { after: leadIn ? 40 : GAP }, keepNext: leadIn, children: runs(fill(b.text)) }));
         break;
+      }
       case "list": {
         const instance = b.style === "number" ? ++numbered : 0;
-        for (const item of b.items) {
+        b.items.forEach((item, i) => {
+          const after = i === b.items.length - 1 ? GAP : 0;
           const text = fill(item);
-          if (b.style === "check") {
-            out.push(
-              new Paragraph({
-                spacing: { after: 60 },
-                indent: { left: 360, hanging: 360 },
-                children: [new TextRun({ text: "☐\t", font: FONT }), ...runs(text)],
-                tabStops: [{ type: "left", position: 360 }],
-              })
-            );
-          } else {
-            out.push(
-              new Paragraph({
-                spacing: { after: 60 },
-                numbering: b.style === "number" ? { reference: "policy-numbers", level: 0, instance } : { reference: "policy-bullets", level: 0 },
-                children: runs(text),
-              })
-            );
-          }
-        }
-        out.push(new Paragraph({ spacing: { after: 60 }, children: [] }));
+          out.push(
+            b.style === "check"
+              ? new Paragraph({
+                  spacing: { after },
+                  indent: { left: 720, hanging: 360 },
+                  tabStops: [{ type: TabStopType.LEFT, position: 720 }],
+                  children: [new TextRun({ text: "\u2610\t", font: FONT }), ...runs(text)],
+                })
+              : new Paragraph({
+                  spacing: { after },
+                  numbering: b.style === "number" ? { reference: "policy-numbers", level: 0, instance } : { reference: "policy-bullets", level: 0 },
+                  children: runs(text),
+                })
+          );
+        });
         break;
       }
       case "table":
@@ -125,62 +127,75 @@ function body(blocks: Block[], fill: (s: string) => string): Array<Paragraph | T
               ...b.rows.map((r) => new TableRow({ children: r.map((c) => cell(fill(c), false)) })),
             ],
           }),
-          new Paragraph({ spacing: { after: 120 }, children: [] })
+          new Paragraph({ spacing: { after: GAP }, children: [] })
         );
         break;
       case "box":
         break;
     }
-  }
+  });
   return out;
 }
 
 export async function policyDocx({ corporation, title, markup }: PolicyExportInput): Promise<Buffer> {
   const fill = (s: string) => fillPlaceholders(s, corporation);
-  const line = (text: string, opts: { bold?: boolean; size?: number; color?: string; after?: number }) =>
+  const name = `${corporation.planNumber} ${corporation.name} \u2013 ${fill(title)}`;
+  const footerName = `${corporation.planNumber} ${corporation.name} - ${fill(title)}`;
+  const field = (label: string, after: number) =>
     new Paragraph({
-      alignment: AlignmentType.CENTER,
-      spacing: { after: opts.after ?? 40 },
-      children: [new TextRun({ text, bold: opts.bold, size: opts.size, color: opts.color, font: FONT })],
+      spacing: { after },
+      children: [new TextRun({ text: `${label}: `, font: FONT }), new TextRun({ text: "____________________", font: FONT })],
     });
 
   const children: Array<Paragraph | Table> = [
-    line(corporation.name, { bold: true, size: 28 }),
-    line(`Strata Plan ${corporation.planNumber}`, { size: 20, color: MUTED }),
-    new Paragraph({ border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: "CCCCCC", space: 1 } }, spacing: { after: 200 } }),
-    new Paragraph({ heading: HeadingLevel.TITLE, alignment: AlignmentType.CENTER, spacing: { after: 160 }, children: [new TextRun({ text: fill(title), font: FONT })] }),
-    new Paragraph({
-      alignment: AlignmentType.CENTER,
-      spacing: { after: 320 },
-      children: [new TextRun({ text: "Activated: ", bold: true, font: FONT }), new TextRun({ text: "____________________", font: FONT })],
-    }),
+    new Paragraph({ heading: HeadingLevel.TITLE, children: [new TextRun({ text: name, font: FONT })] }),
+    field("Activated", 0),
+    field("Version", 240),
     ...body(policyBlocks(parseMarkup(markup)), fill),
   ];
 
   const doc = new Document({
     creator: corporation.name,
-    title: fill(title),
+    title: name,
     styles: {
-      default: { document: { run: { font: FONT, size: 22 } } },
+      default: { document: { run: { font: FONT, size: BODY }, paragraph: { spacing: { line: 276, lineRule: LineRuleType.AUTO } } } },
       paragraphStyles: [
-        { id: "Title", name: "Title", basedOn: "Normal", next: "Normal", run: { size: 36, bold: true, color: INK } },
-        { id: "Heading1", name: "Heading 1", basedOn: "Normal", next: "Normal", quickFormat: true, run: { size: 28, bold: true, color: INK } },
-        { id: "Heading2", name: "Heading 2", basedOn: "Normal", next: "Normal", quickFormat: true, run: { size: 24, bold: true, color: INK } },
+        { id: "Title", name: "Title", basedOn: "Normal", next: "Normal", run: { size: 40, bold: true, color: BLUE }, paragraph: { spacing: { before: 0, after: 160, line: 240, lineRule: LineRuleType.AUTO } } },
+        { id: "Heading1", name: "Heading 1", basedOn: "Normal", next: "Normal", quickFormat: true, run: { size: 32, bold: true, color: BLUE }, paragraph: { spacing: { before: 360, after: 120 } } },
+        { id: "Heading2", name: "Heading 2", basedOn: "Normal", next: "Normal", quickFormat: true, run: { size: 24, bold: true, color: GREY }, paragraph: { spacing: { before: 280, after: 80 } } },
       ],
     },
     numbering: {
       config: [
         {
           reference: "policy-bullets",
-          levels: [{ level: 0, format: LevelFormat.BULLET, text: "•", alignment: AlignmentType.LEFT, style: { paragraph: { indent: { left: 360, hanging: 360 } } } }],
+          levels: [{ level: 0, format: LevelFormat.BULLET, text: "\u25CF", alignment: AlignmentType.LEFT, style: { paragraph: { indent: { left: 720, hanging: 360 } }, run: { size: 18 } } }],
         },
         {
           reference: "policy-numbers",
-          levels: [{ level: 0, format: LevelFormat.DECIMAL, text: "%1.", alignment: AlignmentType.LEFT, style: { paragraph: { indent: { left: 360, hanging: 360 } } } }],
+          levels: [{ level: 0, format: LevelFormat.DECIMAL, text: "%1.", alignment: AlignmentType.LEFT, style: { paragraph: { indent: { left: 720, hanging: 360 } } } }],
         },
       ],
     },
-    sections: [{ properties: { page: { margin: { top: 1440, right: 1440, bottom: 1440, left: 1440 } } }, children }],
+    sections: [
+      {
+        properties: { page: { margin: { top: 1440, right: 1440, bottom: 1440, left: 1440, footer: 720 } } },
+        footers: {
+          default: new Footer({
+            children: [
+              new Paragraph({
+                tabStops: [{ type: TabStopType.RIGHT, position: 9360 }],
+                children: [
+                  new TextRun({ text: footerName, font: FONT, size: 20 }),
+                  new TextRun({ children: ["\tPage ", PageNumber.CURRENT], font: FONT, size: 20 }),
+                ],
+              }),
+            ],
+          }),
+        },
+        children,
+      },
+    ],
   });
   return Packer.toBuffer(doc);
 }
