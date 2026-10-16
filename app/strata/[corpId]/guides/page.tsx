@@ -1,3 +1,4 @@
+import { LibraryDisclaimer } from "@/components/library/LibraryDisclaimer";
 import { notFound } from "next/navigation";
 import { StrataSphereNav } from "@/components/StrataSphereNav";
 import { KnowledgeLibrary, type LibraryCard } from "@/components/KnowledgeLibrary";
@@ -50,6 +51,7 @@ export default async function GuidesPage({
         for every connected member &mdash; plus downloadable, editable
         policy templates with a Stratasphere&trade; subscription.
       </p>
+      <LibraryDisclaimer />
       <KnowledgeLibrary
         resources={cards}
         corpId={corpId}
