@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getStrataAccess } from "@/lib/data/strata";
@@ -32,6 +34,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ corpId:
     corporation: { planNumber: corp.strata_plan_number, name: corp.building_name || corp.legal_name },
     title: item.title,
     markup: item.markup,
+    bodyFont: await readFile(path.join(process.cwd(), "lib/exports/fonts/WorkSans-Regular.ttf")).catch(() => undefined),
   });
   await logDemoActivity({ kind: "library.template_downloaded", detail: { resourceId, file: "template.docx" } });
   return new NextResponse(new Uint8Array(buffer), {
