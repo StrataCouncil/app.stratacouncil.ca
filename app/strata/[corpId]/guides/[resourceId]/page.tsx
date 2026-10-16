@@ -2,6 +2,7 @@ import { SubscribeCta } from "@/components/SubscribeCta";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { StrataSphereNav } from "@/components/StrataSphereNav";
+import { LibraryDisclaimer } from "@/components/library/LibraryDisclaimer";
 import { LibraryArticle } from "@/components/library/LibraryArticle";
 import { getPublishedLibraryItem, listPublishedLibrary, type PublishedLibraryEntry } from "@/lib/data/library";
 import { getStrataAccess } from "@/lib/data/strata";
@@ -86,6 +87,9 @@ async function LibraryItemPage({ item, corpId, subscribed }: { item: PublishedLi
           <h1 className="kb-article__title">{item.title}</h1>
           <p className="kb-article__summary">{item.summary}</p>
           <span className="card__meta">Updated {updated}</span>
+          <div style={{ marginTop: "1.25rem" }}>
+            <LibraryDisclaimer compact />
+          </div>
 
           {locked ? (
             <div className="lock-panel" style={{ marginTop: "1.75rem" }} data-testid="template-lock-panel">
