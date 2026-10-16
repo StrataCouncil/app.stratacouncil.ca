@@ -59,14 +59,42 @@ async function read(id: string): Promise<LibraryDraft | null> {
 export async function createLibraryItem(kind: string): Promise<Result<{ id: string }>> {
   const me = await requireSuperAdmin();
   if (!me) return NOT_STAFF;
-  const { data, error } = await createAdminClient()
+  const admin = createAdminClient();
+  // New items go to the top of the list (0057).
+  const { data: first } = await admin.from("library_resources").select("order_index").order("order_index", { ascending: true, nullsFirst: false }).limit(1).maybeSingle();
+  const { data, error } = await admin
     .from("library_resources")
-    .insert({ kind: normalizeKind(kind), created_by: me.user.id })
+    .insert({ kind: normalizeKind(kind), created_by: me.user.id, order_index: (first?.order_index ?? 1) - 1 })
     .select("id")
     .single();
   if (error || !data) return { ok: false, error: "Couldn't create the item." };
   refresh();
   return { ok: true, id: data.id as string };
+}
+
+/** Swaps an item with its neighbour in the list; members see the same order (0057). */
+export async function moveLibraryItem(id: string, direction: -1 | 1): Promise<Result> {
+  if (!(await requireSuperAdmin())) return NOT_STAFF;
+  if (!isUuid(id)) return { ok: false, error: "Item not found." };
+  const admin = createAdminClient();
+  const { data: rows } = await admin
+    .from("library_resources")
+    .select("id")
+    .order("order_index", { ascending: true, nullsFirst: true })
+    .order("updated_at", { ascending: false });
+  const order = (rows ?? []).map((r) => r.id as string);
+  const i = order.indexOf(id);
+  const j = i + direction;
+  if (i < 0) return { ok: false, error: "Item not found." };
+  if (j < 0 || j >= order.length) return { ok: true };
+  [order[i], order[j]] = [order[j], order[i]];
+  for (const [index, rowId] of order.entries()) {
+    const { error } = await admin.from("library_resources").update({ order_index: index + 1 }).eq("id", rowId);
+    if (error) return { ok: false, error: "Couldn't move the item." };
+  }
+  refresh();
+  mirrorSoon();
+  return { ok: true };
 }
 
 /** Saves the draft. Members see nothing until it's published. */

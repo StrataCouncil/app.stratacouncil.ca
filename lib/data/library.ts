@@ -41,12 +41,13 @@ function toPublished(r: Pick<Row, "id" | "published" | "published_at">): Publish
   return { id: r.id, publishedAt: r.published_at, ...normalizeItem(r.published) };
 }
 
-/** Every published item, newest first. */
+/** Every published item, in the order Super Admins set (0057). */
 export async function listPublishedLibrary(): Promise<PublishedLibraryEntry[]> {
   const { data, error } = await createAdminClient()
     .from("library_resources")
     .select("id, published, published_at")
     .not("published", "is", null)
+    .order("order_index", { ascending: true, nullsFirst: true })
     .order("published_at", { ascending: false });
   if (error) {
     console.error("[listPublishedLibrary]", error.message);
@@ -84,7 +85,9 @@ export function toDraft(r: Row): LibraryDraft {
 /** The console's list. */
 export async function listLibraryDrafts(): Promise<LibraryDraft[] | null> {
   if (!(await requireSuperAdmin())) return null;
-  const { data, error } = await createAdminClient().from("library_resources").select(COLUMNS).order("updated_at", { ascending: false });
+  const { data, error } = await createAdminClient().from("library_resources").select(COLUMNS)
+    .order("order_index", { ascending: true, nullsFirst: true })
+    .order("updated_at", { ascending: false });
   if (error) {
     console.error("[listLibraryDrafts]", error.message);
     return [];
