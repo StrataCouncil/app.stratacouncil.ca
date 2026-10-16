@@ -1220,8 +1220,10 @@ function NarrateAll({
 }) {
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
+  const [redoAll, setRedoAll] = useState(false);
   const stop = useRef(false);
-  const todo = slides.filter((s) => s.narrationScript.trim() && (!s.narration || narrationOutOfDate(s)));
+  // "Redo all" also remakes narration that matches its script (after a voice or pronunciation change).
+  const todo = slides.filter((s) => s.narrationScript.trim() && (redoAll || !s.narration || narrationOutOfDate(s)));
   const outdated = todo.filter((s) => s.narration).length;
   const ready = slides.filter((s) => s.narration && !narrationOutOfDate(s)).length;
   const characters = todo.reduce((n, s) => n + s.narrationScript.trim().length, 0);
@@ -1274,9 +1276,15 @@ function NarrateAll({
           </button>
         </div>
       ) : (
-        <button type="button" className="button button-primary button-small" disabled={!todo.length || !voice} onClick={run}>
-          {todo.some((s) => s.narration) ? "Create or update" : "Create"} narration for {todo.length || "all"} {todo.length === 1 ? "slide" : "slides"}
-        </button>
+        <div className="be-row">
+          <button type="button" className="button button-primary button-small" disabled={!todo.length || !voice} onClick={run}>
+            {todo.some((s) => s.narration) ? "Create or update" : "Create"} narration for {todo.length || "all"} {todo.length === 1 ? "slide" : "slides"}
+          </button>
+          <label className="be-check">
+            <input type="checkbox" checked={redoAll} onChange={(e) => setRedoAll(e.target.checked)} data-testid="narrate-redo-all" />
+            Redo every slide, including narration that&rsquo;s up to date
+          </label>
+        </div>
       )}
     </section>
   );
