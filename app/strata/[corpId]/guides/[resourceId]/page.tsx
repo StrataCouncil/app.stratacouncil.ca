@@ -67,7 +67,7 @@ async function LibraryItemPage({ item, corpId, subscribed }: { item: PublishedLi
       <StrataSphereNav active="guides" />
 
       <Link href={`/strata/${corpId}/guides`} className="kb-article__back">
-        &larr; Knowledge library
+        &larr; Library
       </Link>
 
       <div className="kb-article">
@@ -91,6 +91,19 @@ async function LibraryItemPage({ item, corpId, subscribed }: { item: PublishedLi
             <LibraryDisclaimer compact />
           </div>
 
+          {item.kind === "policy_template" && !locked && (
+            <div className="template-download" data-testid="template-download">
+              <a className="button button-secondary button-small" href={`/strata/${corpId}/guides/${item.id}/template.docx`} data-testid="template-docx">
+                Download as Word (.docx)
+              </a>
+              <p>
+                Filled in with your strata&rsquo;s name and plan number. Adapt it to your strata, review and approve it as a
+                council, add the date it&rsquo;s activated, then upload the approved policy to{" "}
+                <Link href={`/strata/${corpId}/documents`}>Documents</Link> if you wish.
+              </p>
+            </div>
+          )}
+
           {locked ? (
             <div className="lock-panel" style={{ marginTop: "1.75rem" }} data-testid="template-lock-panel">
               <h2>This template requires a subscription</h2>
@@ -103,11 +116,6 @@ async function LibraryItemPage({ item, corpId, subscribed }: { item: PublishedLi
           ) : (
             <LibraryArticle markup={item.markup} />
           )}
-
-          <p className="lib-disclaimer">
-            General information for BC strata corporations, not legal advice. Your own bylaws, insurance policy and
-            agreements may differ; check them, and get professional advice for your situation.
-          </p>
         </article>
 
         <aside className="kb-article__sidebar">
