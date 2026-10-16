@@ -187,15 +187,15 @@ export function DemoLinksAdmin({ list }: { list: DemoVisitorList }) {
             </>
           )}
 
-          <h3>Training and legislation</h3>
+          <h3>Training, Library and Knowledge Base</h3>
           <p className="card__meta">
-            The demo shows the same Council Training (only the first module open) and answers from the same legislation
-            library. Both copy themselves after you publish a module or index a library entry. Use this to copy everything
-            now.
+            The demo shows the same Council Training (only the first module open) and Library (policy templates are
+            replaced by one sample), and answers from the same Knowledge Base. Each copies itself after you publish or
+            index something. Use this to copy everything now.
           </p>
           <p>
             <button type="button" className="button button-secondary" disabled={busy !== null} onClick={copyContent} data-testid="demo-copy-content">
-              {busy === "content" ? "Copying…" : "Copy training and legislation to the demo"}
+              {busy === "content" ? "Copying…" : "Copy training, Library and Knowledge Base to the demo"}
             </button>
           </p>
         </>
