@@ -28,3 +28,12 @@ test("the policy builds as a Word document", async () => {
   const buf = await policyDocx({ corporation: corp, title: "Pet Policy", markup: "## Purpose\n\n**Bold** text\n\n1. First\n2. Second\n\n[ ] Check\n\n| A | B |\n|---|---|\n| 1 | 2 |" });
   assert.equal(buf.subarray(0, 2).toString(), "PK");
 });
+
+test("the policy embeds Work Sans when given it", async () => {
+  const { readFileSync } = await import("node:fs");
+  const font = readFileSync(new URL("../lib/exports/fonts/WorkSans-Regular.ttf", import.meta.url));
+  const withFont = await policyDocx({ corporation: corp, title: "Pet Policy", markup: "## Purpose", bodyFont: font });
+  const without = await policyDocx({ corporation: corp, title: "Pet Policy", markup: "## Purpose" });
+  assert.ok(withFont.includes(Buffer.from("word/fonts/")));
+  assert.ok(!without.includes(Buffer.from("word/fonts/")));
+});

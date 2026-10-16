@@ -7,6 +7,8 @@ const nextConfig = {
   },
   // pdf.js (via unpdf) and mammoth are server-only and shouldn't be bundled.
   serverExternalPackages: ["unpdf", "mammoth"],
+  // The policy template download embeds Work Sans (lib/exports/policy-docx.ts).
+  outputFileTracingIncludes: { "/strata/[corpId]/guides/[resourceId]/template.docx": ["./lib/exports/fonts/**"] },
   // The demo site's switch (lib/demo.ts), for the browser's code too.
   env: { DEMO_MODE: process.env.DEMO_MODE ?? "" },
   // Browser security settings for every page (2026-10 audit): no other site
