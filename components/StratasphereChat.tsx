@@ -634,9 +634,9 @@ export function StratasphereChat({
         <div className="chat-kb-banner" data-testid="kb-banner">
           {activeTitle ? <strong className="chat-kb-banner__title">{activeTitle}</strong> : null}
           <span>
-            Draws on {corpName}&rsquo;s document repository ({indexedDocuments} indexed{" "}
-            {indexedDocuments === 1 ? "document" : "documents"}, minutes included), the decision ledger, BC strata
-            legislation and anonymized precedent from other strata corporations.
+            Draws on everything {corpName} has on StrataCouncil.ca (the owner roster, council, meetings, the document
+            repository with {indexedDocuments} indexed {indexedDocuments === 1 ? "document" : "documents"}, minutes included,
+            and the decision ledger), BC strata legislation and anonymized precedent from other strata corporations.
           </span>
         </div>
 

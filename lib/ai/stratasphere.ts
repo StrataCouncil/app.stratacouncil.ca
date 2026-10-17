@@ -5,6 +5,10 @@ import { askClaudeText, ClaudeRefusalError, streamClaudeText } from "@/lib/ai/cl
 import { estimateCostUsd, type TokenUsage } from "@/lib/ai/pricing";
 import { loadStripContext, stripForCorporation, type StripContext } from "@/lib/kb/privacy";
 import { searchKnowledge, type KnowledgeHit } from "@/lib/kb/search";
+import { buildStrataProfile, type ProfileMeeting } from "@/lib/ai/strata-profile";
+import { listPublishedLibrary } from "@/lib/data/library";
+import { knowledgeResourceKindLabels } from "@/lib/library/catalogue";
+import { meetingFormatLabels, meetingTypeLabels, type MeetingFormat, type MeetingType } from "@/lib/meetings/agenda";
 import type { AgendaItem } from "@/lib/meetings/agenda";
 
 /**
@@ -44,9 +48,9 @@ EARLIER ANSWERS RULE: The records found for each earlier question in this conver
 
 DISPUTED-FACT RULE: If a user says a cited fact is wrong, do not concede the point or change the answer — you have no way to independently verify a claim made in conversation. State exactly which document, section, and upload date the fact came from, and note that an updated version of that document can be uploaded if it's outdated or incorrect. Never revise a factual claim based on a user's assertion alone; only a new document in context can change what you cite.`;
 
-const PERMITTED = `PERMITTED KNOWLEDGE: Only what is in the context blocks below: this corporation's documents and minutes, its decision ledger, the legislation excerpts, and anonymized precedent from other strata corporations on the platform. Precedent is always framed explicitly as cross-platform precedent, never presented as if it were this corporation's own data. General knowledge may be used only to read and understand those sources (plain meaning of words, arithmetic), never as a source of facts.
+const PERMITTED = `PERMITTED KNOWLEDGE: Only what is in the context blocks below: this corporation's live records on StrataCouncil.ca (its owner roster, council, meetings and agendas, the list of documents on file, its management company, platform announcements and the Library), its documents and minutes, its decision ledger, the legislation excerpts, and anonymized precedent from other strata corporations on the platform. The platform records are current as of this question: use them for counts and lists (lots, owners, council, meetings, documents), and say they come from the platform's records. Precedent is always framed explicitly as cross-platform precedent, never presented as if it were this corporation's own data. General knowledge may be used only to read and understand those sources (plain meaning of words, arithmetic), never as a source of facts.
 
-PIPA: Refer to owners by strata lot number only (e.g. SL061), never by name. Text in the context has already had names and personal details replaced with lot numbers or placeholders such as [name redacted]; never try to guess what a placeholder stands for.
+PIPA: Refer to owners who are people by strata lot number only (e.g. SL061), never by name. Text in the context has already had names and personal details replaced with lot numbers or placeholders such as [name redacted]; never try to guess what a placeholder stands for. Owners are never named on the roster, whether people or companies: an "Owner A" or "Company A" code marks the lots one owner holds. Use the codes to count and group lots, and never guess who an owner is. If asked who owns a lot, say the platform doesn't share owners' names and point to the roster in the app.
 
 FORMAT: Plain prose only — no markdown, no **, no #, no bullet dashes, no emoji, no preamble, no sign-off, no unsolicited recommendations. Numbered lists as "1. 2. 3." only when listing is genuinely needed.`;
 
@@ -92,13 +96,14 @@ type Prepared =
     }
   | { ok: false; error: string; limit?: boolean };
 
-function sourcesFrom(hits: KnowledgeHit[], hasLedger: boolean): StratasphereSource[] {
+/** Chips show each document's real title (what's sent to the AI is stripped; what members see isn't). */
+function sourcesFrom(hits: KnowledgeHit[], hasLedger: boolean, titles: Map<string, string>): StratasphereSource[] {
   const out: StratasphereSource[] = [];
   const seenDocs = new Set<string>();
   for (const h of hits) {
     if (h.scope === "corporation" && h.documentId && !seenDocs.has(h.documentId)) {
       seenDocs.add(h.documentId);
-      out.push({ kind: "document", title: h.title || "Untitled document", documentId: h.documentId });
+      out.push({ kind: "document", title: titles.get(h.documentId) || h.title || "Untitled document", documentId: h.documentId });
     }
   }
   // One chip per Act, naming the sections drawn on: "Strata Property Act, s. 45, 46".
@@ -122,6 +127,13 @@ function sourcesFrom(hits: KnowledgeHit[], hasLedger: boolean): StratasphereSour
   if (hits.some((h) => h.scope === "global_precedent")) out.push({ kind: "precedent" });
   if (hasLedger) out.push({ kind: "decisions" });
   return out.slice(0, 12);
+}
+
+async function documentTitles(supabase: SupabaseClient, corpId: string, hits: KnowledgeHit[]) {
+  const ids = [...new Set(hits.flatMap((h) => (h.scope === "corporation" && h.documentId ? [h.documentId] : [])))];
+  if (!ids.length) return new Map<string, string>();
+  const { data } = await supabase.from("documents").select("id, title").eq("corporation_id", corpId).in("id", ids);
+  return new Map((data ?? []).flatMap((d) => (d.title ? [[d.id as string, d.title as string] as const] : [])));
 }
 
 function block(title: string, body: string) {
@@ -193,9 +205,120 @@ async function bylawsBlock(supabase: SupabaseClient, corpId: string, ctx: StripC
     if (text.length > budget) text = `${text.slice(0, budget)}\n[...truncated]`;
     budget -= text.length;
     parts.push(`[BYLAWS: ${title}, uploaded ${String(d.uploaded_at).slice(0, 10)}]\n${text}\n[END BYLAWS]`);
-    sources.push({ kind: "document", title, documentId: d.id });
+    sources.push({ kind: "document", title: d.title || "Bylaws", documentId: d.id });
   }
   return { text: parts.join("\n\n"), sources };
+}
+
+const MAX_PROFILE_CHARS = 80000;
+
+/**
+ * Everything the asking member can see about their strata on the platform
+ * (lib/ai/strata-profile.ts): roster, council, meetings and agendas, the
+ * documents on file, management, announcements and the Library. Read with
+ * the member's own access (RLS), so it never holds more than they could open
+ * themselves. Members' chats, Council Training and billing stay private.
+ */
+async function profileBlock(supabase: SupabaseClient, corpId: string, ctx: StripContext) {
+  const [corp, mgmt, lots, roles, members, meetings, docs, announcements, library] = await Promise.all([
+    supabase.from("strata_corporations").select("strata_plan_number, legal_name, building_name, address, unit_count, jurisdiction").eq("strata_plan_number", corpId).maybeSingle(),
+    supabase.from("strata_management").select("company_name, website, managers").eq("corporation_id", corpId).maybeSingle(),
+    supabase
+      .from("owners_and_council")
+      .select("lot_number, unit_number, unit_entitlement, owner_type, full_name, parking, storage, bike_rack, strata_fees, is_council_member, role")
+      .eq("corporation_id", corpId)
+      .order("lot_number"),
+    supabase.from("corporation_role_assignments").select("role").eq("corporation_id", corpId),
+    supabase.from("corporation_memberships").select("status").eq("corporation_id", corpId),
+    supabase
+      .from("meetings")
+      .select("meeting_date, type, status, format, location, chair_name, agenda, attendance, minutes_state, is_trial")
+      .eq("corporation_id", corpId)
+      .order("meeting_date", { ascending: false })
+      .limit(40),
+    supabase
+      .from("documents")
+      .select("title, category, uploaded_at, is_current")
+      .eq("corporation_id", corpId)
+      .order("uploaded_at", { ascending: false })
+      .limit(400),
+    supabase.from("announcements").select("title, body, published_at, expires_at").order("published_at", { ascending: false }).limit(10),
+    listPublishedLibrary().catch(() => []),
+  ]);
+  for (const [name, r] of Object.entries({ corp, mgmt, lots, roles, members, meetings, docs, announcements })) {
+    if (r.error) console.error(`[askStratasphere] profile ${name}`, r.error.message);
+  }
+  if (!corp.data) return "";
+  const count = (rows: Array<{ [k: string]: unknown }> | null, key: string) => {
+    const m = new Map<string, number>();
+    for (const r of rows ?? []) m.set(String(r[key]), (m.get(String(r[key])) ?? 0) + 1);
+    return m;
+  };
+  const roleCounts = count(roles.data, "role");
+  const memberCounts = count(members.data, "status");
+  const now = Date.now();
+
+  const text = buildStrataProfile(
+    {
+      corp: {
+        planNumber: corp.data.strata_plan_number,
+        legalName: corp.data.legal_name,
+        buildingName: corp.data.building_name,
+        address: corp.data.address,
+        unitCount: corp.data.unit_count,
+        jurisdiction: corp.data.jurisdiction,
+      },
+      management: mgmt.data
+        ? { company: mgmt.data.company_name, website: mgmt.data.website, managers: Array.isArray(mgmt.data.managers) ? mgmt.data.managers.length : 0 }
+        : null,
+      lots: (lots.data ?? []).map((l) => ({
+        lot: l.lot_number,
+        unit: l.unit_number,
+        entitlement: l.unit_entitlement,
+        ownerType: l.owner_type,
+        ownerName: l.full_name,
+        parking: l.parking,
+        storage: l.storage,
+        bikeRack: l.bike_rack,
+        fees: l.strata_fees,
+        isCouncil: Boolean(l.is_council_member),
+        role: l.role,
+      })),
+      platformRoles: [...roleCounts].map(([role, n]) => ({ role, count: n })),
+      members: { active: memberCounts.get("active") ?? 0, invited: memberCounts.get("invited") ?? 0 },
+      meetings: (meetings.data ?? []).map((m): ProfileMeeting => {
+        const agenda = (Array.isArray(m.agenda) ? m.agenda : []) as AgendaItem[];
+        const attendance = (m.attendance ?? {}) as Record<string, string>;
+        return {
+          date: String(m.meeting_date),
+          type: meetingTypeLabels[m.type as MeetingType] ?? m.type,
+          status: m.status,
+          format: meetingFormatLabels[m.format as MeetingFormat] ?? m.format,
+          minutesState: m.minutes_state,
+          trial: Boolean(m.is_trial),
+          location: m.location,
+          chair: m.chair_name,
+          presentLots: Object.values(attendance).filter((v) => v === "present" || v === "proxy").length,
+          agenda: agenda.map((it) => ({
+            num: it.num,
+            cat: it.cat ?? "",
+            text: it.text ?? "",
+            type: String(it.type ?? ""),
+            done: Boolean(it.done),
+            deferred: Boolean(it.deferred),
+            outcome: it.motion?.outcome ?? null,
+          })),
+        };
+      }),
+      documents: (docs.data ?? []).map((d) => ({ title: d.title ?? "Untitled", category: d.category, uploadedAt: String(d.uploaded_at), current: d.is_current !== false })),
+      announcements: (announcements.data ?? [])
+        .filter((a) => !a.expires_at || Date.parse(a.expires_at) > now)
+        .map((a) => ({ title: a.title, body: a.body, publishedAt: String(a.published_at) })),
+      library: library.map((l) => ({ title: l.title, kind: knowledgeResourceKindLabels[l.kind] ?? l.kind, summary: l.summary })),
+    },
+    (s) => stripForCorporation(s, ctx)
+  );
+  return text.length > MAX_PROFILE_CHARS ? `${text.slice(0, MAX_PROFILE_CHARS)}\n[...profile truncated]` : text;
 }
 
 async function ledgerBlock(supabase: SupabaseClient, corpId: string, ctx: StripContext) {
@@ -289,7 +412,11 @@ async function prepareStratasphere({
   const strippedQuestion = stripForCorporation(q, ctx);
   const disclosures: string[] = [];
 
-  const [attachments, ledger, bylaws, hits] = await Promise.all([
+  const [profile, attachments, ledger, bylaws, hits] = await Promise.all([
+    profileBlock(supabase, corpId, ctx).catch((err) => {
+      console.error("[askStratasphere] profile", err instanceof Error ? err.message : err);
+      return "";
+    }),
     meeting ? attachmentsBlock(supabase, corpId, meeting.item, ctx) : Promise.resolve({ text: "", disclosures: [] }),
     ledgerBlock(supabase, corpId, ctx),
     bylawsBlock(supabase, corpId, ctx),
@@ -319,6 +446,7 @@ async function prepareStratasphere({
     : `You are Stratasphere, the AI governance assistant for Strata Plan ${corpId} (${corpName}). Answer in up to a short paragraph.`;
 
   const standing = [
+    block(`${corpName.toUpperCase()} ON STRATACOUNCIL.CA (live platform records: the roster, council, meetings, documents on file, management, announcements and the Library)`, profile),
     block(`${corpName.toUpperCase()} BYLAWS (full text of the current bylaws, most recent first)`, bylaws.text),
     block("DECISION LEDGER (carried motions, newest first)", ledger),
   ]
@@ -383,7 +511,7 @@ async function prepareStratasphere({
     turnContext,
     effort: meeting ? "low" : "medium",
     maxTokens: meeting ? 4000 : 8000,
-    sources: sourcesFrom(hits, Boolean(ledger.trim())),
+    sources: sourcesFrom(hits, Boolean(ledger.trim()), await documentTitles(supabase, corpId, hits)),
     bylawSources: bylaws.sources,
   };
 }

@@ -425,7 +425,7 @@ export async function parseUploadedAgenda(corpId: string, formData: FormData): P
   if (extracted.text.trim().length < 20) return { ok: false, error: "That file looks empty." };
 
   const ctx = await loadStripContext(createAdminClient(), access.corpId);
-  const p = pseudonymize(extracted.text.slice(0, 40000), ctx.people);
+  const p = pseudonymize(extracted.text.slice(0, 40000), ctx.people, ctx.identity);
 
   let parsed: { items: Array<Record<string, string>> };
   try {
@@ -520,7 +520,8 @@ export async function draftMotion(
     ]
       .filter(Boolean)
       .join("\n"),
-    ctx.people
+    ctx.people,
+    ctx.identity
   );
 
   try {

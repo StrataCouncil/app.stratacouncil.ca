@@ -49,6 +49,12 @@ export interface KnownPerson {
   name: string;
   /** Present for owners on the lot roster: their name is replaced by this. */
   lotNumber?: string | null;
+  /**
+   * Replace only the whole name, never its words on their own: for a company
+   * on the roster ("Selkirks Developments Ltd."), whose words are ordinary
+   * ones ("Future Developments") rather than someone's first name or surname.
+   */
+  exact?: boolean;
 }
 
 const PII_PLACEHOLDER = {
@@ -254,7 +260,12 @@ function sealFixed(text: string, v: Vault) {
 /** Layer 1: exact replacement of everyone the strata knows. */
 function stripKnown(text: string, people: KnownPerson[], v: Vault) {
   const named = people
-    .map((p) => ({ name: (p.name ?? "").trim().replace(/\s+/g, " "), lot: p.lotNumber?.trim() || null }))
+    .map((p) => ({
+      // A company's trailing "." ("Ltd.") is optional in the text.
+      name: (p.name ?? "").trim().replace(/\s+/g, " ").replace(p.exact ? /\.$/ : /$^/, ""),
+      lot: p.lotNumber?.trim() || null,
+      exact: Boolean(p.exact),
+    }))
     .filter((p) => p.name.length >= 2);
 
   // Longest first, so "Mary Anne Chen" is replaced before "Anne Chen".
@@ -268,7 +279,7 @@ function stripKnown(text: string, people: KnownPerson[], v: Vault) {
     const parts = p.name.split(" ");
     const replacement = (m: string) => v.seal(p.lot ?? P.member, m);
     const variants = [p.name];
-    if (parts.length >= 2) {
+    if (parts.length >= 2 && !p.exact) {
       const first = parts[0];
       const last = parts[parts.length - 1];
       const given = parts.slice(0, -1).join(" ");
@@ -284,6 +295,7 @@ function stripKnown(text: string, people: KnownPerson[], v: Vault) {
   // take "will" and "mark" out of every sentence.
   const tokens = new Set<string>();
   for (const p of named) {
+    if (p.exact) continue;
     for (const t of p.name.split(" ")) {
       const clean = t.replace(/[^\p{L}\p{M}'’-]/gu, "");
       if (clean.length >= 3 && !isVocab(clean)) {
@@ -450,19 +462,40 @@ function stripLikelyNames(text: string, v: Vault) {
   });
 }
 
-function run(text: string, people: KnownPerson[], v: Vault) {
+/**
+ * Terms that are never redacted: the strata corporation's own legal name,
+ * building name and address. They name the building, not a person, and
+ * redacting them garbles the strata's own records ("[name redacted]
+ * Bylaws"). Longest first, matched case-insensitively across spacing.
+ */
+function sealKept(text: string, keep: string[], v: Vault) {
+  let out = text;
+  const terms = [...new Set(keep.map((k) => k.trim()).filter((k) => k.length >= 3))].sort((a, b) => b.length - a.length);
+  for (const term of terms) {
+    // Words may be joined by spaces or underscores (file names), with "&" or "and" between them or not.
+    const words = term.split(/[\s_]+/).filter((w) => w !== "&" && !/^and$/i.test(w)).map(escapeRegExp);
+    if (!words.length) continue;
+    const re = new RegExp(`(?<![\\p{L}\\p{N}])${words.join("[\\s_]+(?:(?:&|and)[\\s_]+)?")}(?![\\p{L}\\p{N}])`, "giu");
+    out = out.replace(re, (m) => v.seal(m));
+  }
+  return out;
+}
+
+function run(text: string, people: KnownPerson[], v: Vault, keep: string[] = []) {
   // Private-use characters are our seal markers; nothing legitimate uses them.
   let out = text.replace(/[\uE000-\uF8FF]/g, " ");
+  out = sealKept(out, keep, v);
   out = sealFixed(out, v);
   out = stripKnown(out, people, v);
   out = stripPatterns(out, v);
   return stripLikelyNames(out, v);
 }
 
-export function stripPII(text: string, people: KnownPerson[] = []): string {
+/** `keep`: the strata's own name and address, never redacted (see sealKept). */
+export function stripPII(text: string, people: KnownPerson[] = [], keep: string[] = []): string {
   if (!text) return text;
   const v = new Vault();
-  return v.restore(run(text, people, v));
+  return v.restore(run(text, people, v, keep));
 }
 
 /**
@@ -473,9 +506,9 @@ export function stripPII(text: string, people: KnownPerson[] = []): string {
  * ever leaving: send `text`, then pass the reply through `restore`.
  * The same value always gets the same reference within one call.
  */
-export function pseudonymize(text: string, people: KnownPerson[] = []) {
+export function pseudonymize(text: string, people: KnownPerson[] = [], keep: string[] = []) {
   const v = new Vault();
-  const out = text ? v.restore(run(text, people, v), "pseudonymize") : text;
+  const out = text ? v.restore(run(text, people, v, keep), "pseudonymize") : text;
   const refs = new Map(v.refs);
   return {
     text: out,
