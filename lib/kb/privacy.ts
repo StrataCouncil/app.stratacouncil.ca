@@ -1,11 +1,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { isCompanyName, ownerCodes } from "@/lib/ai/strata-profile";
 import { stripPII, type KnownPerson } from "@/lib/pii";
 
 /**
  * Everything one corporation's text needs before it leaves for an AI
  * service: every name it knows (owners and council on the lot roster by
- * lot number, connected members as Council Member), plus — for the global
- * precedent pool only — the corporation's own identity, so a precedent
+ * lot number, connected members as Council Member), and the corporation's
+ * own identity: kept as is in its own text (it names the building, not a
+ * person), and removed from the global precedent pool, so a precedent
  * can't be traced back to a building.
  */
 export interface StripContext {
@@ -28,8 +30,12 @@ export async function loadStripContext(admin: SupabaseClient, corpId: string): P
   ]);
 
   const people: KnownPerson[] = [];
+  // An owner of several lots becomes their roster code ("Company A"), not one of their lot numbers.
+  const { codes, key } = ownerCodes((lots ?? []).map((l) => ({ lot: l.lot_number, ownerName: l.full_name })));
   for (const lot of lots ?? []) {
-    for (const name of splitNames(lot.full_name)) people.push({ name, lotNumber: lot.lot_number });
+    const as = codes.get(key(lot.full_name)) ?? lot.lot_number;
+    if (isCompanyName(lot.full_name)) people.push({ name: lot.full_name!.trim(), lotNumber: as, exact: true });
+    else for (const name of splitNames(lot.full_name)) people.push({ name, lotNumber: as });
     for (const name of splitNames(lot.council_member_name)) people.push({ name, lotNumber: lot.lot_number });
   }
   for (const m of (members ?? []) as unknown as Array<{ profile: { full_name: string | null } | null }>) {
@@ -58,9 +64,12 @@ function splitNames(raw: string | null): string[] {
   return parts.flatMap((p) => (surname && !p.includes(" ") && !p.includes(",") ? [p, `${p} ${surname}`] : [p]));
 }
 
-/** For this corporation's own chunks and for prompts sent on its behalf. */
+/**
+ * For this corporation's own chunks and for prompts sent on its behalf.
+ * Its own name and address are kept: they name the building, not a person.
+ */
 export function stripForCorporation(text: string, ctx: StripContext) {
-  return stripPII(text, ctx.people);
+  return stripPII(text, ctx.people, ctx.identity);
 }
 
 /** For the cross-corporation precedent pool: also remove who the corporation is. */

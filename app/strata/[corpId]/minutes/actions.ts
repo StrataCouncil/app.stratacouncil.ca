@@ -121,7 +121,7 @@ export async function analyzeHistoricMinutes(corpId: string, file: UploadedFile)
   // personal leaves, and a heading the filter mistook for a name ("Electric
   // Vehicle Charging Policy") isn't left as "[name redacted]".
   const ctx = await loadStripContext(admin, access.corpId);
-  const p = pseudonymize(extracted.text.slice(0, 120000), ctx.people);
+  const p = pseudonymize(extracted.text.slice(0, 120000), ctx.people, ctx.identity);
   const lotByName = new Map(
     ctx.people.filter((x) => x.lotNumber).map((x) => [x.name.trim().toLowerCase().replace(/\s+/g, " "), x.lotNumber as string])
   );
