@@ -26,7 +26,6 @@ export function TrainingOverview({
   const next = nextModule(tracks);
   const allModules = tracks.flatMap((t) => t.modules.filter((m) => m.publishedVersion > 0));
   const doneModules = allModules.filter((m) => m.completed).length;
-  const upNext = upcoming(tracks, next?.module.id ?? null);
   const coreLeft = minutesLeft(core);
 
   return (
@@ -103,30 +102,10 @@ export function TrainingOverview({
             </p>
           </section>
 
-          {upNext.length > 0 && (
-            <section className="training-panel">
-              <h2>After that</h2>
-              <ol className="training-upnext">
-                {upNext.map(({ track, module }) => (
-                  <li key={module.id}>
-                    <Cover cover={module.cover} className="training-upnext__thumb" small />
-                    <div>
-                      <div className="training-upnext__title">{module.title}</div>
-                      <div className="training-upnext__meta">
-                        {track.title}
-                        {module.estimatedMinutes ? ` · ${module.estimatedMinutes} min` : ""}
-                      </div>
-                    </div>
-                  </li>
-                ))}
-              </ol>
-            </section>
-          )}
-
           <section className="training-panel training-panel--plain">
             <h2>How it works</h2>
             <ul className="training-how">
-              <li>Modules take 10 to 15 minutes, one screen at a time, with narration.</li>
+              <li>Modules are short and go one screen at a time, with narration.</li>
               <li>Your progress saves after each section, so you can stop any time.</li>
               <li>There&rsquo;s no pass or fail. Finish every module in a track to complete it.</li>
             </ul>
@@ -284,21 +263,6 @@ function TrackCard({ track, all, step, hrefBase }: { track: TrainingTrack; all: 
 /** A track's card photo: the one chosen for the track, or else its first module photo. */
 function trackCover(track: TrainingTrack): ModuleCover | null {
   return track.cover ?? [...track.modules].sort((a, b) => a.orderIndex - b.orderIndex).find((m) => m.cover)?.cover ?? null;
-}
-
-/** The modules after the one up next, in the order a learner meets them (open tracks only). */
-function upcoming(tracks: TrainingTrack[], skipId: string | null) {
-  const out: {
-    track: TrainingTrack;
-    module: TrainingTrack["modules"][number];
-  }[] = [];
-  for (const track of tracks) {
-    if (lockedBehind(track, tracks)) continue;
-    for (const m of [...track.modules].sort((a, b) => a.orderIndex - b.orderIndex)) {
-      if (m.publishedVersion > 0 && !m.completed && m.id !== skipId) out.push({ track, module: m });
-    }
-  }
-  return out.slice(0, 3);
 }
 
 function Cover({
