@@ -5,7 +5,7 @@ create function pg_temp.fails(sql text) returns boolean language plpgsql as $$
 begin execute sql; return false; exception when others then return true; end $$;
 grant execute on function pg_temp.expect(text,boolean), pg_temp.fails(text) to authenticated;
 
-select pg_temp.expect('four tracks', (select count(*) from training_tracks) = 4);
+select pg_temp.expect('five tracks', (select count(*) from training_tracks) = 5);
 select pg_temp.expect('the curriculum: 18 unpublished modules; the 17 from 0036 each with a draft, objectives and further reading',
   (select count(*) from training_modules where curriculum_key is not null and published_version = 0) = 18
   and (select count(*) from training_module_drafts d join training_modules m on m.id = d.module_id
@@ -73,11 +73,11 @@ select pg_temp.expect('0041: further reading comes across',
 -- The checks below build their own modules from scratch.
 delete from training_modules;
 select pg_temp.expect('tracks in curriculum order',
-  (select array_agg(code order by order_index) from training_tracks) = array['strata_basics','council_ready','treasurer','secretary']);
+  (select array_agg(code order by order_index) from training_tracks) = array['strata_basics','council_ready','treasurer','secretary','privacy_officer']);
 select pg_temp.expect('Council Ready needs Strata Basics; the specialty tracks need Council Ready',
   (select count(*) from training_tracks t join training_tracks r on r.id = t.requires_track_id
    where (t.code = 'council_ready' and r.code = 'strata_basics')
-      or (t.code in ('treasurer','secretary') and r.code = 'council_ready' and t.stage = 'specialty')) = 3);
+      or (t.code in ('treasurer','secretary','privacy_officer') and r.code = 'council_ready' and t.stage = 'specialty')) = 4);
 
 -- Super Admin builds a module with two topics in the Council Ready track, and a second, empty one.
 -- Slides are written by the server (service role) after its checkout check.
@@ -181,7 +181,7 @@ select pg_temp.expect('a strata-mate sees the credential', (select count(*) from
 select pg_temp.expect('a strata-mate never sees progress', (select count(*) from training_progress) = 0);
 set test.uid = '00000000-0000-0000-0000-00000000000e';
 select pg_temp.expect('an outsider sees no one''s credential', (select count(*) from training_credentials) = 0);
-select pg_temp.expect('learners can''t edit tracks', pg_temp.fails($$delete from training_tracks$$) or (select count(*) from training_tracks) = 4);
+select pg_temp.expect('learners can''t edit tracks', pg_temp.fails($$delete from training_tracks$$) or (select count(*) from training_tracks) = 5);
 set test.uid = '00000000-0000-0000-0000-00000000000d';
 select pg_temp.expect('Super Admin sees every credential', (select count(*) from training_credentials) = 1);
 
