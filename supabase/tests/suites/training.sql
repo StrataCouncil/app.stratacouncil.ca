@@ -6,13 +6,13 @@ begin execute sql; return false; exception when others then return true; end $$;
 grant execute on function pg_temp.expect(text,boolean), pg_temp.fails(text) to authenticated;
 
 select pg_temp.expect('five tracks', (select count(*) from training_tracks) = 5);
-select pg_temp.expect('the curriculum: 18 unpublished modules; the 17 from 0036 each with a draft, objectives and further reading',
-  (select count(*) from training_modules where curriculum_key is not null and published_version = 0) = 18
+select pg_temp.expect('the curriculum: 24 unpublished modules; the 17 from 0036 each with a draft, objectives and further reading',
+  (select count(*) from training_modules where curriculum_key is not null and published_version = 0) = 24
   and (select count(*) from training_module_drafts d join training_modules m on m.id = d.module_id
        where jsonb_array_length(d.content -> 'objectives') >= 3 and jsonb_array_length(d.content -> 'furtherReading') >= 2) = 17);
-select pg_temp.expect('3 + 6 + 4 + 5 modules by track',
+select pg_temp.expect('3 + 6 + 4 + 5 + 6 modules by track',
   (select array_agg(n order by o) from (select t.order_index o, count(*) n from training_modules m join training_tracks t on t.id = m.track_id group by t.order_index) x)
-  = array[3, 6, 4, 5]::bigint[]);
+  = array[3, 6, 4, 5, 6]::bigint[]);
 -- 0042: the teaching order.
 select pg_temp.expect('0042: Council Ready goes role, meetings, general meetings, repairs, managers, disputes',
   (select array_agg(curriculum_key order by order_index) from training_modules where curriculum_key like 'cr%')
@@ -70,6 +70,13 @@ select pg_temp.expect('0041: "Explain ..." is Understand, "Apply ..." is Apply',
               where curriculum_key = 'cr1' and o ->> 'text' like 'Apply%' and o ->> 'bloom' = 'apply'));
 select pg_temp.expect('0041: further reading comes across',
   (select jsonb_array_length(further_reading) from training_modules where curriculum_key = 'sb2') >= 2);
+-- 0059: the Privacy Officer curriculum.
+select pg_temp.expect('0059: six Privacy Officer modules in order, each 10 minutes with 3 objectives, further reading and a blueprint',
+  (select array_agg(m.curriculum_key order by m.order_index) from training_modules m join training_tracks t on t.id = m.track_id where t.code = 'privacy_officer')
+  = array['po1','po2','po3','po4','po5','po6']
+  and (select count(*) from training_modules where curriculum_key like 'po%' and estimated_minutes = 10
+       and jsonb_array_length(objectives) = 3 and jsonb_array_length(further_reading) >= 3
+       and jsonb_array_length(blueprint) >= 7 and blueprint @> '[{"activity": "knowledge_check"}]') = 6);
 -- The checks below build their own modules from scratch.
 delete from training_modules;
 select pg_temp.expect('tracks in curriculum order',
