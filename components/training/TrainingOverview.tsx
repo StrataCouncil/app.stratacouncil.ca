@@ -6,7 +6,7 @@ import { formatMinutes, lockedBehind, minutesLeft, nextModule, trackStatus, type
 
 /**
  * Council Training overview (0035). The core (Strata Basics, then Council
- * Ready) and the specialty tracks (Treasurer, Secretary, after Council
+ * Ready) and the specialty tracks (Treasurer, Secretary, Privacy Officer, after Council
  * Ready), with the next module up front and the learner's progress beside
  * it. A finished track appears as a certification on the learner's profile in the Stratasphere.
  */
@@ -54,7 +54,7 @@ export function TrainingOverview({
           />
           <TrackGroup
             title="Specialty tracks"
-            note="For treasurers and secretaries, once you're Council Ready. Each is under an hour."
+            note="For treasurers, secretaries and privacy officers, once you're Council Ready."
             tracks={specialty}
             all={tracks}
             hrefBase={hrefBase}

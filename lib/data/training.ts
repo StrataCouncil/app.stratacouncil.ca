@@ -48,7 +48,7 @@ export interface TrainingTrack {
   slug: string;
   title: string;
   description: string;
-  /** "core" (Strata Basics, Council Ready) or "specialty" (Treasurer, Secretary). */
+  /** "core" (Strata Basics, Council Ready) or "specialty" (Treasurer, Secretary, Privacy Officer). */
   stage: "core" | "specialty";
   /** The track to finish first (0035). */
   requiresTrackId: string | null;
