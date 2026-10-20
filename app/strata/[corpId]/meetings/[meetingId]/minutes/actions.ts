@@ -17,7 +17,7 @@ type Fail = { ok: false; error: string };
 
 function refresh(corpId: string, meetingId: string) {
   revalidatePath(`/strata/${corpId}/meetings/${meetingId}/minutes`);
-  revalidatePath(`/strata/${corpId}/minutes`);
+  revalidatePath(`/strata/${corpId}/documents`, "layout");
   revalidatePath(`/strata/${corpId}/meetings`);
 }
 
@@ -58,7 +58,7 @@ export async function saveMinutesSummaries(
 /**
  * Finalize: irreversible. The minutes lock, the meeting's private notes are
  * deleted, and the final PDF is stored in the repository (Meetings &
- * Records, shown on the Minutes tab) and indexed for Stratasphere.
+ * Records) and indexed for Stratasphere.
  */
 export async function finalizeMeetingMinutes(corpId: string, meetingId: string): Promise<{ ok: true } | Fail> {
   const supabase = await createClient();

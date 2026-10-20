@@ -3,8 +3,8 @@ import { documentCategories, type DocumentCategory, type IndexingStatus } from "
 
 /**
  * The corporation's document repository as the signed-in member sees it
- * (RLS: membership alone, doc01 §6). Historic minutes are excluded — they
- * live on the Minutes tab, not in a folder.
+ * (RLS: membership alone, doc01 §6). Finalized and historic minutes are in
+ * Meetings & Records with everything else.
  */
 export interface RepositoryDocument {
   id: string;
@@ -69,8 +69,6 @@ export async function listDocuments(corpId: string, category?: DocumentCategory)
     .select(COLUMNS)
     .eq("corporation_id", corpId)
     .eq("is_current", true)
-    .neq("source_type", "historic_minutes")
-    .neq("source_type", "minutes")
     .order("uploaded_at", { ascending: false });
   if (category) query = query.eq("category", category);
   const { data, error } = await query;
@@ -84,9 +82,7 @@ export async function documentCountsByCategory(corpId: string) {
     .from("documents")
     .select("category")
     .eq("corporation_id", corpId)
-    .eq("is_current", true)
-    .neq("source_type", "historic_minutes")
-    .neq("source_type", "minutes");
+    .eq("is_current", true);
   if (error) console.error("[documentCountsByCategory]", error.message);
   const counts = Object.fromEntries(documentCategories.map((c) => [c, 0])) as Record<DocumentCategory, number>;
   let uncategorized = 0;
@@ -96,17 +92,4 @@ export async function documentCountsByCategory(corpId: string) {
     else uncategorized++;
   }
   return { counts, uncategorized };
-}
-
-/** Historic minutes uploaded on the Minutes tab, newest first. */
-export async function listHistoricMinutes(corpId: string) {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("documents")
-    .select(COLUMNS)
-    .eq("corporation_id", corpId)
-    .eq("source_type", "historic_minutes")
-    .order("uploaded_at", { ascending: false });
-  if (error) console.error("[listHistoricMinutes]", error.message);
-  return ((data ?? []) as unknown as Row[]).map(toDocument);
 }

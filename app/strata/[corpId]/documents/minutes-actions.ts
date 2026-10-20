@@ -212,12 +212,12 @@ export async function saveHistoricMinutes(
   });
   if (error) {
     console.error("[saveHistoricMinutes]", error.code, error.message);
-    return { ok: false, error: "The minutes were saved, but their decisions couldn't be recorded. Try again from the Minutes tab." };
+    return { ok: false, error: "The minutes were saved, but their decisions couldn't be recorded. Try again from Meetings & Records in Documents." };
   }
   if (meta.meetingDate || meta.meetingType) {
     await retitleHistoricMinutes(documentId, meta);
   }
-  revalidatePath(`/strata/${corpId}/minutes`);
+  revalidatePath(`/strata/${corpId}/documents`, "layout");
   return { ok: true, recorded: Number(data) || 0 };
 }
 

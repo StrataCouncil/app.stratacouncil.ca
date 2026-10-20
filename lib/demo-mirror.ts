@@ -16,7 +16,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
  *   project), so the published content is copied as is.
  * - The Library (0049): published playbooks and guides, after each publish,
  *   unpublish, delete or move. Drafts stay on the live site, and so do
- *   policy templates (they're for subscribers): the demo gets one sample
+ *   policy templates and forms (they're for subscribers): the demo gets one sample
  *   template instead (lib/library/demo-sample.ts).
  * - The Knowledge Base: each entry and its search index, so the demo
  *   Stratasphere answers from the same law. Runs after an entry is
@@ -182,7 +182,7 @@ export async function mirrorLegislationToDemo(): Promise<MirrorResult<{ entries:
   return { ok: true, entries: entries.length, copied: changed.length, chunks };
 }
 
-/** Published Library items, as published, except policy templates; then the demo's sample template. */
+/** Published Library items, as published, except policy templates and forms; then the demo's sample template. */
 export async function mirrorLibraryToDemo(): Promise<MirrorResult<{ items: number }>> {
   const db = databases();
   if (!db) return { ok: false, error: NOT_CONNECTED };
@@ -191,7 +191,7 @@ export async function mirrorLibraryToDemo(): Promise<MirrorResult<{ items: numbe
     .from("library_resources")
     .select("id, kind, title, summary, tags, published, published_at, order_index, created_at, updated_at")
     .not("published", "is", null)
-    .neq("kind", "policy_template");
+    .not("kind", "in", "(policy_template,form)");
   if (error || !data) return fail("reading the Library", error?.message ?? "no rows");
   const last = Math.max(0, ...data.map((r) => (r.order_index as number | null) ?? 0));
   const items = [...data, demoSampleTemplate(last + 1)];

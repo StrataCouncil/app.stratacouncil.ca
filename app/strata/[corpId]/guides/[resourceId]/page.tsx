@@ -8,6 +8,7 @@ import { getPublishedLibraryItem, listPublishedLibrary, type PublishedLibraryEnt
 import { getStrataAccess } from "@/lib/data/strata";
 import { isUuid } from "@/lib/library/library";
 import {
+  isDownloadableKind,
   isTemplateLocked,
   knowledgeResourceKindLabels,
   knowledgeResources,
@@ -91,25 +92,29 @@ async function LibraryItemPage({ item, corpId, subscribed }: { item: PublishedLi
             <LibraryDisclaimer compact />
           </div>
 
-          {item.kind === "policy_template" && !locked && (
+          {isDownloadableKind(item.kind) && !locked && (
             <div className="template-download" data-testid="template-download">
               <a className="button button-secondary button-small" href={`/strata/${corpId}/guides/${item.id}/template.docx`} data-testid="template-docx">
                 Download as Word (.docx)
               </a>
-              <p>
-                Filled in with your strata&rsquo;s name and plan number. Adapt it to your strata, review and approve it as a
-                council, add the date it&rsquo;s activated, then upload the approved policy to{" "}
-                <Link href={`/strata/${corpId}/documents`}>Documents</Link> if you wish.
-              </p>
+              {item.kind === "form" ? (
+                <p>Filled in with your strata&rsquo;s name and plan number, ready to adapt and use.</p>
+              ) : (
+                <p>
+                  Filled in with your strata&rsquo;s name and plan number. Adapt it to your strata, review and approve it as a
+                  council, add the date it&rsquo;s activated, then upload the approved policy to{" "}
+                  <Link href={`/strata/${corpId}/documents`}>Documents</Link> if you wish.
+                </p>
+              )}
             </div>
           )}
 
           {locked ? (
             <div className="lock-panel" style={{ marginTop: "1.75rem" }} data-testid="template-lock-panel">
-              <h2>This template requires a subscription</h2>
+              <h2>This {item.kind === "form" ? "form" : "template"} requires a subscription</h2>
               <p>
-                Policy templates are the one part of the Library that&rsquo;s behind Stratasphere&trade;. Playbooks and guides
-                stay free for every connected member.
+                Policy templates and forms are the part of the Library that&rsquo;s behind Stratasphere&trade;. Playbooks and
+                guides stay free for every connected member.
               </p>
               <SubscribeCta testId="template-subscribe-cta" />
             </div>
