@@ -749,17 +749,19 @@ button {
 }
 
 /* Stratasphere stands out among the tabs: bold, in clay, locked or not
-   (a locked tab is when it most needs to be noticed). */
+   (a locked tab is when it most needs to be noticed). Text takes the
+   darker clay (as the slide deck's clay labels do): --accent reads orange
+   as text and is too light on paper at this size. */
 .substrata-nav a.substrata-nav__sphere,
 .substrata-nav__locked.substrata-nav__sphere,
 .substrata-nav__locked.substrata-nav__sphere:hover,
 .substrata-nav__locked.substrata-nav__sphere:focus-visible {
-  color: var(--accent);
+  color: var(--accent-dark);
   font-weight: 700;
 }
 
 .substrata-nav a.substrata-nav__sphere:hover {
-  color: var(--accent-dark);
+  color: var(--ink);
 }
 
 .visually-hidden {
