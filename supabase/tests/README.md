@@ -17,4 +17,12 @@ Run locally with Postgres 16 + pgvector and the usual `PG*` settings:
     npm run test:db
 
 Migrations from `0016` on must be safe to re-run; the runner applies them twice.
+
+A migration that creates a table must, in the same file, enable row-level
+security, grant `service_role`, and either grant `authenticated` what it needs
+or revoke it (a server-only table). `anon` is never granted. Supabase stops
+granting new tables automatically on October 30, 2026, so a table without
+grants would fail in the app with "permission denied". `npm test` checks this
+(`supabase/checks/table-grants.ts`) for migrations from `0016` on and the demo's
+tables.
 Adding a migration or a database rule: add or extend a suite in the same PR.
