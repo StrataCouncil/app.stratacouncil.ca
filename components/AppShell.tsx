@@ -58,7 +58,7 @@ export async function AppShell({
             <Link href="/training" data-active={active === "training"}>
               Council Training
             </Link>
-            <Link href={primaryCorpHref} data-active={active === "strata"} className="app-nav__sphere">
+            <Link href={primaryCorpHref} data-active={active === "strata"}>
               Stratasphere&trade;
             </Link>
             {profile?.isSuperAdmin && (

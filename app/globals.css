@@ -201,19 +201,6 @@ button {
   background: rgba(248, 246, 241, 0.1);
 }
 
-/* Stratasphere stands out in the menu: bold, in clay. The lighter clay
-   (the slide deck's clay on navy) keeps it readable on the dark header;
-   --accent itself is too dark there. */
-.app-nav a.app-nav__sphere {
-  color: #e0925f;
-  font-weight: 700;
-}
-
-.app-nav a.app-nav__sphere:hover,
-.app-nav a.app-nav__sphere[data-active="true"] {
-  color: #eba579;
-}
-
 /* Account menu — replaces the old bare "Sign out" link in the header.
    Trigger is styled for the dark header it sits in; the dropdown panel
    itself reuses the same light-surface popover treatment as
@@ -759,6 +746,20 @@ button {
 
 .substrata-nav__lock {
   flex: none;
+}
+
+/* Stratasphere stands out among the tabs: bold, in clay, locked or not
+   (a locked tab is when it most needs to be noticed). */
+.substrata-nav a.substrata-nav__sphere,
+.substrata-nav__locked.substrata-nav__sphere,
+.substrata-nav__locked.substrata-nav__sphere:hover,
+.substrata-nav__locked.substrata-nav__sphere:focus-visible {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.substrata-nav a.substrata-nav__sphere:hover {
+  color: var(--accent-dark);
 }
 
 .visually-hidden {
