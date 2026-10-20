@@ -201,6 +201,12 @@ button {
   background: rgba(248, 246, 241, 0.1);
 }
 
+/* Stratasphere stands out in the top menu: bold, in full white. */
+.app-nav a.app-nav__sphere {
+  color: #ffffff;
+  font-weight: 700;
+}
+
 /* Account menu — replaces the old bare "Sign out" link in the header.
    Trigger is styled for the dark header it sits in; the dropdown panel
    itself reuses the same light-surface popover treatment as

@@ -124,31 +124,6 @@ export const knowledgeResourceKindLabels: Record<KnowledgeResourceKind, string> 
 
 export const knowledgeResources: KnowledgeResource[] = [
   {
-    id: "kb1",
-    kind: "playbook",
-    title: "Responding to a noise complaint",
-    summary: "An owner reports repeated noise from a neighbouring unit — how to handle it fairly and consistently, start to finish.",
-    body: [
-      "Noise complaints are one of the most common things a council handles, and one of the easiest to get wrong procedurally even when the underlying judgment call is right. The Act requires a written warning before any fine can be levied, and that warning has to actually describe the bylaw and the conduct, not just say \"stop being noisy.\"",
-      "Treat every complaint as a paper trail from the start: get it in writing with a date, time, and specifics, confirm the bylaw being invoked actually covers what's being described (a stereo at 11pm and a toddler at 4pm aren't the same enforcement question), and only fine after a documented warning has gone unheeded. If it escalates, the Civil Resolution Tribunal will expect to see that sequence — a fine issued without a prior warning is one of the most common reasons an enforcement decision gets overturned.",
-    ],
-    jurisdictionLevel: "provincial",
-    jurisdiction: "BC",
-    tags: ["bylaws", "complaints", "enforcement"],
-    updatedAt: "Aug 2025",
-    checklist: [
-      "Get the complaint in writing: date, time, and specifics",
-      "Check whether the bylaw being invoked actually covers this",
-      "Send a written warning before any fine — never fine on a first report",
-      "Log everything in case escalation to CRT becomes necessary",
-    ],
-    commonMistakes: "Fining before a warning, or acting on a verbal complaint with no paper trail.",
-    legislationReferences: [
-      "Strata Property Act, s. 135 (bylaw contravention notice)",
-      "Strata Property Act, s. 137 (fines)",
-    ],
-  },
-  {
     id: "kb2",
     kind: "playbook",
     title: "Approving an alteration agreement",
