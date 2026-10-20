@@ -71,7 +71,7 @@ export function StrataSphereNav({ active }: { active: string }) {
               <button
                 key={key}
                 type="button"
-                className="substrata-nav__locked"
+                className={`substrata-nav__locked${item.slug === "assistant" ? " substrata-nav__sphere" : ""}`}
                 data-active={active === key}
                 data-desktop-only={item.slug === "assistant" ? undefined : "true"}
                 aria-disabled="true"
@@ -89,6 +89,7 @@ export function StrataSphereNav({ active }: { active: string }) {
               key={key}
               href={`/strata/${corpId}${item.slug ? `/${item.slug}` : ""}`}
               data-active={active === key}
+              className={item.slug === "assistant" ? "substrata-nav__sphere" : undefined}
               // The Library and the assistant work on phones (ScreenGate).
               data-desktop-only={item.slug === "guides" || item.slug === "assistant" ? undefined : "true"}
               data-testid={`nav-${key}`}

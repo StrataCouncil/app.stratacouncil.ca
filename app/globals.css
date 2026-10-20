@@ -748,6 +748,20 @@ button {
   flex: none;
 }
 
+/* Stratasphere stands out among the tabs: bold, in clay, locked or not
+   (a locked tab is when it most needs to be noticed). */
+.substrata-nav a.substrata-nav__sphere,
+.substrata-nav__locked.substrata-nav__sphere,
+.substrata-nav__locked.substrata-nav__sphere:hover,
+.substrata-nav__locked.substrata-nav__sphere:focus-visible {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.substrata-nav a.substrata-nav__sphere:hover {
+  color: var(--accent-dark);
+}
+
 .visually-hidden {
   position: absolute;
   width: 1px;
