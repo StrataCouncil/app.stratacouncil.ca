@@ -37,3 +37,13 @@ test("the policy embeds Work Sans when given it", async () => {
   assert.ok(withFont.includes(Buffer.from("word/fonts/")));
   assert.ok(!without.includes(Buffer.from("word/fonts/")));
 });
+
+test("a form has no Effective or Version lines; a policy does", async () => {
+  const { default: JSZip } = await import("jszip");
+  const text = async (buf: Buffer) => (await JSZip.loadAsync(buf)).file("word/document.xml")!.async("string");
+  const policy = await text(await policyDocx({ corporation: corp, title: "Pet Policy", markup: "## Purpose" }));
+  const form = await text(await policyDocx({ corporation: corp, title: "Move-in Form", markup: "## Details", form: true }));
+  assert.ok(policy.includes("Effective: ") && policy.includes("Version: "));
+  assert.ok(!form.includes("Effective: ") && !form.includes("Version: "));
+  assert.ok(form.includes("EPS9048 Harbourview Gardens"));
+});

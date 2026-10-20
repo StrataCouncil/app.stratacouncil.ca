@@ -52,3 +52,9 @@ select pg_temp.expect_error($q$insert into documents (corporation_id, category, 
 select pg_temp.expect_error($q$insert into documents (corporation_id, category, title, storage_path, uploaded_by) values ('BCS-1234', 'insurance', 'x', 'corporation-documents/BCS-9999/u/secret.pdf', '00000000-0000-0000-0000-00000000000c')$q$, 'row-level security');
 select pg_temp.expect_error($q$insert into documents (corporation_id, category, title, storage_path, uploaded_by) values ('BCS-1234', 'insurance', 'x', 'strata-plans/someone/plan.pdf', '00000000-0000-0000-0000-00000000000c')$q$, 'row-level security');
 select pg_temp.expect_error($q$insert into documents (corporation_id, category, title, storage_path, uploaded_by) values ('BCS-1234', 'insurance', 'x', 'corporation-documents/BCS-1234/../BCS-9999/u/secret.pdf', '00000000-0000-0000-0000-00000000000c')$q$, 'row-level security');
+
+-- 0060: minutes stay in Meetings & Records.
+insert into documents (corporation_id, category, title, source_type, file_name, storage_path, uploaded_by)
+  values ('BCS-1234', 'meetings_records', 'old minutes.pdf', 'historic_minutes', 'old minutes.pdf', 'corporation-documents/BCS-1234/u/old minutes.pdf', '00000000-0000-0000-0000-00000000000c');
+select pg_temp.expect_error($q$select move_document((select id from documents where title = 'old minutes.pdf'), 'insurance')$q$, 'minutes stay in Meetings & Records');
+select pg_temp.expect('historic minutes not moved', (select category = 'meetings_records' from documents where title = 'old minutes.pdf'));

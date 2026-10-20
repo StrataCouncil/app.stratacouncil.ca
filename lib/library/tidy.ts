@@ -29,7 +29,7 @@ Markup (the only formatting allowed)
 - "**bold**" for a short lead-in, sparingly. No links, no images, no emoji, no other Markdown.
 
 Also return
-- kind: one of ${LIBRARY_KINDS.map((k) => `${k} (${knowledgeResourceKindLabels[k]})`).join(", ")}. Emergencies (flood, fire, power loss, elevator entrapment) are emergency_playbook; routine "how council handles X" is playbook; explanations are operational_guide; fill-in documents are policy_template.
+- kind: one of ${LIBRARY_KINDS.map((k) => `${k} (${knowledgeResourceKindLabels[k]})`).join(", ")}. Emergencies (flood, fire, power loss, elevator entrapment) are emergency_playbook; routine "how council handles X" is playbook; explanations are operational_guide; council policies to adapt and approve are policy_template; fill-in forms (an application, a request, a notice to complete) are form.
 - title: short, without "BC" or "Playbook" unless needed.
 - summary: one sentence, at most 30 words, saying what it helps with.
 - tags: 3 to 6 lowercase keywords.

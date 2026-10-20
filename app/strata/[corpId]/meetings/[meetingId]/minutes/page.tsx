@@ -17,9 +17,9 @@ export default async function MeetingMinutesPage({ params }: { params: Promise<{
 
   return (
     <>
-      <StrataSphereNav active="minutes" />
-      <Link href={`/strata/${corpId}/minutes`} className="card__meta" style={{ display: "inline-block", marginBottom: "0.75rem" }}>
-        &larr; All minutes
+      <StrataSphereNav active="meetings" />
+      <Link href={`/strata/${corpId}/meetings`} className="card__meta" style={{ display: "inline-block", marginBottom: "0.75rem" }}>
+        &larr; All meetings
       </Link>
       <div className="doc-header">
         <div>

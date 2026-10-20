@@ -40,7 +40,7 @@ export const documentCategoryDescriptions: Record<DocumentCategory, string> = {
   financial_accounting: "Budgets, audited financials, special levies, reserve fund records.",
   insurance: "Policy documents, claims history, EGL requirements.",
   legal_governance: "Bylaws, rules, resolutions, and other governing documents.",
-  meetings_records: "Other meeting-related records. Finalized minutes live in the Minutes tab, not here.",
+  meetings_records: "Finalized and historic minutes, and other meeting-related records. Draft minutes are on each meeting in the Meetings tab.",
   agenda_attachments: "Files and links attached to agenda items. Filed here automatically.",
   operations: "Building operations, maintenance schedules, and day-to-day records.",
 };

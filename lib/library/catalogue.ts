@@ -41,7 +41,8 @@
  * benefits from a step list) and left empty for the others, where a
  * summary carries the content instead.
  *
- * Gating (decided): `policy_template` is the one kind behind the paywall.
+ * Gating (decided): `policy_template` and `form` are the kinds behind the
+ * paywall (forms added 2026-10-20, same treatment as templates).
  * Everything else — playbooks, emergency playbooks, operational guides,
  * financial insights, legislation updates — stays free, on the reasoning
  * already recorded here: playbooks/emergency playbooks are the "don't
@@ -63,12 +64,18 @@
  * `KnowledgeLibrary`/the detail page.
  */
 export function isTemplateLocked(resource: Pick<KnowledgeResource, "kind">, subscribed: boolean) {
-  return resource.kind === "policy_template" && !subscribed;
+  return isDownloadableKind(resource.kind) && !subscribed;
+}
+
+/** The kinds a subscriber downloads as Word, filled in for their strata: policy templates and forms. */
+export function isDownloadableKind(kind: KnowledgeResourceKind) {
+  return kind === "policy_template" || kind === "form";
 }
 export type KnowledgeResourceKind =
   | "playbook"
   | "emergency_playbook"
   | "policy_template"
+  | "form"
   | "operational_guide"
   | "financial_insight"
   | "legislation_update";
@@ -117,37 +124,13 @@ export const knowledgeResourceKindLabels: Record<KnowledgeResourceKind, string> 
   playbook: "Playbook",
   emergency_playbook: "Emergency Playbook",
   policy_template: "Policy Template",
+  form: "Form",
   operational_guide: "Operational Guide",
   financial_insight: "Financial Insight",
   legislation_update: "Legislation Update",
 };
 
 export const knowledgeResources: KnowledgeResource[] = [
-  {
-    id: "kb2",
-    kind: "playbook",
-    title: "Approving an alteration agreement",
-    summary: "An owner wants to renovate and needs council sign-off — what to check before you approve, and what the agreement itself needs to say.",
-    body: [
-      "An alteration request is really two separate questions: does this need a vote, and does the agreement protect the strata if something goes wrong. Common property alterations typically need a 3/4 vote at a general meeting; alterations confined to the owner's own strata lot can usually be approved by council alone, but check your bylaws — some corporations have tightened this.",
-      "Whatever the approval path, get the agreement in writing before work starts. It should name the contractor, require proof of liability insurance and any required permits, and spell out who's responsible for damage to common property or other units during the work. Verbal approval followed by a written agreement after the fact is the single most common way these disputes end up costly.",
-    ],
-    jurisdictionLevel: "provincial",
-    jurisdiction: "BC",
-    tags: ["alterations", "renovations", "agreements"],
-    updatedAt: "May 2025",
-    checklist: [
-      "Confirm whether this needs a 3/4 vote (common property) or council approval alone",
-      "Require proof of contractor insurance and, where relevant, permits",
-      "Put the agreement in writing before work starts, not after",
-      "Specify who's responsible for damage to common property or other units",
-    ],
-    commonMistakes: "Approving verbally, then having nothing in writing when a dispute comes up later.",
-    legislationReferences: [
-      "Strata Property Act, s. 71 (alterations to common property)",
-      "Strata Property Act, s. 72 (repair and maintenance obligations)",
-    ],
-  },
   {
     id: "kb3",
     kind: "playbook",

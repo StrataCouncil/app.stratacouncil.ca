@@ -53,6 +53,8 @@ export interface PolicyExportInput {
   markup: string;
   /** Work Sans Regular (lib/exports/fonts), embedded in the document. */
   bodyFont?: Buffer;
+  /** A form, not a policy: no Effective and Version lines, just the clay rule under the title. */
+  form?: boolean;
 }
 
 /** The blocks that belong in the policy itself: everything but the boxes. */
@@ -148,7 +150,7 @@ function body(blocks: Block[], fill: (s: string) => string): Array<Paragraph | T
   return out;
 }
 
-export async function policyDocx({ corporation, title, markup, bodyFont }: PolicyExportInput): Promise<Buffer> {
+export async function policyDocx({ corporation, title, markup, bodyFont, form }: PolicyExportInput): Promise<Buffer> {
   const fill = (s: string) => fillPlaceholders(s, corporation);
   const name = `${corporation.planNumber} ${corporation.name} \u2013 ${fill(title)}`;
   const footerName = `${corporation.planNumber} ${corporation.name} - ${fill(title)}`;
@@ -161,9 +163,15 @@ export async function policyDocx({ corporation, title, markup, bodyFont }: Polic
     });
 
   const children: Array<Paragraph | Table> = [
-    new Paragraph({ heading: HeadingLevel.TITLE, children: [new TextRun(name)] }),
-    field("Effective", false),
-    field("Version", true),
+    form
+      ? new Paragraph({
+          heading: HeadingLevel.TITLE,
+          spacing: { after: 320 },
+          border: { bottom: { style: BorderStyle.SINGLE, size: 8, color: CLAY, space: 8 } },
+          children: [new TextRun(name)],
+        })
+      : new Paragraph({ heading: HeadingLevel.TITLE, children: [new TextRun(name)] }),
+    ...(form ? [] : [field("Effective", false), field("Version", true)]),
     ...body(policyBlocks(parseMarkup(markup)), fill),
   ];
 

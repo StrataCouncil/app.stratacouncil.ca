@@ -213,7 +213,7 @@ export default async function OverviewPage({ params }: { params: Promise<{ corpI
               ))}
             </ul>
           )}
-          <Link href={`/strata/${corpId}/minutes`} className="link-button overview-card__action">
+          <Link href={`/strata/${corpId}/documents/meetings_records`} className="link-button overview-card__action">
             All minutes
           </Link>
         </section>

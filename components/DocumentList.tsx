@@ -126,15 +126,18 @@ export function DocumentList({ corpId, documents }: { corpId: string; documents:
                 >
                   {doc.sourceType === "link" ? "Open link" : "Download"}
                 </button>
-                <button
-                  type="button"
-                  className="text-action"
-                  onClick={() => setMoving(doc)}
-                  disabled={pending}
-                  data-testid={`move-document-${doc.id}`}
-                >
-                  Move
-                </button>
+                {/* Minutes stay in Meetings & Records (0060). */}
+                {doc.sourceType !== "minutes" && doc.sourceType !== "historic_minutes" && (
+                  <button
+                    type="button"
+                    className="text-action"
+                    onClick={() => setMoving(doc)}
+                    disabled={pending}
+                    data-testid={`move-document-${doc.id}`}
+                  >
+                    Move
+                  </button>
+                )}
               </div>
             </div>
           );

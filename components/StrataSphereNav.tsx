@@ -27,7 +27,6 @@ const allItems: Array<{ slug: string; label: string; gated: boolean; managersOnl
   { slug: "council", label: "Council", gated: false },
   { slug: "lots", label: "Owners", gated: false },
   { slug: "meetings", label: "Meetings", gated: false },
-  { slug: "minutes", label: "Minutes", gated: false },
   { slug: "documents", label: "Documents", gated: false },
   // Billing: the admin, and anyone they've given billing access to (0046); others never see the tab.
   { slug: "billing", label: "Billing", gated: false, billingOnly: true },

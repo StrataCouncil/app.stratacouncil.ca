@@ -221,6 +221,7 @@ export async function moveDocument(
   const supabase = await createClient();
   const { error } = await supabase.rpc("move_document", { p_document_id: documentId, p_category: category });
   if (error) {
+    if (error.message.includes("minutes stay")) return { ok: false, error: "Minutes stay in Meetings & Records." };
     console.error("[moveDocument]", error.code, error.message);
     return { ok: false, error: "Couldn't move that document." };
   }

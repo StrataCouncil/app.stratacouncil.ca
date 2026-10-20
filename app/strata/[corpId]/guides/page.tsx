@@ -49,7 +49,7 @@ export default async function GuidesPage({
         A growing, free library of playbooks, operational guides,
         financial insights, legislation updates and emergency playbooks
         for every connected member &mdash; plus downloadable, editable
-        policy templates with a Stratasphere&trade; subscription.
+        policy templates and forms with a Stratasphere&trade; subscription.
       </p>
       <LibraryDisclaimer />
       <KnowledgeLibrary

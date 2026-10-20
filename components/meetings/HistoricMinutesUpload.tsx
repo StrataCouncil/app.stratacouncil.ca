@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { DOCUMENTS_BUCKET } from "@/lib/documents";
 import { createDocumentUploads } from "@/app/strata/[corpId]/documents/actions";
-import { analyzeHistoricMinutes, saveHistoricMinutes, type ExtractedDecision, type HistoricAnalysis } from "@/app/strata/[corpId]/minutes/actions";
+import { analyzeHistoricMinutes, saveHistoricMinutes, type ExtractedDecision, type HistoricAnalysis } from "@/app/strata/[corpId]/documents/minutes-actions";
 import type { UploadedFile } from "@/app/strata/[corpId]/documents/actions";
 
 /**
