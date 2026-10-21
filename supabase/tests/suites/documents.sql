@@ -58,3 +58,11 @@ insert into documents (corporation_id, category, title, source_type, file_name, 
   values ('BCS-1234', 'meetings_records', 'old minutes.pdf', 'historic_minutes', 'old minutes.pdf', 'corporation-documents/BCS-1234/u/old minutes.pdf', '00000000-0000-0000-0000-00000000000c');
 select pg_temp.expect_error($q$select move_document((select id from documents where title = 'old minutes.pdf'), 'insurance')$q$, 'minutes stay in Meetings & Records');
 select pg_temp.expect('historic minutes not moved', (select category = 'meetings_records' from documents where title = 'old minutes.pdf'));
+
+-- 0062: "Download everything" links are server-only (no policy, so nothing shows even with this suite's grants).
+reset role;
+insert into document_exports (corporation_id, requested_by, token_hash, expires_at)
+  values ('BCS-1234', '00000000-0000-0000-0000-00000000000b', repeat('b', 64), now() + interval '1 day');
+set role authenticated;
+set test.uid = '00000000-0000-0000-0000-00000000000b';  -- Bob, admin
+select pg_temp.expect('even the admin who asked can''t read export links', (select count(*) = 0 from document_exports));

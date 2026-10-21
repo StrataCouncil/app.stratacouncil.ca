@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { StrataSphereNav } from "@/components/StrataSphereNav";
 import { DocumentUpload } from "@/components/DocumentUpload";
+import { GoogleDriveImport } from "@/components/GoogleDriveImport";
 import { DocumentList } from "@/components/DocumentList";
 import { HistoricMinutesUpload } from "@/components/meetings/HistoricMinutesUpload";
 import { getStrataAccess } from "@/lib/data/strata";
@@ -39,7 +40,10 @@ export default async function DocumentCategoryPage({
           <p className="card__meta">{documentCategoryDescriptions[category]}</p>
         </div>
         {category !== "agenda_attachments" && (
-          <DocumentUpload corpId={corpId} defaultCategory={category} label={`Upload to ${label}`} />
+          <div className="doc-header__actions">
+            <GoogleDriveImport corpId={corpId} defaultCategory={category} />
+            <DocumentUpload corpId={corpId} defaultCategory={category} label={`Upload to ${label}`} />
+          </div>
         )}
       </div>
 

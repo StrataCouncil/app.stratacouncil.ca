@@ -2,16 +2,14 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 import {
   acceptedExtensions,
-  DOCUMENTS_BUCKET,
   documentCategoryLabels,
   MAX_FILES_PER_UPLOAD,
   pickableDocumentCategories,
   type DocumentCategory,
 } from "@/lib/documents";
-import { createDocumentUploads, registerDocuments } from "@/app/strata/[corpId]/documents/actions";
+import { uploadToStrataDocuments } from "@/lib/documents-upload";
 
 /**
  * "Upload document": pick one or more files and the folder they go in
@@ -81,35 +79,7 @@ function UploadDialog({
     if (!category) return setError("Choose a folder.");
     setBusy(true);
     setError(null);
-
-    const tickets = await createDocumentUploads(
-      corpId,
-      files.map((f) => ({ name: f.name, size: f.size }))
-    );
-    if (!tickets.ok) {
-      setBusy(false);
-      return setError(tickets.error);
-    }
-
-    const storage = createClient().storage.from(DOCUMENTS_BUCKET);
-    const uploaded = [];
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      const ticket = tickets.tickets[i];
-      setStatus(`Uploading ${i + 1} of ${files.length}: ${file.name}`);
-      const { error: uploadError } = await storage.uploadToSignedUrl(ticket.path, ticket.token, file, {
-        contentType: file.type || "application/octet-stream",
-      });
-      if (uploadError) {
-        setBusy(false);
-        setStatus(null);
-        return setError(`${file.name} didn't upload. Please try again.`);
-      }
-      uploaded.push({ path: ticket.path, name: file.name, size: file.size, type: file.type });
-    }
-
-    setStatus("Saving…");
-    const result = await registerDocuments(corpId, category, uploaded);
+    const result = await uploadToStrataDocuments(corpId, category, files, setStatus);
     setBusy(false);
     setStatus(null);
     if (!result.ok) return setError(result.error);
