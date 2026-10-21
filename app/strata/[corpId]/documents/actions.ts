@@ -252,3 +252,18 @@ export async function reindexDocument(corpId: string, documentId: string): Promi
   revalidatePath(`/strata/${corpId}/documents`, "layout");
   return { ok: true };
 }
+
+/** File names already in a folder, so an import can flag duplicates. */
+export async function documentNamesInFolder(corpId: string, category: string): Promise<string[]> {
+  if (!isDocumentCategory(category)) return [];
+  const access = await getStrataAccess(corpId);
+  if (!access) return [];
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("documents")
+    .select("file_name")
+    .eq("corporation_id", access.corpId)
+    .eq("category", category)
+    .eq("is_current", true);
+  return (data ?? []).map((d) => (d.file_name ?? "").toLowerCase()).filter(Boolean);
+}

@@ -2,6 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { StrataSphereNav } from "@/components/StrataSphereNav";
 import { DocumentUpload } from "@/components/DocumentUpload";
+import { DocumentExportRequest } from "@/components/DocumentExportRequest";
+import { GoogleDriveImport } from "@/components/GoogleDriveImport";
 import { getStrataAccess } from "@/lib/data/strata";
 import { documentCountsByCategory } from "@/lib/data/documents";
 import { documentCategories, documentCategoryDescriptions, documentCategoryLabels } from "@/lib/documents";
@@ -31,7 +33,10 @@ export default async function DocumentsPage({ params }: { params: Promise<{ corp
             PDF, Word and text file is indexed so Stratasphere&trade; can use it.
           </p>
         </div>
-        <DocumentUpload corpId={corpId} />
+        <div className="doc-header__actions">
+          <GoogleDriveImport corpId={corpId} />
+          <DocumentUpload corpId={corpId} />
+        </div>
       </div>
 
       <div className="grid-cards" data-testid="document-folders">
@@ -62,18 +67,7 @@ export default async function DocumentsPage({ params }: { params: Promise<{ corp
         </p>
       )}
 
-      <div className="sync-note" data-testid="cloud-sync-note">
-        <div>
-          <strong>Sync with a cloud drive</strong>
-          <p>
-            Mirror this repository against Dropbox or Google Drive instead of
-            uploading by hand. Coming later.
-          </p>
-        </div>
-        <button className="button button-secondary" disabled data-testid="connect-cloud-drive-cta">
-          Connect a drive
-        </button>
-      </div>
+      {access.isAdmin && <DocumentExportRequest corpId={corpId} />}
     </>
   );
 }
