@@ -42,3 +42,12 @@ select pg_temp.expect('but not without two-step verification', (select count(*) 
 reset role;
 set role anon;
 select pg_temp.expect_error($q$select count(*) from investors$q$, 'permission denied');
+
+-- Deleting an investor (the console's Delete) takes their links, viewing and notes with them.
+reset role;
+insert into investors (email, full_name, disclaimer_version, disclaimer_accepted_at, accredited_confirmed_at, referred_by)
+  values ('friend@example.com', 'Friend', '2026-10-21', now(), now(), '33333333-3333-3333-3333-333333333333');
+insert into investor_notes (investor_id, deck_id, page, body) values ('33333333-3333-3333-3333-333333333333', '22222222-2222-2222-2222-222222222222', 1, 'A question');
+delete from investors where id = '33333333-3333-3333-3333-333333333333';
+select pg_temp.expect('their links, viewing and notes go too', (select count(*) = 0 from investor_links) and (select count(*) = 0 from investor_slide_time) and (select count(*) = 0 from investor_notes));
+select pg_temp.expect('someone they shared with stays, without the referral', (select referred_by is null from investors where email = 'friend@example.com'));

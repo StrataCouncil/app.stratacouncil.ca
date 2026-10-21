@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { AdminTabs } from "@/components/AdminTabs";
 import { AppShell } from "@/components/AppShell";
 import { InvestorAccessButton } from "@/components/investors/InvestorAccessButton";
+import { InvestorDeleteButton } from "@/components/investors/InvestorDeleteButton";
 import { getCurrentProfile } from "@/lib/data/profile";
 import { getInvestorDetail } from "@/lib/data/investors";
 import { INVESTOR_DECK_BUCKET, formatSeconds, formatWhen } from "@/lib/investors/briefing";
@@ -77,7 +78,10 @@ export default async function AdminInvestorPage({ params }: { params: Promise<{ 
           </dl>
           <div style={{ marginTop: "1rem" }}>
             {investor.revokedAt && <p className="card__meta">Access ended {formatWhen(investor.revokedAt)}.</p>}
-            <InvestorAccessButton investorId={investor.id} revoked={Boolean(investor.revokedAt)} />
+            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+              <InvestorAccessButton investorId={investor.id} revoked={Boolean(investor.revokedAt)} />
+              <InvestorDeleteButton investorId={investor.id} name={investor.name} />
+            </div>
           </div>
         </section>
 
