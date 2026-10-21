@@ -160,7 +160,7 @@ async function visitorAccount(admin: SupabaseClient, visitor: DemoVisitorRow): P
  * The nightly clean-up (and a quick one whenever a link is opened):
  * every visitor whose link has expired loses their strata and their
  * account, along with anyone they invited. The visitor rows themselves
- * (name, email, link, activity log) go 7 days after the link expired.
+ * (name, email, link, activity log) go 30 days after the link expired.
  */
 export async function wipeExpiredVisitors(): Promise<{ wiped: number; failed: number; forgotten: number }> {
   const admin = createAdminClient();
@@ -185,10 +185,11 @@ export async function wipeExpiredVisitors(): Promise<{ wiped: number; failed: nu
     }
   }
 
-  const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();
-  const { data: gone } = await admin.from("demo_visitors").delete().lte("expires_at", weekAgo).not("wiped_at", "is", null).select("id");
-  // The activity log goes with its visitor's row, and never stays longer than 7 days.
-  const { error: logError } = await admin.from("demo_activity").delete().lt("at", weekAgo);
+  // Kept 30 days (was 7 until 2026-10-21).
+  const keepUntil = new Date(Date.now() - 30 * 86_400_000).toISOString();
+  const { data: gone } = await admin.from("demo_visitors").delete().lte("expires_at", keepUntil).not("wiped_at", "is", null).select("id");
+  // The activity log goes with its visitor's row, and never stays longer than 30 days.
+  const { error: logError } = await admin.from("demo_activity").delete().lt("at", keepUntil);
   if (logError) console.error("[wipeExpiredVisitors] activity:", logError.message);
   return { wiped, failed, forgotten: gone?.length ?? 0 };
 }

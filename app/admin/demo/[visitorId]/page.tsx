@@ -20,7 +20,7 @@ const MEETING_PROGRESS = {
 
 /**
  * One demo visitor's activity (lib/demo-activity.ts): how far they got,
- * then everything they did, in order. Kept for 7 days.
+ * then everything they did, in order. Kept for 30 days.
  */
 export default async function DemoActivityPage({ params }: { params: Promise<{ visitorId: string }> }) {
   const profile = await getCurrentProfile();

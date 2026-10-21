@@ -7818,3 +7818,364 @@ a.kb-card:hover {
   color: var(--muted);
   margin: 0.25rem 0 0;
 }
+
+/* Investor briefing (app/investors, 0061) */
+
+.modal__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.investor-signup {
+  max-width: 460px;
+}
+
+.investor-signup__lede {
+  color: var(--muted);
+  font-size: 0.95rem;
+  line-height: 1.55;
+  margin: 0 0 1.25rem;
+}
+
+.investor-signup__submit {
+  width: 100%;
+  margin-top: 0.25rem;
+}
+
+.investor-signup__fine {
+  margin: 1.1rem 0 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.investor-signup__fine a {
+  color: var(--accent-dark);
+}
+
+.investor-signup__trap {
+  position: absolute;
+  left: -10000px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+.investor-disclaimer {
+  font-size: 0.9rem;
+  line-height: 1.55;
+  color: var(--ink);
+}
+
+.investor-disclaimer h3 {
+  font-size: 1rem;
+  margin: 1.1rem 0 0.4rem;
+}
+
+.investor-disclaimer p {
+  color: var(--ink);
+  margin: 0 0 0.6rem;
+}
+
+.investor-disclaimer ul {
+  margin: 0.25rem 0 0;
+  padding-left: 1.2rem;
+}
+
+.investor-disclaimer li {
+  margin-bottom: 0.4rem;
+}
+
+.investor-briefing {
+  min-height: 100vh;
+  background: var(--paper);
+}
+
+.investor-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.5rem;
+  padding: 0.85rem clamp(1rem, 3vw, 2rem);
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.investor-bar__brand {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-family: var(--font-fraunces), Georgia, serif;
+  font-weight: 600;
+  font-size: 1.15rem;
+}
+
+.investor-bar__mark {
+  width: 26px;
+  height: 26px;
+  color: var(--paper);
+}
+
+.investor-bar__label {
+  font-family: var(--font-work-sans), system-ui, sans-serif;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #e3a47c;
+  margin-left: 0.4rem;
+}
+
+.investor-bar__actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.6rem 0.9rem;
+  font-size: 0.9rem;
+}
+
+.investor-bar__actions > a:first-child {
+  color: var(--paper);
+}
+
+.investor-bar .button-secondary {
+  color: var(--paper);
+  border-color: rgba(248, 246, 241, 0.4);
+}
+
+.investor-bar .button-secondary:hover {
+  border-color: var(--paper);
+}
+
+.investor-stage {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: clamp(1rem, 3vw, 2rem);
+}
+
+.investor-slide {
+  position: relative;
+  width: 100%;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: #e8e4da;
+  box-shadow: 0 2px 10px rgba(27, 42, 65, 0.14);
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.investor-slide img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+/* The watermark sits in the slides' empty bottom-right corner, clear of their text. */
+.investor-slide__mark {
+  position: absolute;
+  right: 2.2%;
+  bottom: 3.2%;
+  font-size: clamp(0.55rem, 1.1vw, 0.8rem);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: rgba(128, 128, 128, 0.6);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.investor-slide__nav {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 12%;
+  border: 0;
+  background: transparent;
+  color: transparent;
+  font-size: 2.5rem;
+  cursor: pointer;
+}
+
+.investor-slide__nav:disabled {
+  cursor: default;
+}
+
+.investor-slide__nav--prev {
+  left: 0;
+}
+
+.investor-slide__nav--next {
+  right: 0;
+}
+
+.investor-slide__nav:not(:disabled):hover,
+.investor-slide__nav:focus-visible {
+  color: rgba(128, 128, 128, 0.75);
+}
+
+.investor-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  margin: 1rem 0 0.75rem;
+}
+
+.investor-controls__count {
+  font-size: 0.9rem;
+  color: var(--muted);
+  min-width: 7.5em;
+  text-align: center;
+}
+
+.investor-strip {
+  list-style: none;
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+  padding: 0.25rem 0.1rem 0.6rem;
+  margin: 0 0 1.25rem;
+}
+
+.investor-strip button {
+  position: relative;
+  display: block;
+  width: 96px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: #e8e4da;
+  cursor: pointer;
+}
+
+.investor-strip button[aria-current="true"] {
+  border-color: var(--accent);
+}
+
+.investor-strip img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+}
+
+.investor-strip span {
+  position: absolute;
+  left: 4px;
+  bottom: 3px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--ink);
+  background: rgba(248, 246, 241, 0.85);
+  border-radius: 3px;
+  padding: 0 4px;
+}
+
+.investor-strip__dot {
+  position: absolute;
+  right: 5px;
+  top: 5px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.investor-notes label {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  font-weight: 600;
+  font-size: 0.95rem;
+  margin-bottom: 0.45rem;
+}
+
+.investor-notes__state {
+  font-weight: 400;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.investor-notes textarea {
+  width: 100%;
+  font: inherit;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  padding: 0.75em 0.9em;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+  resize: vertical;
+}
+
+.investor-notes textarea:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.investor-notes__fine {
+  margin: 0.6rem 0 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.investor-notes__fine a {
+  color: var(--accent-dark);
+}
+
+.investor-share {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.investor-share input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.5em 0.7em;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--paper);
+  color: var(--ink);
+}
+
+@media (max-width: 640px) {
+  .investor-bar__label {
+    display: none;
+  }
+  .investor-bar__actions > a:first-child {
+    flex-basis: 100%;
+    order: 3;
+    font-size: 0.85rem;
+  }
+  .investor-strip button {
+    width: 72px;
+  }
+}
+
+/* Super Admin: investors (app/admin/investors) */
+
+.investor-admin-table td,
+.investor-admin-table th {
+  vertical-align: top;
+}
+
+.investor-admin-note {
+  white-space: pre-wrap;
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.investor-admin-thumb {
+  width: 120px;
+  border-radius: 4px;
+  display: block;
+}

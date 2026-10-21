@@ -112,8 +112,8 @@ export function DemoLinksAdmin({ list }: { list: DemoVisitorList }) {
       <p className="card__meta">
         A personal link to demo.stratacouncil.ca, opening on the Stratasphere or Council Training. Either way the person gets
         their own fictional strata, as its admin, with nothing emailed and no billing. Each link works until midnight (Pacific) three days after the day you make it (one
-        made Monday works until Thursday ends), and their strata is cleared overnight then. Names and emails are deleted a week
-        later. Choose Create link to send the link from your own email; nothing is emailed from the app.
+        made Monday works until Thursday ends), and their strata is cleared overnight then. Names, emails and activity are deleted 30
+        days later. Choose Create link to send the link from your own email; nothing is emailed from the app.
       </p>
 
       {!list.configured ? (
@@ -182,7 +182,7 @@ export function DemoLinksAdmin({ list }: { list: DemoVisitorList }) {
 
           {ended.length > 0 && (
             <>
-              <h3>Ended (last 7 days)</h3>
+              <h3>Ended (last 30 days)</h3>
               <VisitorTable visitors={ended} busy={busy} copied={copied} onDelete={remove} />
             </>
           )}

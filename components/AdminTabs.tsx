@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-export type AdminTab = "overview" | "stratas" | "training" | "library" | "legislation" | "announcements" | "demo";
+export type AdminTab = "overview" | "stratas" | "training" | "library" | "legislation" | "announcements" | "demo" | "investors";
 
 const TABS: Array<{ key: AdminTab; label: string; href: string }> = [
   { key: "overview", label: "Overview", href: "/admin" },
@@ -10,6 +10,7 @@ const TABS: Array<{ key: AdminTab; label: string; href: string }> = [
   { key: "training", label: "Council Training", href: "/admin/training" },
   { key: "legislation", label: "Knowledge Base", href: "/admin/legislation" },
   { key: "demo", label: "Demo", href: "/admin/demo" },
+  { key: "investors", label: "Investors", href: "/admin/investors" },
 ];
 
 /** The Super Admin console's sections, on every /admin page (styled like the Stratasphere sub-nav). */
