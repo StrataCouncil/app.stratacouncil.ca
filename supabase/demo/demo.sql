@@ -11,7 +11,7 @@
 --   fictional strata, and signs them in. Links stop working at midnight
 --   Pacific on the day they were made, and that night's clean-up deletes
 --   the visitor's strata and account. The row itself (name, email, link)
---   is deleted 7 days after the link expired.
+--   is deleted 30 days after the link expired.
 --
 -- Nothing here is reachable by signed-in visitors: RLS is on with no
 -- policies, and the functions are for the service role only.
@@ -324,8 +324,8 @@ grant execute on function public.demo_use(uuid, text, int, boolean) to service_r
 -- Everything a visitor does (lib/demo-activity.ts): pages, clicks, what
 -- they asked the Stratasphere and its answers, the meeting they ran,
 -- Council Training progress, limits reached, errors. Deleted with the
--- visitor's row (7 days after the link expired), and anything older than
--- 7 days by the nightly clean-up.
+-- visitor's row (30 days after the link expired), and anything older than
+-- 30 days by the nightly clean-up.
 create table if not exists public.demo_activity (
   id bigint generated always as identity primary key,
   visitor_id uuid not null references public.demo_visitors(id) on delete cascade,

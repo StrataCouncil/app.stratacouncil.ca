@@ -259,3 +259,15 @@ export function demoInviteEmail(params: { fullName: string; link: string; landin
   const text = `Hi ${first},\n\n${introText}:\n\n${params.link}\n\nThe link works until midnight (Pacific time) on ${params.dayLabel}, and everything in the demo is cleared then. It signs you in, so please don't forward it. Questions? Email support@stratacouncil.ca.`;
   return { subject: training ? "Your StrataCouncil.ca Council Training link" : "Your StrataCouncil.ca demo", html, text };
 }
+
+/** The investor briefing's sign-in link (0061): personal, works for 30 days. */
+export function investorBriefingEmail(params: { name: string; openUrl: string; days: number }) {
+  const html = wrap(`
+    <p style="margin:0 0 16px;font-size:16px;color:${INK};">Hello ${escapeHtml(params.name)},</p>
+    <p style="margin:0 0 16px;font-size:16px;color:${INK};">Thank you for your interest in StrataCouncil.ca. Your personal link to the investor briefing is below.</p>
+    ${button(params.openUrl, "Open the investor briefing")}
+    <p style="margin:16px 0 0;font-size:13px;color:${MUTED};">The link works for ${params.days} days and is for you alone. To invite a colleague, use Share inside the briefing; they will sign up and receive their own link. If you didn't request this, you can ignore this email.</p>
+  `);
+  const text = `Hello ${params.name},\n\nThank you for your interest in StrataCouncil.ca. Your personal link to the investor briefing:\n\n${params.openUrl}\n\nThe link works for ${params.days} days and is for you alone. To invite a colleague, use Share inside the briefing; they will sign up and receive their own link. If you didn't request this, you can ignore this email.`;
+  return { subject: "Your StrataCouncil.ca investor briefing", html, text };
+}
