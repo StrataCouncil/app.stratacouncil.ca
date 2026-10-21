@@ -79,3 +79,19 @@ export async function setInvestorAccess(investorId: string, revoked: boolean): P
   revalidatePath(`/admin/investors/${investorId}`);
   return { ok: true };
 }
+
+/**
+ * Deletes an investor and everything of theirs (links, viewing time,
+ * notes), for test or junk sign-ups. Anyone they shared the briefing with
+ * stays, without the "shared by".
+ */
+export async function deleteInvestor(investorId: string): Promise<{ ok: true } | Fail> {
+  if (!(await superAdmin())) return { ok: false, error: "Super Admins only." };
+  const { error } = await createAdminClient().from("investors").delete().eq("id", investorId);
+  if (error) {
+    console.error("[deleteInvestor]", error.message);
+    return { ok: false, error: "Couldn't delete this investor." };
+  }
+  revalidatePath("/admin/investors");
+  return { ok: true };
+}

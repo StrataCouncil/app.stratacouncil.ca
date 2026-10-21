@@ -4,6 +4,7 @@ import { AdminTabs } from "@/components/AdminTabs";
 import { AppShell } from "@/components/AppShell";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { InvestorDeckUpload } from "@/components/investors/InvestorDeckUpload";
+import { InvestorDeleteButton } from "@/components/investors/InvestorDeleteButton";
 import { getCurrentProfile } from "@/lib/data/profile";
 import { getInvestorOverview } from "@/lib/data/investors";
 import { formatSeconds, formatWhen } from "@/lib/investors/briefing";
@@ -58,6 +59,7 @@ export default async function AdminInvestorsPage() {
                   <th>Slides viewed</th>
                   <th>Time</th>
                   <th>Notes</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
@@ -74,6 +76,9 @@ export default async function AdminInvestorsPage() {
                     <td>{current ? `${i.slidesViewed} of ${current.pageCount}` : "—"}</td>
                     <td>{formatSeconds(i.seconds)}</td>
                     <td>{i.notes}</td>
+                    <td>
+                      <InvestorDeleteButton investorId={i.id} name={i.name} small />
+                    </td>
                   </tr>
                 ))}
               </tbody>
