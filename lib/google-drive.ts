@@ -82,14 +82,28 @@ function loadScript(src: string) {
   });
 }
 
-async function loadGoogle(): Promise<{ google: GoogleGlobal }> {
-  await Promise.all([loadScript("https://accounts.google.com/gsi/client"), loadScript("https://apis.google.com/js/api.js")]);
-  const w = window as unknown as { google?: GoogleGlobal; gapi?: GapiGlobal };
-  await new Promise<void>((resolve) => w.gapi!.load("picker", resolve));
-  return { google: w.google! };
+// Google's scripts load when the Documents page opens (preloadGoogleDrive), so
+// a click can open the sign-in window at once: browsers block a pop-up that
+// opens after waiting on anything, even a script load.
+let loaded: Promise<GoogleGlobal> | null = null;
+let googleReady: GoogleGlobal | null = null;
+
+export function preloadGoogleDrive(): Promise<void> {
+  loaded ??= Promise.all([loadScript("https://accounts.google.com/gsi/client"), loadScript("https://apis.google.com/js/api.js")])
+    .then(async () => {
+      const w = window as unknown as { google?: GoogleGlobal; gapi?: GapiGlobal };
+      await new Promise<void>((resolve) => w.gapi!.load("picker", resolve));
+      googleReady = w.google!;
+      return googleReady;
+    })
+    .catch((err) => {
+      loaded = null;
+      throw err;
+    });
+  return loaded.then(() => undefined);
 }
 
-/** Sign in to Google (a popup) for a token that covers only the files picked next. */
+/** Sign in to Google (a pop-up) for a token that covers only the files picked next. Must run straight from a click. */
 function requestToken(google: GoogleGlobal): Promise<string> {
   return new Promise((resolve, reject) => {
     const client = google.accounts.oauth2.initTokenClient({
@@ -97,16 +111,32 @@ function requestToken(google: GoogleGlobal): Promise<string> {
       scope: SCOPE,
       callback: (res: { access_token?: string; error?: string }) =>
         res.access_token ? resolve(res.access_token) : reject(new Error(res.error === "access_denied" ? "Google sign-in was cancelled." : "Google sign-in didn't work.")),
-      error_callback: () => reject(new Error("Google sign-in was closed before it finished.")),
+      error_callback: (err: { type?: string }) =>
+        reject(
+          new Error(
+            err?.type === "popup_failed_to_open"
+              ? "Your browser blocked Google's sign-in window. Allow pop-ups for app.stratacouncil.ca, then try again."
+              : "Google sign-in was closed before it finished."
+          )
+        ),
     });
     client.requestAccessToken({ prompt: "" });
   });
 }
 
-/** Opens Google's picker; resolves with the files picked (empty if cancelled) and the token to fetch them. */
-export async function pickFromGoogleDrive(maxItems: number): Promise<{ token: string; files: PickedFile[] }> {
-  const { google } = await loadGoogle();
-  const token = await requestToken(google);
+/**
+ * Opens Google's sign-in, then its picker; resolves with the files picked
+ * (empty if cancelled) and the token to fetch them. Call it directly from
+ * the click, after preloadGoogleDrive has finished.
+ */
+export function pickFromGoogleDrive(maxItems: number): Promise<{ token: string; files: PickedFile[] }> {
+  const google = googleReady;
+  if (!google) return Promise.reject(new Error("Google Drive is still loading. Please try again in a moment."));
+  // Opened synchronously, inside the click.
+  return requestToken(google).then((token) => openPicker(google, token, maxItems));
+}
+
+function openPicker(google: GoogleGlobal, token: string, maxItems: number): Promise<{ token: string; files: PickedFile[] }> {
   const p = google.picker;
   return new Promise((resolve) => {
     // Their Drive (folders to browse into), and shared drives (a Workspace's team folders).
