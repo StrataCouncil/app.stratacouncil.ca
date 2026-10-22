@@ -13,9 +13,11 @@ import { acceptedExtensions, fileExtension, MAX_DOCUMENT_BYTES } from "./documen
  * and Picker APIs on); the import button is hidden without them.
  */
 
-export const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? "";
-const GOOGLE_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_API_KEY ?? "";
-const GOOGLE_PROJECT_NUMBER = process.env.NEXT_PUBLIC_GOOGLE_PROJECT_NUMBER ?? "";
+// Trimmed: a line break pasted into Vercel with the client ID made Google
+// answer "invalid_client" (2026-10-22).
+export const GOOGLE_CLIENT_ID = (process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? "").trim();
+const GOOGLE_API_KEY = (process.env.NEXT_PUBLIC_GOOGLE_API_KEY ?? "").trim();
+const GOOGLE_PROJECT_NUMBER = (process.env.NEXT_PUBLIC_GOOGLE_PROJECT_NUMBER ?? "").trim();
 const SCOPE = "https://www.googleapis.com/auth/drive.file";
 
 export const googleDriveConfigured = Boolean(GOOGLE_CLIENT_ID && GOOGLE_API_KEY && GOOGLE_PROJECT_NUMBER);
