@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { documentCategoryLabels, MAX_FILES_PER_UPLOAD, pickableDocumentCategories, type DocumentCategory } from "@/lib/documents";
 import { documentNamesInFolder } from "@/app/strata/[corpId]/documents/actions";
 import { uploadToStrataDocuments } from "@/lib/documents-upload";
-import { fetchFromGoogleDrive, googleDriveConfigured, pickFromGoogleDrive, planImport, type ImportPlan } from "@/lib/google-drive";
+import { fetchFromGoogleDrive, googleDriveConfigured, pickFromGoogleDrive, planImport, preloadGoogleDrive, type ImportPlan } from "@/lib/google-drive";
 import { IS_DEMO } from "@/lib/demo";
 
 /**
@@ -17,28 +17,42 @@ export function GoogleDriveImport({ corpId, defaultCategory }: { corpId: string;
   const [picked, setPicked] = useState<{ token: string; files: ImportPlan[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [opening, setOpening] = useState(false);
-  if (!googleDriveConfigured || IS_DEMO) return null;
+  const [ready, setReady] = useState(false);
+  const enabled = googleDriveConfigured && !IS_DEMO;
 
-  async function open() {
+  // Load Google's scripts up front, so the click can open its sign-in window at once.
+  useEffect(() => {
+    if (!enabled) return;
+    let live = true;
+    preloadGoogleDrive()
+      .then(() => live && setReady(true))
+      .catch((err) => live && setError(err instanceof Error ? err.message : "Couldn't reach Google."));
+    return () => {
+      live = false;
+    };
+  }, [enabled]);
+
+  if (!enabled) return null;
+
+  function open() {
     setError(null);
     setOpening(true);
-    try {
-      const { token, files } = await pickFromGoogleDrive(MAX_FILES_PER_UPLOAD);
-      if (files.length) setPicked({ token, files: files.map(planImport) });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Google Drive didn't open.");
-    } finally {
-      setOpening(false);
-    }
+    // No await before this call: the sign-in window must open within the click.
+    pickFromGoogleDrive(MAX_FILES_PER_UPLOAD)
+      .then(({ token, files }) => {
+        if (files.length) setPicked({ token, files: files.map(planImport) });
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : "Google Drive didn't open."))
+      .finally(() => setOpening(false));
   }
 
   return (
-    <>
-      <button type="button" className="button button-secondary" onClick={open} disabled={opening} data-testid="import-google-drive">
+    <div className="drive-import">
+      <button type="button" className="button button-secondary" onClick={open} disabled={opening || !ready} data-testid="import-google-drive">
         {opening ? "Opening Google Drive…" : "Import from Google Drive"}
       </button>
       {error && (
-        <p className="roster-invites__error" role="alert">
+        <p className="roster-invites__error drive-import__error" role="alert">
           {error}
         </p>
       )}
@@ -51,7 +65,7 @@ export function GoogleDriveImport({ corpId, defaultCategory }: { corpId: string;
           onClose={() => setPicked(null)}
         />
       )}
-    </>
+    </div>
   );
 }
 

@@ -8216,6 +8216,20 @@ a.kb-card:hover {
   color: var(--muted);
 }
 
+.drive-import {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.35rem;
+}
+
+.drive-import__error {
+  max-width: 22rem;
+  margin: 0;
+  font-size: 0.85rem;
+  text-align: right;
+}
+
 .doc-header__actions {
   display: flex;
   flex-wrap: wrap;
