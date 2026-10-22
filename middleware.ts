@@ -6,7 +6,7 @@ import { IS_DEMO } from "@/lib/demo";
 // /start and /demo: the demo site's personal links and the page that
 // explains them (both do nothing on the live site).
 // /investors: the investor briefing, which has its own sign-in by email (0061).
-const PUBLIC_PATHS = ["/login", "/signup", "/auth/confirm", "/start", "/demo", "/investors"];
+const PUBLIC_PATHS = ["/login", "/signup", "/auth/confirm", "/start", "/demo", "/investors", "/google-drive/return"];
 
 function isPublicPath(pathname: string) {
   return PUBLIC_PATHS.some(

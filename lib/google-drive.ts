@@ -63,11 +63,8 @@ export function planImport(f: PickedFile): ImportPlan {
   return { ...f, fileName: f.name, problem: null };
 }
 
-// Google's scripts, loaded once on first use.
-type GoogleGlobal = {
-  accounts: { oauth2: { initTokenClient: (cfg: Record<string, unknown>) => { requestAccessToken: (o?: Record<string, unknown>) => void } } };
-  picker: Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
-};
+// Google's Picker script, loaded once when the Documents page opens.
+type GoogleGlobal = { picker: Record<string, any> }; // eslint-disable-line @typescript-eslint/no-explicit-any
 type GapiGlobal = { load: (name: string, cb: () => void) => void };
 
 function loadScript(src: string) {
@@ -82,19 +79,14 @@ function loadScript(src: string) {
   });
 }
 
-// Google's scripts load when the Documents page opens (preloadGoogleDrive), so
-// a click can open the sign-in window at once: browsers block a pop-up that
-// opens after waiting on anything, even a script load.
 let loaded: Promise<GoogleGlobal> | null = null;
-let googleReady: GoogleGlobal | null = null;
 
 export function preloadGoogleDrive(): Promise<void> {
-  loaded ??= Promise.all([loadScript("https://accounts.google.com/gsi/client"), loadScript("https://apis.google.com/js/api.js")])
+  loaded ??= loadScript("https://apis.google.com/js/api.js")
     .then(async () => {
       const w = window as unknown as { google?: GoogleGlobal; gapi?: GapiGlobal };
       await new Promise<void>((resolve) => w.gapi!.load("picker", resolve));
-      googleReady = w.google!;
-      return googleReady;
+      return w.google!;
     })
     .catch((err) => {
       loaded = null;
@@ -103,37 +95,96 @@ export function preloadGoogleDrive(): Promise<void> {
   return loaded.then(() => undefined);
 }
 
-/** Sign in to Google (a pop-up) for a token that covers only the files picked next. Must run straight from a click. */
-function requestToken(google: GoogleGlobal): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const client = google.accounts.oauth2.initTokenClient({
-      client_id: GOOGLE_CLIENT_ID,
-      scope: SCOPE,
-      callback: (res: { access_token?: string; error?: string }) =>
-        res.access_token ? resolve(res.access_token) : reject(new Error(res.error === "access_denied" ? "Google sign-in was cancelled." : "Google sign-in didn't work.")),
-      error_callback: (err: { type?: string }) =>
-        reject(
-          new Error(
-            err?.type === "popup_failed_to_open"
-              ? "Your browser blocked Google's sign-in window. Allow pop-ups for app.stratacouncil.ca, then try again."
-              : "Google sign-in was closed before it finished."
-          )
-        ),
-    });
-    client.requestAccessToken({ prompt: "" });
-  });
+// Google sign-in is a full-page visit to Google, not a pop-up: pop-up
+// blockers, extensions and managed (Workspace) browsers can close a pop-up
+// silently, and a full page shows Google's own reason when it refuses.
+// Google sends the person back to /google-drive/return with a short-lived
+// token in the address's #fragment (never sent to our server), which hands
+// it to the page they started on through this tab's sessionStorage.
+export const GOOGLE_RETURN_PATH = "/google-drive/return";
+const STATE_KEY = "google-drive-state";
+const RESULT_KEY = "google-drive-result";
+
+type Storage = Pick<globalThis.Storage, "getItem" | "setItem" | "removeItem">;
+export type SignInResult = { token: string; expiresAt: number } | { error: string };
+
+/** Only a path on this site (not "//elsewhere") can be returned to. */
+export function safeReturnPath(path: string | null | undefined): string {
+  return path && path.startsWith("/") && !path.startsWith("//") && !path.startsWith("/\\") ? path : "/";
 }
 
+/** Google's address for signing in and allowing access to the files picked next. */
+export function googleSignInUrl(origin: string, state: string): string {
+  const q = new URLSearchParams({
+    client_id: GOOGLE_CLIENT_ID,
+    redirect_uri: origin + GOOGLE_RETURN_PATH,
+    response_type: "token",
+    scope: SCOPE,
+    include_granted_scopes: "true",
+    state,
+  });
+  return `https://accounts.google.com/o/oauth2/v2/auth?${q}`;
+}
+
+/** Goes to Google's sign-in; Google brings the person back to returnTo. Call it from the click. */
+export function startGoogleDriveSignIn(returnTo: string) {
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  const nonce = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+  sessionStorage.setItem(STATE_KEY, nonce);
+  window.location.assign(googleSignInUrl(window.location.origin, `${nonce}:${safeReturnPath(returnTo)}`));
+}
+
+const GOOGLE_ERRORS: Record<string, string> = {
+  access_denied: "Google sign-in was cancelled, so nothing was imported.",
+  admin_policy_enforced:
+    "Your organization's Google administrator doesn't allow StrataCouncil to open Google Drive. Ask them to allow it, or sign in to Google with a different account.",
+};
+
 /**
- * Opens Google's sign-in, then its picker; resolves with the files picked
- * (empty if cancelled) and the token to fetch them. Call it directly from
- * the click, after preloadGoogleDrive has finished.
+ * Reads Google's answer (the #fragment on the return page), checks it
+ * belongs to a sign-in this tab started, and keeps the result for the page
+ * the person came from. Returns that page's path.
  */
-export function pickFromGoogleDrive(maxItems: number): Promise<{ token: string; files: PickedFile[] }> {
-  const google = googleReady;
-  if (!google) return Promise.reject(new Error("Google Drive is still loading. Please try again in a moment."));
-  // Opened synchronously, inside the click.
-  return requestToken(google).then((token) => openPicker(google, token, maxItems));
+export function finishGoogleDriveSignIn(hash: string, storage: Storage, now = Date.now()): string {
+  const params = new URLSearchParams(hash.replace(/^#/, ""));
+  const [nonce, ...rest] = (params.get("state") ?? "").split(":");
+  const returnTo = safeReturnPath(rest.join(":"));
+  const expected = storage.getItem(STATE_KEY);
+  storage.removeItem(STATE_KEY);
+
+  let result: SignInResult;
+  if (!expected || nonce !== expected) {
+    result = { error: "Google sign-in didn't finish. Please try again." };
+  } else if (params.get("error")) {
+    result = { error: GOOGLE_ERRORS[params.get("error")!] ?? "Google sign-in didn't work. Please try again." };
+  } else if (params.get("access_token")) {
+    const seconds = Number(params.get("expires_in")) || 3600;
+    result = { token: params.get("access_token")!, expiresAt: now + seconds * 1000 };
+  } else {
+    result = { error: "Google sign-in didn't work. Please try again." };
+  }
+  storage.setItem(RESULT_KEY, JSON.stringify(result));
+  return returnTo;
+}
+
+/** The sign-in result waiting for this page, if any (read once). */
+export function takeGoogleDriveSignIn(storage: Storage, now = Date.now()): SignInResult | null {
+  const raw = storage.getItem(RESULT_KEY);
+  storage.removeItem(RESULT_KEY);
+  if (!raw) return null;
+  try {
+    const r = JSON.parse(raw) as SignInResult;
+    if ("token" in r && r.expiresAt <= now) return { error: "Google sign-in expired. Please try again." };
+    return r;
+  } catch {
+    return null;
+  }
+}
+
+/** Opens Google's picker; resolves with the files picked (empty if cancelled). */
+export async function pickFromGoogleDrive(token: string, maxItems: number): Promise<{ token: string; files: PickedFile[] }> {
+  await preloadGoogleDrive();
+  return openPicker((await loaded)!, token, maxItems);
 }
 
 function openPicker(google: GoogleGlobal, token: string, maxItems: number): Promise<{ token: string; files: PickedFile[] }> {
