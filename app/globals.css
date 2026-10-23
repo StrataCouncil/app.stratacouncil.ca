@@ -918,6 +918,27 @@ button {
   margin: 0 0.25em 0.25em 0;
 }
 
+/* Owners: eleven columns, so tighter cells, and long names and emails wrap
+   instead of pushing the table past the page (2026-10-23). It still
+   scrolls sideways on phones. */
+.roster-table--owners th,
+.roster-table--owners td {
+  padding: 0.75rem 0.55rem;
+}
+.roster-table--owners th:first-child,
+.roster-table--owners td:first-child {
+  padding-left: 1rem;
+}
+.roster-table--owners td:nth-child(3) {
+  min-width: 11rem;
+}
+.roster-table--owners .roster-table__meta {
+  overflow-wrap: anywhere;
+}
+.roster-table--owners .roster-table__edit-roles {
+  white-space: nowrap;
+}
+
 .roster-table__meta {
   font-size: 0.8rem;
   color: var(--muted);
