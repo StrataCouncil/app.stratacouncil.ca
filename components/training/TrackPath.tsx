@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { moduleStatuses, type TrainingTrack } from "@/lib/data/training";
 import { lockedBehind } from "@/lib/training/progress";
+import { SIGNUP_URL } from "@/lib/demo";
 
 /**
  * A track as a learning path: its modules in order, each done, open,
@@ -19,7 +20,7 @@ export function TrackPath({
 }) {
   const blocker = lockedBehind(track, tracks);
   const statuses = moduleStatuses(track);
-  if (blocker) for (const m of track.modules) if (m.publishedVersion > 0) statuses.set(m.id, "locked");
+  if (blocker || track.closed) for (const m of track.modules) if (m.publishedVersion > 0) statuses.set(m.id, "locked");
   const published = track.modules.filter((m) => m.publishedVersion > 0);
   const completed = published.filter((m) => m.completed).length;
   const minutes = published.reduce((sum, m) => sum + (m.completed ? 0 : (m.estimatedMinutes ?? 0)), 0);
@@ -37,7 +38,12 @@ export function TrackPath({
             ? "Modules for this track are on the way."
             : `${completed} of ${track.modules.length} modules complete${minutes ? ` · about ${minutes} minutes to go` : ""}. Modules open in order.`}
         </p>
-        {blocker && (
+        {track.closed ? (
+          <p className="form-alert" data-testid="track-locked">
+            The demo includes Strata Basics. This track is part of Council Training on{" "}
+            <a href={SIGNUP_URL}>StrataCouncil.ca</a>, free with an account.
+          </p>
+        ) : blocker && (
           <p className="form-alert" data-testid="track-locked">
             This track opens once you&rsquo;ve finished <Link href={`${hrefBase}/${blocker.slug}`}>{blocker.title}</Link>.
           </p>
@@ -60,7 +66,7 @@ export function TrackPath({
                     {status === "done" && "Complete"}
                     {status === "open" && (m.completedSections > 0 ? "In progress" : "Up next")}
                     {status === "locked" &&
-                      (blocker ? `Finish ${blocker.title} first` : "Finish the module before this one first")}
+                      (track.closed ? "On StrataCouncil.ca" : blocker ? `Finish ${blocker.title} first` : "Finish the module before this one first")}
                     {status === "soon" && "Coming soon"}
                     {m.estimatedMinutes ? ` · ${m.estimatedMinutes} min` : ""}
                   </div>

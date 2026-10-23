@@ -24,9 +24,11 @@ export function TrainingOverview({
   const core = tracks.filter((t) => t.stage === "core");
   const specialty = tracks.filter((t) => t.stage === "specialty");
   const next = nextModule(tracks);
-  const allModules = tracks.flatMap((t) => t.modules.filter((m) => m.publishedVersion > 0));
+  // Totals count only the tracks offered here (the demo offers Strata Basics only).
+  const open = tracks.filter((t) => !t.closed);
+  const allModules = open.flatMap((t) => t.modules.filter((m) => m.publishedVersion > 0));
   const doneModules = allModules.filter((m) => m.completed).length;
-  const coreLeft = minutesLeft(core);
+  const coreLeft = minutesLeft(core.filter((t) => !t.closed));
 
   return (
     <div className="wrap page">
@@ -94,7 +96,7 @@ export function TrainingOverview({
               </div>
               <div>
                 <dt>Time to go</dt>
-                <dd>{minutesLeft(tracks) ? formatMinutes(minutesLeft(tracks)).replace("about ", "") : "None"}</dd>
+                <dd>{minutesLeft(open) ? formatMinutes(minutesLeft(open)).replace("about ", "") : "None"}</dd>
               </div>
             </dl>
             <p className="training-panel__note">
@@ -227,7 +229,9 @@ function TrackCard({ track, all, step, hrefBase }: { track: TrainingTrack; all: 
               ? "Modules on the way"
               : `${track.modules.length} module${track.modules.length === 1 ? "" : "s"}${minutes ? ` · ${formatMinutes(minutes)}` : ""}`}
           </span>
-          {status === "locked" && blocker ? (
+          {track.closed ? (
+            <span className="track-card__meta">On StrataCouncil.ca</span>
+          ) : status === "locked" && blocker ? (
             <span className="track-card__meta">Finish {blocker.title} first</span>
           ) : (
             published.length > 0 && (

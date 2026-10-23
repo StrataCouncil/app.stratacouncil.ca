@@ -22,6 +22,9 @@ export const DEMO_LANDINGS: { value: DemoLanding; label: string }[] = [
   { value: "training", label: "Council Training" },
 ];
 
+/** The only Council Training track open on the demo; the others show, locked (lib/data/training.ts). */
+export const DEMO_TRACK = "strata_basics";
+
 /** Where demo visitors go to make a real account. */
 export const SIGNUP_URL = "https://app.stratacouncil.ca/signup";
 

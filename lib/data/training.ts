@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { DEMO_TRACK, IS_DEMO } from "@/lib/demo";
 import {
   normalizeBlueprint,
   normalizeCredit,
@@ -56,6 +57,8 @@ export interface TrainingTrack {
   credential: { issuedAt: string } | null;
   /** The picture on the track's card (0042); the first module photo stands in when there's none. */
   cover: ModuleCover | null;
+  /** On the demo, every track but Strata Basics: shown, but locked (lib/demo.ts DEMO_TRACK). */
+  closed: boolean;
 }
 
 const trackSlug = (code: string) => code.replace(/_/g, "-");
@@ -94,6 +97,7 @@ export async function getTrainingTracks(): Promise<TrainingTrack[]> {
       requiresTrackId: (t.requires_track_id as string | null) ?? null,
       credential: credential ? { issuedAt: credential.issued_at } : null,
       cover: toCover(t.cover),
+      closed: IS_DEMO && t.code !== DEMO_TRACK,
       modules: (modules ?? [])
         .filter((m) => m.track_id === t.id)
         .map((m) => {

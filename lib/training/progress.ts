@@ -27,6 +27,8 @@ export interface ProgressTrack<M extends ProgressModule = ProgressModule> {
   /** Every module in the track is published and done (the roster's filled circle). */
   credential: unknown | null;
   modules: M[];
+  /** Not offered here: on the demo, every track but Strata Basics (shown, always locked). */
+  closed?: boolean;
 }
 
 export type ModuleStatus = "done" | "open" | "locked" | "soon";
@@ -64,6 +66,7 @@ export function lockedBehind<T extends ProgressTrack>(track: T, all: T[]): T | n
 }
 
 export function trackStatus(track: ProgressTrack, all: ProgressTrack[]): TrackStatus {
+  if (track.closed) return "locked";
   if (track.credential) return "complete";
   if (lockedBehind(track, all)) return "locked";
   if (published(track).length === 0) return "soon";
@@ -77,7 +80,7 @@ export function trackStatus(track: ProgressTrack, all: ProgressTrack[]): TrackSt
 export function nextModule<T extends ProgressTrack>(tracks: T[]): { track: T; module: T["modules"][number]; position: number } | null {
   const open: { track: T; module: T["modules"][number]; position: number }[] = [];
   for (const track of tracks) {
-    if (lockedBehind(track, tracks)) continue;
+    if (track.closed || lockedBehind(track, tracks)) continue;
     const statuses = moduleStatuses(track);
     const ordered = [...track.modules].sort((a, b) => a.orderIndex - b.orderIndex);
     const i = ordered.findIndex((m) => statuses.get(m.id) === "open");

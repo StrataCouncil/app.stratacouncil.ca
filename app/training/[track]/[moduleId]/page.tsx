@@ -13,7 +13,7 @@ export default async function ModulePage({ params }: { params: Promise<{ track: 
   if (!track) notFound();
   const statuses = moduleStatuses(track);
   // Tracks and modules open in order; a locked one sends the learner back to the path.
-  if (statuses.get(moduleId) === "locked" || lockedBehind(track, tracks)) redirect(`/training/${slug}`);
+  if (track.closed || statuses.get(moduleId) === "locked" || lockedBehind(track, tracks)) redirect(`/training/${slug}`);
   const nextModule = track.modules.find((m) => m.orderIndex > mod.module.orderIndex && m.publishedVersion > 0 && !m.completed) ?? null;
 
   return (
