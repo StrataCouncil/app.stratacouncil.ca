@@ -25,11 +25,19 @@ export function PhotoPicker({
   initialQuery,
   onPick,
   onClose,
+  title = "Find a photo",
+  intro,
+  actions,
 }: {
   moduleId: string;
   initialQuery: string;
   onPick: (p: PickedPhoto) => void;
   onClose: () => void;
+  title?: string;
+  /** Shown above the search (the slide, in the Choose photos pass). */
+  intro?: React.ReactNode;
+  /** Extra buttons beside "More photos" (Skip and Done, in the pass). */
+  actions?: React.ReactNode;
 }) {
   const [query, setQuery] = useState(initialQuery);
   const [searched, setSearched] = useState("");
@@ -68,7 +76,8 @@ export function PhotoPicker({
   }
 
   return (
-    <Modal title="Find a photo" onClose={onClose} wide>
+    <Modal title={title} onClose={onClose} wide closeOnBackdrop={!actions}>
+      {intro}
       <form
         className="photo-picker__search"
         onSubmit={(e) => {
@@ -112,11 +121,14 @@ export function PhotoPicker({
           </a>
           , credited to the photographer wherever they appear.
         </span>
-        {page < totalPages && (
-          <button type="button" className="button button-secondary button-small" disabled={busy} onClick={() => search(searched, page + 1)}>
-            {busy ? "Loading…" : "More photos"}
-          </button>
-        )}
+        <span className="photo-picker__actions">
+          {page < totalPages && (
+            <button type="button" className="button button-secondary button-small" disabled={busy} onClick={() => search(searched, page + 1)}>
+              {busy ? "Loading…" : "More photos"}
+            </button>
+          )}
+          {actions}
+        </span>
       </div>
     </Modal>
   );

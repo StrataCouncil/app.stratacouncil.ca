@@ -25,6 +25,7 @@ import {
   type OutlineSlide,
 } from "@/lib/training/drafting";
 import { normalizeBlueprint, normalizeObjectives, type Slide } from "@/lib/training/slides";
+import { normalizePhotoSearches, PHOTO_SYSTEM, photoSearchRequest, photoSearchSchema } from "@/lib/training/photos";
 import type { AdminClient } from "@/lib/training/builder-server";
 
 /**
@@ -235,5 +236,40 @@ export async function writeSlide(
     return slide ? { ok: true, slide, problems } : { ok: false, error: "The slide was saved but couldn't be read back. Reload the page." };
   } catch (err) {
     return aiError(err, "writeSlide");
+  }
+}
+
+/**
+ * Suggested Unsplash searches for the "Choose photos" pass
+ * (lib/training/photos.ts), one per slide asked about. Only the slides'
+ * course text goes to the AI. Nothing is saved, and no photo is chosen:
+ * the author chooses each one.
+ */
+export async function suggestPhotoSearches(
+  moduleId: string,
+  token: string,
+  slideIds: string[]
+): Promise<Result<{ searches: { slideId: string; query: string }[] }>> {
+  const e = await editing(moduleId, token);
+  if (!e.ok) return e;
+  const ids = [...new Set((Array.isArray(slideIds) ? slideIds : []).map(String))].slice(0, 80);
+  if (!ids.length) return { ok: true, searches: [] };
+  const [{ data: rows }, info] = await Promise.all([
+    e.admin.from("training_slides").select("id, position, topic, title, body").eq("module_id", moduleId).in("id", ids).order("position"),
+    moduleInfo(e.admin, moduleId),
+  ]);
+  const slides = (rows ?? []).map((r) => ({ id: r.id as string, topic: (r.topic as string) ?? "", title: (r.title as string) ?? "", body: (r.body as string) ?? "" }));
+  if (!slides.length) return { ok: true, searches: [] };
+  try {
+    const raw = await askClaudeJson<unknown>({
+      system: PHOTO_SYSTEM,
+      messages: [{ role: "user", content: photoSearchRequest(info?.title ?? "", slides) }],
+      schema: photoSearchSchema,
+      effort: "low",
+      maxTokens: 6000,
+    });
+    return { ok: true, searches: normalizePhotoSearches(raw, slides) };
+  } catch (err) {
+    return aiError(err, "suggestPhotoSearches");
   }
 }
