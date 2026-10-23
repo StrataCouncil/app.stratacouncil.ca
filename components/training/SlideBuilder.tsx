@@ -43,6 +43,8 @@ import {
 } from "@/app/admin/training/actions";
 import { ModulePlayer } from "@/components/training/ModulePlayer";
 import { DraftWithAI } from "@/components/training/DraftWithAI";
+import { suggestPhotoSearches } from "@/app/admin/training/drafting-actions";
+import { wantsPhoto } from "@/lib/training/photos";
 import { PasteBlueprint } from "@/components/training/PasteBlueprint";
 import { PhotoCreditLine, PhotoPicker } from "@/components/training/PhotoPicker";
 import { Modal } from "@/components/Modal";
@@ -652,6 +654,14 @@ export function SlideBuilder({
                 voice={voice ?? defaultVoice}
                 beforeStart={flush}
                 onVoiced={(id, p) => patchLocal(id, p)}
+                onError={(e) => (e.startsWith(LOST) ? lose(e) : setAlert(e))}
+              />
+              <ChoosePhotos
+                moduleId={initial.id}
+                token={token}
+                slides={slides}
+                beforeStart={flush}
+                onSaved={(id, p) => patchLocal(id, p)}
                 onError={(e) => (e.startsWith(LOST) ? lose(e) : setAlert(e))}
               />
             </div>
@@ -1285,6 +1295,129 @@ function NarrateAll({
             Redo every slide, including narration that&rsquo;s up to date
           </label>
         </div>
+      )}
+    </section>
+  );
+}
+
+// ── Choose photos ─────────────────────────────────────────────────────
+
+/**
+ * A first pass at the module's pictures: the AI suggests search words for
+ * each slide that takes a picture (no interactive element, not a text-only
+ * layout), and the author goes through them one slide at a time, choosing
+ * a photo or skipping. Unsplash needs a person to choose every photo, so
+ * nothing is picked for them (lib/training/photos.ts).
+ */
+function ChoosePhotos({
+  moduleId,
+  token,
+  slides,
+  beforeStart,
+  onSaved,
+  onError,
+}: {
+  moduleId: string;
+  token: string;
+  slides: Slide[];
+  beforeStart: () => Promise<boolean>;
+  onSaved: (id: string, p: Partial<Slide>) => void;
+  onError: (e: string) => void;
+}) {
+  const [includeAll, setIncludeAll] = useState(false);
+  const [queue, setQueue] = useState<{ slideId: string; query: string }[] | null>(null);
+  const [at, setAt] = useState(0);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [added, setAdded] = useState(0);
+  const [result, setResult] = useState<string | null>(null);
+  const eligible = slides.filter(wantsPhoto);
+  const withPicture = eligible.filter((s) => s.visual).length;
+  const todo = includeAll ? eligible : eligible.filter((s) => !s.visual);
+
+  async function start() {
+    setResult(null);
+    setBusy("Suggesting searches…");
+    await beforeStart();
+    const r = await suggestPhotoSearches(moduleId, token, todo.map((s) => s.id));
+    setBusy(null);
+    if (!r.ok) return onError(r.error);
+    if (!r.searches.length) return setResult("There are no slides to choose photos for.");
+    setAdded(0);
+    setAt(0);
+    setQueue(r.searches);
+  }
+
+  function finish(count: number) {
+    setQueue(null);
+    setResult(`${count === 0 ? "No photos" : count === 1 ? "1 photo" : `${count} photos`} added. Check each slide's picture description for screen readers.`);
+  }
+
+  const current = queue?.[at];
+  const slide = current ? slides.find((s) => s.id === current.slideId) : undefined;
+  const next = (count: number) => (queue && at + 1 < queue.length ? setAt(at + 1) : finish(count));
+
+  return (
+    <section className="builder__block" data-testid="choose-photos">
+      <div className="builder__block-head">
+        <span className="builder__block-type">Choose photos</span>
+      </div>
+      <p className="card__meta">
+        {withPicture} of {eligible.length} slides that take a picture have one. Slides with an interactive element or a text-only layout don&rsquo;t take one. The
+        AI suggests what to search for; you choose each photo, or skip a slide.
+      </p>
+      {result && <p role="status">{result}</p>}
+      <div className="be-row">
+        <button type="button" className="button button-primary button-small" disabled={!todo.length || Boolean(busy)} onClick={start} data-testid="choose-photos-start">
+          {busy ?? `Choose photos for ${todo.length || "no"} ${todo.length === 1 ? "slide" : "slides"}`}
+        </button>
+        <label className="be-check">
+          <input type="checkbox" checked={includeAll} onChange={(e) => setIncludeAll(e.target.checked)} />
+          Include slides that already have a picture
+        </label>
+      </div>
+      {current && queue && (
+        <PhotoPicker
+          key={current.slideId}
+          moduleId={moduleId}
+          initialQuery={current.query}
+          title={`Choose photos: ${at + 1} of ${queue.length}`}
+          intro={
+            slide && (
+              <div className="choose-photos__slide">
+                <p className="be-label">
+                  Slide {slides.indexOf(slide) + 1}
+                  {slide.topic.trim() ? ` \u00b7 ${slide.topic.trim()}` : ""}
+                  {slide.visual ? " \u00b7 has a picture (choosing one replaces it)" : ""}
+                </p>
+                <p className="choose-photos__title">{slide.title || "Untitled slide"}</p>
+                <p className="card__meta">{slide.body.replace(/\s+/g, " ").trim().slice(0, 240)}</p>
+              </div>
+            )
+          }
+          actions={
+            <>
+              <button type="button" className="button button-secondary button-small" disabled={Boolean(busy)} onClick={() => next(added)} data-testid="choose-photos-skip">
+                Skip this slide
+              </button>
+              <button type="button" className="text-action" onClick={() => finish(added)}>
+                Done for now
+              </button>
+            </>
+          }
+          onClose={() => finish(added)}
+          onPick={async (p) => {
+            setBusy("Adding…");
+            const r = await attachStockPhoto(moduleId, token, current.slideId, p);
+            setBusy(null);
+            if (!r.ok) {
+              setQueue(null);
+              return onError(r.error);
+            }
+            onSaved(current.slideId, { visual: r.media });
+            setAdded(added + 1);
+            next(added + 1);
+          }}
+        />
       )}
     </section>
   );
