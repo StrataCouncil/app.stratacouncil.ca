@@ -54,7 +54,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 <style>
 body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#f8f6f1;color:#1b2a41;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
 main{text-align:center;padding:24px}
-.logo{display:block;width:211px;height:32px;margin:0 auto 32px}
+.logo{display:block;width:422px;max-width:100%;height:auto;margin:0 auto 36px}
 .spinner{width:28px;height:28px;margin:0 auto 18px;border:3px solid #d9d4c7;border-top-color:#1b2a41;border-radius:50%;animation:spin .9s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.spinner{animation-duration:2.4s}}
@@ -67,7 +67,7 @@ button{font:inherit;font-weight:600;font-size:16px;padding:12px 22px;border:0;bo
 </head>
 <body>
 <main>
-<img class="logo" src="/email/stratacouncil-logo-2026.png" width="211" height="32" alt="StrataCouncil.ca">
+<img class="logo" src="/email/stratacouncil-logo-2026.png" width="422" height="64" alt="StrataCouncil.ca">
 <form method="post" action="/start/${token}">
 <div class="spinner" aria-hidden="true"></div>
 <h1 role="status">Setting up your demo</h1>
