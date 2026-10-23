@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { IS_DEMO } from "@/lib/demo";
+import { DEMO_TRACK, IS_DEMO } from "@/lib/demo";
 import { logDemoActivity } from "@/lib/demo-usage";
 
 /**
@@ -16,6 +16,12 @@ export async function completeSection(
   sectionId: string
 ): Promise<{ ok: true; moduleComplete: boolean; credentialEarned: boolean } | { ok: false; error: string }> {
   const supabase = await createClient();
+  // The demo offers Strata Basics only; the other tracks stay locked.
+  if (IS_DEMO) {
+    const { data: m } = await supabase.from("training_modules").select("track:training_tracks(code)").eq("id", moduleId).maybeSingle();
+    const track = (Array.isArray(m?.track) ? m?.track[0] : m?.track) as { code?: string } | null | undefined;
+    if (track?.code !== DEMO_TRACK) return { ok: false, error: "The demo includes Strata Basics only." };
+  }
   const { data, error } = await supabase.rpc("complete_training_section", {
     p_module_id: moduleId,
     p_version: version,

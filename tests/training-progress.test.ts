@@ -83,3 +83,12 @@ test("minutes left and their wording", () => {
   assert.equal(formatMinutes(120), "about 2 h");
   assert.equal(formatMinutes(98), "about 1 h 40 min");
 });
+
+test("on the demo, a closed track is always locked and never offered as the next module", () => {
+  const sb = track("sb", null, [mod("1", 1, done)], { issuedAt: "x" });
+  const cr = { ...track("cr", "sb", [mod("2", 1, { completedSections: 2 })]), closed: true };
+  assert.equal(trackStatus(cr, [sb, cr]), "locked");
+  assert.equal(nextModule([sb, cr]), null);
+  // Even with progress or a credential carried over, it stays locked.
+  assert.equal(trackStatus({ ...cr, credential: { issuedAt: "x" } }, [sb, cr]), "locked");
+});
