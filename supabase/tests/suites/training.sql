@@ -6,17 +6,31 @@ begin execute sql; return false; exception when others then return true; end $$;
 grant execute on function pg_temp.expect(text,boolean), pg_temp.fails(text) to authenticated;
 
 select pg_temp.expect('five tracks', (select count(*) from training_tracks) = 5);
-select pg_temp.expect('the curriculum: 24 unpublished modules; the 17 from 0036 each with a draft, objectives and further reading',
-  (select count(*) from training_modules where curriculum_key is not null and published_version = 0) = 24
+select pg_temp.expect('the curriculum: 26 unpublished modules; the 17 from 0036 each with a draft, objectives and further reading',
+  (select count(*) from training_modules where curriculum_key is not null and published_version = 0) = 26
   and (select count(*) from training_module_drafts d join training_modules m on m.id = d.module_id
        where jsonb_array_length(d.content -> 'objectives') >= 3 and jsonb_array_length(d.content -> 'furtherReading') >= 2) = 17);
-select pg_temp.expect('3 + 6 + 4 + 5 + 6 modules by track',
+select pg_temp.expect('3 + 8 + 4 + 5 + 6 modules by track',
   (select array_agg(n order by o) from (select t.order_index o, count(*) n from training_modules m join training_tracks t on t.id = m.track_id group by t.order_index) x)
-  = array[3, 6, 4, 5, 6]::bigint[]);
--- 0042: the teaching order.
-select pg_temp.expect('0042: Council Ready goes role, meetings, general meetings, repairs, managers, disputes',
+  = array[3, 8, 4, 5, 6]::bigint[]);
+-- 0063: Council Ready rebuilt: role, decisions, money, building, managers, owners and disputes, special situations, leading.
+select pg_temp.expect('0063: Council Ready is eight modules in teaching order, 107 minutes, each ending on a scenario check',
   (select array_agg(curriculum_key order by order_index) from training_modules where curriculum_key like 'cr%')
-  = array['cr1','cr2','cr3','cr5','cr6','cr4']);
+  = array['cr1','cr2','cr3','cr5','cr6','cr4','cr7','cr8']
+  and (select sum(estimated_minutes) from training_modules where curriculum_key like 'cr%') = 107
+  and (select count(*) from training_modules where curriculum_key like 'cr%'
+       and jsonb_array_length(objectives) between 1 and 3 and jsonb_array_length(further_reading) >= 3
+       and blueprint -> -1 ->> 'activity' = 'knowledge_check' and blueprint -> -1 ->> 'topic' = 'Scenario') = 8
+  and (select title from training_modules where curriculum_key = 'cr6') = 'Working with your strata manager and contractors'
+  and (select description from training_tracks where code = 'council_ready') like 'The essentials for every council member%');
+-- Re-running 0063, or 0042 after it, changes nothing.
+update training_modules set title = 'My money module' where curriculum_key = 'cr3';
+\i supabase/migrations/0063_council_ready_rebuilt.sql
+\i supabase/migrations/0042_training_progression.sql
+select pg_temp.expect('0063 runs once: a re-run (or 0042 after it) leaves the order and an author''s edit alone',
+  (select title from training_modules where curriculum_key = 'cr3') = 'My money module'
+  and (select array_agg(curriculum_key order by order_index) from training_modules where curriculum_key like 'cr%')
+      = array['cr1','cr2','cr3','cr5','cr6','cr4','cr7','cr8']);
 select pg_temp.expect('0042: Treasurer goes budget, reserve fund, statements, collections',
   (select array_agg(curriculum_key order by order_index) from training_modules where curriculum_key like 't%')
   = array['t2','t3','t1','t4']);
@@ -24,9 +38,7 @@ select pg_temp.expect('0042: Secretary 5 is Using the Stratasphere, with three o
   (select title = 'Using the Stratasphere' and jsonb_array_length(objectives) = 3 and order_index = 5
    from training_modules where curriculum_key = 's5'));
 select pg_temp.expect('0042: new titles and objectives',
-  (select title from training_modules where curriculum_key = 'cr6') = 'Strata managers and contracts'
-  and (select objectives -> 2 ->> 'bloom' from training_modules where curriculum_key = 'cr6') = 'analyze'
-  and (select title from training_modules where curriculum_key = 's4') = 'Certificates and privacy');
+  (select title from training_modules where curriculum_key = 's4') = 'Certificates and privacy');
 -- An author's changes survive a re-run, and the order isn't shuffled again.
 update training_modules set title = 'My repairs module', objectives = '[{"text": "Mine", "bloom": "apply"}]' where curriculum_key = 'cr5';
 update training_modules set order_index = 9 where curriculum_key = 'cr1';
