@@ -43,3 +43,33 @@ select pg_temp.expect('never another corporation''s private chunk',
 select pg_temp.expect_error($q$select * from match_knowledge_chunks('EPS0002', pg_temp.vec(1))$q$, 'not allowed');
 set test.uid = '00000000-0000-0000-0000-00000000000a';  -- removed member
 select pg_temp.expect_error($q$select * from match_knowledge_chunks('BCS-1234', pg_temp.vec(1))$q$, 'not allowed');
+
+-- 0064: the strata's own passages are found even when the legislation library
+-- is far larger and closer to the question (the vector index alone returned
+-- only legislation, and the strata's filter was left with nothing).
+reset role;
+insert into knowledge_chunks (scope, chunk_text, embedding, chunk_index)
+select 'legislation', 'Building Code ' || n,
+  ('[' || array_to_string(array(select case when g = 5 then 1 else (random() * 0.06)::real end from generate_series(1, 1024) g), ',') || ']')::extensions.vector, 0
+from generate_series(1, 2000) n;
+insert into knowledge_chunks (scope, corporation_id, document_id, title, chunk_text, embedding, chunk_index) values
+  ('corporation', 'BCS-1234', null, 'September financials', 'BC Hydro general ledger lines',
+   ('[' || array_to_string(array(select case when g = 5 then 0.5 when g = 6 then 0.85 else 0 end from generate_series(1, 1024) g), ',') || ']')::extensions.vector, 0);
+-- At production size the planner reaches for the vector index; here the
+-- other indexes are dropped (this test copy only) so it has to.
+drop index knowledge_chunks_corporation_idx;
+drop index knowledge_chunks_document_idx;
+drop index knowledge_chunks_legislation_idx;
+create table public.kb_question as select pg_temp.vec(5) as v;  -- the question's embedding, as the app passes it
+grant select on public.kb_question to authenticated;
+analyze knowledge_chunks;
+set enable_seqscan = off;
+set role authenticated;
+set test.uid = '00000000-0000-0000-0000-00000000000c';
+select pg_temp.expect('0064: the strata''s passage comes back although 2,000 legislation passages are closer',
+  (select coalesce(bool_or(chunk_text = 'BC Hydro general ledger lines'), false)
+   from match_knowledge_chunks('BCS-1234', (select v from kb_question), 14, 0.25, array['corporation','global_precedent'])));
+select pg_temp.expect('0064: legislation still has its own share',
+  (select count(*) = 8 from match_knowledge_chunks('BCS-1234', (select v from kb_question), 8, 0.25, array['legislation'])));
+reset role;
+reset enable_seqscan;
