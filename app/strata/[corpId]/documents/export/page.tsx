@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { IS_DEMO } from "@/lib/demo";
 import { hashExportToken } from "@/lib/document-export";
-import { documentCategoryLabels, isDocumentCategory } from "@/lib/documents";
+import { folderLabel } from "@/lib/documents";
 
 export const dynamic = "force-dynamic";
 
@@ -94,7 +94,7 @@ export default async function DocumentExportPage({
   const items: ExportItem[] = rows.map((r) => ({
     title: r.title || r.file_name || "Untitled",
     fileName: r.file_name,
-    folder: r.category && isDocumentCategory(r.category) ? documentCategoryLabels[r.category] : "Not in a folder",
+    folder: folderLabel(r.category),
     kind: r.source_type,
     url: r.source_type === "link" ? r.url : null,
     uploadedAt: r.uploaded_at,

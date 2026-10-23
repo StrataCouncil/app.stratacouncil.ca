@@ -3,7 +3,8 @@ import { IS_DEMO } from "@/lib/demo";
 
 /**
  * Background jobs (doc04 §4/§11): indexing strata documents and the
- * Knowledge Base. Events are sent
+ * Knowledge Base, and fingerprinting stored files (to find identical
+ * copies). Events are sent
  * with INNGEST_EVENT_KEY; Inngest calls back into /api/inngest, verified
  * with INNGEST_SIGNING_KEY. Locally, `npx inngest-cli dev` stands in for
  * both.
@@ -18,3 +19,5 @@ export const inngest = new Inngest({ id: IS_DEMO ? "stratacouncil-demo" : "strat
 const EVENT_PREFIX = IS_DEMO ? "demo/" : "";
 export const DOCUMENT_INDEX_EVENT = `${EVENT_PREFIX}documents/index.requested`;
 export const LEGISLATION_INDEX_EVENT = `${EVENT_PREFIX}legislation/index.requested`;
+export const DOCUMENT_FINGERPRINT_EVENT = `${EVENT_PREFIX}documents/fingerprint.requested`;
+export const CORPORATION_FINGERPRINT_EVENT = `${EVENT_PREFIX}documents/fingerprint-all.requested`;

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getMeeting, getLotRoll } from "@/lib/data/meetings";
 import { electedChair, normalizeAgenda, meetingTypeLabels, type AgendaItem } from "@/lib/meetings/agenda";
+import { checkAttachments } from "@/lib/meetings/attachments";
 import { deferUnresolved, minutesSummary, type AttendanceStatus } from "@/lib/meetings/rules";
 import { buildMinutes } from "@/lib/meetings/minutes";
 import { askStratasphere, type AssistantTurn } from "@/lib/ai/stratasphere";
@@ -41,7 +42,13 @@ export async function saveMeetingState(
 ): Promise<{ ok: true } | Fail> {
   const supabase = await createClient();
   const attendance = cleanAttendance(state.attendance);
-  const agenda = normalizeAgenda(state.agenda).slice(0, 300);
+  let agenda;
+  try {
+    agenda = await checkAttachments(supabase, corpId, normalizeAgenda(state.agenda).slice(0, 300));
+  } catch (err) {
+    console.error("[saveMeetingState] attachments", err instanceof Error ? err.message : err);
+    return { ok: false, error: "Couldn't save. Check your connection; your changes are kept on this screen." };
+  }
   // A chair elected at the meeting becomes the meeting's chair (agenda,
   // scripts and minutes).
   const chair = electedChair(agenda);

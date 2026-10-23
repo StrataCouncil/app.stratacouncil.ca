@@ -18,8 +18,7 @@ export type DocCategory =
   | "meetings_records"
   | "building_construction"
   | "contracts_service_agreements"
-  | "correspondence"
-  | "agenda_attachments";
+  | "correspondence";
 
 export interface KitDoc {
   key: string;
@@ -28,7 +27,7 @@ export interface KitDoc {
   fileName: string;
   docType: "bylaws" | "minutes" | "financial" | "correspondence" | "contract" | "policy" | "other";
   /** Uploaded AGM minutes: their resolutions go in the decision ledger. */
-  sourceType?: "upload" | "historic_minutes" | "agenda_attachment";
+  sourceType?: "upload" | "historic_minutes";
   text: string;
 }
 

@@ -10,7 +10,7 @@ import { getAllCorporations } from "@/lib/data/admin";
 import { getStrataDashboard } from "@/lib/data/admin-dashboard";
 import { ComplimentarySwitch } from "@/components/ComplimentarySwitch";
 import { StripeModeSwitch } from "@/components/StripeModeSwitch";
-import { documentCategoryLabels, isDocumentCategory } from "@/lib/documents";
+import { folderLabel } from "@/lib/documents";
 import { getCurrentProfile } from "@/lib/data/profile";
 import { createClient } from "@/lib/supabase/server";
 import { corporationRoleLabels, isCorporationRole } from "@/lib/strata";
@@ -192,7 +192,7 @@ export default async function AdminCorporationDetailPage({
                 <div className="admin-folders">
                   {dash.documents.byCategory.map((c) => (
                     <span className="admin-folder" key={c.category}>
-                      {isDocumentCategory(c.category) ? documentCategoryLabels[c.category] : "Uncategorized"} <strong>{c.count}</strong>
+                      {folderLabel(c.category)} <strong>{c.count}</strong>
                     </span>
                   ))}
                 </div>

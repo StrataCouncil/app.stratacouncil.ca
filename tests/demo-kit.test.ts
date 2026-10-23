@@ -73,6 +73,4 @@ test("the visitor's meeting: a written agenda with one item theirs to edit", () 
   assert.equal(editable[0].motion?.text, "", "the motion is left for the visitor (or Stratasphere) to write");
   assert.ok(upcoming.agenda.every((it) => !it.done && !it.motion?.outcome));
   assert.equal(upcoming.agenda.at(-1)?.text, "Adjournment");
-  const docs = kitDocuments(kitDates(days[1]), "The Owners, Strata Plan DEMO000001");
-  assert.ok(docs.every((doc) => doc.category !== "agenda_attachments"), "no attachment waits on a meeting that doesn't exist yet");
 });

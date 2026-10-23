@@ -1,6 +1,8 @@
 /**
  * Document repository vocabulary shared by server and browser code
- * (doc01 §4 — the nine folders; `agenda_attachments` is system-assigned).
+ * (doc01 §4 — the eight folders, plus Unfiled for documents not in one
+ * yet). Agenda attachments are filed in these folders like any other
+ * document (0065); there's no separate attachments folder.
  */
 
 export const documentCategories = [
@@ -11,15 +13,26 @@ export const documentCategories = [
   "insurance",
   "legal_governance",
   "meetings_records",
-  "agenda_attachments",
   "operations",
 ] as const;
 export type DocumentCategory = (typeof documentCategories)[number];
 
-/** Folders an uploader can pick or move into — everything but agenda_attachments. */
-export const pickableDocumentCategories = documentCategories.filter(
-  (c): c is Exclude<DocumentCategory, "agenda_attachments"> => c !== "agenda_attachments"
-);
+/** Folders an uploader can pick or move into: all of them. */
+export const pickableDocumentCategories = documentCategories;
+
+/**
+ * Documents with no folder (category null): the agenda attachments filed
+ * before 0065, and older documents that never had one. Shown as a folder
+ * of its own at /documents/unfiled until each is moved.
+ */
+export const UNFILED = "unfiled";
+export const UNFILED_LABEL = "Unfiled";
+export const UNFILED_DESCRIPTION = "Not in a folder yet. Move each one to where it belongs.";
+
+/** A document's folder name, or Unfiled. */
+export function folderLabel(category: string | null | undefined) {
+  return category && isDocumentCategory(category) ? documentCategoryLabels[category] : UNFILED_LABEL;
+}
 
 export const documentCategoryLabels: Record<DocumentCategory, string> = {
   building_construction: "Building & Construction",
@@ -29,7 +42,6 @@ export const documentCategoryLabels: Record<DocumentCategory, string> = {
   insurance: "Insurance",
   legal_governance: "Legal & Governance",
   meetings_records: "Meetings & Records",
-  agenda_attachments: "Agenda Attachments",
   operations: "Operations",
 };
 
@@ -41,7 +53,6 @@ export const documentCategoryDescriptions: Record<DocumentCategory, string> = {
   insurance: "Policy documents, claims history, EGL requirements.",
   legal_governance: "Bylaws, rules, resolutions, and other governing documents.",
   meetings_records: "Finalized and historic minutes, and other meeting-related records. Draft minutes are on each meeting in the Meetings tab.",
-  agenda_attachments: "Files and links attached to agenda items. Filed here automatically.",
   operations: "Building operations, maintenance schedules, and day-to-day records.",
 };
 

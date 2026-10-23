@@ -420,3 +420,70 @@ export function normalizeAgenda(raw: unknown): AgendaItem[] {
       };
     });
 }
+
+/** What an attachment needs to know about the document it points at. */
+export interface AttachmentTarget {
+  title: string;
+  kind: "document" | "link";
+  url: string | null;
+}
+
+/**
+ * An agenda's attachments, checked against the strata's own documents
+ * before saving: an attachment pointing at a document that isn't the
+ * strata's (or no longer exists) is dropped, its kind and link address
+ * come from the document itself, and an item attaches each document once.
+ * Older link attachments with no document keep their checked address.
+ */
+export function reconcileAttachments(agenda: AgendaItem[], targets: Map<string, AttachmentTarget>): AgendaItem[] {
+  return agenda.map((it) => {
+    const seen = new Set<string>();
+    const atts: Attachment[] = [];
+    for (const a of it.atts) {
+      if (!a.documentId) {
+        if (a.kind === "link" && isWebUrl(a.url)) atts.push(a);
+        continue;
+      }
+      const target = targets.get(a.documentId);
+      if (!target || seen.has(a.documentId)) continue;
+      seen.add(a.documentId);
+      const title = (typeof a.title === "string" && a.title.trim() ? a.title.trim() : target.title).slice(0, 300);
+      const id = `a_${a.documentId}`;
+      if (target.kind === "link") {
+        if (isWebUrl(target.url)) atts.push({ id, kind: "link", documentId: a.documentId, url: target.url, title });
+      } else {
+        atts.push({ id, kind: "document", documentId: a.documentId, title });
+      }
+    }
+    return { ...it, atts };
+  });
+}
+
+/** Where a document is attached: one agenda item of one meeting. */
+export interface AttachmentUse {
+  meetingId: string;
+  meetingType: MeetingType;
+  meetingDate: string;
+  itemNum: number;
+  itemText: string;
+}
+
+/**
+ * Every document attached to an agenda item, and where: the meetings in
+ * the order given (newest first from the caller), items in agenda order.
+ */
+export function attachmentUses(
+  meetings: Array<{ id: string; type: MeetingType; meetingDate: string; agenda: AgendaItem[] }>
+): Map<string, AttachmentUse[]> {
+  const uses = new Map<string, AttachmentUse[]>();
+  for (const m of meetings) {
+    for (const it of m.agenda) {
+      for (const documentId of new Set(it.atts.map((a) => a.documentId).filter((x): x is string => Boolean(x)))) {
+        const list = uses.get(documentId) ?? [];
+        list.push({ meetingId: m.id, meetingType: m.type, meetingDate: m.meetingDate, itemNum: it.num, itemText: it.text });
+        uses.set(documentId, list);
+      }
+    }
+  }
+  return uses;
+}

@@ -5,16 +5,18 @@ import { useRouter } from "next/navigation";
 import {
   acceptedExtensions,
   documentCategoryLabels,
+  folderLabel,
   MAX_FILES_PER_UPLOAD,
   pickableDocumentCategories,
   type DocumentCategory,
 } from "@/lib/documents";
-import { uploadToStrataDocuments } from "@/lib/documents-upload";
+import { findAlreadyInDocuments, uploadToStrataDocuments, type AlreadyInDocuments } from "@/lib/documents-upload";
 
 /**
  * "Upload document": pick one or more files and the folder they go in
- * (doc01 §4 — uploader-chosen for every folder except Agenda
- * Attachments, which only the agenda flow fills).
+ * (doc01 §4). A file that's already in Documents (same contents, any
+ * name) is pointed out first, and left out unless the uploader wants a
+ * second copy.
  */
 export function DocumentUpload({
   corpId,
@@ -39,7 +41,7 @@ export function DocumentUpload({
       {open && (
         <UploadDialog
           corpId={corpId}
-          defaultCategory={defaultCategory && defaultCategory !== "agenda_attachments" ? defaultCategory : ""}
+          defaultCategory={defaultCategory ?? ""}
           onClose={() => setOpen(false)}
         />
       )}
@@ -62,6 +64,7 @@ function UploadDialog({
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [already, setAlready] = useState<AlreadyInDocuments[] | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -79,7 +82,20 @@ function UploadDialog({
     if (!category) return setError("Choose a folder.");
     setBusy(true);
     setError(null);
-    const result = await uploadToStrataDocuments(corpId, category, files, setStatus);
+    setStatus("Checking Documents…");
+    const found = await findAlreadyInDocuments(corpId, files);
+    setStatus(null);
+    setBusy(false);
+    if (found.length) return setAlready(found);
+    await send(files);
+  }
+
+  async function send(toUpload: File[]) {
+    setAlready(null);
+    if (!toUpload.length) return onClose();
+    setBusy(true);
+    setError(null);
+    const result = await uploadToStrataDocuments(corpId, category, toUpload, setStatus);
     setBusy(false);
     setStatus(null);
     if (!result.ok) return setError(result.error);
@@ -111,7 +127,10 @@ function UploadDialog({
             type="file"
             multiple
             accept={acceptedExtensions.map((x) => `.${x}`).join(",")}
-            onChange={(e) => setFiles(Array.from(e.target.files ?? []).slice(0, MAX_FILES_PER_UPLOAD))}
+            onChange={(e) => {
+              setFiles(Array.from(e.target.files ?? []).slice(0, MAX_FILES_PER_UPLOAD));
+              setAlready(null);
+            }}
             disabled={busy}
             data-testid="upload-document-files"
           />
@@ -136,6 +155,33 @@ function UploadDialog({
           </select>
         </label>
 
+        {already && (
+          <div className="item-editor__already" role="alert" data-testid="upload-document-already">
+            <p>{already.length === 1 ? "This file is" : "These files are"} already in Documents:</p>
+            <ul>
+              {already.map((a) => (
+                <li key={a.existing.id + a.file.name}>
+                  {a.file.name}: <strong>{a.existing.title}</strong> ({folderLabel(a.existing.category)})
+                </li>
+              ))}
+            </ul>
+            <div className="item-editor__attach-actions">
+              <button
+                type="button"
+                className="button button-primary button-small"
+                onClick={() => send(files.filter((f) => !already.some((a) => a.file === f)))}
+                disabled={busy}
+                data-testid="upload-document-skip-copies"
+              >
+                {already.length === files.length ? "Don't upload" : "Upload the others only"}
+              </button>
+              <button type="button" className="button button-secondary button-small" onClick={() => send(files)} disabled={busy}>
+                Upload anyway
+              </button>
+            </div>
+          </div>
+        )}
+
         {status && (
           <p className="card__meta" role="status">
             {status}
@@ -151,7 +197,7 @@ function UploadDialog({
           <button type="button" className="button button-secondary" onClick={onClose} disabled={busy}>
             Cancel
           </button>
-          <button type="submit" className="button button-primary" disabled={busy} data-testid="upload-document-submit">
+          <button type="submit" className="button button-primary" disabled={busy || Boolean(already)} data-testid="upload-document-submit">
             {busy ? "Uploading…" : files.length > 1 ? `Upload ${files.length} files` : "Upload"}
           </button>
         </div>
