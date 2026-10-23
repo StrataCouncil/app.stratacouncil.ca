@@ -60,7 +60,7 @@ export function OwnerRoster({
       {isAdmin && <RosterUpload corporationId={corporationId} />}
 
       <div className="roster-table-wrap">
-        <table className="roster-table" data-testid="strata-lots-table">
+        <table className="roster-table roster-table--owners" data-testid="strata-lots-table">
           <thead>
             <tr>
               <th>SL #</th>
