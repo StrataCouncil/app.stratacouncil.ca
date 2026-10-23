@@ -9,8 +9,10 @@ import { createClient } from "@/lib/supabase/server";
  * another device) until it ends (lib/demo.ts, demoLinkEnds); then /demo
  * explains that it has ended.
  *
- * GET only shows a small "Opening your demo" page, titled for link
- * previews, that sends itself on as a POST. Messages, email scanners and
+ * GET only shows a small "Setting up your demo" page (the logo and a
+ * spinner, with a button only if it's still waiting after 10 seconds, or
+ * when scripts are off), titled for link previews, that sends itself on as
+ * a POST. Messages, email scanners and
  * other link previews fetch the link without running scripts, so they
  * stop there: they don't set anything up or count as the visitor opening
  * it. The POST sets up the visitor's account and their own copy of the
@@ -52,19 +54,33 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 <style>
 body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#f8f6f1;color:#1b2a41;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
 main{text-align:center;padding:24px}
-p{margin:0 0 16px;font-size:17px}
+.logo{display:block;width:422px;max-width:100%;height:auto;margin:0 auto 36px}
+.spinner{width:28px;height:28px;margin:0 auto 18px;border:3px solid #d9d4c7;border-top-color:#1b2a41;border-radius:50%;animation:spin .9s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.spinner{animation-duration:2.4s}}
+h1{margin:0 0 6px;font-size:20px;font-weight:600}
+p{margin:0 0 16px;font-size:16px;color:#5b6575}
 button{font:inherit;font-weight:600;font-size:16px;padding:12px 22px;border:0;border-radius:8px;background:#1b2a41;color:#fff;cursor:pointer}
+[hidden]{display:none}
 </style>
+<noscript><style>.spinner{display:none}button[hidden]{display:inline-block}</style></noscript>
 </head>
 <body>
 <main>
+<img class="logo" src="/email/stratacouncil-logo-2026.png" width="422" height="64" alt="StrataCouncil.ca">
 <form method="post" action="/start/${token}">
-<p>Opening your demo&hellip;</p>
+<div class="spinner" aria-hidden="true"></div>
+<h1 role="status">Setting up your demo</h1>
+<p id="note">This takes a few seconds.</p>
 <noscript><p>Select the button to continue.</p></noscript>
-<button type="submit">Open the demo</button>
+<button type="submit" hidden>Open the demo</button>
 </form>
 </main>
-<script>document.forms[0].submit();</script>
+<script>
+// Goes on by itself; the button only appears if it's still waiting after 10 seconds.
+document.forms[0].submit();
+setTimeout(function(){document.getElementById("note").textContent="Taking a while?";document.querySelector("button").hidden=false;},10000);
+</script>
 </body>
 </html>`;
   return new Response(html, {
