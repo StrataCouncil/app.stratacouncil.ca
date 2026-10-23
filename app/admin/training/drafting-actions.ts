@@ -221,7 +221,8 @@ export async function writeSlide(
         topic: planned.topic,
         title: draft.title,
         body: draft.body,
-        layout: draft.element?.type === "knowledge_check" ? "text" : "photo",
+        // Slides with an interactive element (knowledge check, accordion, flip cards) are text only: no picture to find.
+        layout: draft.element ? "text" : "photo",
         narration_script: draft.narrationScript,
         element: draft.element,
         citations,
