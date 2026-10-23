@@ -24,6 +24,8 @@ import {
   type ResolutionType,
 } from "@/lib/meetings/agenda";
 import { registerUploadedDocuments, type UploadedFile } from "@/app/strata/[corpId]/documents/actions";
+import { isDocumentCategory } from "@/lib/documents";
+import { checkAttachments } from "@/lib/meetings/attachments";
 import { extractDocumentText } from "@/lib/kb/extract";
 import { loadStripContext } from "@/lib/kb/privacy";
 import { pseudonymize } from "@/lib/pii";
@@ -211,7 +213,13 @@ export async function saveAgenda(
     };
   }
 
-  let next = sanitizeAgenda(agenda);
+  let next: AgendaItem[];
+  try {
+    next = await checkAttachments(supabase, corpId, sanitizeAgenda(agenda));
+  } catch (err) {
+    console.error("[saveAgenda] attachments", err instanceof Error ? err.message : err);
+    return { ok: false, error: "Couldn't save the agenda." };
+  }
   if (IS_DEMO) {
     const locked = await demoLockedAgenda(supabase, corpId, meetingId, next);
     if (!locked) return { ok: false, error: "Couldn't save the agenda." };
@@ -295,23 +303,21 @@ export async function saveItemNote(corpId: string, meetingId: string, itemId: st
 }
 
 /**
- * Files attached to an agenda item: written to the repository's Agenda
- * Attachments folder (system-assigned, doc01 §4) and indexed like any
- * other document.
+ * Files attached to an agenda item: filed in the folder the uploader chose,
+ * like any other upload, and indexed. The document remembers the meeting
+ * and item it was added from.
  */
 export async function registerAgendaAttachments(
   corpId: string,
   meetingId: string,
   itemId: string,
-  files: UploadedFile[]
+  files: UploadedFile[],
+  category: string
 ): Promise<Ok<{ attachments: Attachment[] }> | Fail | DemoLimitFail> {
   if (IS_DEMO) return demoLimitFail();
   if (!(await runner(corpId))) return { ok: false, error: "You can't add attachments to this agenda." };
-  const result = await registerUploadedDocuments(corpId, "agenda_attachments", files, {
-    sourceType: "agenda_attachment",
-    meetingId,
-    agendaItemId: itemId,
-  });
+  if (!isDocumentCategory(category)) return { ok: false, error: "Choose the folder these files go in." };
+  const result = await registerUploadedDocuments(corpId, category, files, { meetingId, agendaItemId: itemId });
   if (!result.ok) return result;
   return {
     ok: true,
@@ -325,20 +331,22 @@ export async function registerAgendaAttachments(
 }
 
 /**
- * A link attachment: stored as a document in Agenda Attachments and
- * fetched once in the background (with the link guard) so its content is
- * indexed for Stratasphere like any other attachment.
+ * A link attachment: filed as a document in the folder the person chose,
+ * and fetched once in the background (with the link guard) so its content
+ * is indexed for Stratasphere like any other attachment.
  */
 export async function addLinkAttachment(
   corpId: string,
   meetingId: string,
   itemId: string,
   rawUrl: string,
-  label: string
+  label: string,
+  category: string
 ): Promise<Ok<{ attachment: Attachment }> | Fail | DemoLimitFail> {
   if (IS_DEMO) return demoLimitFail();
   const access = await runner(corpId);
   if (!access) return { ok: false, error: "You can't add attachments to this agenda." };
+  if (!isDocumentCategory(category)) return { ok: false, error: "Choose the folder this link goes in." };
   let url: URL;
   try {
     url = new URL(rawUrl.trim());
@@ -353,7 +361,7 @@ export async function addLinkAttachment(
     .from("documents")
     .insert({
       corporation_id: access.corpId,
-      category: "agenda_attachments",
+      category,
       title,
       file_name: null,
       source_type: "link",

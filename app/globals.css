@@ -1421,6 +1421,10 @@ button {
   height: 26px;
   color: var(--accent);
 }
+.folder-card--unfiled {
+  border-color: var(--accent);
+  border-style: dashed;
+}
 
 .sync-note {
   display: flex;
@@ -2857,6 +2861,13 @@ button.chat-source:hover {
   margin-left: 0.5rem;
   font-size: 0.7rem;
 }
+.doc-row__uses a {
+  color: var(--accent-dark);
+}
+.doc-row__uses,
+.doc-row__same {
+  overflow-wrap: anywhere;
+}
 .doc-status {
   display: inline-block;
   font-size: 0.72rem;
@@ -3160,9 +3171,71 @@ button.chat-source:hover {
   font-weight: 600;
   padding: 0 0.3rem;
 }
-.item-editor__file {
-  align-self: flex-start;
-  cursor: pointer;
+.item-editor__attach-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.item-editor__attach-actions .button[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--accent-dark);
+}
+.item-editor__attach-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.75rem;
+  border-radius: var(--radius-sm);
+  background: var(--paper);
+}
+.item-editor__attach-panel input[type="search"] {
+  font: inherit;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+.item-editor__already {
+  border-left: 3px solid var(--accent);
+  padding: 0.5rem 0.75rem;
+  background: var(--surface);
+  border-radius: var(--radius-sm);
+  font-size: 0.9rem;
+}
+.item-editor__already p {
+  margin: 0 0 0.35rem;
+}
+.item-editor__already ul {
+  margin: 0 0 0.6rem;
+  padding-left: 1.1rem;
+  overflow-wrap: anywhere;
+}
+.item-editor__library {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 16rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+.item-editor__library li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.9rem;
+}
+.item-editor__library li:last-child {
+  border-bottom: 0;
+}
+.item-editor__library-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .item-editor__link {
   display: flex;

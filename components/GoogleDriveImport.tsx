@@ -67,7 +67,7 @@ export function GoogleDriveImport({ corpId, defaultCategory }: { corpId: string;
           corpId={corpId}
           token={picked.token}
           files={picked.files}
-          defaultCategory={defaultCategory && defaultCategory !== "agenda_attachments" ? defaultCategory : ""}
+          defaultCategory={defaultCategory ?? ""}
           onClose={() => setPicked(null)}
         />
       )}

@@ -16,10 +16,11 @@ import {
   pickableDocumentCategories,
   type DocumentCategory,
 } from "@/lib/documents";
-import { queueDocumentIndexing } from "@/lib/kb/queue";
+import { queueDocumentFingerprints, queueDocumentIndexing } from "@/lib/kb/queue";
 import { IS_DEMO, demoLimitFail } from "@/lib/demo";
 import { logDemoActivity } from "@/lib/demo-usage";
 import { isWebUrl } from "@/lib/web-url";
+import { isSha256Hex } from "@/lib/fingerprint";
 
 /**
  * Document repository actions (doc01 §4a — free for every member, always).
@@ -94,14 +95,14 @@ export interface UploadedFile {
 
 /**
  * Write rows for files the browser has finished uploading. Shared by the
- * Documents screen and agenda-item attachments (which pass
- * `agenda_attachments` plus the meeting/item they belong to).
+ * Documents screen and agenda-item attachments, which file into the folder
+ * the uploader chose and record the meeting and item they were added from.
  */
 export async function registerUploadedDocuments(
   corpId: string,
   category: DocumentCategory,
   files: UploadedFile[],
-  extra: { sourceType?: "upload" | "agenda_attachment" | "historic_minutes"; meetingId?: string; agendaItemId?: string } = {}
+  extra: { sourceType?: "upload" | "historic_minutes"; meetingId?: string; agendaItemId?: string } = {}
 ): Promise<{ ok: true; documentIds: string[] } | Fail> {
   // The demo has only its own materials (lib/demo.ts).
   if (IS_DEMO) return demoLimitFail();
@@ -153,6 +154,7 @@ export async function registerUploadedDocuments(
     await admin.from("documents").update({ indexing_status: "not_indexable" }).in("id", unreadable);
   }
   await queueDocumentIndexing(data.filter((d) => isIndexableFile(d.file_name ?? "")).map((d) => d.id));
+  await queueDocumentFingerprints(data.map((d) => d.id));
 
   revalidatePath(`/strata/${access.corpId}/documents`, "layout");
   return { ok: true, documentIds: data.map((d) => d.id) };
@@ -165,9 +167,7 @@ export async function registerDocuments(
 ): Promise<{ ok: true } | Fail> {
   // The demo has only its own materials (lib/demo.ts).
   if (IS_DEMO) return demoLimitFail();
-  if (!isDocumentCategory(category) || category === "agenda_attachments") {
-    return { ok: false, error: "Choose a folder." };
-  }
+  if (!isDocumentCategory(category)) return { ok: false, error: "Choose a folder." };
   const result = await registerUploadedDocuments(corpId, category, files);
   return result.ok ? { ok: true } : result;
 }
@@ -266,4 +266,107 @@ export async function documentNamesInFolder(corpId: string, category: string): P
     .eq("category", category)
     .eq("is_current", true);
   return (data ?? []).map((d) => (d.file_name ?? "").toLowerCase()).filter(Boolean);
+}
+
+export interface IdenticalDocument {
+  sha256: string;
+  id: string;
+  title: string;
+  category: string | null;
+}
+
+/**
+ * Documents already stored with these fingerprints (lib/fingerprint.ts),
+ * so an upload can offer the copy that's already there. Only files the
+ * server has fingerprinted are found.
+ */
+export async function findIdenticalDocuments(corpId: string, hashes: string[]): Promise<IdenticalDocument[]> {
+  const wanted = [...new Set(hashes.filter(isSha256Hex))].slice(0, MAX_FILES_PER_UPLOAD);
+  if (!wanted.length) return [];
+  const access = await getStrataAccess(corpId);
+  if (!access) return [];
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("documents")
+    .select("id, title, file_name, category, content_sha256, uploaded_at")
+    .eq("corporation_id", access.corpId)
+    .eq("is_current", true)
+    .in("content_sha256", wanted)
+    .order("uploaded_at", { ascending: true });
+  // One per fingerprint: a filed copy before an unfiled one, then the oldest.
+  const byHash = new Map<string, IdenticalDocument>();
+  for (const d of data ?? []) {
+    const hash = d.content_sha256 as string;
+    const seen = byHash.get(hash);
+    if (seen && (seen.category || !d.category)) continue;
+    byHash.set(hash, { sha256: hash, id: d.id, title: d.title || d.file_name || "Untitled", category: d.category });
+  }
+  return [...byHash.values()];
+}
+
+/**
+ * Remove a document whose file is identical to another (admins; 0065's
+ * merge_duplicate_document points agenda items at the one kept), then
+ * delete the removed copy's file.
+ */
+export async function mergeDuplicateDocument(corpId: string, duplicateId: string, keepId: string): Promise<{ ok: true } | Fail> {
+  if (IS_DEMO) return demoLimitFail();
+  const access = await getStrataAccess(corpId);
+  if (!access?.isAdmin) return { ok: false, error: "Only an admin can remove a duplicate." };
+  const supabase = await createClient();
+  const { data: storagePath, error } = await supabase.rpc("merge_duplicate_document", {
+    p_duplicate_id: duplicateId,
+    p_keep_id: keepId,
+  });
+  if (error) {
+    if (error.message.includes("not the same file")) return { ok: false, error: "Those two files aren't identical." };
+    if (error.message.includes("stays")) return { ok: false, error: "That document is part of the strata's records, so it stays." };
+    console.error("[mergeDuplicateDocument]", error.code, error.message);
+    return { ok: false, error: "Couldn't remove the duplicate." };
+  }
+  if (typeof storagePath === "string" && storagePath.startsWith(`${DOCUMENTS_BUCKET}/${access.corpId}/`)) {
+    const { error: removeError } = await createAdminClient()
+      .storage.from(DOCUMENTS_BUCKET)
+      .remove([storagePath.slice(DOCUMENTS_BUCKET.length + 1)]);
+    if (removeError) console.error("[mergeDuplicateDocument] file", removeError.message);
+  }
+  revalidatePath(`/strata/${access.corpId}/documents`, "layout");
+  revalidatePath(`/strata/${access.corpId}/meetings`, "layout");
+  return { ok: true };
+}
+
+export interface AttachableDocument {
+  id: string;
+  title: string;
+  category: string | null;
+  kind: "document" | "link";
+  url: string | null;
+}
+
+/** Every current document of the strata, for attaching one to an agenda item. */
+export async function listAttachableDocuments(corpId: string): Promise<{ ok: true; documents: AttachableDocument[] } | Fail> {
+  const access = await getStrataAccess(corpId);
+  if (!access) return { ok: false, error: "You're not connected to this strata." };
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("documents")
+    .select("id, title, file_name, category, source_type, url")
+    .eq("corporation_id", access.corpId)
+    .eq("is_current", true)
+    .order("uploaded_at", { ascending: false })
+    .limit(2000);
+  if (error) {
+    console.error("[listAttachableDocuments]", error.code, error.message);
+    return { ok: false, error: "Couldn't load the strata's documents." };
+  }
+  return {
+    ok: true,
+    documents: (data ?? []).map((d) => ({
+      id: d.id,
+      title: d.title || d.file_name || "Untitled",
+      category: d.category,
+      kind: d.source_type === "link" ? "link" : "document",
+      url: d.source_type === "link" ? d.url : null,
+    })),
+  };
 }

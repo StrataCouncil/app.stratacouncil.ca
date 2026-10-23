@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   documentCategoryLabels,
@@ -8,8 +9,15 @@ import {
   type DocumentCategory,
   type IndexingStatus,
 } from "@/lib/documents";
-import type { RepositoryDocument } from "@/lib/data/documents";
-import { getDocumentDownloadUrl, moveDocument, reindexDocument } from "@/app/strata/[corpId]/documents/actions";
+import type { FiledCopy, RepositoryDocument } from "@/lib/data/documents";
+import { getDocumentDownloadUrl, mergeDuplicateDocument, moveDocument, reindexDocument } from "@/app/strata/[corpId]/documents/actions";
+
+/** An agenda item a document is attached to, ready to show. */
+export interface DocumentUseLink {
+  href: string;
+  label: string;
+  item: string;
+}
 
 const statusLabels: Record<IndexingStatus, string> = {
   pending: "Waiting to index",
@@ -30,8 +38,24 @@ function formatSize(bytes: number | null) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-/** One folder's documents: status, download, move, (re)index. */
-export function DocumentList({ corpId, documents }: { corpId: string; documents: RepositoryDocument[] }) {
+/**
+ * One folder's documents: status, download, move, (re)index, and the
+ * agenda items each is attached to. In Unfiled, a document identical to
+ * one already filed says so, and an admin can keep the filed one.
+ */
+export function DocumentList({
+  corpId,
+  documents,
+  uses = {},
+  sameAs = {},
+  canRemoveCopies = false,
+}: {
+  corpId: string;
+  documents: RepositoryDocument[];
+  uses?: Record<string, DocumentUseLink[]>;
+  sameAs?: Record<string, FiledCopy>;
+  canRemoveCopies?: boolean;
+}) {
   const router = useRouter();
   const [moving, setMoving] = useState<RepositoryDocument | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -53,6 +77,17 @@ export function DocumentList({ corpId, documents }: { corpId: string; documents:
       if (!result.ok) return setError(result.error);
       if (doc.sourceType === "link") window.open(result.url, "_blank", "noopener,noreferrer");
       else window.location.assign(result.url);
+    });
+  }
+
+  function keepFiled(doc: RepositoryDocument, copy: FiledCopy) {
+    const where = documentCategoryLabels[copy.category];
+    if (!window.confirm(`Keep "${copy.title}" in ${where} and remove this copy? Agenda items that attach this copy will attach that one instead. The files are identical, so nothing is lost.`)) return;
+    setError(null);
+    startTransition(async () => {
+      const result = await mergeDuplicateDocument(corpId, doc.id, copy.id);
+      if (!result.ok) setError(result.error);
+      router.refresh();
     });
   }
 
@@ -103,6 +138,28 @@ export function DocumentList({ corpId, documents }: { corpId: string; documents:
                 )}
                 {doc.indexingStatus === "failed" && doc.indexingError && (
                   <div className="module-row__meta">{doc.indexingError}</div>
+                )}
+                {uses[doc.id]?.length ? <AttachedTo uses={uses[doc.id]} /> : null}
+                {sameAs[doc.id] && (
+                  <div className="module-row__meta doc-row__same" data-testid={`same-as-${doc.id}`}>
+                    Identical to <strong>{sameAs[doc.id].title}</strong> in {documentCategoryLabels[sameAs[doc.id].category]}.
+                    {canRemoveCopies ? (
+                      <>
+                        {" "}
+                        <button
+                          type="button"
+                          className="text-action"
+                          onClick={() => keepFiled(doc, sameAs[doc.id])}
+                          disabled={pending}
+                          data-testid={`keep-filed-${doc.id}`}
+                        >
+                          Keep that one, remove this copy
+                        </button>
+                      </>
+                    ) : (
+                      " An admin can remove this copy."
+                    )}
+                  </div>
                 )}
               </div>
               <div className="text-actions">
@@ -155,6 +212,31 @@ export function DocumentList({ corpId, documents }: { corpId: string; documents:
         />
       )}
     </>
+  );
+}
+
+/** "Attached to" with the first few agenda items, and how many more. */
+function AttachedTo({ uses }: { uses: DocumentUseLink[] }) {
+  const [all, setAll] = useState(false);
+  const shown = all ? uses : uses.slice(0, 2);
+  return (
+    <div className="module-row__meta doc-row__uses">
+      Attached to{" "}
+      {shown.map((u, i) => (
+        <span key={`${u.href}-${i}`}>
+          {i > 0 && "; "}
+          <Link href={u.href}>{u.label}</Link> ({u.item})
+        </span>
+      ))}
+      {!all && uses.length > shown.length && (
+        <>
+          {" "}
+          <button type="button" className="text-action" onClick={() => setAll(true)}>
+            and {uses.length - shown.length} more
+          </button>
+        </>
+      )}
+    </div>
   );
 }
 

@@ -5,7 +5,10 @@ import { createClient } from "@/lib/supabase/client";
 import {
   acceptedExtensions,
   DOCUMENTS_BUCKET,
+  documentCategoryLabels,
+  folderLabel,
   MAX_FILES_PER_UPLOAD,
+  pickableDocumentCategories,
 } from "@/lib/documents";
 import {
   decisionTypeLabels,
@@ -21,7 +24,8 @@ import {
   type DecisionType,
   type ResolutionType,
 } from "@/lib/meetings/agenda";
-import { createDocumentUploads } from "@/app/strata/[corpId]/documents/actions";
+import { createDocumentUploads, listAttachableDocuments, type AttachableDocument } from "@/app/strata/[corpId]/documents/actions";
+import { findAlreadyInDocuments, type AlreadyInDocuments } from "@/lib/documents-upload";
 import { addLinkAttachment, draftMotion, registerAgendaAttachments } from "@/app/strata/[corpId]/meetings/actions";
 import { IS_DEMO } from "@/lib/demo";
 import { isDemoLimit, showDemoLimit } from "@/lib/demo-client";
@@ -56,8 +60,16 @@ export function ItemEditor({
   const [noteDraft, setNoteDraft] = useState(note);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  // Attaching: upload files to a folder, add a link to a folder, or pick
+  // something already in Documents.
+  const [adding, setAdding] = useState<"upload" | "link" | "library" | null>(null);
+  const [folder, setFolder] = useState("");
+  const [files, setFiles] = useState<File[]>([]);
+  const [already, setAlready] = useState<AlreadyInDocuments[] | null>(null);
   const [linkUrl, setLinkUrl] = useState("");
   const [linkLabel, setLinkLabel] = useState("");
+  const [library, setLibrary] = useState<AttachableDocument[] | null>(null);
+  const [search, setSearch] = useState("");
   const titleRef = useRef<HTMLInputElement>(null);
   const simple = isAdjournment(draft) || isNextMeeting(draft);
 
@@ -108,25 +120,78 @@ export function ItemEditor({
     }));
   }
 
-  async function uploadFiles(files: File[]) {
-    if (!files.length) return;
+  function startAdding(mode: "upload" | "link" | "library") {
+    if (IS_DEMO && mode !== "library") return showDemoLimit("upload");
     setError(null);
-    setBusy(`Uploading ${files.length} file${files.length === 1 ? "" : "s"}…`);
+    setAlready(null);
+    setAdding((current) => (current === mode ? null : mode));
+    if (mode === "library" && !library) {
+      void listAttachableDocuments(corpId).then((res) => {
+        if (res.ok) setLibrary(res.documents);
+        else setError(res.error);
+      });
+    }
+  }
+
+  function attach(atts: Attachment[]) {
+    setDraft((d) => {
+      const have = new Set(d.atts.map((a) => a.documentId).filter(Boolean));
+      return { ...d, atts: [...d.atts, ...atts.filter((a) => !a.documentId || !have.has(a.documentId))] };
+    });
+  }
+
+  function attachExisting(doc: { id: string; title: string; kind: "document" | "link"; url: string | null }) {
+    attach([
+      doc.kind === "link" && doc.url
+        ? { id: `a_${doc.id}`, kind: "link", documentId: doc.id, url: doc.url, title: doc.title }
+        : { id: `a_${doc.id}`, kind: "document", documentId: doc.id, title: doc.title },
+    ]);
+  }
+
+  // Upload: first check whether any file is already in Documents (same
+  // contents, any name), and offer that copy instead of a second one.
+  async function checkThenUpload() {
+    if (!files.length) return setError("Choose at least one file.");
+    if (!folder) return setError("Choose the folder these files go in.");
+    setError(null);
+    setBusy("Checking Documents…");
+    const found = await findAlreadyInDocuments(corpId, files);
+    setBusy(null);
+    if (found.length) return setAlready(found);
+    await uploadFiles(files);
+  }
+
+  async function useCopiesInDocuments() {
+    if (!already) return;
+    const dupes = new Set(already.map((a) => a.file));
+    already.forEach((a) =>
+      attachExisting({ id: a.existing.id, title: a.existing.title, kind: "document", url: null })
+    );
+    setAlready(null);
+    await uploadFiles(files.filter((f) => !dupes.has(f)));
+  }
+
+  async function uploadFiles(toUpload: File[]) {
+    setAlready(null);
+    if (!toUpload.length) return finishAdding();
+    setError(null);
+    setBusy(`Uploading ${toUpload.length} file${toUpload.length === 1 ? "" : "s"}…`);
     try {
-      const tickets = await createDocumentUploads(corpId, files.map((f) => ({ name: f.name, size: f.size })));
+      const tickets = await createDocumentUploads(corpId, toUpload.map((f) => ({ name: f.name, size: f.size })));
       if (!tickets.ok) throw new Error(tickets.error);
       const storage = createClient().storage.from(DOCUMENTS_BUCKET);
       const uploaded = [];
-      for (let i = 0; i < files.length; i++) {
-        const { error: upErr } = await storage.uploadToSignedUrl(tickets.tickets[i].path, tickets.tickets[i].token, files[i], {
-          contentType: files[i].type || "application/octet-stream",
+      for (let i = 0; i < toUpload.length; i++) {
+        const { error: upErr } = await storage.uploadToSignedUrl(tickets.tickets[i].path, tickets.tickets[i].token, toUpload[i], {
+          contentType: toUpload[i].type || "application/octet-stream",
         });
-        if (upErr) throw new Error(`${files[i].name} didn't upload.`);
-        uploaded.push({ path: tickets.tickets[i].path, name: files[i].name, size: files[i].size, type: files[i].type });
+        if (upErr) throw new Error(`${toUpload[i].name} didn't upload.`);
+        uploaded.push({ path: tickets.tickets[i].path, name: toUpload[i].name, size: toUpload[i].size, type: toUpload[i].type });
       }
-      const result = await registerAgendaAttachments(corpId, meetingId, draft.id, uploaded);
+      const result = await registerAgendaAttachments(corpId, meetingId, draft.id, uploaded, folder);
       if (!result.ok) throw new Error(result.error);
-      setDraft((d) => ({ ...d, atts: [...d.atts, ...result.attachments] }));
+      attach(result.attachments);
+      finishAdding();
     } catch (err) {
       setError(err instanceof Error ? err.message : "The upload didn't finish.");
     } finally {
@@ -136,21 +201,36 @@ export function ItemEditor({
 
   async function addLink() {
     if (!linkUrl.trim()) return;
-    if (IS_DEMO) return showDemoLimit("upload");
+    if (!folder) return setError("Choose the folder this link goes in.");
     setError(null);
     setBusy("Adding link…");
-    const result = await addLinkAttachment(corpId, meetingId, draft.id, linkUrl, linkLabel);
+    const result = await addLinkAttachment(corpId, meetingId, draft.id, linkUrl, linkLabel, folder);
     setBusy(null);
     if (!result.ok) return setError(result.error);
-    setDraft((d) => ({ ...d, atts: [...d.atts, result.attachment] }));
+    attach([result.attachment]);
+    finishAdding();
+  }
+
+  function finishAdding() {
+    setAdding(null);
+    setFiles([]);
     setLinkUrl("");
     setLinkLabel("");
+    // Documents changed: load the list afresh next time.
+    setLibrary(null);
   }
 
   function removeAttachment(att: Attachment) {
-    // Detaches from the item only; the file stays in Agenda Attachments.
+    // Takes it off this item only; the document stays in Documents.
     setDraft((d) => ({ ...d, atts: d.atts.filter((a) => a.id !== att.id) }));
   }
+
+  const attachedIds = new Set(draft.atts.map((a) => a.documentId).filter(Boolean));
+  const query = search.trim().toLowerCase();
+  const matches = (library ?? [])
+    .filter((d) => !attachedIds.has(d.id))
+    .filter((d) => !query || `${d.title} ${folderLabel(d.category)}`.toLowerCase().includes(query))
+    .slice(0, 40);
 
   function save(e: React.FormEvent) {
     e.preventDefault();
@@ -279,38 +359,136 @@ export function ItemEditor({
               ))}
             </ul>
           )}
-          <label className="button button-secondary button-small item-editor__file">
-            Add files
-            <input
-              type="file"
-              multiple
-              accept={acceptedExtensions.map((x) => `.${x}`).join(",")}
-              onChange={(e) => {
-                const files = Array.from(e.target.files ?? []).slice(0, MAX_FILES_PER_UPLOAD);
-                e.target.value = "";
-                void uploadFiles(files);
-              }}
-              disabled={Boolean(busy)}
-              className="visually-hidden"
-              data-testid="item-attach-files"
-            />
-          </label>
-          <div className="item-editor__link">
-            <input
-              type="url"
-              value={linkUrl}
-              onChange={(e) => setLinkUrl(e.target.value)}
-              placeholder="https://…"
-              aria-label="Link address"
-              data-testid="item-link-url"
-            />
-            <input value={linkLabel} onChange={(e) => setLinkLabel(e.target.value)} placeholder="Label (optional)" aria-label="Link label" maxLength={300} />
-            <button type="button" className="button button-secondary button-small" onClick={addLink} disabled={Boolean(busy) || !linkUrl.trim()} data-testid="item-add-link">
-              Add link
+          <div className="item-editor__attach-actions">
+            <button type="button" className="button button-secondary button-small" aria-pressed={adding === "upload"} onClick={() => startAdding("upload")} disabled={Boolean(busy)} data-testid="item-attach-upload">
+              Upload files
+            </button>
+            <button type="button" className="button button-secondary button-small" aria-pressed={adding === "link"} onClick={() => startAdding("link")} disabled={Boolean(busy)} data-testid="item-attach-link">
+              Add a link
+            </button>
+            <button type="button" className="button button-secondary button-small" aria-pressed={adding === "library"} onClick={() => startAdding("library")} disabled={Boolean(busy)} data-testid="item-attach-library">
+              From Documents
             </button>
           </div>
+
+          {(adding === "upload" || adding === "link") && (
+            <div className="item-editor__attach-panel">
+              {adding === "upload" ? (
+                <label className="field">
+                  <span>Files</span>
+                  <input
+                    type="file"
+                    multiple
+                    accept={acceptedExtensions.map((x) => `.${x}`).join(",")}
+                    onChange={(e) => {
+                      setFiles(Array.from(e.target.files ?? []).slice(0, MAX_FILES_PER_UPLOAD));
+                      setAlready(null);
+                    }}
+                    disabled={Boolean(busy)}
+                    data-testid="item-attach-files"
+                  />
+                </label>
+              ) : (
+                <div className="item-editor__link">
+                  <input
+                    type="url"
+                    value={linkUrl}
+                    onChange={(e) => setLinkUrl(e.target.value)}
+                    placeholder="https://…"
+                    aria-label="Link address"
+                    data-testid="item-link-url"
+                  />
+                  <input value={linkLabel} onChange={(e) => setLinkLabel(e.target.value)} placeholder="Label (optional)" aria-label="Link label" maxLength={300} />
+                </div>
+              )}
+              <label className="field">
+                <span>Folder in Documents</span>
+                <select value={folder} onChange={(e) => setFolder(e.target.value)} disabled={Boolean(busy)} data-testid="item-attach-folder">
+                  <option value="">Choose a folder</option>
+                  {pickableDocumentCategories.map((c) => (
+                    <option key={c} value={c}>
+                      {documentCategoryLabels[c]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              {already ? (
+                <div className="item-editor__already" role="alert" data-testid="item-attach-already">
+                  <p>
+                    {already.length === 1 ? "This file is" : "These files are"} already in Documents:
+                  </p>
+                  <ul>
+                    {already.map((a) => (
+                      <li key={a.existing.id + a.file.name}>
+                        {a.file.name}: <strong>{a.existing.title}</strong> ({folderLabel(a.existing.category)})
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="item-editor__attach-actions">
+                    <button type="button" className="button button-primary button-small" onClick={useCopiesInDocuments} disabled={Boolean(busy)} data-testid="item-attach-use-existing">
+                      Attach the {already.length === 1 ? "copy" : "copies"} in Documents
+                    </button>
+                    <button type="button" className="button button-secondary button-small" onClick={() => uploadFiles(files)} disabled={Boolean(busy)}>
+                      Upload another copy
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="item-editor__attach-actions">
+                  {adding === "upload" ? (
+                    <button type="button" className="button button-primary button-small" onClick={checkThenUpload} disabled={Boolean(busy) || !files.length} data-testid="item-attach-upload-submit">
+                      {files.length > 1 ? `Upload ${files.length} files` : "Upload"}
+                    </button>
+                  ) : (
+                    <button type="button" className="button button-primary button-small" onClick={addLink} disabled={Boolean(busy) || !linkUrl.trim()} data-testid="item-add-link">
+                      Add link
+                    </button>
+                  )}
+                  <button type="button" className="link-button" onClick={finishAdding} disabled={Boolean(busy)}>
+                    Cancel
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {adding === "library" && (
+            <div className="item-editor__attach-panel" data-testid="item-attach-library-panel">
+              <input
+                type="search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search by title or folder"
+                aria-label="Search Documents"
+                data-testid="item-attach-search"
+              />
+              {!library ? (
+                <p className="card__meta">Loading Documents…</p>
+              ) : matches.length === 0 ? (
+                <p className="card__meta">{query ? "Nothing in Documents matches that." : "Nothing else in Documents to attach."}</p>
+              ) : (
+                <ul className="item-editor__library">
+                  {matches.map((d) => (
+                    <li key={d.id}>
+                      <span className="item-editor__library-title" title={d.title}>
+                        {d.title}
+                        {d.kind === "link" && <span className="pill doc-row__kind">Link</span>}
+                      </span>
+                      <span className="card__meta">{folderLabel(d.category)}</span>
+                      <button type="button" className="link-button" onClick={() => attachExisting(d)} data-testid={`item-attach-doc-${d.id}`}>
+                        Attach
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+
           <p className="field__hint">
-            Files and links are filed in Documents under Agenda Attachments and indexed so Stratasphere can use them.
+            Uploads and links are filed in the folder you choose and indexed so Stratasphere can use them.
+            Remove takes a document off this item only; it stays in Documents.
           </p>
         </fieldset>
 
