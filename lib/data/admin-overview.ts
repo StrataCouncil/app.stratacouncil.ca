@@ -66,6 +66,7 @@ export async function getAdminOverview(): Promise<AdminOverview | null> {
     requests,
     legislationProblems,
     review,
+    demoRequests,
     demo,
   ] = await Promise.all([
     count(admin.from("strata_corporations").select("strata_plan_number", head), "stratas"),
@@ -93,6 +94,7 @@ export async function getAdminOverview(): Promise<AdminOverview | null> {
     count(admin.from("corporation_creation_requests").select("id", head).eq("status", "pending"), "requests"),
     count(admin.from("legislation_documents").select("id", head).in("indexing_status", ["failed", "needs_text"]), "legislation"),
     count(admin.from("training_modules").select("id", head).not("ready_for_review_at", "is", null), "review"),
+    count(admin.from("demo_requests").select("id", head).is("handled_at", null), "demo requests"),
     demoToday(),
   ]);
 
@@ -107,6 +109,7 @@ export async function getAdminOverview(): Promise<AdminOverview | null> {
     { key: "documents", count: docsProblems, label: "strata documents that couldn't be indexed (failed, or need text)", href: "/admin/stratas" },
     { key: "legislation", count: legislationProblems, label: "Knowledge Base entries that couldn't be indexed", href: "/admin/legislation" },
     { key: "review", count: review, label: "training modules ready for review", href: "/admin/training" },
+    { key: "demo-requests", count: demoRequests, label: "demo requests waiting", href: "/admin/demo#requests" },
   ].filter((a) => a.count > 0);
   if (!demo) attention.push({ key: "demo", count: 0, label: "The demo database isn't connected", href: "/admin/demo" });
 

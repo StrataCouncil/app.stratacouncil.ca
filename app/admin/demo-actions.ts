@@ -9,6 +9,8 @@ import { demoInviteEmail } from "@/lib/email/templates";
 import { mirrorLegislationToDemo, mirrorLibraryToDemo, mirrorTrainingToDemo } from "@/lib/demo-mirror";
 import { EMAIL_RE } from "@/lib/strata";
 import { wipeVisitor } from "@/lib/demo-server";
+import { DEMO_REQUEST_COLUMNS, forgetHandledRequests, toDemoRequest } from "@/lib/demo-requests-server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
  * Personal demo links (lib/demo.ts), made from the live site's Super
@@ -200,6 +202,48 @@ export async function deleteDemoLink(visitorId: string): Promise<{ ok: true } | 
   }
   const { error: deleteError } = await db.from("demo_visitors").delete().eq("id", visitorId);
   if (deleteError) return { ok: false, error: "The strata and account are gone, but the link couldn't be removed. Try again." };
+  revalidatePath("/admin", "layout");
+  return { ok: true };
+}
+
+/**
+ * A demo request from stratacouncil.ca (0067), answered in one click: makes
+ * the person's link and emails it, then marks the request sent. If the
+ * email doesn't go, the request stays waiting and the link is in Working
+ * now to copy or resend.
+ */
+export async function sendDemoRequestLink(requestId: string, landing: DemoLanding): Promise<DemoLinkResult> {
+  const creator = await staffName();
+  if (!creator) return { ok: false, error: "Only platform staff can do this." };
+  const admin = createAdminClient();
+  const { data } = await admin.from("demo_requests").select(DEMO_REQUEST_COLUMNS).eq("id", requestId).maybeSingle();
+  if (!data) return { ok: false, error: "That request no longer exists." };
+  const request = toDemoRequest(data);
+  if (request.handledAt) return { ok: false, error: `${request.fullName}'s request was already handled.` };
+
+  const result = await createDemoLink({ fullName: request.fullName, email: request.email, landing, send: true });
+  if (!result.ok || !result.emailed) return result;
+  await admin
+    .from("demo_requests")
+    .update({ handled_at: new Date().toISOString(), outcome: "sent", handled_by_name: creator })
+    .eq("id", requestId)
+    .is("handled_at", null);
+  await forgetHandledRequests(admin);
+  revalidatePath("/admin", "layout");
+  return result;
+}
+
+/** Spam, or someone answered another way: off the waiting list, kept 30 days. */
+export async function dismissDemoRequest(requestId: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  const creator = await staffName();
+  if (!creator) return { ok: false, error: "Only platform staff can do this." };
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("demo_requests")
+    .update({ handled_at: new Date().toISOString(), outcome: "dismissed", handled_by_name: creator })
+    .eq("id", requestId)
+    .is("handled_at", null);
+  if (error) return { ok: false, error: "Couldn't dismiss the request." };
   revalidatePath("/admin", "layout");
   return { ok: true };
 }

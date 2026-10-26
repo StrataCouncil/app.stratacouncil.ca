@@ -260,6 +260,22 @@ export function demoInviteEmail(params: { fullName: string; link: string; landin
   return { subject: training ? "Your StrataCouncil.ca Council Training link" : "Your StrataCouncil.ca demo", html, text };
 }
 
+/**
+ * A new demo request from stratacouncil.ca (0067), to platform staff. The
+ * button opens the console's Demo tab, where one click sends the link.
+ * Sent from the no-reply address, so it doesn't invite a reply.
+ */
+export function demoRequestNoticeEmail(params: { name: string; email: string; where: string; campaign: string; consoleUrl: string }) {
+  const html = wrap(`
+    <p style="margin:0 0 16px;font-size:16px;color:${INK};"><strong>${escapeHtml(params.name)}</strong> (${escapeHtml(params.email)}) asked for a demo on the ${escapeHtml(params.where)}.</p>
+    ${params.campaign ? `<p style="margin:0 0 8px;font-size:14px;color:${MUTED};">Came from: ${escapeHtml(params.campaign)}</p>` : ""}
+    <p style="margin:0 0 8px;font-size:14px;color:${INK};">Send their demo link from the console in one click, or dismiss the request.</p>
+    ${button(params.consoleUrl, "Open in the console")}
+  `);
+  const text = `${params.name} (${params.email}) asked for a demo on the ${params.where}.${params.campaign ? `\nCame from: ${params.campaign}` : ""}\n\nSend their demo link from the console in one click, or dismiss the request:\n\n${params.consoleUrl}`;
+  return { subject: `Demo request: ${params.name}`, html, text };
+}
+
 /** The investor briefing's sign-in link (0061): personal, works for 30 days. */
 export function investorBriefingEmail(params: { name: string; openUrl: string; days: number }) {
   const html = wrap(`

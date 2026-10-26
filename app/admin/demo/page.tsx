@@ -2,14 +2,16 @@ import { notFound } from "next/navigation";
 import { AdminTabs } from "@/components/AdminTabs";
 import { AppShell } from "@/components/AppShell";
 import { DemoLinksAdmin } from "@/components/DemoLinksAdmin";
+import { DemoRequestsAdmin } from "@/components/DemoRequestsAdmin";
 import { getDemoVisitors } from "@/lib/data/demo-visitors";
 import { getCurrentProfile } from "@/lib/data/profile";
+import { getDemoRequests } from "@/lib/demo-requests-server";
 
-/** Super Admin: personal links to the demo site (lib/demo.ts), and copying content to it. */
+/** Super Admin: demo requests from stratacouncil.ca, personal links to the demo site (lib/demo.ts), and copying content to it. */
 export default async function AdminDemoPage() {
   const profile = await getCurrentProfile();
   if (!profile?.isSuperAdmin) notFound();
-  const demoVisitors = await getDemoVisitors();
+  const [demoVisitors, demoRequests] = await Promise.all([getDemoVisitors(), getDemoRequests()]);
 
   return (
     <AppShell active="admin">
@@ -22,6 +24,7 @@ export default async function AdminDemoPage() {
             Training, gives them a strata of their own, and stops working at midnight Pacific three days after the day it was made.
           </p>
         </div>
+        <DemoRequestsAdmin requests={demoRequests} connected={demoVisitors.configured} />
         <DemoLinksAdmin list={demoVisitors} />
       </div>
     </AppShell>
