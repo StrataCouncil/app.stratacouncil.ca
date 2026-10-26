@@ -7946,6 +7946,15 @@ a.kb-card:hover {
   max-width: 460px;
 }
 
+/* The Legal Disclaimer on its own page (app/investors/disclaimer). */
+.investor-disclaimer-page {
+  max-width: 760px;
+}
+
+.investor-disclaimer-page h1 {
+  margin-bottom: 1.25rem;
+}
+
 .investor-signup__lede {
   color: var(--muted);
   font-size: 0.95rem;
