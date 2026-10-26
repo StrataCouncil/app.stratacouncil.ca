@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { MFA_BACKUP_COOKIE_NAME } from "@/lib/auth/mfa-session";
 import type { SendOtpState } from "@/lib/auth/otp-state";
+import { readCampaign } from "@/lib/campaign";
 
 // SendOtpState's type and initial value moved to lib/auth/otp-state.ts —
 // this "use server" file may only export async functions (Next.js 15.5),
@@ -20,7 +21,8 @@ import type { SendOtpState } from "@/lib/auth/otp-state";
  *
  * - Sign-up may create the account. Migration 0001's on_auth_user_created
  *   trigger then creates the profiles row from raw_user_meta_data
- *   (full_name, and marketing_opt_in for CASL, doc01 §2 / 0006). Name and
+ *   (full_name, marketing_opt_in for CASL, doc01 §2 / 0006, and the
+ *   campaign tags the sign-up link carried, 0066). Name and
  *   Terms acceptance are required here, on the server too. An email that
  *   already has an account just gets a sign-in link; Supabase only applies
  *   the metadata when it creates the user, so nothing is overwritten.
@@ -41,6 +43,7 @@ export async function sendOtp(
   const email = String(formData.get("email") ?? "").trim();
   const fullName = String(formData.get("full_name") ?? "").trim();
   const marketingOptIn = formData.get("marketing_opt_in") === "on";
+  const campaign = readCampaign(formData);
 
   if (!email) {
     return { status: "error", message: "Enter your email address." };
@@ -60,7 +63,9 @@ export async function sendOtp(
     options: {
       shouldCreateUser: signingUp,
       emailRedirectTo: `${origin}/auth/confirm`,
-      ...(signingUp ? { data: { full_name: fullName, marketing_opt_in: marketingOptIn } } : {}),
+      ...(signingUp
+        ? { data: { full_name: fullName, marketing_opt_in: marketingOptIn, ...(campaign ? { campaign } : {}) } }
+        : {}),
     },
   });
 
