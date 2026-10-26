@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { Logo } from "@/components/Logo";
 import { sendOtp } from "@/lib/auth/actions";
 import { initialSendOtpState } from "@/lib/auth/otp-state";
+import { readCampaign } from "@/lib/campaign";
 
 /**
  * Stage 2 signup (doc03): email + full name only, no SP#, no corporation,
@@ -24,8 +25,11 @@ export default function SignupPage() {
 
 function SignupForm() {
   const [state, formAction, pending] = useActionState(sendOtp, initialSendOtpState);
+  const params = useSearchParams();
   // From the login page's "Create an account", when the email had no account.
-  const prefilledEmail = useSearchParams().get("email") ?? "";
+  const prefilledEmail = params.get("email") ?? "";
+  // Campaign tags from stratacouncil.ca's sign-up links, saved on the new account (0066).
+  const campaign = readCampaign(params);
 
   if (state.status === "sent") {
     return (
@@ -62,6 +66,8 @@ function SignupForm() {
         <p>No strata plan number needed &mdash; just your name and email.</p>
         <form action={formAction}>
           <input type="hidden" name="intent" value="signup" />
+          {campaign &&
+            Object.entries(campaign).map(([key, value]) => <input key={key} type="hidden" name={key} value={value} />)}
           <div className="field">
             <label htmlFor="full_name">Full name</label>
             <input id="full_name" name="full_name" type="text" autoComplete="name" required data-testid="signup-name" />
