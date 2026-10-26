@@ -81,6 +81,12 @@ export interface Motion {
   outcome: "CARRIED" | "DEFEATED" | null;
   mover: string;
   sec: string;
+  /**
+   * The president's second, deciding vote on a tie (Standard Bylaws 18(2)
+   * for council, 27(5) for general meetings), if they cast one. The counts
+   * above stay as voted; the rules add this vote when deciding.
+   */
+  tieBreak?: "for" | "against" | null;
 }
 
 export type Attachment =
@@ -395,6 +401,7 @@ export function normalizeAgenda(raw: unknown): AgendaItem[] {
             outcome: m.outcome === "CARRIED" || m.outcome === "DEFEATED" ? m.outcome : null,
             mover: String(m.mover ?? ""),
             sec: String(m.sec ?? ""),
+            tieBreak: m.tieBreak === "for" || m.tieBreak === "against" ? m.tieBreak : null,
           }
         : null;
       return {

@@ -69,14 +69,15 @@ export function callToOrderScript(opts: {
   };
 }
 
-export function itemScript(it: AgendaItem): string | null {
+/** The chair's script for an item. At council meetings every motion is decided by a majority of members present. */
+export function itemScript(it: AgendaItem, general = true): string | null {
   if (isAdjournment(it)) {
     return `"Is there a motion to adjourn? … Moved by — seconded by — all in favour? … The motion is CARRIED. This meeting is adjourned at [time]. Thank you all for attending."`;
   }
   if (isNextMeeting(it)) {
     return `"Before we adjourn, we need to set the date for our next meeting. Does the council have any preferences for the next meeting date?"`;
   }
-  const dt = it.motion?.dt;
+  const dt = general ? it.motion?.dt : "MAJORITY";
   if (it.type === "FOR_INFORMATION") {
     return `"${it.text} is presented for information. [Present the content.] Any questions or discussion? … The item is received and placed on file."`;
   }

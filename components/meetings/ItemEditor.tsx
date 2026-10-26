@@ -45,6 +45,7 @@ export function ItemEditor({
   item,
   note,
   categories,
+  general = true,
   onSave,
   onClose,
 }: {
@@ -53,6 +54,8 @@ export function ItemEditor({
   item: AgendaItem;
   note: string;
   categories: string[];
+  /** AGM or SGM. Council and committee decisions are always by a majority of members present, so there's no threshold to choose. */
+  general?: boolean;
   onSave: (item: AgendaItem, note: string) => void;
   onClose: () => void;
 }) {
@@ -314,6 +317,11 @@ export function ItemEditor({
                   </button>
                 </span>
               </label>
+              {!general ? (
+                <p className="field field__hint" data-testid="item-decision-council">
+                  Council decides by a majority of the council members present (Standard Bylaws 18(1)).
+                </p>
+              ) : (
               <label className="field">
                 <span>Decision type</span>
                 <select
@@ -328,6 +336,7 @@ export function ItemEditor({
                   ))}
                 </select>
               </label>
+              )}
             </>
           )}
           <label className="field field--wide">
