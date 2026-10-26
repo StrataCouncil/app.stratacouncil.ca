@@ -22,7 +22,7 @@
  *   tied to one province's legislation (`jurisdiction: "BC" | "AB" | "QC"`).
  *   This is what changes as StrataCouncil expands beyond BC — Alberta and
  *   Quebec each get their own provincial set, not a rewrite of BC's.
- * - `"federal"` — Canada-wide legislation (PIPEDA, for instance), which
+ * - `"federal"` — Canada-wide legislation, which
  *   applies to every corporation regardless of province, so it's neither
  *   scoped to one province nor truly "universal" in the way general
  *   meeting-etiquette content is. `jurisdiction` stays `null` here.
@@ -400,18 +400,18 @@ export const knowledgeResources: KnowledgeResource[] = [
   {
     id: "kb21",
     kind: "operational_guide",
-    title: "Federal privacy law and your strata's data (PIPEDA)",
-    summary: "Council handles personal information about owners and tenants every day — what the federal privacy law actually requires, on top of BC's own.",
+    title: "Privacy law and your strata's data (PIPA)",
+    summary: "Council handles personal information about owners and tenants every day — what BC's Personal Information Protection Act actually requires.",
     body: [
-      "PIPEDA is federal, not provincial — it applies to every strata corporation in Canada that collects personal information in the course of a commercial activity, regardless of which province you're in. It sits alongside BC's own Personal Information Protection Act (PIPA), which covers organizations operating within BC specifically; the two overlap rather than one replacing the other, and council doesn't get to pick whichever is more convenient.",
-      "In practice, this affects things council already handles routinely: owner contact information, parking/EV charging records, correspondence about a bylaw complaint, and anything uploaded to this platform. The core obligation is the same under both: collect only what you actually need, keep it reasonably secure, and don't use it for a purpose the owner wouldn't reasonably expect — a complaint file isn't a place to note unrelated opinions about a resident, for instance.",
+      "A BC strata corporation is an organization under BC's Personal Information Protection Act (PIPA), so the Act governs how it collects, uses, discloses and protects personal information about owners, tenants and anyone else it deals with. Council acts for the corporation, so in practice these are council's obligations.",
+      "In practice, this affects things council already handles routinely: owner contact information, parking/EV charging records, correspondence about a bylaw complaint, and anything uploaded to this platform. The core obligation is simple to state: collect only what you actually need, keep it reasonably secure, and don't use it for a purpose the owner wouldn't reasonably expect — a complaint file isn't a place to note unrelated opinions about a resident, for instance.",
     ],
-    jurisdictionLevel: "federal",
-    jurisdiction: null,
-    tags: ["privacy", "data handling", "pipeda"],
-    updatedAt: "Feb 2026",
+    jurisdictionLevel: "provincial",
+    jurisdiction: "BC",
+    tags: ["privacy", "data handling", "pipa"],
+    updatedAt: "Oct 2026",
     reviewStatus: "current",
-    legislationReferences: ["Personal Information Protection and Electronic Documents Act (PIPEDA)"],
+    legislationReferences: ["Personal Information Protection Act (BC)"],
   },
   {
     id: "kb22",

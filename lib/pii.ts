@@ -2,7 +2,7 @@
  * PII stripping — the one gate every piece of text passes through before
  * it leaves our database for a third-party AI service (Voyage embeddings,
  * Anthropic). doc02 §2, and the standing rule that anything fed to
- * Stratasphere must be PIPA/PIPEDA-compliant.
+ * Stratasphere must be PIPA-compliant.
  *
  * Pure, deterministic, no network: stripping must never itself send the
  * text anywhere (a model-based detector would defeat the point).
