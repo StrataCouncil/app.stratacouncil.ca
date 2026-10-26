@@ -23,12 +23,17 @@ import {
 } from "@/lib/meetings/agenda";
 import {
   attendanceRoll,
+  effectiveDecisionType,
   evaluateVote,
   isGeneralMeeting,
+  isTie,
   minutesSummary,
   quorum,
+  thresholdText,
+  tieBreakAllowed,
   unresolvedItems,
   type AttendanceStatus,
+  type VoteContext,
 } from "@/lib/meetings/rules";
 import { callToOrderScript, itemScript, zonedInstant } from "@/lib/meetings/scripts";
 import { adjournMeeting, askMeetingAssistant, callToOrder, saveMeetingState } from "@/app/strata/[corpId]/meetings/[meetingId]/run/actions";
@@ -132,6 +137,8 @@ export function MeetingMode(props: {
   const q = quorum(type, { lotCount: props.lots.length, councilCount: roll.length, attendance });
   const present = roll.filter((l) => attendance[l] === "present");
   const voters = present.length + (general ? q.proxies : 0);
+  // Who the thresholds count: members present (council), votes cast or every lot's vote (general).
+  const voteCtx: VoteContext = { type, present: voters, eligible: props.lots.length, lotCount: props.lots.length };
   const called = Boolean(startedAt);
 
   const scheduled = props.startTime ? zonedInstant(props.meetingDate, props.startTime, timezone).getTime() : null;
@@ -197,7 +204,7 @@ export function MeetingMode(props: {
     if (isElectChair(it) && !it.nominee?.trim()) return blockAction(it, "Enter the nominee first.");
     if (!m.mover || !m.sec) return blockAction(it, "Choose a mover and a seconder first.");
     if (m.mover === m.sec) return blockAction(it, "The mover and seconder must be different lots.");
-    const v = evaluateVote(m);
+    const v = evaluateVote(m, voteCtx);
     if (v.total === 0) return blockAction(it, "Record the votes first.");
     if (v.total > voters) {
       return blockAction(it, `${v.total} votes recorded, but only ${voters} ${voters === 1 ? "voter is" : "voters are"} present. Check the count.`);
@@ -213,13 +220,20 @@ export function MeetingMode(props: {
           <p>&ldquo;{it.text}&rdquo;</p>
           <p>
             Moved by {m.mover}, seconded by {m.sec}.<br />
-            {decisionTypeLabels[m.dt]}: {m.for} in favour, {m.against} opposed{m.abstain ? `, ${m.abstain} abstaining` : ""}.
-            {m.abstain ? " Abstentions don't count toward the threshold." : ""}
+            {decisionTypeLabels[v.dt]}: {m.for} in favour, {m.against} opposed{m.abstain ? `, ${m.abstain} abstaining` : ""}.
+            {v.tieBroken ? ` The president cast a deciding vote ${m.tieBreak === "for" ? "in favour" : "against"}.` : ""}
           </p>
-          {m.dt !== "MAJORITY" && (
+          <p className="card__meta">
+            {general
+              ? v.dt === "EIGHTY_PERCENT" || v.dt === "UNANIMOUS"
+                ? `This counts against the votes of all ${props.lots.length} strata lots, present or not (SPA s.1).`
+                : "Abstentions aren't votes cast and don't count toward the threshold (SPA s.1)."
+              : `Council decisions need a majority of the ${voters} council members present (Standard Bylaws 18(1)), so an abstention counts like a vote against.`}
+          </p>
+          {general && m.dt !== "MAJORITY" && (
             <p className="form-error">Confirm the exact wording of this resolution was included with the meeting notice (SPA s.45).</p>
           )}
-          {m.dt === "THREE_QUARTER" && outcome === "CARRIED" && (
+          {general && m.dt === "THREE_QUARTER" && outcome === "CARRIED" && (
             <p className="card__meta">A 3/4 vote resolution takes effect after a one-week delay unless immediate action is needed for safety.</p>
           )}
           <p className="card__meta">This can&rsquo;t be undone.</p>
@@ -230,7 +244,11 @@ export function MeetingMode(props: {
   }
 
   function recordOutcome(it: AgendaItem, outcome: "CARRIED" | "DEFEATED", motionPatch: Partial<NonNullable<AgendaItem["motion"]>> = {}) {
-    const decided: AgendaItem = { ...it, done: true, deferred: false, motion: { ...it.motion!, ...motionPatch, outcome } };
+    const motion = { ...it.motion!, ...motionPatch, outcome };
+    // What the minutes and the decision ledger record is the threshold that applied.
+    motion.dt = effectiveDecisionType(type, motion.dt);
+    if (!(motion.tieBreak && tieBreakAllowed(motion, voteCtx))) motion.tieBreak = null;
+    const decided: AgendaItem = { ...it, done: true, deferred: false, motion };
     decided.minutesSummary = it.minutesSummary || minutesSummary(decided);
     const next = renumber(agenda.map((i) => (i.id === it.id ? decided : i)));
     setAgenda(next);
@@ -246,6 +264,14 @@ export function MeetingMode(props: {
     if (!m.mover || !m.sec) return blockAction(it, "Choose a mover and a seconder first.");
     if (m.mover === m.sec) return blockAction(it, "The mover and seconder must be different lots.");
     if (isElectChair(it) && !it.nominee?.trim()) return blockAction(it, "Enter the nominee first.");
+    // Everyone present in favour isn't always enough: 80% and unanimous resolutions count every lot's vote.
+    const v = evaluateVote({ ...m, for: voters, against: 0, abstain: 0, tieBreak: null }, voteCtx);
+    if (!v.passing) {
+      return blockAction(
+        it,
+        `All ${voters} present in favour isn't enough: this ${decisionTypeLabels[v.dt]} needs ${v.needed ?? "more"} of the ${v.of} eligible votes. Record the votes instead.`
+      );
+    }
     setActionError(null);
     setConfirm({
       title: "Unanimous vote",
@@ -571,6 +597,7 @@ export function MeetingMode(props: {
               called={called}
               present={present}
               voters={voters}
+              voteCtx={voteCtx}
               names={names}
               note={notes[item.id] ?? ""}
               onNote={(body) => {
@@ -616,6 +643,7 @@ export function MeetingMode(props: {
           item={editing}
           note={notes[editing.id] ?? ""}
           categories={[...new Set(agenda.map((i) => i.cat))]}
+          general={general}
           onSave={saveEdited}
           onClose={() => setEditing(null)}
         />
@@ -738,6 +766,7 @@ function ItemPanel(props: {
   present: string[];
   /** Everyone who can vote: those present, plus proxies at a general meeting. */
   voters: number;
+  voteCtx: VoteContext;
   names: Record<string, string>;
   note: string;
   onNote: (body: string) => void;
@@ -755,8 +784,8 @@ function ItemPanel(props: {
 }) {
   const { item: it, onPatch } = props;
   const m = it.motion;
-  const script = itemScript(it);
-  const vote = m ? evaluateVote(m) : null;
+  const script = itemScript(it, props.general);
+  const vote = m ? evaluateVote(m, props.voteCtx) : null;
   const [note, setNote] = useState(props.note);
   const locked = it.done || !props.called;
   const setMotion = (patch: Partial<NonNullable<AgendaItem["motion"]>>) => onPatch({ motion: { ...m!, ...patch } });
@@ -779,7 +808,7 @@ function ItemPanel(props: {
           </h2>
           <div className="mm-item__tags">
             <span className={`rtag rtag--${it.type.toLowerCase()}`}>{resolutionTypeLabels[it.type]}</span>
-            {m && <span className="rtag">{decisionTypeLabels[m.dt]}</span>}
+            {m && <span className="rtag">{props.general ? decisionTypeLabels[m.dt] : "Majority of council members present"}</span>}
             {it.addedDuringMeeting && <span className="rtag">Added during meeting</span>}
             {it.done && <span className="pill mm-outcome" data-outcome={m?.outcome ?? "DONE"}>{m?.outcome ?? (it.consensus ? "Consensus" : "Done")}</span>}
             {it.deferred && !it.done && <span className="pill">Deferred</span>}
@@ -938,13 +967,34 @@ function ItemPanel(props: {
                 : ""}
             </p>
           )}
-          <p className="mm-threshold" data-state={it.done ? m.outcome?.toLowerCase() : vote && vote.cast > 0 ? (vote.passing ? "passing" : "failing") : "pending"}>
+          <p className="mm-threshold" data-state={it.done ? m.outcome?.toLowerCase() : vote && vote.total > 0 ? (vote.passing ? "passing" : "failing") : "pending"}>
             {it.done
               ? m.outcome
-              : vote && vote.cast > 0
-                ? `Need ${vote.needed} of ${vote.cast} cast${m.abstain ? ` (${m.abstain} abstaining)` : ""}: ${vote.passing ? "passing" : "failing"}`
+              : vote && vote.total > 0
+                ? `${thresholdText(vote)}: ${vote.passing ? "passing" : "failing"}`
                 : "No votes recorded yet"}
           </p>
+          {!it.done && isTie(m) && (
+            tieBreakAllowed(m, props.voteCtx) ? (
+              <label className="field" data-testid="mm-tie-break">
+                <span>Tied vote: president&rsquo;s deciding vote</span>
+                <select
+                  value={m.tieBreak ?? ""}
+                  onChange={(e) => setMotion({ tieBreak: e.target.value === "for" || e.target.value === "against" ? e.target.value : null })}
+                  disabled={locked}
+                >
+                  <option value="">None cast (the tie stands)</option>
+                  <option value="for">In favour</option>
+                  <option value="against">Against</option>
+                </select>
+                <span className="field__hint">
+                  The president may break a tie with a second, deciding vote ({props.general ? "Standard Bylaws 27(5)" : "Standard Bylaws 18(2)"}), if your bylaws allow it.
+                </span>
+              </label>
+            ) : (
+              <p className="card__meta">Tied vote. With only 2 strata lots there is no deciding vote, so the tie stands.</p>
+            )
+          )}
         </div>
       )}
 

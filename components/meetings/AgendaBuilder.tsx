@@ -17,6 +17,7 @@ import {
   type MeetingType,
 } from "@/lib/meetings/agenda";
 import { parseUploadedAgenda, saveAgenda, saveItemNote } from "@/app/strata/[corpId]/meetings/actions";
+import { isGeneralMeeting } from "@/lib/meetings/rules";
 import { ItemEditor } from "@/components/meetings/ItemEditor";
 import { LaunchMeetingButton } from "@/components/meetings/MeetingActions";
 import { DEMO_EDITABLE_ITEM_ID, IS_DEMO } from "@/lib/demo";
@@ -378,6 +379,7 @@ export function AgendaBuilder({
           item={editing}
           note={notes[editing.id] ?? ""}
           categories={categoryNames}
+          general={isGeneralMeeting(meetingType)}
           onSave={saveItem}
           onClose={() => setEditing(null)}
         />
