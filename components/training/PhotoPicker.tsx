@@ -22,6 +22,7 @@ export interface PickedPhoto {
  */
 export function PhotoPicker({
   moduleId,
+  searchWith,
   initialQuery,
   onPick,
   onClose,
@@ -29,7 +30,9 @@ export function PhotoPicker({
   intro,
   actions,
 }: {
-  moduleId: string;
+  /** The training module the search is for; or pass `searchWith` (the Social tab). */
+  moduleId?: string;
+  searchWith?: (query: string, page: number) => Promise<{ ok: true; photos: StockPhoto[]; totalPages: number } | { ok: false; error: string }>;
   initialQuery: string;
   onPick: (p: PickedPhoto) => void;
   onClose: () => void;
@@ -51,7 +54,7 @@ export function PhotoPicker({
     if (!q.trim()) return;
     setBusy(true);
     setError(null);
-    const r = await searchStockPhotos(moduleId, q, p);
+    const r = searchWith ? await searchWith(q, p) : await searchStockPhotos(moduleId ?? "", q, p);
     setBusy(false);
     if (!r.ok) return setError(r.error);
     setPhotos(p === 1 ? r.photos : (prev) => [...prev, ...r.photos]);
