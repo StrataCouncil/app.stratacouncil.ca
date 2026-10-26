@@ -6994,7 +6994,8 @@ a.track-card:focus-visible {
   flex-wrap: wrap;
   gap: 0 0.5rem;
 }
-.demo-links__form select {
+.demo-links__form select,
+.demo-links__landing {
   font-family: inherit;
   font-size: 0.95rem;
   padding: 0.65em 0.85em;
@@ -7002,6 +7003,10 @@ a.track-card:focus-visible {
   border-radius: var(--radius-sm);
   background: var(--paper);
   color: var(--ink);
+}
+/* The Opens on picker beside each demo request, as tall as its buttons. */
+.demo-links__landing {
+  padding: 0.4em 0.6em;
 }
 @media (max-width: 720px) {
   .demo-links__form {
