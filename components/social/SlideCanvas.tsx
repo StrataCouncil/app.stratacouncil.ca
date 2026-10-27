@@ -226,7 +226,7 @@ function ListSlide(c: Ctx) {
     : { right: pad.right, bottom: pad.bottom + 30, width: 420, height: c.tall ? 620 : 470 };
 
   if (slide.kind === "cover") {
-    const title = slide.title.toUpperCase();
+    const title = slide.title;
     return (
       <>
         <Dots color={s.dots} style={{ left: -60, top: -60, width: 420, height: 420 }} />
@@ -234,9 +234,9 @@ function ListSlide(c: Ctx) {
         <div style={{ position: "absolute", left: pad.side, right: pad.right, top: pad.top + 40, display: "flex", flexDirection: "column", gap: 34 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 36 }}>
             {slide.number && (
-              <span style={{ fontFamily: SANS, fontWeight: 900, fontSize: 330, lineHeight: 0.8, color: s.hi, letterSpacing: "-0.04em" }}>{slide.number}</span>
+              <span style={{ fontFamily: SERIF, fontWeight: 900, fontSize: 340, lineHeight: 0.8, color: s.hi, letterSpacing: "-0.04em", fontVariationSettings: '"SOFT" 50' }}>{slide.number}</span>
             )}
-            <span style={{ fontFamily: SANS, fontWeight: 900, fontSize: fit(slide.number ? 112 : 128, title, 22, 64), lineHeight: 0.98, letterSpacing: "-0.01em" }}>{title}</span>
+            <span style={{ fontFamily: SERIF, fontWeight: 900, fontSize: fit(slide.number ? 116 : 132, title, 22, 64), lineHeight: 0.98, letterSpacing: "-0.005em", fontVariationSettings: '"SOFT" 50' }}>{title}</span>
           </div>
           {slide.kicker && (
             <div style={{ fontFamily: SANS, fontWeight: 800, fontSize: fit(54, slide.kicker, 34, 38), lineHeight: 1.12, color: s.hi, textTransform: "uppercase", maxWidth: 820 }}>{slide.kicker}</div>
@@ -253,7 +253,7 @@ function ListSlide(c: Ctx) {
     );
   }
 
-  const title = slide.title.toUpperCase();
+  const title = slide.title;
   const big = slide.kind === "quote" ? slide.number || "" : slide.number;
   return (
     <>
@@ -262,18 +262,19 @@ function ListSlide(c: Ctx) {
         {big && (
           <span
             style={{
-              fontFamily: slide.kind === "quote" ? SERIF : SANS,
+              fontFamily: SERIF,
               fontWeight: 900,
-              fontSize: slide.kind === "quote" ? fit(230, big, 4, 140) : 230,
+              fontSize: slide.kind === "quote" ? fit(230, big, 4, 140) : 240,
               lineHeight: 0.85,
               color: s.hi,
               letterSpacing: "-0.03em",
+              fontVariationSettings: '"SOFT" 50',
             }}
           >
             {big}
           </span>
         )}
-        <span style={{ fontFamily: SANS, fontWeight: 900, fontSize: fit(100, title, 24, 60), lineHeight: 1.0 }}>{title}</span>
+        <span style={{ fontFamily: SERIF, fontWeight: 900, fontSize: fit(104, title, 24, 60), lineHeight: 1.0, letterSpacing: "-0.005em", fontVariationSettings: '"SOFT" 50' }}>{title}</span>
         <Rule color={s.hi} />
         <Body text={slide.body} s={s} size={fit(40, slide.body, 150, 30)} width={hasPhoto ? (cutout ? 470 : 520) : textWidth} />
       </div>
@@ -343,7 +344,7 @@ function StorySlide(c: Ctx) {
         <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(20,28,40,0.72) 0%, rgba(20,28,40,0.35) 45%, rgba(20,28,40,0.65) 100%)" }} />
         <StoryHeader c={c} color={COLORS.white} />
         <div style={{ position: "absolute", left: pad.side, right: pad.right, top: pad.top + 70, display: "flex", flexDirection: "column", gap: 30, color: COLORS.white }}>
-          <span style={{ fontFamily: SERIF, fontWeight: 900, fontSize: fit(96, title, 34, 58), lineHeight: 0.98, letterSpacing: "-0.02em", fontVariationSettings: '"SOFT" 50' }}>{title}</span>
+          <span style={{ fontFamily: SERIF, fontWeight: 900, fontSize: fit(96, title, 34, 58), lineHeight: 0.98, letterSpacing: "-0.005em", fontVariationSettings: '"SOFT" 50' }}>{title}</span>
           <Body text={slide.body} s={{ ...s, muted: "rgba(255,255,255,0.92)" }} size={fit(40, slide.body, 120, 30)} width={800} weight={600} />
         </div>
         <StoryFooter c={c} color={COLORS.white} />
@@ -504,7 +505,7 @@ function PhotoFullSlide(c: Ctx) {
       <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(20,28,40,0) 35%, rgba(20,28,40,0.82) 100%)" }} />
       <div style={{ position: "absolute", left: pad.side, right: pad.right, bottom: pad.bottom + 40, display: "flex", flexDirection: "column", gap: 24, color: COLORS.white }}>
         {slide.kicker && <span style={{ fontFamily: SANS, fontWeight: 700, fontSize: 30, letterSpacing: "0.1em", textTransform: "uppercase" }}>{slide.kicker}</span>}
-        <span style={{ fontFamily: SANS, fontWeight: 900, fontSize: fit(88, slide.title, 30, 56), lineHeight: 1.0, textTransform: "uppercase" }}>{slide.title}</span>
+        <span style={{ fontFamily: SERIF, fontWeight: 900, fontSize: fit(92, slide.title, 30, 56), lineHeight: 1.0, letterSpacing: "-0.005em", fontVariationSettings: '"SOFT" 50' }}>{slide.title}</span>
         <Body text={slide.body} s={{ ...c.s, muted: "rgba(255,255,255,0.9)" }} size={fit(36, slide.body, 120, 28)} width={860} />
       </div>
       <Footer {...c} s={{ ...c.s, muted: "rgba(255,255,255,0.9)" }} />
@@ -514,7 +515,6 @@ function PhotoFullSlide(c: Ctx) {
 
 function CtaSlide(c: Ctx) {
   const { slide, s, pad, post } = c;
-  const serifTitle = post.template !== "list";
   return (
     <>
       <Dots color={s.dots} style={{ right: -90, top: -90, width: 520, height: 520 }} />
@@ -524,13 +524,12 @@ function CtaSlide(c: Ctx) {
         {slide.kicker && <span style={{ fontFamily: SANS, fontWeight: 700, fontSize: 32, letterSpacing: "0.1em", textTransform: "uppercase", color: s.hi }}>{slide.kicker}</span>}
         <span
           style={{
-            fontFamily: serifTitle ? SERIF : SANS,
+            fontFamily: SERIF,
             fontWeight: 900,
             fontSize: fit(118, slide.title, 22, 64),
             lineHeight: 0.98,
-            letterSpacing: "-0.02em",
-            textTransform: serifTitle ? "none" : "uppercase",
-            fontVariationSettings: serifTitle ? '"SOFT" 50' : undefined,
+            letterSpacing: "-0.005em",
+            fontVariationSettings: '"SOFT" 50',
           }}
         >
           {slide.title}
