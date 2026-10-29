@@ -8,6 +8,7 @@ import { isDownloadableKind, isTemplateLocked } from "@/lib/library/catalogue";
 import { policyDocx } from "@/lib/exports/policy-docx";
 import { exportFileName, todayInBC } from "@/lib/exports/filename";
 import { logDemoActivity } from "@/lib/demo-usage";
+import { logUserActivity } from "@/lib/user-activity";
 
 /**
  * A Library policy template or form as an editable .docx, filled in with the
@@ -38,6 +39,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ corpId:
     bodyFont: await readFile(path.join(process.cwd(), "lib/exports/fonts/WorkSans-Regular.ttf")).catch(() => undefined),
   });
   await logDemoActivity({ kind: "library.template_downloaded", detail: { resourceId, file: "template.docx" } });
+  await logUserActivity({ kind: "template_downloaded", strata: corpId, ref: resourceId, label: item.title });
   return new NextResponse(new Uint8Array(buffer), {
     headers: {
       "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",

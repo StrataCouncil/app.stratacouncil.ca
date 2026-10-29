@@ -5,6 +5,7 @@ import { agendaDocx } from "@/lib/exports/agenda-docx";
 import { exportFileName, meetingDocumentName } from "@/lib/exports/filename";
 import { loadLetterhead } from "@/lib/data/management";
 import { logDemoActivity } from "@/lib/demo-usage";
+import { logUserActivity } from "@/lib/user-activity";
 
 /** Agenda export (.docx). Any member can download the agenda (RLS: members read meetings). */
 export async function GET(_req: Request, { params }: { params: Promise<{ corpId: string; meetingId: string }> }) {
@@ -26,6 +27,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ corpId:
     letterhead: await loadLetterhead(corpId),
   });
   await logDemoActivity({ kind: "meeting.exported", detail: { meetingId, file: "agenda.docx" } });
+  await logUserActivity({ kind: "agenda_downloaded", strata: corpId, ref: meetingId, label: "agenda.docx" });
   return new NextResponse(new Uint8Array(buffer), {
     headers: {
       "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",

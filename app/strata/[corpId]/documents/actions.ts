@@ -19,6 +19,7 @@ import {
 import { queueDocumentFingerprints, queueDocumentIndexing } from "@/lib/kb/queue";
 import { IS_DEMO, demoLimitFail } from "@/lib/demo";
 import { logDemoActivity } from "@/lib/demo-usage";
+import { logUserActivity } from "@/lib/user-activity";
 import { isWebUrl } from "@/lib/web-url";
 import { isSha256Hex } from "@/lib/fingerprint";
 
@@ -186,7 +187,7 @@ export async function getDocumentDownloadUrl(
   const supabase = await createClient();
   const { data: doc } = await supabase
     .from("documents")
-    .select("storage_path, file_name, title, url, source_type")
+    .select("storage_path, file_name, title, url, source_type, category")
     .eq("id", documentId)
     .eq("corporation_id", corpId)
     .maybeSingle();
@@ -207,6 +208,7 @@ export async function getDocumentDownloadUrl(
     return { ok: false, error: "Couldn't prepare the download. Please try again." };
   }
   await logDemoActivity({ kind: view ? "document.viewed" : "document.downloaded", detail: { title: doc.title, file: doc.file_name } });
+  await logUserActivity({ kind: view ? "document_viewed" : "document_downloaded", strata: corpId, ref: documentId, label: doc.category });
   return { ok: true, url: data.signedUrl };
 }
 
