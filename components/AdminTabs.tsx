@@ -1,10 +1,11 @@
 import Link from "next/link";
 
-export type AdminTab = "overview" | "stratas" | "training" | "library" | "legislation" | "announcements" | "demo" | "investors" | "social";
+export type AdminTab = "overview" | "stratas" | "users" | "training" | "library" | "legislation" | "announcements" | "demo" | "investors" | "social";
 
 const TABS: Array<{ key: AdminTab; label: string; href: string }> = [
   { key: "overview", label: "Overview", href: "/admin" },
   { key: "stratas", label: "Stratas", href: "/admin/stratas" },
+  { key: "users", label: "Users", href: "/admin/users" },
   { key: "announcements", label: "Announcements", href: "/admin/announcements" },
   { key: "library", label: "Library", href: "/admin/library" },
   { key: "training", label: "Council Training", href: "/admin/training" },

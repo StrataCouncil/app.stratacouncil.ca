@@ -5,6 +5,7 @@ import { exportFileName, meetingDocumentName } from "@/lib/exports/filename";
 import type { MinutesContent } from "@/lib/meetings/minutes";
 import { loadLetterhead } from "@/lib/data/management";
 import { logDemoActivity } from "@/lib/demo-usage";
+import { logUserActivity } from "@/lib/user-activity";
 
 /** Draft minutes as an editable .docx. Final minutes are the PDF. */
 export async function GET(_req: Request, { params }: { params: Promise<{ corpId: string; meetingId: string }> }) {
@@ -16,6 +17,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ corpId:
     letterhead: await loadLetterhead(corpId),
   });
   await logDemoActivity({ kind: "meeting.exported", detail: { meetingId, file: "minutes.docx" } });
+  await logUserActivity({ kind: "minutes_downloaded", strata: corpId, ref: meetingId, label: "minutes.docx" });
   return new NextResponse(new Uint8Array(buffer), {
     headers: {
       "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",

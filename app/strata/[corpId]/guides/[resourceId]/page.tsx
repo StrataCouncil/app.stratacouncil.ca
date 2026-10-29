@@ -6,6 +6,7 @@ import { LibraryDisclaimer } from "@/components/library/LibraryDisclaimer";
 import { LibraryArticle } from "@/components/library/LibraryArticle";
 import { getPublishedLibraryItem, listPublishedLibrary, type PublishedLibraryEntry } from "@/lib/data/library";
 import { getStrataAccess } from "@/lib/data/strata";
+import { logUserActivity } from "@/lib/user-activity";
 import { isUuid } from "@/lib/library/library";
 import {
   isDownloadableKind,
@@ -43,6 +44,7 @@ export default async function KnowledgeResourcePage({
   if (isUuid(resourceId)) {
     const item = await getPublishedLibraryItem(resourceId);
     if (!item) notFound();
+    await logUserActivity({ kind: "guide_opened", strata: corpId, ref: item.id, label: item.title });
     return <LibraryItemPage item={item} corpId={corpId} subscribed={access.subscribed} />;
   }
   // Placeholder articles show on the Library as "Coming soon" and don't

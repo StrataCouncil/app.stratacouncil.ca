@@ -4860,6 +4860,120 @@ abbr.role-tag--short {
 }
 
 /* Super Admin strata dashboard */
+/* Super Admin, Users tab (app/admin/users). */
+.admin-funnel {
+  list-style: none;
+  margin: 0 0 0.5rem;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 0.6rem;
+}
+
+.admin-funnel a {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  height: 100%;
+  padding: 0.8rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.admin-funnel a:hover {
+  border-color: var(--accent);
+}
+
+.admin-funnel strong {
+  font-size: 1.6rem;
+  line-height: 1.1;
+}
+
+.admin-funnel span {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.admin-funnel li[data-followup] a {
+  background: #fbf3ec;
+  border-color: #ecd3c0;
+}
+
+.admin-user-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: center;
+}
+
+.admin-user-filters .kb-search {
+  flex: 1 1 260px;
+  margin: 0;
+}
+
+.admin-user-filters select {
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font: inherit;
+}
+
+.admin-user-table td {
+  vertical-align: top;
+}
+
+/* Signed up, Last seen. */
+.admin-user-table td:nth-child(2),
+.admin-user-table td:nth-child(3) {
+  white-space: nowrap;
+}
+
+.admin-user-staff {
+  margin-left: 0.5rem;
+  vertical-align: middle;
+}
+
+.admin-user-followup {
+  margin-top: 0.25rem;
+  font-size: 0.82rem;
+  color: var(--accent-dark);
+}
+
+.admin-user-insights {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 1.5rem;
+  margin-top: 2.5rem;
+}
+
+.admin-user-stages {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.admin-user-stages li {
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  border: 1px dashed var(--line);
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.admin-user-stages li[data-reached] {
+  border: 1px solid var(--free);
+  background: var(--free-bg);
+  color: var(--free);
+  font-weight: 600;
+}
+
 .admin-stats {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
