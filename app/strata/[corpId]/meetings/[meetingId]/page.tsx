@@ -84,7 +84,7 @@ export default async function MeetingPage({ params }: { params: Promise<{ corpId
               Resume Meeting Mode
             </Link>
           )}
-          {meeting.status === "ADJOURNED" && (
+          {meeting.status === "ADJOURNED" && Boolean(meeting.minutesContent) && (
             <Link href={`/strata/${corpId}/meetings/${meetingId}/minutes`} className="button button-primary" data-testid="open-minutes">
               {meeting.minutesState === "FINAL" ? "View minutes" : "Review minutes"}
             </Link>
