@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireSuperAdmin } from "@/lib/data/admin";
 import { MANAGEMENT_LOGOS_BUCKET } from "@/lib/data/management";
 import { DOCUMENTS_BUCKET } from "@/lib/documents";
+import { DISCUSSION_FILES_BUCKET } from "@/lib/discussions/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { listFolder, removeFiles, removeFolder } from "@/lib/storage-admin";
 
@@ -57,7 +58,7 @@ async function strataFiles(corpId: string) {
     const slash = sp.indexOf("/");
     if (slash > 0) add(sp.slice(0, slash), sp.slice(slash + 1));
   }
-  for (const [bucket] of [[DOCUMENTS_BUCKET], [MANAGEMENT_LOGOS_BUCKET]]) {
+  for (const [bucket] of [[DOCUMENTS_BUCKET], [MANAGEMENT_LOGOS_BUCKET], [DISCUSSION_FILES_BUCKET]]) {
     for (const path of await listFolder(admin, bucket, corpId)) add(bucket, path);
   }
   return byBucket;

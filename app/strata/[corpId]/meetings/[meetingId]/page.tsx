@@ -6,6 +6,7 @@ import { agendaVersion } from "@/lib/meetings/agenda-version";
 import { AgendaView } from "@/components/meetings/AgendaView";
 import { DeleteMeetingButton, EditMeetingDetailsButton } from "@/components/meetings/MeetingActions";
 import { getStrataAccess } from "@/lib/data/strata";
+import { ratificationCandidates } from "@/lib/data/discussions";
 import { chairCandidates, getMeeting, getMeetingNotes } from "@/lib/data/meetings";
 import { meetingFormatLabels, meetingTypeLabels } from "@/lib/meetings/agenda";
 import { formatMeetingWhen } from "@/lib/meetings/format";
@@ -105,6 +106,7 @@ export default async function MeetingPage({ params }: { params: Promise<{ corpId
           initialNotes={notes}
           aiAvailable={access.subscribed || trialAvailable}
           launch={{ subscribed: access.subscribed, trialAvailable, isAdmin: access.isAdmin }}
+          ratifications={meeting.type === "council" ? await ratificationCandidates(corpId, meetingId) : []}
         />
       ) : (
         <AgendaView corpId={corpId} agenda={meeting.agenda} />

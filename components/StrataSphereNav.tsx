@@ -19,7 +19,7 @@ import { SubscriptionPendingNote } from "@/components/SubscriptionPendingNote";
  * context and has no browse surface (doc01 §4a). No "Calendar" either —
  * not built in V1 (doc01 §7 item 21).
  */
-const allItems: Array<{ slug: string; label: string; gated: boolean; managersOnly?: boolean; billingOnly?: boolean }> = [
+const allItems: Array<{ slug: string; label: string; gated: boolean; managersOnly?: boolean; billingOnly?: boolean; councilOnly?: boolean }> = [
   // Overview is the strata's landing page: its dashboard.
   { slug: "", label: "Overview", gated: false },
   { slug: "assistant", label: "Stratasphere™", gated: true },
@@ -27,6 +27,9 @@ const allItems: Array<{ slug: string; label: string; gated: boolean; managersOnl
   { slug: "council", label: "Council", gated: false },
   { slug: "lots", label: "Owners", gated: false },
   { slug: "meetings", label: "Meetings", gated: false },
+  // Council votes between meetings (0070): council only. The first is free;
+  // the page itself says when a subscription is needed for more.
+  { slug: "discussions", label: "Discussions", gated: false, councilOnly: true },
   { slug: "documents", label: "Documents", gated: false },
   // Billing: the admin, and anyone they've given billing access to (0046); others never see the tab.
   { slug: "billing", label: "Billing", gated: false, billingOnly: true },
@@ -55,8 +58,8 @@ function LockIcon() {
 }
 
 export function StrataSphereNav({ active }: { active: string }) {
-  const { corpId, subscribed, pending, canBill, canManage } = useStrata();
-  const items = allItems.filter((i) => (!i.managersOnly || canManage) && (!i.billingOnly || canBill));
+  const { corpId, subscribed, pending, canBill, canManage, isCouncil } = useStrata();
+  const items = allItems.filter((i) => (!i.managersOnly || canManage) && (!i.billingOnly || canBill) && (!i.councilOnly || isCouncil));
   const [prompt, setPrompt] = useState<string | null>(null);
 
   return (

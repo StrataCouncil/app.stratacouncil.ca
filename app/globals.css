@@ -8621,3 +8621,211 @@ a.kb-card:hover {
     grid-column: 1 / -1;
   }
 }
+
+/* Council discussions (0070): votes between meetings. */
+.discussion-status[data-tone="open"] {
+  background: rgba(180, 96, 47, 0.12);
+  color: var(--accent-dark);
+}
+
+.discussion-status[data-tone="awaiting_ratification"] {
+  background: rgba(196, 138, 30, 0.14);
+  color: #94650f;
+}
+
+.discussion-status[data-tone="ratified"] {
+  background: var(--free-bg);
+  color: var(--free);
+}
+
+.discussion-status[data-tone="not_ratified"] {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.discussion-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.discussion-side {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.discussion-side .card,
+.discussion-motion {
+  margin: 0;
+}
+
+.discussion-label {
+  margin: 0 0 0.3rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.discussion-motion__text {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.discussion-section {
+  margin-top: 1.25rem;
+}
+
+.discussion-body {
+  margin: 0;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.discussion-vote__choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.75rem 0;
+}
+
+.discussion-vote__recuse {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  align-items: flex-start;
+}
+
+.discussion-voters {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  border-top: 1px solid var(--line);
+}
+
+.discussion-voters li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.92rem;
+}
+
+.discussion-voters li > span:last-child {
+  color: var(--muted);
+}
+
+.discussion-voters li[data-vote="for"] > span:last-child {
+  color: var(--free);
+  font-weight: 600;
+}
+
+.discussion-voters li[data-vote="against"] > span:last-child {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.discussion-result {
+  margin: 0.25rem 0 0.4rem;
+  font-weight: 700;
+  font-size: 1.05rem;
+}
+
+.discussion-result[data-result="supported"] {
+  color: var(--free);
+}
+
+.discussion-result[data-result="not_supported"] {
+  color: var(--danger);
+}
+
+.discussion-majority {
+  margin: 0.4rem 0 0;
+  font-weight: 600;
+  color: var(--free);
+}
+
+.discussion-comments {
+  margin-top: 2rem;
+}
+
+.discussion-comments > h3 {
+  margin-bottom: 0.75rem;
+}
+
+.discussion-comment-list {
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.discussion-comment-list .card {
+  margin: 0;
+}
+
+.discussion-comment__who {
+  margin: 0 0 0.4rem;
+}
+
+.discussion-comment-form {
+  margin-bottom: 0.75rem;
+}
+
+.discussion-comment-form__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 0.5rem;
+}
+
+.discussion-note {
+  margin: 0;
+  font-size: 0.92rem;
+}
+
+/* The agenda builder's notice of motions waiting to be ratified. */
+.ratification-notice {
+  margin: 0 0 1.25rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid #ecd3c0;
+  border-radius: var(--radius-lg);
+  background: #fbf3ec;
+}
+
+.ratification-notice h3 {
+  margin: 0 0 0.35rem;
+}
+
+.ratification-notice ul {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.ratification-notice li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+@media (max-width: 900px) {
+  .discussion-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

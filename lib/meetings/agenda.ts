@@ -116,6 +116,11 @@ export interface AgendaItem {
   addedDuringMeeting?: boolean;
   /** Elect Chairperson item only: who was nominated. */
   nominee?: string;
+  /**
+   * Ratification of a council discussion (0070): the discussion it ratifies.
+   * When the meeting adjourns, this item's outcome marks it ratified or not.
+   */
+  discussionId?: string;
 }
 
 function rid(prefix: string) {
@@ -424,6 +429,7 @@ export function normalizeAgenda(raw: unknown): AgendaItem[] {
         nextMeeting: (r.nextMeeting as AgendaItem["nextMeeting"]) ?? undefined,
         addedDuringMeeting: Boolean(r.addedDuringMeeting) || undefined,
         nominee: typeof r.nominee === "string" && r.nominee.trim() ? r.nominee.slice(0, 200) : undefined,
+        discussionId: typeof r.discussionId === "string" && /^[0-9a-f-]{36}$/i.test(r.discussionId) ? r.discussionId : undefined,
       };
     });
 }
