@@ -8,6 +8,11 @@ on:
   push:
     branches: [main]
 
+# The job's GitHub token can only read the code: nothing here pushes,
+# comments or releases, so nothing it runs (an npm package included) can.
+permissions:
+  contents: read
+
 concurrency:
   group: checks-${{ github.ref }}
   cancel-in-progress: true
