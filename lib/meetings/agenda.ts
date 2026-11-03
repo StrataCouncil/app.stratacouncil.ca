@@ -87,6 +87,11 @@ export interface Motion {
    * above stay as voted; the rules add this vote when deciding.
    */
   tieBreak?: "for" | "against" | null;
+  /**
+   * The live vote these counts came from (0073), once it has closed. The
+   * counts then stay as the database recorded them.
+   */
+  voteId?: string;
 }
 
 export type Attachment =
@@ -121,6 +126,12 @@ export interface AgendaItem {
    * When the meeting adjourns, this item's outcome marks it ratified or not.
    */
   discussionId?: string;
+  /**
+   * Council lots that declared a conflict of interest on this item (SPA
+   * s.32), copied from the meeting's live record (0073) at adjournment for
+   * the minutes.
+   */
+  conflicts?: string[];
 }
 
 function rid(prefix: string) {
@@ -407,6 +418,7 @@ export function normalizeAgenda(raw: unknown): AgendaItem[] {
             mover: String(m.mover ?? ""),
             sec: String(m.sec ?? ""),
             tieBreak: m.tieBreak === "for" || m.tieBreak === "against" ? m.tieBreak : null,
+            ...(typeof m.voteId === "string" && m.voteId ? { voteId: m.voteId } : {}),
           }
         : null;
       return {
@@ -430,6 +442,9 @@ export function normalizeAgenda(raw: unknown): AgendaItem[] {
         addedDuringMeeting: Boolean(r.addedDuringMeeting) || undefined,
         nominee: typeof r.nominee === "string" && r.nominee.trim() ? r.nominee.slice(0, 200) : undefined,
         discussionId: typeof r.discussionId === "string" && /^[0-9a-f-]{36}$/i.test(r.discussionId) ? r.discussionId : undefined,
+        conflicts: Array.isArray(r.conflicts)
+          ? [...new Set((r.conflicts as unknown[]).filter((l): l is string => typeof l === "string" && /^SL\s?-?\d{1,4}$/.test(l)))].sort()
+          : undefined,
       };
     });
 }

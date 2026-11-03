@@ -28,6 +28,8 @@ export default async function MeetingPage({ params }: { params: Promise<{ corpId
   if (!meeting) notFound();
 
   const launchedByMe = meeting.launchedBy === access.userId;
+  // Following live (0073): council, the manager, and anyone who can run meetings.
+  const canFollow = access.isCouncil || access.canRunMeetings || access.roles.includes("manager");
   const launchedByOther = meeting.launchedBy !== null && !launchedByMe;
   const canEdit = access.canRunMeetings && meeting.status === "DRAFT" && meeting.launchedBy === null;
   const [notes, chairOptions] = canEdit
@@ -78,6 +80,11 @@ export default async function MeetingPage({ params }: { params: Promise<{ corpId
             <a className="button button-secondary button-small" href={`/strata/${corpId}/meetings/${meetingId}/agenda.docx`} data-testid="export-agenda">
               Export agenda (.docx)
             </a>
+          )}
+          {!launchedByMe && meeting.status === "LIVE" && canFollow && (
+            <Link href={`/strata/${corpId}/meetings/${meetingId}/live`} className="button button-primary" data-testid="follow-meeting">
+              Follow the meeting
+            </Link>
           )}
           {launchedByMe && meeting.status !== "ADJOURNED" && (
             <Link href={`/strata/${corpId}/meetings/${meetingId}/run`} className="button button-primary" data-testid="resume-meeting">

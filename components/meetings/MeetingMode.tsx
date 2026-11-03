@@ -43,6 +43,17 @@ import { openInNewTab } from "@/lib/open-in-tab";
 import { ItemEditor } from "@/components/meetings/ItemEditor";
 import { DEMO_LIMITS, DEMO_LIMIT_MESSAGE, SIGNUP_URL } from "@/lib/demo";
 import { isDemoLimit, showDemoLimit } from "@/lib/demo-client";
+import { ConflictsPanel, RunnerVotePanel } from "@/components/meetings/LiveVote";
+import { presentForItem, type Choice, type ClosedVote, type LiveConflict, type LiveState, type OpenVote } from "@/lib/meetings/live";
+import {
+  cancelVote,
+  closeVote,
+  declareConflict,
+  getLiveState,
+  openVote,
+  recordVote,
+  withdrawConflict,
+} from "@/app/strata/[corpId]/meetings/[meetingId]/live/actions";
 
 /**
  * Meeting Mode (doc01 §4, doc03 Stage 5a). Run by one person — whoever
@@ -78,6 +89,8 @@ export function MeetingMode(props: {
   aiAvailable: boolean;
   /** The demo site: questions left for Meeting Mode's Stratasphere. Null elsewhere. */
   demoLeft?: number | null;
+  /** Live votes and conflicts as loaded with the page (0073). */
+  initialLive?: LiveState | null;
 }) {
   const { corpId, meetingId, type, timezone } = props;
   const [demoLeft, setDemoLeft] = useState(props.demoLeft ?? null);
@@ -111,8 +124,9 @@ export function MeetingMode(props: {
 
   // ── Autosave ─────────────────────────────────────────────────────────
   const firstRender = useRef(true);
-  const latest = useRef({ agenda, attendance, agendaApproved });
-  latest.current = { agenda, attendance, agendaApproved };
+  const currentItemId = current === ATTENDANCE_VIEW ? null : current;
+  const latest = useRef({ agenda, attendance, agendaApproved, currentItemId });
+  latest.current = { agenda, attendance, agendaApproved, currentItemId };
   useEffect(() => {
     if (firstRender.current) {
       firstRender.current = false;
@@ -128,7 +142,33 @@ export function MeetingMode(props: {
       setSaveError(result.ok ? null : result.error);
     }, 700);
     return () => clearTimeout(t);
-  }, [agenda, attendance, agendaApproved, corpId, meetingId]);
+  }, [agenda, attendance, agendaApproved, currentItemId, corpId, meetingId]);
+
+  /** Saves now, for steps that need the saved agenda (opening a vote). */
+  async function saveNow() {
+    const result = await saveMeetingState(corpId, meetingId, latest.current).catch(() => ({ ok: false as const, error: "Couldn't save." }));
+    setSaveState(result.ok ? "saved" : "error");
+    return result.ok;
+  }
+
+  // ── Live votes and conflicts (0073) ─────────────────────────────────
+  const [live, setLive] = useState<LiveState | null>(props.initialLive ?? null);
+  const [liveNow, setLiveNow] = useState(() => Date.now());
+  const [liveBusy, setLiveBusy] = useState(false);
+  const [liveError, setLiveError] = useState<string | null>(null);
+  const refreshLive = useCallback(async () => {
+    const s = await getLiveState(meetingId).catch(() => null);
+    if (s) setLive(s);
+    setLiveNow(Date.now());
+  }, [meetingId]);
+  const voteOpen = Boolean(live?.openVote);
+  useEffect(() => {
+    void refreshLive();
+    // Faster while a vote is open, so ballots appear as they're cast.
+    const t = setInterval(() => void refreshLive(), voteOpen ? 2000 : 6000);
+    return () => clearInterval(t);
+  }, [refreshLive, voteOpen]);
+  const conflicts: LiveConflict[] = live?.conflicts ?? [];
 
   // ── Roll, quorum ─────────────────────────────────────────────────────
   const councilLots = props.lots.filter((l) => l.isCouncil).map((l) => l.lot);
@@ -139,6 +179,9 @@ export function MeetingMode(props: {
   const voters = present.length + (general ? q.proxies : 0);
   // Who the thresholds count: members present (council), votes cast or every lot's vote (general).
   const voteCtx: VoteContext = { type, present: voters, eligible: props.lots.length, lotCount: props.lots.length };
+  // Council: anyone with a declared conflict on an item isn't present for its votes (SPA s.32).
+  const votersFor = (it: AgendaItem) => (general ? voters : presentForItem(present, conflicts, it.id).length);
+  const ctxFor = (it: AgendaItem): VoteContext => ({ ...voteCtx, present: votersFor(it) });
   const called = Boolean(startedAt);
 
   const scheduled = props.startTime ? zonedInstant(props.meetingDate, props.startTime, timezone).getTime() : null;
@@ -201,6 +244,9 @@ export function MeetingMode(props: {
 
   function confirmDecision(it: AgendaItem) {
     const m = it.motion!;
+    const voters = votersFor(it);
+    const voteCtx = ctxFor(it);
+    if (live?.openVote?.itemId === it.id) return blockAction(it, "Close the vote first.");
     if (isElectChair(it) && !it.nominee?.trim()) return blockAction(it, "Enter the nominee first.");
     if (!m.mover || !m.sec) return blockAction(it, "Choose a mover and a seconder first.");
     if (m.mover === m.sec) return blockAction(it, "The mover and seconder must be different lots.");
@@ -244,6 +290,7 @@ export function MeetingMode(props: {
   }
 
   function recordOutcome(it: AgendaItem, outcome: "CARRIED" | "DEFEATED", motionPatch: Partial<NonNullable<AgendaItem["motion"]>> = {}) {
+    const voteCtx = ctxFor(it);
     const motion = { ...it.motion!, ...motionPatch, outcome };
     // What the minutes and the decision ledger record is the threshold that applied.
     motion.dt = effectiveDecisionType(type, motion.dt);
@@ -261,6 +308,10 @@ export function MeetingMode(props: {
 
   function unanimous(it: AgendaItem) {
     const m = it.motion!;
+    const voters = votersFor(it);
+    const voteCtx = ctxFor(it);
+    if (live?.openVote?.itemId === it.id) return blockAction(it, "A vote is open on this item. Close it, or cancel it to record a unanimous vote.");
+    if (m.voteId) return blockAction(it, "This motion was counted in the app. Confirm the decision instead.");
     if (!m.mover || !m.sec) return blockAction(it, "Choose a mover and a seconder first.");
     if (m.mover === m.sec) return blockAction(it, "The mover and seconder must be different lots.");
     if (isElectChair(it) && !it.nominee?.trim()) return blockAction(it, "Enter the nominee first.");
@@ -321,6 +372,49 @@ export function MeetingMode(props: {
     );
     setAgenda(next);
     goNext(it.id, next);
+  }
+
+  // ── Live vote handlers ──────────────────────────────────────────────
+  async function liveStep(run: () => Promise<{ ok: true } | { ok: false; error: string }>) {
+    setLiveBusy(true);
+    setLiveError(null);
+    const result = await run().catch(() => ({ ok: false as const, error: "Couldn't reach the server. Try again." }));
+    setLiveBusy(false);
+    if (!result.ok) setLiveError(result.error);
+    await refreshLive();
+    return result.ok;
+  }
+  async function startVote(it: AgendaItem) {
+    const m = it.motion;
+    if (!m?.text.trim()) return setLiveError("Write the motion before opening the vote.");
+    await liveStep(async () => {
+      if (!(await saveNow())) return { ok: false as const, error: "Couldn't save the agenda. Check your connection and try again." };
+      return openVote(meetingId, it.id, m.text, effectiveDecisionType(type, m.dt));
+    });
+  }
+  function finishVote(it: AgendaItem, vote: OpenVote) {
+    const ballots = vote.ballots?.length ?? 0;
+    const missing = vote.eligibleLots.length - ballots;
+    const close = () =>
+      liveStep(async () => {
+        const r = await closeVote(vote.id);
+        if (!r.ok) return r;
+        // The counts come from the database; the motion keeps them (and its link to the vote).
+        patchItem(it.id, { motion: { ...it.motion!, ...r.counts, voteId: vote.id } });
+        return { ok: true as const };
+      }).then(() => setConfirm(null));
+    if (missing > 0) {
+      setConfirm({
+        title: "Close the vote?",
+        confirmLabel: "Close vote",
+        body: (
+          <p>
+            {missing} of {vote.eligibleLots.length} council {vote.eligibleLots.length === 1 ? "member hasn't" : "members haven't"} voted. They&rsquo;ll be recorded as abstaining, which for a council vote has the same effect as voting against (Standard Bylaws 18(1)).
+          </p>
+        ),
+        onConfirm: () => void close(),
+      });
+    } else void close();
   }
 
   // ── Adjournment ─────────────────────────────────────────────────────
@@ -595,9 +689,31 @@ export function MeetingMode(props: {
               item={item}
               general={general}
               called={called}
-              present={present}
-              voters={voters}
-              voteCtx={voteCtx}
+              present={general ? present : presentForItem(present, conflicts, item.id)}
+              voters={votersFor(item)}
+              voteCtx={ctxFor(item)}
+              live={
+                general
+                  ? null
+                  : {
+                      vote: live?.openVote?.itemId === item.id ? live.openVote : null,
+                      otherOpenItem:
+                        live?.openVote && live.openVote.itemId !== item.id ? (agenda.find((i) => i.id === live.openVote!.itemId)?.num ?? 0) : null,
+                      closed: item.motion?.voteId ? (live?.closedVotes.find((v) => v.id === item.motion!.voteId) ?? null) : null,
+                      conflicts: conflicts.filter((c) => c.itemId === item.id),
+                      allPresent: present,
+                      ownLot: live?.myLot ?? null,
+                      busy: liveBusy,
+                      error: liveError,
+                      now: liveNow,
+                      onOpen: () => void startVote(item),
+                      onRecord: (lot: string, choice: Choice) => void liveStep(() => recordVote(live!.openVote!.id, lot, choice)),
+                      onClose: () => live?.openVote && finishVote(item, live.openVote),
+                      onCancel: () => live?.openVote && void liveStep(() => cancelVote(live.openVote!.id)),
+                      onDeclare: (lot: string, note: string) => void liveStep(() => declareConflict(meetingId, item.id, lot, note)),
+                      onWithdraw: (lot: string) => void liveStep(() => withdrawConflict(meetingId, item.id, lot)),
+                    }
+              }
               names={names}
               note={notes[item.id] ?? ""}
               onNote={(body) => {
@@ -767,6 +883,25 @@ function ItemPanel(props: {
   /** Everyone who can vote: those present, plus proxies at a general meeting. */
   voters: number;
   voteCtx: VoteContext;
+  /** Live voting and conflicts (0073); council meetings only. */
+  live: null | {
+    vote: OpenVote | null;
+    otherOpenItem: number | null;
+    closed: ClosedVote | null;
+    conflicts: LiveConflict[];
+    /** Every council lot present, conflicts included (who could declare one). */
+    allPresent: string[];
+    ownLot: string | null;
+    busy: boolean;
+    error: string | null;
+    now: number;
+    onOpen: () => void;
+    onRecord: (lot: string, choice: Choice) => void;
+    onClose: () => void;
+    onCancel: () => void;
+    onDeclare: (lot: string, note: string) => void;
+    onWithdraw: (lot: string) => void;
+  };
   names: Record<string, string>;
   note: string;
   onNote: (body: string) => void;
@@ -787,7 +922,10 @@ function ItemPanel(props: {
   const script = itemScript(it, props.general);
   const vote = m ? evaluateVote(m, props.voteCtx) : null;
   const [note, setNote] = useState(props.note);
+  const live = props.live;
   const locked = it.done || !props.called;
+  // While a live vote is open, or once one counted this motion, the counts aren't typed by hand.
+  const countsLocked = locked || Boolean(live?.vote) || Boolean(m?.voteId);
   const setMotion = (patch: Partial<NonNullable<AgendaItem["motion"]>>) => onPatch({ motion: { ...m!, ...patch } });
   const lotLabel = (lot: string) => (!props.general && props.names[lot] ? `${lot} — ${props.names[lot]}` : lot);
 
@@ -890,6 +1028,21 @@ function ItemPanel(props: {
         </label>
       )}
 
+      {live && props.called && !it.done && (
+        <ConflictsPanel
+          conflicts={live.conflicts}
+          present={live.allPresent}
+          names={props.names}
+          canEdit
+          busy={live.busy}
+          onDeclare={live.onDeclare}
+          onWithdraw={live.onWithdraw}
+        />
+      )}
+      {live && it.done && live.conflicts.length > 0 && (
+        <ConflictsPanel conflicts={live.conflicts} present={[]} names={props.names} canEdit={false} busy onDeclare={() => {}} onWithdraw={() => {}} />
+      )}
+
       {m && (
         <div className="mm-vote">
           <label className="field">
@@ -922,6 +1075,25 @@ function ItemPanel(props: {
               </select>
             </label>
           </div>
+          {live && props.called && !it.done && !isElectChair(it) && (
+            <RunnerVotePanel
+              vote={live.vote}
+              otherOpenItem={live.otherOpenItem}
+              closed={live.closed}
+              present={props.present}
+              names={props.names}
+              ownLot={live.ownLot}
+              busy={live.busy}
+              error={live.error}
+              now={live.now}
+              onOpen={live.onOpen}
+              onRecord={live.onRecord}
+              onClose={live.onClose}
+              onCancel={live.onCancel}
+            />
+          )}
+          {!live?.vote && (
+            <>
           <div className="mm-tally">
             {(["for", "against", "abstain"] as const).map((k) => {
               // Nobody votes twice: the three counts together can't exceed the voters present.
@@ -931,7 +1103,7 @@ function ItemPanel(props: {
               <div className="mm-tally__box" key={k}>
                 <span className="mm-tally__label">{k === "for" ? "In favour" : k === "against" ? "Opposed" : "Abstain"}</span>
                 <div className="mm-tally__controls">
-                  <button type="button" className="icon-button" aria-label={`One fewer ${k}`} onClick={() => setMotion({ [k]: Math.max(0, m[k] - 1) })} disabled={locked}>
+                  <button type="button" className="icon-button" aria-label={`One fewer ${k}`} onClick={() => setMotion({ [k]: Math.max(0, m[k] - 1) })} disabled={countsLocked}>
                     &minus;
                   </button>
                   <input
@@ -941,7 +1113,7 @@ function ItemPanel(props: {
                     value={m[k]}
                     max={max}
                     onChange={(e) => setMotion({ [k]: Math.min(max, Math.max(0, Math.floor(Number(e.target.value) || 0))) })}
-                    disabled={locked}
+                    disabled={countsLocked}
                     aria-label={k === "for" ? "Votes in favour" : k === "against" ? "Votes opposed" : "Abstentions"}
                     data-testid={`mm-votes-${k}`}
                   />
@@ -950,7 +1122,7 @@ function ItemPanel(props: {
                     className="icon-button"
                     aria-label={`One more ${k}`}
                     onClick={() => setMotion({ [k]: Math.min(max, m[k] + 1) })}
-                    disabled={locked || m[k] >= max}
+                    disabled={countsLocked || m[k] >= max}
                   >
                     +
                   </button>
@@ -974,6 +1146,8 @@ function ItemPanel(props: {
                 ? `${thresholdText(vote)}: ${vote.passing ? "passing" : "failing"}`
                 : "No votes recorded yet"}
           </p>
+            </>
+          )}
           {!it.done && isTie(m) && (
             tieBreakAllowed(m, props.voteCtx) ? (
               <label className="field" data-testid="mm-tie-break">
@@ -1083,7 +1257,7 @@ function Detail({ title, body }: { title: string; body: string }) {
   );
 }
 
-function Assistant(props: {
+export function Assistant(props: {
   corpId: string;
   meetingId: string;
   item: AgendaItem | null;

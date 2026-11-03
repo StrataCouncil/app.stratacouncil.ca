@@ -11,6 +11,7 @@ import {
   type MeetingType,
 } from "./agenda.ts";
 import { minutesSummary, motionNote, quorum, type AttendanceStatus } from "./rules.ts";
+import { conflictLine } from "./live.ts";
 
 /**
  * Minutes as structured data (meetings.minutes_content), built once at
@@ -115,7 +116,8 @@ export function buildMinutes(input: {
         id: it.id,
         num: it.num,
         title: it.text,
-        summary: summaryFor(it),
+        // A declared conflict (SPA s.32) is part of the record of the item.
+        summary: [conflictLine(it.conflicts ?? []), summaryFor(it)].filter(Boolean).join(" "),
         deferred: it.deferred && !it.done,
         motion:
           it.motion && (it.motion.text || it.done)

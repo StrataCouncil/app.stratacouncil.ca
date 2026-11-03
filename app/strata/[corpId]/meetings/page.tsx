@@ -128,8 +128,8 @@ export default async function MeetingsPage({ params }: { params: Promise<{ corpI
         </div>
       )}
 
-      <MeetingSection title="Upcoming and in progress" meetings={upcoming} corpId={corpId} userId={access.userId} seesDrafts={access.isCouncil || access.canRunMeetings} empty={IS_DEMO ? "No meetings scheduled. Press New meeting: the agenda is written for you, ready to run in Meeting Mode." : "No meetings scheduled."} />
-      {past.length > 0 && <MeetingSection title="Past meetings" meetings={past} corpId={corpId} userId={access.userId} seesDrafts={access.isCouncil || access.canRunMeetings} />}
+      <MeetingSection title="Upcoming and in progress" meetings={upcoming} corpId={corpId} userId={access.userId} seesDrafts={access.isCouncil || access.canRunMeetings} canFollow={access.isCouncil || access.canRunMeetings || access.roles.includes("manager")} empty={IS_DEMO ? "No meetings scheduled. Press New meeting: the agenda is written for you, ready to run in Meeting Mode." : "No meetings scheduled."} />
+      {past.length > 0 && <MeetingSection title="Past meetings" meetings={past} corpId={corpId} userId={access.userId} seesDrafts={access.isCouncil || access.canRunMeetings} canFollow={access.isCouncil || access.canRunMeetings || access.roles.includes("manager")} />}
     </>
   );
 }
@@ -140,6 +140,7 @@ function MeetingSection({
   corpId,
   userId,
   seesDrafts,
+  canFollow,
   empty,
 }: {
   title: string;
@@ -148,6 +149,8 @@ function MeetingSection({
   userId: string;
   /** Draft minutes are for council and whoever runs meetings (0072). */
   seesDrafts: boolean;
+  /** Can follow a live meeting (0073): council, the manager, anyone who runs meetings. */
+  canFollow: boolean;
   empty?: string;
 }) {
   return (
@@ -175,6 +178,9 @@ function MeetingSection({
                 {m.launchedBy === userId && m.status !== "ADJOURNED" ? (
                   <Link href={`/strata/${corpId}/meetings/${m.id}/run`} className="button button-primary button-small">
                     Resume
+                  </Link>) : m.status === "LIVE" && canFollow ? (
+                  <Link href={`/strata/${corpId}/meetings/${m.id}/live`} className="button button-primary button-small" data-testid={`follow-${m.id}`}>
+                    Follow
                   </Link>
                 ) : m.status === "ADJOURNED" && (m.minutesState === "FINAL" || (m.minutesState === "DRAFT" && seesDrafts)) ? (
                   <Link href={`/strata/${corpId}/meetings/${m.id}/minutes`} className="button button-secondary button-small">
