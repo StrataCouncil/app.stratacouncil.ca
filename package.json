@@ -23,7 +23,7 @@
     "inngest": "^4.21.0",
     "jszip": "^3.10.2",
     "mammoth": "^1.13.0",
-    "next": "^15.1.0",
+    "next": "^15.5.28",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^4.10.38",
     "react": "^19.0.0",
@@ -37,5 +37,13 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "typescript": "^5"
+  },
+  "overrides": {
+    "next": {
+      "postcss": "^8.5.32"
+    },
+    "rimraf": {
+      "glob": "^14.0.3"
+    }
   }
 }
