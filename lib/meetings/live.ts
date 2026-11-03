@@ -1,0 +1,168 @@
+/**
+ * Live voting (0073): what a follower's screen gets from
+ * live_meeting_state(), and how a closed vote becomes the motion's counts.
+ * Council meetings only for now. Shared by Meeting Mode (the runner) and
+ * the members' live page; no app imports, so the unit tests can load it.
+ */
+
+export type Choice = "for" | "against" | "abstain";
+
+export interface LiveConflict {
+  itemId: string;
+  lot: string;
+  note: string;
+}
+
+export interface LiveBallot {
+  lot: string;
+  choice: Choice;
+  /** Entered by the runner for someone else. */
+  forOther: boolean;
+  at: string;
+}
+
+export interface OpenVote {
+  id: string;
+  itemId: string;
+  motion: string;
+  decisionType: string;
+  openedAt: string;
+  eligibleLots: string[];
+  votedCount: number;
+  /** The signed-in member's own ballot, if they've voted. */
+  myBallot: Choice | null;
+  /** Every ballot: the runner only. */
+  ballots: LiveBallot[] | null;
+}
+
+export interface ClosedVote {
+  id: string;
+  itemId: string;
+  for: number;
+  against: number;
+  abstain: number;
+  missing: number;
+  present: number;
+  closedAt: string;
+}
+
+export interface LiveState {
+  status: "DRAFT" | "LIVE" | "ADJOURNED";
+  agenda: unknown;
+  attendance: Record<string, string>;
+  currentItemId: string | null;
+  calledToOrderAt: string | null;
+  chair: string | null;
+  updatedAt: string;
+  isRunner: boolean;
+  /** The member's council lot; null for a manager or anyone without a vote. */
+  myLot: string | null;
+  conflicts: LiveConflict[];
+  openVote: OpenVote | null;
+  closedVotes: ClosedVote[];
+}
+
+const CHOICES: readonly string[] = ["for", "against", "abstain"];
+const str = (v: unknown) => (typeof v === "string" ? v : "");
+const int = (v: unknown) => (Number.isFinite(Number(v)) ? Math.max(0, Math.floor(Number(v))) : 0);
+const choice = (v: unknown): Choice | null => (CHOICES.includes(v as string) ? (v as Choice) : null);
+const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
+const obj = (v: unknown): Record<string, unknown> => (v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {});
+
+/** live_meeting_state() as returned, checked field by field. Null when the caller may not follow. */
+export function parseLiveState(raw: unknown): LiveState | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = obj(raw);
+  const status = r.status === "LIVE" || r.status === "ADJOURNED" ? r.status : "DRAFT";
+  const ov = r.openVote ? obj(r.openVote) : null;
+  return {
+    status,
+    agenda: r.agenda ?? [],
+    attendance: Object.fromEntries(Object.entries(obj(r.attendance)).map(([k, v]) => [k, str(v)])),
+    currentItemId: str(r.currentItemId) || null,
+    calledToOrderAt: str(r.calledToOrderAt) || null,
+    chair: str(r.chair) || null,
+    updatedAt: str(r.updatedAt),
+    isRunner: r.isRunner === true,
+    myLot: str(r.myLot) || null,
+    conflicts: arr(r.conflicts).map((c) => {
+      const o = obj(c);
+      return { itemId: str(o.itemId), lot: str(o.lot), note: str(o.note) };
+    }),
+    openVote: ov
+      ? {
+          id: str(ov.id),
+          itemId: str(ov.itemId),
+          motion: str(ov.motion),
+          decisionType: str(ov.decisionType),
+          openedAt: str(ov.openedAt),
+          eligibleLots: arr(ov.eligibleLots).map(str).filter(Boolean),
+          votedCount: int(ov.votedCount),
+          myBallot: choice(ov.myBallot),
+          ballots: Array.isArray(ov.ballots)
+            ? ov.ballots
+                .map((b) => {
+                  const o = obj(b);
+                  const c = choice(o.choice);
+                  return c ? { lot: str(o.lot), choice: c, forOther: o.forOther === true, at: str(o.at) } : null;
+                })
+                .filter((b): b is LiveBallot => b !== null)
+            : null,
+        }
+      : null,
+    closedVotes: arr(r.closedVotes).map((v) => {
+      const o = obj(v);
+      return {
+        id: str(o.id),
+        itemId: str(o.itemId),
+        for: int(o.for),
+        against: int(o.against),
+        abstain: int(o.abstain),
+        missing: int(o.missing),
+        present: int(o.present),
+        closedAt: str(o.closedAt),
+      };
+    }),
+  };
+}
+
+/** Lots with a declared conflict on this item. */
+export function conflictedLots(conflicts: LiveConflict[], itemId: string): string[] {
+  return [...new Set(conflicts.filter((c) => c.itemId === itemId).map((c) => c.lot))].sort();
+}
+
+/**
+ * Council members present for this item's votes: those marked present,
+ * less anyone who declared a conflict on it (they leave the meeting while
+ * it's discussed and voted on, SPA s.32).
+ */
+export function presentForItem(presentLots: string[], conflicts: LiveConflict[], itemId: string): string[] {
+  const out = new Set(conflictedLots(conflicts, itemId));
+  return presentLots.filter((l) => !out.has(l));
+}
+
+/**
+ * A closed vote as the motion's counts. Someone present who didn't vote is
+ * recorded as abstaining: a council decision needs a majority of the
+ * members present (Standard Bylaws 18(1)), so a non-vote has the same
+ * effect as an abstention, and the counts then add up to those present.
+ */
+export function motionCounts(v: Pick<ClosedVote, "for" | "against" | "abstain" | "missing">) {
+  return { for: v.for, against: v.against, abstain: v.abstain + v.missing };
+}
+
+/** "2 of 4 have voted". */
+export function votedLine(v: Pick<OpenVote, "votedCount" | "eligibleLots">) {
+  return `${v.votedCount} of ${v.eligibleLots.length} ${v.eligibleLots.length === 1 ? "has" : "have"} voted`;
+}
+
+export const choiceLabels: Record<Choice, string> = { for: "For", against: "Against", abstain: "Abstain" };
+
+/** The minutes line for an item's declared conflicts. */
+export function conflictLine(lots: string[]): string {
+  if (lots.length === 0) return "";
+  const list = lots.length === 1 ? lots[0] : `${lots.slice(0, -1).join(", ")} and ${lots[lots.length - 1]}`;
+  return lots.length === 1
+    ? `${list} declared a conflict of interest, left the meeting for this item and did not vote.`
+    : `${list} declared conflicts of interest, left the meeting for this item and did not vote.`;
+}

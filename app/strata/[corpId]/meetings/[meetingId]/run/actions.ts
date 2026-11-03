@@ -12,6 +12,7 @@ import { IS_DEMO, demoLimitFail } from "@/lib/demo";
 import { logDemoActivity, refundDemoAllowance, takeDemoAllowance } from "@/lib/demo-usage";
 import { fileDiscussionRecord } from "@/lib/discussions/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { motionCounts } from "@/lib/meetings/live";
 
 /**
  * Meeting Mode (doc01 §4): saving the running meeting, Call to Order, the
@@ -40,7 +41,7 @@ const presentLots = (attendance: Record<string, AttendanceStatus>) =>
 export async function saveMeetingState(
   corpId: string,
   meetingId: string,
-  state: { agenda: unknown; attendance: Record<string, string>; agendaApproved: boolean }
+  state: { agenda: unknown; attendance: Record<string, string>; agendaApproved: boolean; currentItemId?: string | null }
 ): Promise<{ ok: true } | Fail> {
   const supabase = await createClient();
   const attendance = cleanAttendance(state.attendance);
@@ -61,6 +62,8 @@ export async function saveMeetingState(
       attendance,
       attendees: presentLots(attendance),
       agenda_approved: Boolean(state.agendaApproved),
+      // Where the runner is, so members' live pages follow along (0073).
+      current_item_id: typeof state.currentItemId === "string" ? state.currentItemId.slice(0, 100) : null,
       ...(chair ? { chair_name: chair } : {}),
     })
     .eq("id", meetingId)
@@ -109,8 +112,13 @@ export async function askMeetingAssistant(
     data: { user },
   } = await supabase.auth.getUser();
   const meeting = await getMeeting(corpId, meetingId);
-  if (!user || !meeting || meeting.launchedBy !== user.id || meeting.status === "ADJOURNED") {
-    return { ok: false as const, error: "The assistant is available to whoever is running this meeting." };
+  // Whoever runs the meeting, and council members following it live (0073).
+  const following =
+    meeting && meeting.launchedBy !== user?.id && meeting.status === "LIVE"
+      ? (await supabase.rpc("can_follow_meeting", { p_meeting_id: meetingId })).data === true
+      : false;
+  if (!user || !meeting || (meeting.launchedBy !== user.id && !following) || meeting.status === "ADJOURNED") {
+    return { ok: false as const, error: "The assistant is available to whoever is running this meeting, and to council members following it." };
   }
   const liveAgenda = normalizeAgenda(agenda);
   const item = liveAgenda.find((i) => i.id === itemId);
@@ -154,9 +162,24 @@ export async function adjournMeeting(
   const meeting = await getMeeting(corpId, meetingId);
   if (!meeting) return { ok: false, error: "Meeting not found." };
 
-  const agenda: AgendaItem[] = deferUnresolved(normalizeAgenda(rawAgenda)).map((it) =>
-    it.deferred && !it.done && !it.minutesSummary ? { ...it, minutesSummary: minutesSummary(it) } : it
-  );
+  // Live votes and declared conflicts (0073) are taken from the database,
+  // not the screen: a motion decided by a live vote keeps the counts the
+  // vote recorded, and each item carries the conflicts declared on it.
+  const [{ data: closedVotes }, { data: conflictRows }] = await Promise.all([
+    supabase.from("meeting_votes").select("id, votes_for, votes_against, votes_abstain, votes_missing").eq("meeting_id", meetingId).eq("status", "closed"),
+    supabase.from("meeting_conflicts").select("item_id, lot_number").eq("meeting_id", meetingId),
+  ]);
+  const votesById = new Map((closedVotes ?? []).map((v) => [v.id as string, v]));
+  const agenda: AgendaItem[] = deferUnresolved(normalizeAgenda(rawAgenda)).map((raw) => {
+    let it = raw;
+    const v = it.motion?.voteId ? votesById.get(it.motion.voteId) : undefined;
+    if (it.motion && v) {
+      it = { ...it, motion: { ...it.motion, ...motionCounts({ for: v.votes_for ?? 0, against: v.votes_against ?? 0, abstain: v.votes_abstain ?? 0, missing: v.votes_missing ?? 0 }) } };
+    }
+    const lots = (conflictRows ?? []).filter((c) => c.item_id === it.id).map((c) => c.lot_number as string);
+    if (lots.length) it = { ...it, conflicts: [...new Set(lots)].sort() };
+    return it.deferred && !it.done && !it.minutesSummary ? { ...it, minutesSummary: minutesSummary(it) } : it;
+  });
   const clean = cleanAttendance(attendance);
   const [{ data: corp }, roll] = await Promise.all([
     supabase.from("strata_corporations").select("strata_plan_number, legal_name, building_name, address, unit_count").eq("strata_plan_number", corpId).maybeSingle(),

@@ -1,7 +1,8 @@
-# Zoom council meetings (design, not built)
+# Zoom council meetings (design)
 
-Status: agreed direction, 2026-10-26. Nothing here is built yet. Read this
-before starting the work.
+Status: agreed direction, 2026-10-26; updated 2026-11-04. Live voting
+(below) is built without Zoom (migration 0073); the Zoom parts aren't built
+yet. Read this before starting the work.
 
 ## Decisions so far
 
@@ -20,6 +21,44 @@ before starting the work.
   minutes themselves.
 - A "Distribute minutes" button emails approved minutes.
 - Vote and quorum math was corrected first (PR 153, `lib/meetings/rules.ts`).
+- **Build for general meetings from the start** (2026-11-04): council
+  meetings first, but votes are stored per lot with a weight, a proxy-holder
+  column and a secret-ballot flag, so AGMs and SGMs (notices, proxies,
+  voting per lot) don't need a rewrite.
+- **Live voting, decided 2026-11-04 and built in 0073:**
+  - Council members vote For / Against / Abstain on their own screens and can
+    change their vote until the vote closes.
+  - The runner sees each vote by name as it comes in and can enter a vote for
+    anyone (on the phone, or in the room without a device). They can change
+    their own vote and votes they entered for others, never one a member cast
+    themselves. Every ballot and change is logged with who pressed it.
+  - Members see only their own vote while it's open, and the result after it
+    closes. The final count is what matters.
+  - Only council members vote. The runner votes when they're on council; a
+    manager or anyone else following has no vote.
+  - Someone present who doesn't vote is recorded as abstaining (same effect
+    under SB 18(1)); the runner is warned before closing.
+  - Conflict of interest: the member is **recused**, not abstaining. They're
+    left out of "present" for that item's votes (a council vote needs a
+    majority of members present, so counting them as an abstention would act
+    as a vote against). The minutes say the lot declared a conflict, left for
+    the item and didn't vote. With Zoom, declaring moves them to the waiting
+    room; the runner admits them back.
+- **Meeting Mode layout:** the runner keeps today's Meeting Mode (agenda,
+  item details, attachments, motion, notes, assistant); Zoom video docks at
+  the top of the right column, above the assistant. Members get the same
+  layout read-only, following the runner's current item, with their own
+  Stratasphere assistant collapsed by default; while it's collapsed the
+  video tiles stack down the right column. Private notes stay the runner's
+  (written beforehand in the agenda builder by anyone who can run meetings).
+- **Creating the Zoom meeting** happens from the meeting's page and agenda
+  builder: choosing Electronic or Hybrid creates the Zoom meeting on our
+  account. Members never see the link or passcode.
+- **Phone voting:** Zoom can't read keypad presses from phone participants,
+  and they can't use polls. For council, the runner enters phone members'
+  votes. Keypad voting (press 1/2/3) means putting our own phone number in
+  front of Zoom (Twilio or similar: PIN, then bridged into the meeting);
+  prove it with a small spike before general meetings, where it matters.
 
 ## Law that applies (council meetings)
 
@@ -143,8 +182,10 @@ current to 2026-10-20); both are in the Knowledge Base.
 
 ## Build order (one PR each, with tests)
 
+0. Live voting without Zoom (built, migration 0073).
 1. Zoom setup: server libs (S2S token, create meeting, SDK signature), host
-   pool, meeting fields (migration, safe to re-run, grants stated).
+   pool, meeting fields (migration, safe to re-run, grants stated); creating
+   the Zoom meeting from the meeting page and agenda builder.
 2. Meeting room: embedded video beside the agenda, member join, attendance.
 3. Live voting and conflicts, audit trail.
 4. AI summaries in the minutes view.
@@ -159,8 +200,24 @@ current to 2026-10-20); both are in the Knowledge Base.
 
 ## Open decisions
 
+0. **Zoom AI transcript for Stratasphere** (asked 2026-11-04): not a record
+   people see, but Stratasphere would know what was said at every meeting.
+   Before building, decide:
+   - Zoom needs cloud recording with audio transcripts on for this (paid
+     plan); the design so far says "no recording".
+   - Everyone must be told the meeting is transcribed (PIPA notice), and owners
+     observing too, once they can.
+   - What's said is not what's decided: answers must keep saying the minutes
+     and the decision ledger are the record, and treat the transcript as
+     discussion only.
+   - In-camera items, hearings (SB 17(4)) and anything said by a recused member
+     shouldn't go in.
+   - Strip PII before it's stored or sent to the AI, as for documents; store it
+     in Canada, delete it from Zoom, and set how long we keep it.
+
+
 1. Owners observing (SB 17(3)): watch-only join in v1, or later?
-2. Phone dial-in for council members (operator verifies and records their
-   vote), or off?
+2. ~~Phone dial-in~~ Decided: on; the runner records phone votes (keypad
+   voting later, see Decisions).
 3. Owner accounts now (to read minutes in the app), or with general
    meetings? Distribution can use the lot emails without them.
