@@ -25,7 +25,7 @@ const statusLabels: Record<IndexingStatus, string> = {
   indexed: "Indexed",
   failed: "Indexing failed",
   not_indexable: "Stored for reference",
-  needs_text: "No text layer",
+  needs_text: "Couldn’t read this scan",
 };
 
 function formatDate(iso: string) {
@@ -127,13 +127,26 @@ export function DocumentList({
                   {formatDate(doc.uploadedAt)}
                   {size ? ` · ${size}` : ""}{" "}
                   <span className={`doc-status doc-status--${doc.indexingStatus}`} title={doc.indexingError ?? undefined}>
-                    {statusLabels[doc.indexingStatus]}
+                    {doc.indexingStatus === "processing" && doc.readFromScan ? "Reading the scan…" : statusLabels[doc.indexingStatus]}
                   </span>
+                  {doc.indexingStatus === "indexed" && doc.readFromScan && (
+                    <span className="doc-status doc-status--scan" data-testid={`read-from-scan-${doc.id}`}>
+                      {doc.unclearPages > 0 ? "Read from scan · some pages unclear" : "Read from scan"}
+                    </span>
+                  )}
                 </div>
+                {doc.indexingStatus === "indexed" && doc.readFromScan && (doc.unclearPages > 0 || doc.skippedPages > 0) && (
+                  <div className="module-row__meta">
+                    {doc.unclearPages > 0 &&
+                      `${doc.unclearPages} ${doc.unclearPages === 1 ? "page was" : "pages were"} hard to read, so some words may be wrong. `}
+                    {doc.skippedPages > 0 && `The last ${doc.skippedPages} scanned pages weren’t read (300-page limit). `}
+                    A clearer or searchable copy reads better.
+                  </div>
+                )}
                 {doc.indexingStatus === "needs_text" && (
                   <div className="module-row__meta">
-                    This looks like a scanned PDF with no text in it. Upload a
-                    searchable (OCR&rsquo;d) copy so Stratasphere&trade; can read it.
+                    We read this scan but found no text: it may be blank, handwritten, or too faint. A clearer copy, or a
+                    searchable (OCR&rsquo;d) one, lets Stratasphere&trade; read it.
                   </div>
                 )}
                 {doc.indexingStatus === "failed" && doc.indexingError && (

@@ -509,8 +509,8 @@ function PlanReading({ parse, strataPlanNumber }: { parse: ParseState; strataPla
     case "no_text":
       return (
         <p className="sync-note" role="status" data-testid="plan-scanned">
-          This plan is a scanned image, so it can&rsquo;t be read automatically. Enter the number of strata lots from the
-          plan; our team checks it before the strata is created.
+          We couldn&rsquo;t read this plan, even from the scan. Enter the number of strata lots from the plan; our team
+          checks it before the strata is created.
         </p>
       );
     case "failed":

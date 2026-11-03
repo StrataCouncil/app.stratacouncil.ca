@@ -2881,6 +2881,12 @@ button.chat-source:hover {
   background: var(--free-bg);
   color: var(--free);
 }
+/* Read from a scan by OCR (lib/kb/ocr.ts). */
+.doc-status--scan {
+  margin-left: 0.35rem;
+  background: rgba(196, 138, 30, 0.14);
+  color: #94650f;
+}
 .doc-status--failed,
 .doc-status--needs_text {
   background: var(--danger-bg);

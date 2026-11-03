@@ -17,9 +17,13 @@ test("PDF with a text layer is extracted", async () => {
   if (r.status === "ok") assert.match(r.text, /must not cause a nuisance\. Section 29/);
 });
 
-test("scanned PDF (no text layer) is flagged, not sent anywhere", async () => {
+test("scanned PDF (no text layer) is flagged for OCR on our own servers, not sent anywhere", async () => {
   const r = await extractDocumentText(fixture("scanned.pdf"), "scan.pdf", "application/pdf");
-  assert.equal(r.status, "needs_text");
+  assert.equal(r.status, "needs_ocr");
+  if (r.status === "needs_ocr") {
+    assert.ok(r.scanned.length > 0);
+    assert.equal(r.scanned.length, r.totalPages);
+  }
 });
 
 test("docx is extracted", async () => {

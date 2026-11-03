@@ -19,6 +19,9 @@ import { meetingTypeLabels } from "@/lib/meetings/agenda";
 import { queueCorporationFingerprints } from "@/lib/kb/queue";
 import { IS_DEMO } from "@/lib/demo";
 
+// An upload read here may be a scan, read by OCR while the person waits (lib/kb/ocr.ts).
+export const maxDuration = 120;
+
 function shortDate(iso: string) {
   return new Date(`${iso}T12:00:00`).toLocaleDateString("en-CA", { year: "numeric", month: "short", day: "numeric" });
 }

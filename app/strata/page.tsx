@@ -9,6 +9,9 @@ import { IS_DEMO } from "@/lib/demo";
 import { createClient } from "@/lib/supabase/server";
 import { acceptInvite, dismissRequest } from "./actions";
 
+// An upload read here may be a scan, read by OCR while the person waits (lib/kb/ocr.ts).
+export const maxDuration = 120;
+
 /**
  * Connect a strata (doc03 "Zero, one, and many connections"). With no
  * connected corporation this is the landing page; with one or more, it
