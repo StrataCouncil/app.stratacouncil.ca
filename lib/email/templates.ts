@@ -299,3 +299,35 @@ export function documentExportEmail(params: { name: string; strataName: string; 
   const text = `Hello ${params.name},\n\nYou asked to download all of ${params.strataName}'s documents. Open this link while signed in to StrataCouncil.ca to download them as one ZIP file:\n\n${params.openUrl}\n\nThe link works once, for 24 hours, and only for you. If you didn't ask for this, someone may be signed in to your account: please contact support@stratacouncil.ca.`;
   return { subject: `Your download link: ${params.strataName} documents`, html, text };
 }
+
+/**
+ * To council when a member opens a discussion (0070). Only the title and a
+ * link: the motion and its background stay behind sign-in, where the
+ * database limits them to council.
+ */
+export function discussionOpenedEmail(params: { corporationName: string; authorName: string; title: string; openUrl: string }) {
+  const html = wrap(`
+    <p style="margin:0 0 16px;font-size:16px;color:${INK};">${escapeHtml(params.authorName || "A council member")} opened a council discussion for <strong>${escapeHtml(params.corporationName)}</strong>:</p>
+    <p style="margin:0 0 8px;font-size:16px;font-weight:600;color:${INK};">${escapeHtml(params.title)}</p>
+    <p style="margin:0 0 8px;font-size:14px;color:${MUTED};">Read the motion, vote, and add your comments. A motion that passes goes to the next council meeting to be ratified.</p>
+    ${button(params.openUrl, "Open the discussion")}
+  `);
+  const text = `${params.authorName || "A council member"} opened a council discussion for ${params.corporationName}:\n\n${params.title}\n\nRead the motion, vote, and add your comments. A motion that passes goes to the next council meeting to be ratified:\n\n${params.openUrl}`;
+  return { subject: `Council discussion: ${params.title}`, html, text };
+}
+
+/** To council when the author closes a discussion (0070), with the result. */
+export function discussionClosedEmail(params: { corporationName: string; title: string; result: string; tally: string; passed: boolean; openUrl: string }) {
+  const next = params.passed
+    ? "It now awaits ratification at the next council meeting."
+    : "It didn't pass, so it won't go to a meeting for ratification.";
+  const html = wrap(`
+    <p style="margin:0 0 16px;font-size:16px;color:${INK};">A council discussion for <strong>${escapeHtml(params.corporationName)}</strong> has been closed:</p>
+    <p style="margin:0 0 8px;font-size:16px;font-weight:600;color:${INK};">${escapeHtml(params.title)}</p>
+    <p style="margin:0 0 4px;font-size:15px;color:${INK};">${escapeHtml(params.result)} (${escapeHtml(params.tally)}).</p>
+    <p style="margin:0 0 8px;font-size:14px;color:${MUTED};">${next} The vote record is in Documents, under Meetings &amp; Records.</p>
+    ${button(params.openUrl, "Open the discussion")}
+  `);
+  const text = `A council discussion for ${params.corporationName} has been closed:\n\n${params.title}\n${params.result} (${params.tally}).\n\n${next} The vote record is in Documents, under Meetings & Records:\n\n${params.openUrl}`;
+  return { subject: `Discussion closed: ${params.title}`, html, text };
+}

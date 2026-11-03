@@ -11,6 +11,7 @@ import {
   isCallToOrder,
   makeItem,
   newCategoryId,
+  newMotion,
   renumber,
   resolutionTypeShort,
   type AgendaItem,
@@ -22,6 +23,53 @@ import { ItemEditor } from "@/components/meetings/ItemEditor";
 import { LaunchMeetingButton } from "@/components/meetings/MeetingActions";
 import { DEMO_EDITABLE_ITEM_ID, IS_DEMO } from "@/lib/demo";
 import { isDemoLimit, showDemoLimit } from "@/lib/demo-client";
+import { ratificationMotion } from "@/lib/discussions/tally";
+
+/** A council discussion whose motion passed, waiting to be ratified (0070). */
+export interface RatificationCandidate {
+  id: string;
+  title: string;
+  motion: string;
+  background: string;
+  financial: string;
+  risks: string;
+  closedAt: string;
+  recordDocumentId: string | null;
+  tally: string;
+}
+
+const RATIFICATION = "Ratification";
+
+/**
+ * The agenda item that puts a discussion to the meeting: For ratification,
+ * under a Ratification section after the administrative items, carrying the
+ * discussion's background, the vote, and its record as an attachment.
+ */
+function ratificationItem(c: RatificationCandidate, agenda: AgendaItem[]): AgendaItem {
+  const closedOn = new Date(c.closedAt).toLocaleDateString("en-CA", { timeZone: "America/Vancouver" });
+  const existing = agenda.find((i) => i.cat === RATIFICATION);
+  return makeItem(`Ratify council vote: ${c.title}`.slice(0, 300), RATIFICATION, {
+    catId: existing?.catId ?? newCategoryId(),
+    type: "FOR_RATIFICATION",
+    background: [`Council voted between meetings, closed ${closedOn}: ${c.tally}. The motion passed.`, c.background].filter(Boolean).join("\n\n"),
+    financial: c.financial,
+    risks: c.risks,
+    motion: newMotion("MAJORITY", ratificationMotion(c.motion, closedOn)),
+    discussionId: c.id,
+    atts: c.recordDocumentId ? [{ id: `a_${c.recordDocumentId}`, kind: "document", documentId: c.recordDocumentId, title: `Council vote record: ${c.title}` }] : [],
+  });
+}
+
+/** Where a new ratification item goes: after the other ratifications, else after the administrative items. */
+function insertRatification(agenda: AgendaItem[], item: AgendaItem): AgendaItem[] {
+  const lastRatify = agenda.map((i) => i.cat).lastIndexOf(RATIFICATION);
+  const lastAdmin = agenda.map((i) => i.cat.toLowerCase()).lastIndexOf("administrative");
+  const afterOpening = agenda.findIndex((i) => !isCallToOrder(i));
+  const at = lastRatify >= 0 ? lastRatify + 1 : lastAdmin >= 0 ? lastAdmin + 1 : Math.max(afterOpening, 1);
+  const next = [...agenda];
+  next.splice(at, 0, item);
+  return next;
+}
 
 /** The demo's agenda is written for the visitor: only one item is theirs to edit. */
 const locked = (it: AgendaItem) => IS_DEMO && it.id !== DEMO_EDITABLE_ITEM_ID;
@@ -41,6 +89,7 @@ export function AgendaBuilder({
   initialNotes,
   aiAvailable,
   launch,
+  ratifications = [],
 }: {
   corpId: string;
   meetingId: string;
@@ -52,6 +101,8 @@ export function AgendaBuilder({
   aiAvailable: boolean;
   /** Present when the viewer may launch this meeting. */
   launch?: { subscribed: boolean; trialAvailable: boolean; isAdmin: boolean };
+  /** Council meetings only: discussions awaiting ratification (0070). */
+  ratifications?: RatificationCandidate[];
 }) {
   const router = useRouter();
   const [agenda, setAgenda] = useState<AgendaItem[]>(initialAgenda);
@@ -254,8 +305,45 @@ export function AgendaBuilder({
     );
   }
 
+  const waiting = ratifications.filter((c) => !agenda.some((i) => i.discussionId === c.id));
+  const addRatifications = (list: RatificationCandidate[]) => {
+    let next = agenda;
+    for (const c of list) next = insertRatification(next, ratificationItem(c, next));
+    update(next);
+    setStatus(`Added ${list.length === 1 ? "the ratification" : `${list.length} ratifications`}. Save the agenda to keep ${list.length === 1 ? "it" : "them"}.`);
+  };
+
   return (
     <section className="agenda-builder" data-testid="agenda-builder">
+      {waiting.length > 0 && (
+        <div className="ratification-notice" data-testid="ratification-notice">
+          <h3>
+            {waiting.length === 1 ? "A council vote needs ratification" : `${waiting.length} council votes need ratification`}
+          </h3>
+          <p className="card__meta">
+            Council passed {waiting.length === 1 ? "this motion" : "these motions"} between meetings. Include{" "}
+            {waiting.length === 1 ? "it" : "them"} for ratification at this meeting?
+          </p>
+          <ul>
+            {waiting.map((c) => (
+              <li key={c.id}>
+                <span>
+                  <strong>{c.title}</strong>
+                  <span className="card__meta"> &middot; {c.tally}</span>
+                </span>
+                <button type="button" className="button button-secondary button-small" onClick={() => addRatifications([c])} data-testid={`ratify-add-${c.id}`}>
+                  Include
+                </button>
+              </li>
+            ))}
+          </ul>
+          {waiting.length > 1 && (
+            <button type="button" className="button button-primary button-small" style={{ marginTop: "0.75rem" }} onClick={() => addRatifications(waiting)} data-testid="ratify-add-all">
+              Include all
+            </button>
+          )}
+        </div>
+      )}
       {IS_DEMO && (
         <p className="sync-note" role="note" style={{ marginBottom: "1rem" }} data-testid="demo-agenda-note">
           <span>

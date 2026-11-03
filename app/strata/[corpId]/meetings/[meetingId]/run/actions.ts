@@ -10,6 +10,8 @@ import { buildMinutes } from "@/lib/meetings/minutes";
 import { askStratasphere, type AssistantTurn } from "@/lib/ai/stratasphere";
 import { IS_DEMO, demoLimitFail } from "@/lib/demo";
 import { logDemoActivity, refundDemoAllowance, takeDemoAllowance } from "@/lib/demo-usage";
+import { fileDiscussionRecord } from "@/lib/discussions/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
  * Meeting Mode (doc01 §4): saving the running meeting, Call to Order, the
@@ -179,6 +181,10 @@ export async function adjournMeeting(
     console.error("[adjournMeeting]", error.code, error.message);
     return { ok: false, error: error.message.includes("already") || error.message.includes("decided") ? error.message : "Couldn't adjourn the meeting." };
   }
+  // Council votes ratified (or not) at this meeting (0070): the database
+  // settled them on adjournment; their records get the outcome as a last line.
+  const { data: settled } = await createAdminClient().from("discussions").select("id").eq("ratified_meeting_id", meetingId);
+  for (const d of settled ?? []) await fileDiscussionRecord(d.id);
   await logDemoActivity({
     kind: "meeting.adjourned",
     detail: { meetingId, decided: agenda.filter((i) => i.done).length, deferred: agenda.filter((i) => i.deferred).length, items: agenda.length },

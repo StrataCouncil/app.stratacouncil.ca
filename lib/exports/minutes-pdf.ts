@@ -10,13 +10,13 @@ import type { Letterhead } from "@/lib/data/management";
  * PDF fonts; characters they can't draw are replaced rather than dropped
  * silently.
  */
-const INK = rgb(0.106, 0.165, 0.255);
-const MUTED = rgb(0.38, 0.38, 0.38);
-const GREEN = rgb(0.184, 0.451, 0.333);
-const RED = rgb(0.651, 0.204, 0.165);
+export const INK = rgb(0.106, 0.165, 0.255);
+export const MUTED = rgb(0.38, 0.38, 0.38);
+export const GREEN = rgb(0.184, 0.451, 0.333);
+export const RED = rgb(0.651, 0.204, 0.165);
 const PAGE = { w: 612, h: 792, margin: 72 };
 
-function winAnsi(text: string) {
+export function winAnsi(text: string) {
   return text
     .normalize("NFC")
     .replace(/[\u2018\u2019]/g, "'")
@@ -30,7 +30,7 @@ function winAnsi(text: string) {
     .replace(/[^\x09\x0A\x0D\x20-\x7E\u00A0-\u00FF]/g, "?");
 }
 
-class Writer {
+export class Writer {
   page!: PDFPage;
   y = 0;
   pageNo = 0;

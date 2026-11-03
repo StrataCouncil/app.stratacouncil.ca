@@ -30,6 +30,8 @@ export interface StrataAccess {
   userId: string;
   /** A Super Admin managing a strata they aren't a member of. */
   superAdminOnly: boolean;
+  /** An active member holding a council role (0070): sees Discussions. */
+  isCouncil: boolean;
 }
 
 export const getStrataAccess = cache(async (corpId: string): Promise<StrataAccess | null> => {
@@ -39,7 +41,7 @@ export const getStrataAccess = cache(async (corpId: string): Promise<StrataAcces
   } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const [{ data: corp }, { data: sub }, { data: roleRows }, { data: canRun }, { data: membership }, { data: superAdmin }, { data: canBill }] =
+  const [{ data: corp }, { data: sub }, { data: roleRows }, { data: canRun }, { data: membership }, { data: superAdmin }, { data: canBill }, { data: onCouncil }] =
     await Promise.all([
     supabase
       .from("strata_corporations")
@@ -62,6 +64,7 @@ export const getStrataAccess = cache(async (corpId: string): Promise<StrataAcces
       .maybeSingle(),
     supabase.rpc("is_super_admin"),
     supabase.rpc("can_manage_billing", { target_corporation_id: corpId }),
+    supabase.rpc("is_on_council", { target_corporation_id: corpId }),
   ]);
   if (!corp) return null;
 
@@ -78,5 +81,6 @@ export const getStrataAccess = cache(async (corpId: string): Promise<StrataAcces
     canRunMeetings: canRun === true,
     userId: user.id,
     superAdminOnly: superAdmin === true && !membership,
+    isCouncil: onCouncil === true,
   };
 });

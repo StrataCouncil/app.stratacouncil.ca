@@ -26,6 +26,7 @@ import {
 import { registerUploadedDocuments, type UploadedFile } from "@/app/strata/[corpId]/documents/actions";
 import { isDocumentCategory } from "@/lib/documents";
 import { checkAttachments } from "@/lib/meetings/attachments";
+import { checkRatificationLinks } from "@/lib/data/discussions";
 import { extractDocumentText } from "@/lib/kb/extract";
 import { loadStripContext } from "@/lib/kb/privacy";
 import { pseudonymize } from "@/lib/pii";
@@ -215,7 +216,7 @@ export async function saveAgenda(
 
   let next: AgendaItem[];
   try {
-    next = await checkAttachments(supabase, corpId, sanitizeAgenda(agenda));
+    next = await checkRatificationLinks(corpId, meetingId, await checkAttachments(supabase, corpId, sanitizeAgenda(agenda)));
   } catch (err) {
     console.error("[saveAgenda] attachments", err instanceof Error ? err.message : err);
     return { ok: false, error: "Couldn't save the agenda." };
