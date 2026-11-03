@@ -54,12 +54,21 @@ export async function sendTransactionalEmail(params: {
   /** Overrides MAILTRAP_SENDER_EMAIL for this one send, if ever needed. */
   fromEmail?: string;
   fromName?: string;
+  /** The strata it's about, when the recipient may not have an account (an invitation). */
+  corporationId?: string;
 }) {
-  // The demo site (lib/demo.ts) never emails anyone: its people are
-  // fictional, and visitors are trying things out.
+  // The demo site (lib/demo.ts) never emails a visitor's fictional people.
+  // A Super Admin's sandbox emails only the Super Admin who made it, saying
+  // who it was for (lib/demo-email.ts).
   if (IS_DEMO) {
-    console.info("[sendTransactionalEmail] demo, not sent:", params.subject);
-    return { success: true, demo: true };
+    const { sandboxRecipient } = await import("@/lib/demo-email");
+    // Without a Mailtrap key on the demo project, nothing is sent (as before).
+    const redirect = process.env.MAILTRAP_API_TOKEN ? await sandboxRecipient(params.to, params.corporationId).catch(() => null) : null;
+    if (!redirect) {
+      console.info("[sendTransactionalEmail] demo, not sent:", params.subject);
+      return { success: true, demo: true };
+    }
+    params = { ...params, to: redirect.to, subject: `[Sandbox → ${redirect.label}] ${params.subject}` };
   }
 
   const apiToken = process.env.MAILTRAP_API_TOKEN;

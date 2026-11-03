@@ -1,5 +1,6 @@
 "use client";
 
+import { useDemoRestricted } from "@/components/DemoContext";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -21,7 +22,7 @@ import { parseUploadedAgenda, saveAgenda, saveItemNote } from "@/app/strata/[cor
 import { isGeneralMeeting } from "@/lib/meetings/rules";
 import { ItemEditor } from "@/components/meetings/ItemEditor";
 import { LaunchMeetingButton } from "@/components/meetings/MeetingActions";
-import { DEMO_EDITABLE_ITEM_ID, IS_DEMO } from "@/lib/demo";
+import { DEMO_EDITABLE_ITEM_ID } from "@/lib/demo";
 import { isDemoLimit, showDemoLimit } from "@/lib/demo-client";
 import { ratificationMotion } from "@/lib/discussions/tally";
 
@@ -71,9 +72,6 @@ function insertRatification(agenda: AgendaItem[], item: AgendaItem): AgendaItem[
   return next;
 }
 
-/** The demo's agenda is written for the visitor: only one item is theirs to edit. */
-const locked = (it: AgendaItem) => IS_DEMO && it.id !== DEMO_EDITABLE_ITEM_ID;
-
 /**
  * The agenda builder (doc01 §4): start from the meeting type's template,
  * empty, or an uploaded agenda; then categories and items, each with an
@@ -104,6 +102,10 @@ export function AgendaBuilder({
   /** Council meetings only: discussions awaiting ratification (0070). */
   ratifications?: RatificationCandidate[];
 }) {
+  // The demo's restrictions, lifted in a Super Admin's sandbox (lib/demo-sandbox.ts).
+  const demoRestricted = useDemoRestricted();
+  // The demo's agenda is written for the visitor: only one item is theirs to edit.
+  const locked = (it: AgendaItem) => demoRestricted && it.id !== DEMO_EDITABLE_ITEM_ID;
   const router = useRouter();
   const [agenda, setAgenda] = useState<AgendaItem[]>(initialAgenda);
   const [notes, setNotes] = useState(initialNotes);
@@ -344,7 +346,7 @@ export function AgendaBuilder({
           )}
         </div>
       )}
-      {IS_DEMO && (
+      {demoRestricted && (
         <p className="sync-note" role="note" style={{ marginBottom: "1rem" }} data-testid="demo-agenda-note">
           <span>
             Your agenda is written and ready. Open <strong>Roof Repairs</strong> under New Business to make it your own: change
@@ -353,7 +355,7 @@ export function AgendaBuilder({
         </p>
       )}
       <div className="agenda-builder__bar">
-        {!IS_DEMO && (
+        {!demoRestricted && (
           <button type="button" className="button button-secondary button-small" onClick={addCategory} data-testid="agenda-add-category">
             Add category
           </button>
@@ -399,9 +401,9 @@ export function AgendaBuilder({
               onChange={(e) => renameCategory(cat.id, e.target.value)}
               aria-label="Category name"
               maxLength={120}
-              readOnly={IS_DEMO}
+              readOnly={demoRestricted}
             />
-            {!IS_DEMO && (
+            {!demoRestricted && (
               <div className="agenda-row__tools">
                 <button type="button" className="icon-button" onClick={() => moveCategory(cat.id, -1)} disabled={!canMoveCat(ci, -1)} aria-label={`Move ${cat.name} up`}>
                   <Arrow up />
@@ -431,9 +433,9 @@ export function AgendaBuilder({
                   {it.atts.length > 0 && <span className="card__meta">{it.atts.length} attached</span>}
                   {notes[it.id] && <span className="card__meta">Note</span>}
                   <span className={`rtag rtag--${it.type.toLowerCase()}`}>{resolutionTypeShort[it.type]}</span>
-                  {IS_DEMO && !locked(it) && <span className="pill">Yours to edit</span>}
+                  {demoRestricted && !locked(it) && <span className="pill">Yours to edit</span>}
                   <div className="agenda-row__tools">
-                    {!IS_DEMO && (
+                    {!demoRestricted && (
                       <>
                         <button type="button" className="icon-button" onClick={() => moveItem(it.id, -1)} disabled={!canMove(idx, -1)} aria-label={`Move ${it.text} up`}>
                           <Arrow up />
@@ -443,10 +445,10 @@ export function AgendaBuilder({
                         </button>
                       </>
                     )}
-                    <button type="button" className="link-button" onClick={open} data-testid={IS_DEMO && !locked(it) ? "demo-edit-item" : undefined}>
+                    <button type="button" className="link-button" onClick={open} data-testid={demoRestricted && !locked(it) ? "demo-edit-item" : undefined}>
                       Edit
                     </button>
-                    {!IS_DEMO && !isCallToOrder(it) && !isAdjournment(it) && (
+                    {!demoRestricted && !isCallToOrder(it) && !isAdjournment(it) && (
                       <button type="button" className="link-button agenda-danger" onClick={() => deleteItem(it.id)} aria-label={`Delete ${it.text}`}>
                         Delete
                       </button>
@@ -456,7 +458,7 @@ export function AgendaBuilder({
               );
             })}
           </ol>
-          {!IS_DEMO && <QuickAdd onAdd={(text) => addItem(cat.id, text)} />}
+          {!demoRestricted && <QuickAdd onAdd={(text) => addItem(cat.id, text)} />}
         </div>
       ))}
 

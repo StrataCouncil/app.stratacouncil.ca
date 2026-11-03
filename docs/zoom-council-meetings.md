@@ -2,7 +2,7 @@
 
 Status: agreed direction, 2026-10-26; updated 2026-11-04. Live voting
 (below) is built without Zoom (migration 0073); the Zoom parts aren't built
-yet. Read this before starting the work.
+yet. Test in a sandbox on the demo site (docs/demo-site.md). Read this before starting the work.
 
 ## Decisions so far
 
@@ -17,8 +17,8 @@ yet. Read this before starting the work.
 - Whoever has permission to launch a meeting runs it, as now.
 - The operator sees each vote live.
 - Minutes name lots, not people.
-- Zoom AI Companion summaries are a drafting aid for the minutes, never the
-  minutes themselves.
+- **No Zoom AI summaries, recordings or transcripts** (decided 2026-11-04):
+  the tool is procedural; the minutes and the decision ledger are the record.
 - A "Distribute minutes" button emails approved minutes.
 - Vote and quorum math was corrected first (PR 153, `lib/meetings/rules.ts`).
 - **Build for general meetings from the start** (2026-11-04): council
@@ -105,10 +105,7 @@ current to 2026-10-20); both are in the Knowledge Base.
    buttons disappear, they're left out of "members present" for that item,
    then `putOnHold(userId, false)` brings them back. The declaration goes in
    the minutes.
-6. **AI summary.** After the meeting: fetch the AI Companion summary,
-   strip PII, store it with the meeting in Canada, delete it from Zoom,
-   show it beside the minutes.
-7. **Distribute minutes.** Email approved minutes to every lot's address,
+6. **Distribute minutes.** Email approved minutes to every lot's address,
    log each delivery, warn before the 2-week deadline (SB 19).
 
 ## Zoom facts (checked 2026-10-26)
@@ -136,7 +133,8 @@ current to 2026-10-20); both are in the Knowledge Base.
   `active-speaker`, `caption-message`, `recording-change`,
   `chat-on-message`, among others.
 - The SDK "does not support bots or AI notetakers"; that's Realtime Media
-  Streams (paid Developer Pack credits). AI Companion summaries from the
+  Streams (paid Developer Pack credits). We don't use AI Companion summaries
+  (decided 2026-11-04). AI Companion summaries from the
   host account are a different thing and are what we use.
 
 ### REST API and webhooks
@@ -147,7 +145,7 @@ current to 2026-10-20); both are in the Knowledge Base.
 - Since 2026-03-15, fields omitted from Create a meeting inherit the
   account's settings. Set what we rely on explicitly: `waiting_room`,
   `join_before_host: false`, `auto_recording: "none"`,
-  `auto_start_meeting_summary: true`.
+  `auto_start_meeting_summary: false`.
 - Summary: `GET /meetings/{meetingUUID}/meeting_summary` (past meeting
   UUID; double-encode a UUID containing "/"). Forum reports mention scopes
   `meeting_summary:read:admin` and newer `meeting:read:summary:admin`;
@@ -174,9 +172,8 @@ current to 2026-10-20); both are in the Knowledge Base.
 ## Privacy (PIPA)
 
 - Zoom gets display names only. No recording. Canadian routing on.
-- Join notice: AI summaries are on.
 - Zoom's data processing agreement in place; one new privacy-policy
-  paragraph naming Zoom (video and AI summaries, possibly outside Canada).
+  paragraph naming Zoom (video, possibly outside Canada).
 - Summaries pass the PII stripper before anything reaches the Stratasphere
   AI; the decision ledger stays name-free.
 
@@ -188,34 +185,20 @@ current to 2026-10-20); both are in the Knowledge Base.
    the Zoom meeting from the meeting page and agenda builder.
 2. Meeting room: embedded video beside the agenda, member join, attendance.
 3. Live voting and conflicts, audit trail.
-4. AI summaries in the minutes view.
-5. Distribute minutes.
+4. Distribute minutes.
 
 ## Needed from the owner before step 1
 
-- A Zoom paid account with AI Companion and the host licences needed.
+- A Zoom account: the free plan is enough for building and testing (calls
+  under 40 minutes); a paid plan and host licences when the feature goes live.
 - A Meeting SDK app and a Server-to-Server OAuth app; credentials in Vercel
   environment variables only.
 - Zoom sales confirmation of the hosting terms.
 
 ## Open decisions
 
-0. **Zoom AI transcript for Stratasphere** (asked 2026-11-04): not a record
-   people see, but Stratasphere would know what was said at every meeting.
-   Before building, decide:
-   - Zoom needs cloud recording with audio transcripts on for this (paid
-     plan); the design so far says "no recording".
-   - Everyone must be told the meeting is transcribed (PIPA notice), and owners
-     observing too, once they can.
-   - What's said is not what's decided: answers must keep saying the minutes
-     and the decision ledger are the record, and treat the transcript as
-     discussion only.
-   - In-camera items, hearings (SB 17(4)) and anything said by a recused member
-     shouldn't go in.
-   - Strip PII before it's stored or sent to the AI, as for documents; store it
-     in Canada, delete it from Zoom, and set how long we keep it.
-
-
+0. ~~Zoom AI transcript for Stratasphere~~ Decided 2026-11-04: no. The tool
+   is procedural; Stratasphere works from the minutes and the decision ledger.
 1. Owners observing (SB 17(3)): watch-only join in v1, or later?
 2. ~~Phone dial-in~~ Decided: on; the runner records phone votes (keypad
    voting later, see Decisions).

@@ -165,3 +165,15 @@ select pg_temp.expect('visitors can''t use up limits themselves, or read the log
 insert into demo_activity (visitor_id, kind, path) values ('dddddddd-0000-0000-0000-000000000002', 'view', '/training');
 delete from demo_visitors where id = 'dddddddd-0000-0000-0000-000000000002';
 select pg_temp.expect('the log goes with the visitor', not exists (select 1 from demo_activity));
+
+-- Sandboxes (2026-11-04): a group of links sharing sandbox_id, each with a
+-- persona and the Super Admin's address for redirected email.
+select pg_temp.expect('a sandbox link needs its persona and where its emails go',
+  pg_temp.fails($q$insert into demo_visitors (token, full_name, email, expires_at, sandbox_id) values (repeat('s', 43), 'S', 's@x.ca', now() + interval '1 day', gen_random_uuid())$q$, 'demo_visitors_sandbox_check'));
+select pg_temp.expect('an ordinary link has none of them',
+  pg_temp.fails($q$insert into demo_visitors (token, full_name, email, expires_at, persona) values (repeat('t', 43), 'T', 't@x.ca', now() + interval '1 day', 'admin')$q$, 'demo_visitors_sandbox_check'));
+insert into demo_visitors (token, full_name, email, expires_at, sandbox_id, persona, email_to) values
+  (repeat('u', 43), 'Sam Staff', 'admin.abcd1234@sandbox.example.com', now() + interval '7 days', 'eeeeeeee-0000-0000-0000-000000000001', 'admin', 'd@x.ca'),
+  (repeat('v', 43), 'Margaret Chen-Whitford', 'margaret.abcd1234@sandbox.example.com', now() + interval '7 days', 'eeeeeeee-0000-0000-0000-000000000001', 'margaret', 'd@x.ca');
+select pg_temp.expect('a sandbox is a group of links', (select count(*) = 2 from demo_visitors where sandbox_id = 'eeeeeeee-0000-0000-0000-000000000001'));
+select pg_temp.expect('visitors can''t read sandboxes either', not has_table_privilege('authenticated', 'public.demo_visitors', 'select'));

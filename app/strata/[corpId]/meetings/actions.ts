@@ -35,6 +35,7 @@ import { askClaudeJson, ClaudeRefusalError } from "@/lib/ai/claude";
 import { isGeneralMeeting } from "@/lib/meetings/rules";
 import { queueDocumentIndexing } from "@/lib/kb/queue";
 import { DEMO_EDITABLE_ITEM_ID, IS_DEMO, demoLimitFail, lockDemoAgenda, type DemoLimitFail } from "@/lib/demo";
+import { demoRestricted } from "@/lib/demo-sandbox";
 import { demoMeetingAgenda } from "@/lib/demo-kit/agenda";
 import { logDemoActivity, refundDemoAllowance, takeDemoAllowance } from "@/lib/demo-usage";
 
@@ -87,10 +88,12 @@ export async function createMeeting(corpId: string, input: MeetingDetailsInput):
   const access = await runner(corpId);
   if (!access) return { ok: false, error: "Only the secretary, the admin, or someone they've allowed can create meetings." };
   // The demo: one council meeting per visitor, its agenda already written.
-  if (IS_DEMO) input = { ...input, type: "council" };
+  // A Super Admin's sandbox has none of the demo's limits (lib/demo-sandbox.ts).
+  const restricted = await demoRestricted();
+  if (restricted) input = { ...input, type: "council" };
   const invalid = validateDetails(input);
   if (invalid) return { ok: false, error: invalid };
-  if (IS_DEMO && !(await takeDemoAllowance("meetings"))) {
+  if (restricted && !(await takeDemoAllowance("meetings"))) {
     await logDemoActivity({ kind: "limit", detail: { reason: "second meeting" } });
     return demoLimitFail();
   }
@@ -110,7 +113,7 @@ export async function createMeeting(corpId: string, input: MeetingDetailsInput):
       location: input.location.trim() || null,
       chair_name: chair,
       created_by: access.userId,
-      ...(IS_DEMO ? { agenda: await demoMeetingAgenda(createAdminClient(), access.corpId) } : {}),
+      ...(restricted ? { agenda: await demoMeetingAgenda(createAdminClient(), access.corpId) } : {}),
     })
     .select("id")
     .single();
@@ -130,7 +133,7 @@ export async function updateMeetingDetails(
   input: MeetingDetailsInput
 ): Promise<Ok | Fail> {
   if (!(await runner(corpId))) return { ok: false, error: "You can't edit this meeting." };
-  if (IS_DEMO) input = { ...input, type: "council" };
+  if (await demoRestricted()) input = { ...input, type: "council" };
   const invalid = validateDetails(input);
   if (invalid) return { ok: false, error: invalid };
   const supabase = await createClient();
@@ -221,7 +224,7 @@ export async function saveAgenda(
     console.error("[saveAgenda] attachments", err instanceof Error ? err.message : err);
     return { ok: false, error: "Couldn't save the agenda." };
   }
-  if (IS_DEMO) {
+  if (await demoRestricted()) {
     const locked = await demoLockedAgenda(supabase, corpId, meetingId, next);
     if (!locked) return { ok: false, error: "Couldn't save the agenda." };
     next = locked;
@@ -315,7 +318,7 @@ export async function registerAgendaAttachments(
   files: UploadedFile[],
   category: string
 ): Promise<Ok<{ attachments: Attachment[] }> | Fail | DemoLimitFail> {
-  if (IS_DEMO) return demoLimitFail();
+  if (await demoRestricted()) return demoLimitFail();
   if (!(await runner(corpId))) return { ok: false, error: "You can't add attachments to this agenda." };
   if (!isDocumentCategory(category)) return { ok: false, error: "Choose the folder these files go in." };
   const result = await registerUploadedDocuments(corpId, category, files, { meetingId, agendaItemId: itemId });
@@ -344,7 +347,7 @@ export async function addLinkAttachment(
   label: string,
   category: string
 ): Promise<Ok<{ attachment: Attachment }> | Fail | DemoLimitFail> {
-  if (IS_DEMO) return demoLimitFail();
+  if (await demoRestricted()) return demoLimitFail();
   const access = await runner(corpId);
   if (!access) return { ok: false, error: "You can't add attachments to this agenda." };
   if (!isDocumentCategory(category)) return { ok: false, error: "Choose the folder this link goes in." };
@@ -414,7 +417,7 @@ const AGENDA_SCHEMA = {
  * agenda shows real names but none were ever sent.
  */
 export async function parseUploadedAgenda(corpId: string, formData: FormData): Promise<Ok<{ agenda: AgendaItem[] }> | Fail | DemoLimitFail> {
-  if (IS_DEMO) return demoLimitFail();
+  if (await demoRestricted()) return demoLimitFail();
   const access = await runner(corpId);
   if (!access) return { ok: false, error: "You can't edit this agenda." };
   if (!access.subscribed && access.freeMeetingUsed) {

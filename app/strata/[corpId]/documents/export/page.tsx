@@ -6,6 +6,7 @@ import { getStrataAccess } from "@/lib/data/strata";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { IS_DEMO } from "@/lib/demo";
+import { demoRestricted } from "@/lib/demo-sandbox";
 import { hashExportToken } from "@/lib/document-export";
 import { folderLabel } from "@/lib/documents";
 
@@ -25,7 +26,7 @@ export default async function DocumentExportPage({
 }) {
   const { corpId } = await params;
   const { t } = await searchParams;
-  if (IS_DEMO) notFound();
+  if (await demoRestricted()) notFound();
   const access = await getStrataAccess(corpId);
   if (!access) notFound();
 

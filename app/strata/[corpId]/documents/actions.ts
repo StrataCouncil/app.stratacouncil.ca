@@ -18,6 +18,7 @@ import {
 } from "@/lib/documents";
 import { queueDocumentFingerprints, queueDocumentIndexing } from "@/lib/kb/queue";
 import { IS_DEMO, demoLimitFail } from "@/lib/demo";
+import { demoRestricted } from "@/lib/demo-sandbox";
 import { logDemoActivity } from "@/lib/demo-usage";
 import { logUserActivity } from "@/lib/user-activity";
 import { isWebUrl } from "@/lib/web-url";
@@ -58,7 +59,7 @@ export async function createDocumentUploads(
   files: Array<{ name: string; size: number }>
 ): Promise<{ ok: true; tickets: UploadTicket[] } | Fail> {
   // The demo has only its own materials (lib/demo.ts).
-  if (IS_DEMO) return demoLimitFail();
+  if (await demoRestricted()) return demoLimitFail();
   const access = await getStrataAccess(corpId);
   if (!access) return { ok: false, error: "You're not connected to this strata." };
   if (files.length === 0) return { ok: false, error: "Choose at least one file." };
@@ -106,7 +107,7 @@ export async function registerUploadedDocuments(
   extra: { sourceType?: "upload" | "historic_minutes"; meetingId?: string; agendaItemId?: string } = {}
 ): Promise<{ ok: true; documentIds: string[] } | Fail> {
   // The demo has only its own materials (lib/demo.ts).
-  if (IS_DEMO) return demoLimitFail();
+  if (await demoRestricted()) return demoLimitFail();
   const supabase = await createClient();
   const {
     data: { user },
@@ -167,7 +168,7 @@ export async function registerDocuments(
   files: UploadedFile[]
 ): Promise<{ ok: true } | Fail> {
   // The demo has only its own materials (lib/demo.ts).
-  if (IS_DEMO) return demoLimitFail();
+  if (await demoRestricted()) return demoLimitFail();
   if (!isDocumentCategory(category)) return { ok: false, error: "Choose a folder." };
   const result = await registerUploadedDocuments(corpId, category, files);
   return result.ok ? { ok: true } : result;
@@ -312,7 +313,7 @@ export async function findIdenticalDocuments(corpId: string, hashes: string[]): 
  * delete the removed copy's file.
  */
 export async function mergeDuplicateDocument(corpId: string, duplicateId: string, keepId: string): Promise<{ ok: true } | Fail> {
-  if (IS_DEMO) return demoLimitFail();
+  if (await demoRestricted()) return demoLimitFail();
   const access = await getStrataAccess(corpId);
   if (!access?.isAdmin) return { ok: false, error: "Only an admin can remove a duplicate." };
   const supabase = await createClient();

@@ -5,7 +5,9 @@ import { SiteFooter } from "@/components/SiteFooter";
 import { Logo } from "@/components/Logo";
 import { getCurrentProfile } from "@/lib/data/profile";
 import { getConnectedCorporations } from "@/lib/data/corporations";
-import { IS_DEMO, SIGNUP_URL } from "@/lib/demo";
+import { IS_DEMO, SANDBOX_PERSONAS, SIGNUP_URL } from "@/lib/demo";
+import { sandboxSession } from "@/lib/demo-sandbox";
+import { DemoRestrictedProvider } from "@/components/DemoContext";
 
 /**
  * Top-level app shell (doc03 "Screen layout — two levels, not one flat
@@ -29,13 +31,25 @@ export async function AppShell({
 }) {
   const profile = await getCurrentProfile();
   const corporations = await getConnectedCorporations();
+  const sandbox = await sandboxSession();
   const primaryCorpHref =
     corporations.length > 0 ? `/strata/${corporations[0].id}` : "/strata";
 
   return (
     <>
       {IS_DEMO && <DemoGuard />}
-      {IS_DEMO && (
+      {sandbox && (
+        <div className="demo-banner demo-banner--sandbox" role="note" data-testid="sandbox-banner">
+          <div className="wrap">
+            <span>
+              <strong>Sandbox.</strong> Signed in as {sandbox.name}
+              {sandbox.persona !== "admin" ? ` (${SANDBOX_PERSONAS.find((p) => p.key === sandbox.persona)?.label ?? sandbox.persona})` : " (admin)"}.
+              Everything here is fictional, and every email goes to you.
+            </span>
+          </div>
+        </div>
+      )}
+      {IS_DEMO && !sandbox && (
         <div className="demo-banner" role="note" data-testid="demo-banner">
           <div className="wrap">
             <span>
@@ -70,7 +84,9 @@ export async function AppShell({
           <AccountMenu profile={profile} />
         </div>
       </header>
-      <main>{children}</main>
+      <main>
+        <DemoRestrictedProvider restricted={IS_DEMO && !sandbox}>{children}</DemoRestrictedProvider>
+      </main>
       <SiteFooter />
     </>
   );

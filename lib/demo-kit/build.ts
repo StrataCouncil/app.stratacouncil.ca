@@ -32,8 +32,21 @@ import { BUILDING, CAST, MANAGEMENT, OWNERS, council, ownerEmail } from "./peopl
  * Documents go through the same PII stripping as real ones before their
  * passages are embedded, and each passage's vector is kept
  * (demo_kit_embeddings) so later visitors reuse it.
+ *
+ * A sandbox passes its own people, so signing in as one of them never
+ * reaches anyone else's demo strata.
  */
-export async function buildDemoStrata(admin: SupabaseClient, corpId: string, now: Date = new Date()) {
+export async function buildDemoStrata(
+  admin: SupabaseClient,
+  corpId: string,
+  now: Date = new Date(),
+  /**
+   * A sandbox's own copies of the council and manager (lib/demo.ts,
+   * SANDBOX_PERSONAS), by CAST key, used instead of the shared fictional
+   * accounts, which belong to every visitor's strata.
+   */
+  people?: Map<string, string>
+) {
   const d = kitDates(now);
   const { data: corp } = await admin
     .from("strata_corporations")
@@ -44,7 +57,7 @@ export async function buildDemoStrata(admin: SupabaseClient, corpId: string, now
   const legalName = corp.legal_name as string;
 
   const cast = await ensureCast(admin);
-  const id = (key: string) => cast.get(key)!;
+  const id = (key: string) => people?.get(key) ?? cast.get(key)!;
   const dev = id("dev");
   const secretary = id("liam");
 

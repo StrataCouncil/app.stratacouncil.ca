@@ -3,7 +3,8 @@ import { AdminTabs } from "@/components/AdminTabs";
 import { AppShell } from "@/components/AppShell";
 import { DemoLinksAdmin } from "@/components/DemoLinksAdmin";
 import { DemoRequestsAdmin } from "@/components/DemoRequestsAdmin";
-import { getDemoVisitors } from "@/lib/data/demo-visitors";
+import { SandboxAdmin } from "@/components/SandboxAdmin";
+import { getDemoVisitors, getSandboxes } from "@/lib/data/demo-visitors";
 import { getCurrentProfile } from "@/lib/data/profile";
 import { getDemoRequests } from "@/lib/demo-requests-server";
 
@@ -11,7 +12,7 @@ import { getDemoRequests } from "@/lib/demo-requests-server";
 export default async function AdminDemoPage() {
   const profile = await getCurrentProfile();
   if (!profile?.isSuperAdmin) notFound();
-  const [demoVisitors, demoRequests] = await Promise.all([getDemoVisitors(), getDemoRequests()]);
+  const [demoVisitors, demoRequests, sandboxes] = await Promise.all([getDemoVisitors(), getDemoRequests(), getSandboxes()]);
 
   return (
     <AppShell active="admin">
@@ -26,6 +27,7 @@ export default async function AdminDemoPage() {
         </div>
         <DemoRequestsAdmin requests={demoRequests} connected={demoVisitors.configured} />
         <DemoLinksAdmin list={demoVisitors} />
+        <SandboxAdmin list={sandboxes} />
       </div>
     </AppShell>
   );
