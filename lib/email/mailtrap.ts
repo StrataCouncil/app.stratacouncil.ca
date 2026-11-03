@@ -16,14 +16,33 @@ import { IS_DEMO } from "@/lib/demo";
 
 const MAILTRAP_SEND_URL = "https://send.api.mailtrap.io/api/send";
 
+/**
+ * A failed send. `body` is Mailtrap's reply, which callers log, so any email
+ * address in it is replaced first (PIPA: personal information stays out of
+ * the logs). The status and Mailtrap's own error text are kept.
+ */
 export class MailtrapSendError extends Error {
+  public readonly body: unknown;
   constructor(
     message: string,
     public readonly status: number,
-    public readonly body: unknown
+    body: unknown
   ) {
     super(message);
     this.name = "MailtrapSendError";
+    this.body = redactEmails(body);
+  }
+}
+
+const EMAIL_IN_TEXT = /[^\s@"'<>,;:()]+@[^\s@"'<>,;:()]+\.[^\s@"'<>,;:()]+/g;
+
+/** The same value with every email address replaced by [email]. */
+export function redactEmails(value: unknown): unknown {
+  if (value == null) return value;
+  try {
+    return JSON.parse(JSON.stringify(value).replace(EMAIL_IN_TEXT, "[email]"));
+  } catch {
+    return "[unreadable]";
   }
 }
 

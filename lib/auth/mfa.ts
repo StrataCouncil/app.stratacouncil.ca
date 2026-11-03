@@ -1,6 +1,7 @@
 "use server";
 
 import { cookies } from "next/headers";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import {
   MFA_BACKUP_COOKIE_MAX_AGE,
@@ -205,7 +206,10 @@ export async function verifyBackupCode(rawCode: string): Promise<MfaActionResult
   const normalized = rawCode.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
   const hash = await sha256Hex(normalized);
 
-  const { data: matches, error: lookupError } = await supabase
+  // The table is server-only (0072): read and marked used with the service
+  // role, always for the signed-in user.
+  const admin = createAdminClient();
+  const { data: matches, error: lookupError } = await admin
     .from("mfa_backup_codes")
     .select("id")
     .eq("user_id", user.id)
@@ -220,12 +224,19 @@ export async function verifyBackupCode(rawCode: string): Promise<MfaActionResult
     return { status: "error", message: "That backup code isn't valid, or has already been used." };
   }
 
-  const { error: updateError } = await supabase
+  const { data: marked, error: updateError } = await admin
     .from("mfa_backup_codes")
     .update({ used_at: new Date().toISOString() })
-    .eq("id", matches[0].id);
+    .eq("id", matches[0].id)
+    .eq("user_id", user.id)
+    .is("used_at", null)
+    .select("id");
   if (updateError) {
     return { status: "error", message: updateError.message };
+  }
+  // Used by another request in the meantime: a code works once.
+  if (!marked?.length) {
+    return { status: "error", message: "That backup code isn't valid, or has already been used." };
   }
 
   const cookieValue = await createMfaBackupCookieValue(user.id);
@@ -250,12 +261,19 @@ export async function verifyBackupCode(rawCode: string): Promise<MfaActionResult
 async function generateBackupCodes(
   userId: string
 ): Promise<MfaActionResult<{ codes: string[] }>> {
+  // Only a session that has just passed the authenticator (aal2) gets
+  // codes; the table itself is server-only (0072).
   const supabase = await createClient();
+  const [{ data: aal }, { data: auth }] = await Promise.all([supabase.auth.mfa.getAuthenticatorAssuranceLevel(), supabase.auth.getUser()]);
+  if (aal?.currentLevel !== "aal2" || auth.user?.id !== userId) {
+    return { status: "error", message: "Verify your authenticator code first." };
+  }
+  const admin = createAdminClient();
 
   const codes = Array.from({ length: BACKUP_CODE_COUNT }, () => generateOneBackupCode());
   const hashes = await Promise.all(codes.map((code) => sha256Hex(code.replace("-", ""))));
 
-  const { error: deleteError } = await supabase
+  const { error: deleteError } = await admin
     .from("mfa_backup_codes")
     .delete()
     .eq("user_id", userId);
@@ -264,7 +282,7 @@ async function generateBackupCodes(
   }
 
   const rows = hashes.map((code_hash) => ({ user_id: userId, code_hash }));
-  const { error: insertError } = await supabase.from("mfa_backup_codes").insert(rows);
+  const { error: insertError } = await admin.from("mfa_backup_codes").insert(rows);
   if (insertError) {
     return { status: "error", message: insertError.message };
   }

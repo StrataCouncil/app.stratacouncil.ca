@@ -128,8 +128,8 @@ export default async function MeetingsPage({ params }: { params: Promise<{ corpI
         </div>
       )}
 
-      <MeetingSection title="Upcoming and in progress" meetings={upcoming} corpId={corpId} userId={access.userId} empty={IS_DEMO ? "No meetings scheduled. Press New meeting: the agenda is written for you, ready to run in Meeting Mode." : "No meetings scheduled."} />
-      {past.length > 0 && <MeetingSection title="Past meetings" meetings={past} corpId={corpId} userId={access.userId} />}
+      <MeetingSection title="Upcoming and in progress" meetings={upcoming} corpId={corpId} userId={access.userId} seesDrafts={access.isCouncil || access.canRunMeetings} empty={IS_DEMO ? "No meetings scheduled. Press New meeting: the agenda is written for you, ready to run in Meeting Mode." : "No meetings scheduled."} />
+      {past.length > 0 && <MeetingSection title="Past meetings" meetings={past} corpId={corpId} userId={access.userId} seesDrafts={access.isCouncil || access.canRunMeetings} />}
     </>
   );
 }
@@ -139,12 +139,15 @@ function MeetingSection({
   meetings,
   corpId,
   userId,
+  seesDrafts,
   empty,
 }: {
   title: string;
   meetings: MeetingRecord[];
   corpId: string;
   userId: string;
+  /** Draft minutes are for council and whoever runs meetings (0072). */
+  seesDrafts: boolean;
   empty?: string;
 }) {
   return (
@@ -173,7 +176,7 @@ function MeetingSection({
                   <Link href={`/strata/${corpId}/meetings/${m.id}/run`} className="button button-primary button-small">
                     Resume
                   </Link>
-                ) : m.status === "ADJOURNED" ? (
+                ) : m.status === "ADJOURNED" && (m.minutesState === "FINAL" || (m.minutesState === "DRAFT" && seesDrafts)) ? (
                   <Link href={`/strata/${corpId}/meetings/${m.id}/minutes`} className="button button-secondary button-small">
                     {m.minutesState === "FINAL" ? "Minutes" : "Review minutes"}
                   </Link>

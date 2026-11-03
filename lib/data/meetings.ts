@@ -24,12 +24,17 @@ export interface MeetingRecord {
   adjournedAt: string | null;
   isTrial: boolean;
   minutesState: "DRAFT" | "FINAL" | null;
+  /**
+   * The minutes, from meeting_minutes() (0072): final minutes for any member,
+   * draft minutes only for council and whoever can run meetings. Null when
+   * there are none, or the viewer may not see them yet. Only getMeeting reads it.
+   */
   minutesContent: unknown;
   updatedAt: string;
 }
 
 const COLUMNS =
-  "id, corporation_id, type, status, meeting_date, start_time, timezone, format, location, chair_name, agenda, attendance, attendees, agenda_approved, launched_by, launched_at, actual_start_at, adjourned_at, is_trial, minutes_state, minutes_content, updated_at, launcher:profiles!meetings_launched_by_fkey(full_name)";
+  "id, corporation_id, type, status, meeting_date, start_time, timezone, format, location, chair_name, agenda, attendance, attendees, agenda_approved, launched_by, launched_at, actual_start_at, adjourned_at, is_trial, minutes_state, updated_at, launcher:profiles!meetings_launched_by_fkey(full_name)";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function toMeeting(r: any): MeetingRecord {
@@ -55,7 +60,7 @@ function toMeeting(r: any): MeetingRecord {
     adjournedAt: r.adjourned_at,
     isTrial: r.is_trial,
     minutesState: r.minutes_state,
-    minutesContent: r.minutes_content,
+    minutesContent: null,
     updatedAt: r.updated_at,
   };
 }
@@ -80,7 +85,14 @@ export async function getMeeting(corpId: string, meetingId: string): Promise<Mee
     .eq("id", meetingId)
     .maybeSingle();
   if (error) console.error("[getMeeting]", error.message);
-  return data ? toMeeting(data) : null;
+  if (!data) return null;
+  const meeting = toMeeting(data);
+  if (meeting.minutesState) {
+    const { data: minutes, error: minutesError } = await supabase.rpc("meeting_minutes", { p_meeting_id: meetingId });
+    if (minutesError) console.error("[getMeeting] minutes", minutesError.message);
+    meeting.minutesContent = minutes ?? null;
+  }
+  return meeting;
 }
 
 /** Private notes, keyed by agenda item id. RLS returns nothing to anyone who may not see them. */
