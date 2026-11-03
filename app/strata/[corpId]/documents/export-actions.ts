@@ -6,6 +6,7 @@ import { getStrataAccess } from "@/lib/data/strata";
 import { getCurrentProfile } from "@/lib/data/profile";
 import { APP_URL } from "@/lib/app-url";
 import { IS_DEMO, demoLimitFail } from "@/lib/demo";
+import { demoRestricted } from "@/lib/demo-sandbox";
 import { sendTransactionalEmail } from "@/lib/email/mailtrap";
 import { documentExportEmail } from "@/lib/email/templates";
 import { EXPORT_LINK_HOURS, hashExportToken } from "@/lib/document-export";
@@ -19,7 +20,7 @@ import { EXPORT_LINK_HOURS, hashExportToken } from "@/lib/document-export";
 const MAX_PER_HOUR = 3;
 
 export async function requestDocumentExport(corpId: string): Promise<{ ok: true; email: string } | { ok: false; error: string }> {
-  if (IS_DEMO) return demoLimitFail();
+  if (await demoRestricted()) return demoLimitFail();
   const access = await getStrataAccess(corpId);
   if (!access?.isAdmin) return { ok: false, error: "Only the strata's Admin can download everything." };
   const profile = await getCurrentProfile();

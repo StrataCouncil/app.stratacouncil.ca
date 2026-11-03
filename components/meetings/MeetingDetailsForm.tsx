@@ -1,5 +1,6 @@
 "use client";
 
+import { useDemoRestricted } from "@/components/DemoContext";
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -11,7 +12,7 @@ import {
 } from "@/lib/meetings/agenda";
 import { createMeeting, updateMeetingDetails, type MeetingDetailsInput } from "@/app/strata/[corpId]/meetings/actions";
 import type { ChairCandidate } from "@/lib/data/meetings";
-import { IS_DEMO } from "@/lib/demo";
+
 import { isDemoLimit, showDemoLimit } from "@/lib/demo-client";
 
 const ELECT = "__elect";
@@ -31,6 +32,8 @@ export function MeetingDetailsForm({
   onDone?: () => void;
   chairOptions?: ChairCandidate[];
 }) {
+  // The demo's restrictions, lifted in a Super Admin's sandbox (lib/demo-sandbox.ts).
+  const demoRestricted = useDemoRestricted();
   const router = useRouter();
   const [form, setForm] = useState<MeetingDetailsInput>(
     initial ?? {
@@ -93,7 +96,7 @@ export function MeetingDetailsForm({
           <span>Meeting type</span>
           <select value={form.type} onChange={set("type")} required data-testid="meeting-type">
             {/* The demo's meeting is a council meeting (its agenda is written for one). */}
-            {(IS_DEMO ? (["council"] as const) : meetingTypes).map((t) => (
+            {(demoRestricted ? (["council"] as const) : meetingTypes).map((t) => (
               <option key={t} value={t}>
                 {meetingTypeLabels[t]}
               </option>

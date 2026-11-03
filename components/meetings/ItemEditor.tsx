@@ -1,5 +1,6 @@
 "use client";
 
+import { useDemoRestricted } from "@/components/DemoContext";
 import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -27,7 +28,7 @@ import {
 import { createDocumentUploads, listAttachableDocuments, type AttachableDocument } from "@/app/strata/[corpId]/documents/actions";
 import { findAlreadyInDocuments, type AlreadyInDocuments } from "@/lib/documents-upload";
 import { addLinkAttachment, draftMotion, registerAgendaAttachments } from "@/app/strata/[corpId]/meetings/actions";
-import { IS_DEMO } from "@/lib/demo";
+
 import { isDemoLimit, showDemoLimit } from "@/lib/demo-client";
 
 /**
@@ -59,6 +60,8 @@ export function ItemEditor({
   onSave: (item: AgendaItem, note: string) => void;
   onClose: () => void;
 }) {
+  // The demo's restrictions, lifted in a Super Admin's sandbox (lib/demo-sandbox.ts).
+  const demoRestricted = useDemoRestricted();
   const [draft, setDraft] = useState<AgendaItem>(item);
   const [noteDraft, setNoteDraft] = useState(note);
   const [error, setError] = useState<string | null>(null);
@@ -124,7 +127,7 @@ export function ItemEditor({
   }
 
   function startAdding(mode: "upload" | "link" | "library") {
-    if (IS_DEMO && mode !== "library") return showDemoLimit("upload");
+    if (demoRestricted && mode !== "library") return showDemoLimit("upload");
     setError(null);
     setAlready(null);
     setAdding((current) => (current === mode ? null : mode));
@@ -260,7 +263,7 @@ export function ItemEditor({
           </label>
           <label className="field">
             <span>Category</span>
-            <input value={draft.cat} onChange={(e) => set("cat", e.target.value)} list="agenda-categories" maxLength={120} readOnly={IS_DEMO} />
+            <input value={draft.cat} onChange={(e) => set("cat", e.target.value)} list="agenda-categories" maxLength={120} readOnly={demoRestricted} />
             <datalist id="agenda-categories">
               {categories.map((c) => (
                 <option key={c} value={c} />

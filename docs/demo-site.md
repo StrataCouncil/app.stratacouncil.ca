@@ -97,6 +97,32 @@ demo's own tables and functions, safe to re-run). The live database is never
 touched; its migrations are still run by hand. It can also be run from the
 Actions tab (Run workflow).
 
+## Sandboxes (Super Admin testing)
+
+For trying features with several people at once, without test data on the
+live site. In the live console's **Demo** tab, **New sandbox** makes one:
+
+- A copy of Larchwood Commons on the demo site, with a sign-in link for
+  each person in it: you (as the strata's admin), the five council members
+  and the manager. Each sandbox has its own copies of those people, at
+  reserved `@sandbox.example.com` addresses, so signing in as one never
+  reaches a visitor's strata (the shared fictional accounts are in every
+  visitor's copy). Open each link in its own browser or private window.
+- Built the first time any of its links is opened (about 20 seconds). Lasts
+  7 days; **Renew 7 days** and **Delete** are in the console. At most 3 at a
+  time.
+- None of the demo's limits: uploads, any number of meetings, any meeting
+  type, an agenda of your own, unlimited Stratasphere questions. Billing,
+  extra stratas and the activity log stay off. Sandboxes aren't listed as
+  visitors or counted in the console's numbers.
+- **Email:** every email it would send goes to the Super Admin who made it,
+  never to the address on it, with the subject saying who it was for
+  (`[Sandbox → Liam Fraser, Secretary] …`). Needs `MAILTRAP_API_TOKEN` (and
+  `MAILTRAP_SENDER_EMAIL`) on the demo project; without them nothing is
+  sent. Ordinary demo visitors never get email. An invitation can be sent
+  and read, but not accepted: nobody can sign in on the demo except through
+  a link.
+
 ## Settings
 
 | Where | Name | Value |
@@ -105,6 +131,7 @@ Actions tab (Run workflow).
 | | `NEXT_PUBLIC_APP_URL` | `https://demo.stratacouncil.ca` |
 | | `DEMO_MODE` | `true` |
 | | `ANTHROPIC_API_KEY`, `VOYAGE_API_KEY` | as live |
+| | `MAILTRAP_API_TOKEN`, `MAILTRAP_SENDER_EMAIL` | as live: only sandboxes send, and only to the Super Admin who made them |
 | | `CRON_SECRET` | any long random string (Vercel sends it to the clean-up) |
 | | Inngest keys | from the Inngest integration (tick the demo project there) |
 | Vercel, `app-stratacouncil-ca` | `DEMO_SUPABASE_URL`, `DEMO_SUPABASE_SERVICE_ROLE_KEY` | the demo Supabase project |

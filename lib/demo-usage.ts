@@ -6,14 +6,27 @@ import { createClient } from "@/lib/supabase/server";
  * The demo site's limits and activity log for the signed-in visitor
  * (lib/demo.ts). Server only. The visitor is known from their account's
  * app_metadata, which only the service role can set (lib/demo-server.ts).
- * Outside the demo, nothing is limited and nothing is logged.
+ * Outside the demo, and in a Super Admin's sandbox, nothing is limited
+ * and nothing is logged.
  */
 
-async function visitorId(): Promise<string | null> {
+async function demoUser() {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  return user;
+}
+
+/** A Super Admin's sandbox (lib/demo-sandbox.ts): no limits, and nothing logged. */
+async function inSandbox(): Promise<boolean> {
+  return typeof (await demoUser())?.app_metadata?.demo_sandbox_id === "string";
+}
+
+/** The demo visitor behind this request; null for a sandbox, which isn't a visitor. */
+async function visitorId(): Promise<string | null> {
+  const user = await demoUser();
+  if (typeof user?.app_metadata?.demo_sandbox_id === "string") return null;
   const id = user?.app_metadata?.demo_visitor_id;
   return typeof id === "string" ? id : null;
 }
@@ -23,7 +36,7 @@ async function visitorId(): Promise<string | null> {
  * (or the visitor can't be told apart, which fails closed).
  */
 export async function takeDemoAllowance(what: DemoLimit): Promise<boolean> {
-  if (!IS_DEMO) return true;
+  if (!IS_DEMO || (await inSandbox())) return true;
   const id = await visitorId();
   if (!id) return false;
   const { data, error } = await createAdminClient().rpc("demo_use", { p_visitor_id: id, p_what: what, p_limit: DEMO_LIMITS[what] });
@@ -42,7 +55,7 @@ export async function refundDemoAllowance(what: DemoLimit, knownVisitorId?: stri
 
 /** How many of each are left, or null outside the demo. */
 export async function demoAllowanceLeft(): Promise<Record<DemoLimit, number> | null> {
-  if (!IS_DEMO) return null;
+  if (!IS_DEMO || (await inSandbox())) return null;
   const none = { chat: 0, meeting: 0, meetings: 0, motions: 0 };
   const id = await visitorId();
   if (!id) return none;

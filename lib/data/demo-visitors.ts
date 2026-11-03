@@ -1,6 +1,6 @@
 import { createClient as createSupabaseClient, type SupabaseClient } from "@supabase/supabase-js";
 import { requireSuperAdmin } from "@/lib/data/admin";
-import { demoLink, type DemoLanding } from "@/lib/demo";
+import { demoLink, SANDBOX_PERSONAS, type DemoLanding } from "@/lib/demo";
 import type { DemoActivityEvent } from "@/lib/demo-activity";
 
 /**
@@ -64,6 +64,8 @@ export async function getDemoVisitors(): Promise<DemoVisitorList> {
   const { data, error } = await db
     .from("demo_visitors")
     .select(`${DEMO_VISITOR_COLUMNS}, demo_activity(count)`)
+    // Sandboxes are listed on their own (getSandboxes), not as visitors.
+    .is("sandbox_id", null)
     .order("created_at", { ascending: false })
     .limit(100);
   if (error) {
@@ -102,4 +104,65 @@ export async function getDemoActivity(visitorId: string): Promise<DemoActivityRe
   }
   const list = (events ?? []) as DemoActivityEvent[];
   return { ok: true, visitor: toDemoVisitor(row as unknown as Record<string, string | null>), events: list, truncated: list.length >= ACTIVITY_LIMIT };
+}
+
+/** A Super Admin's sandbox on the demo site (lib/demo.ts, SANDBOX_*): one link per person. */
+export interface Sandbox {
+  id: string;
+  createdAt: string;
+  createdByName: string;
+  emailTo: string;
+  expiresAt: string;
+  /** Built (the first link has been opened). */
+  ready: boolean;
+  people: Array<{ visitorId: string; persona: string; label: string; name: string; link: string; lastOpenedAt: string | null }>;
+}
+
+export type SandboxList = { configured: false } | { configured: true; sandboxes: Sandbox[]; error: string | null };
+
+/** Sandboxes still working, newest first. Super Admins only. */
+export async function getSandboxes(): Promise<SandboxList> {
+  if (!(await requireSuperAdmin())) return { configured: true, sandboxes: [], error: null };
+  const db = demoDatabase();
+  if (!db) return { configured: false };
+  const { data, error } = await db
+    .from("demo_visitors")
+    .select("id, token, full_name, sandbox_id, persona, email_to, expires_at, created_at, created_by_name, corporation_id, last_opened_at")
+    .not("sandbox_id", "is", null)
+    .gt("expires_at", new Date().toISOString())
+    .order("created_at", { ascending: false })
+    .limit(200);
+  if (error) {
+    console.error("[getSandboxes]", error.message);
+    return { configured: true, sandboxes: [], error: "Couldn't reach the demo database." };
+  }
+  const order = (persona: string) => {
+    const i = SANDBOX_PERSONAS.findIndex((p) => p.key === persona);
+    return i < 0 ? 99 : i;
+  };
+  const groups = new Map<string, Sandbox>();
+  for (const r of data ?? []) {
+    const id = r.sandbox_id as string;
+    const box: Sandbox = groups.get(id) ?? {
+      id,
+      createdAt: r.created_at,
+      createdByName: r.created_by_name ?? "",
+      emailTo: r.email_to ?? "",
+      expiresAt: r.expires_at,
+      ready: false,
+      people: [],
+    };
+    if (r.persona === "admin" && r.corporation_id) box.ready = true;
+    box.people.push({
+      visitorId: r.id,
+      persona: r.persona as string,
+      label: SANDBOX_PERSONAS.find((p) => p.key === r.persona)?.label ?? (r.persona as string),
+      name: r.full_name ?? "",
+      link: demoLink(r.token as string),
+      lastOpenedAt: r.last_opened_at,
+    });
+    groups.set(id, box);
+  }
+  for (const box of groups.values()) box.people.sort((a, b) => order(a.persona) - order(b.persona));
+  return { configured: true, sandboxes: [...groups.values()], error: null };
 }

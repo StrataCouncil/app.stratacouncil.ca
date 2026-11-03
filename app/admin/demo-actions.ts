@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { requireSuperAdmin } from "@/lib/data/admin";
 import { DEMO_VISITOR_COLUMNS, demoDatabase, toDemoVisitor, type DemoVisitor } from "@/lib/data/demo-visitors";
-import { IS_DEMO, demoDayLabel, demoLinkEnds, newDemoToken, type DemoLanding } from "@/lib/demo";
+import { IS_DEMO, SANDBOX_PERSONAS, demoDayLabel, demoLinkEnds, newDemoToken, sandboxEnds, sandboxPersonaEmail, type DemoLanding } from "@/lib/demo";
+import { CAST } from "@/lib/demo-kit/people";
 import { MailtrapSendError, sendTransactionalEmail } from "@/lib/email/mailtrap";
 import { demoInviteEmail } from "@/lib/email/templates";
 import { mirrorLegislationToDemo, mirrorLibraryToDemo, mirrorTrainingToDemo } from "@/lib/demo-mirror";
@@ -268,4 +269,102 @@ export async function copyContentToDemo(): Promise<{ ok: true; notice: string } 
       `${library.items} Library items (policy templates replaced by the sample) ` +
       `and ${legislation.entries} Knowledge Base entries (${legislation.copied} re-indexed, ${legislation.chunks} passages) to the demo.`,
   };
+}
+
+// ── Sandboxes ────────────────────────────────────────────────────────────
+
+/** At most this many sandboxes at once: each is a full strata on the demo site. */
+const MAX_SANDBOXES = 3;
+
+/**
+ * A sandbox (lib/demo.ts, SANDBOX_*): a test strata on the demo site with a
+ * sign-in link for each person in it. Everything in it is fictional; the
+ * demo's limits don't apply; every email it sends comes to you. It's built
+ * the first time one of its links is opened, and lasts 7 days.
+ */
+export async function createSandbox(): Promise<{ ok: true; notice: string } | { ok: false; error: string }> {
+  const ctx = await requireSuperAdmin();
+  if (!ctx || IS_DEMO) return { ok: false, error: "Only platform staff can make sandboxes." };
+  const db = demoDatabase();
+  if (!db) return { ok: false, error: NOT_CONNECTED };
+  const { data: me } = await ctx.supabase.from("profiles").select("full_name, email").eq("id", ctx.user.id).single();
+  const emailTo = String(me?.email ?? ctx.user.email ?? "").toLowerCase();
+  if (!EMAIL_RE.test(emailTo)) return { ok: false, error: "Your account has no email address for the sandbox's emails." };
+
+  const { data: open } = await db.from("demo_visitors").select("sandbox_id").not("sandbox_id", "is", null).gt("expires_at", new Date().toISOString());
+  if (new Set((open ?? []).map((r) => r.sandbox_id)).size >= MAX_SANDBOXES) {
+    return { ok: false, error: `There are already ${MAX_SANDBOXES} sandboxes. Delete one first.` };
+  }
+
+  const sandboxId = crypto.randomUUID();
+  const expiresAt = sandboxEnds().toISOString();
+  const creator = (me?.full_name as string) || "Super Admin";
+  const rows = SANDBOX_PERSONAS.map((p) => ({
+    token: newDemoToken(),
+    full_name: p.key === "admin" ? creator : (CAST.find((c) => c.key === p.key)?.fullName ?? p.label),
+    email: sandboxPersonaEmail(sandboxId, p.key),
+    landing: "strata",
+    expires_at: expiresAt,
+    created_by_name: creator,
+    sandbox_id: sandboxId,
+    persona: p.key,
+    email_to: emailTo,
+  }));
+  const { error } = await db.from("demo_visitors").insert(rows);
+  if (error) {
+    console.error("[createSandbox]", error.message);
+    return { ok: false, error: "Couldn't make the sandbox. Check that the demo database is up to date (the Demo database GitHub Action)." };
+  }
+  revalidatePath("/admin/demo");
+  return {
+    ok: true,
+    notice: `Sandbox ready. Open any of its links to build it (about 20 seconds the first time). It lasts until midnight (Pacific) on ${demoDayLabel(new Date(expiresAt))}, and its emails come to ${emailTo}.`,
+  };
+}
+
+/** Another 7 days, from today. */
+export async function renewSandbox(sandboxId: string): Promise<{ ok: true; notice: string } | { ok: false; error: string }> {
+  if (!(await requireSuperAdmin()) || IS_DEMO) return { ok: false, error: "Only platform staff can renew sandboxes." };
+  const db = demoDatabase();
+  if (!db) return { ok: false, error: NOT_CONNECTED };
+  if (!/^[0-9a-f-]{36}$/i.test(sandboxId)) return { ok: false, error: "That sandbox isn't available." };
+  const expiresAt = sandboxEnds().toISOString();
+  const { data, error } = await db
+    .from("demo_visitors")
+    .update({ expires_at: expiresAt })
+    .eq("sandbox_id", sandboxId)
+    .gt("expires_at", new Date().toISOString())
+    .select("id, user_id, persona");
+  if (error || !data?.length) return { ok: false, error: "That sandbox has already ended." };
+  // Signed-in sessions carry the end date too (middleware.ts checks it).
+  for (const r of data) {
+    if (!r.user_id) continue;
+    await db.auth.admin.updateUserById(r.user_id, {
+      app_metadata: { demo_visitor_id: r.id, demo_expires_at: expiresAt, demo_sandbox_id: sandboxId, demo_persona: r.persona },
+    });
+  }
+  revalidatePath("/admin/demo");
+  return { ok: true, notice: `Renewed until midnight (Pacific) on ${demoDayLabel(new Date(expiresAt))}.` };
+}
+
+/** Deletes the sandbox: its strata, its people and their links, now. */
+export async function deleteSandbox(sandboxId: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!(await requireSuperAdmin()) || IS_DEMO) return { ok: false, error: "Only platform staff can delete sandboxes." };
+  const db = demoDatabase();
+  if (!db) return { ok: false, error: NOT_CONNECTED };
+  if (!/^[0-9a-f-]{36}$/i.test(sandboxId)) return { ok: false, error: "That sandbox isn't available." };
+  // Ended first, so its links stop working while it's taken apart.
+  await db.from("demo_visitors").update({ expires_at: new Date(Date.now() - 1000).toISOString() }).eq("sandbox_id", sandboxId);
+  const { data: rows } = await db.from("demo_visitors").select("id, user_id, corporation_id, persona").eq("sandbox_id", sandboxId);
+  try {
+    const lead = (rows ?? []).find((r) => r.persona === "admin");
+    if (lead) await wipeVisitor(db, lead);
+    for (const r of rows ?? []) if (r !== lead) await wipeVisitor(db, { user_id: r.user_id, corporation_id: null });
+  } catch (err) {
+    console.error("[deleteSandbox]", err instanceof Error ? err.message : err);
+    return { ok: false, error: "Couldn't finish deleting it. It has ended, and the nightly clean-up will finish the job." };
+  }
+  await db.from("demo_visitors").delete().eq("sandbox_id", sandboxId);
+  revalidatePath("/admin/demo");
+  return { ok: true };
 }

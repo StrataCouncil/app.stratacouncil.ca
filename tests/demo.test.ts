@@ -77,3 +77,20 @@ test("the demo's agenda: only the editable item can change", () => {
   assert.equal(out[2].cat, "New Business", "it stays in its category");
   assert.deepEqual(lockDemoAgenda(saved, []), saved, "leaving it out changes nothing");
 });
+
+test("a sandbox lasts 7 days after the day it's made, to midnight Pacific", async () => {
+  const { sandboxEnds, demoLinkEnds } = await import("../lib/demo.ts");
+  const made = new Date("2026-11-04T19:00:00Z"); // Wednesday, 11 a.m. PST
+  assert.equal(sandboxEnds(made).toISOString(), "2026-11-12T08:00:00.000Z");
+  assert.ok(sandboxEnds(made) > demoLinkEnds(made));
+});
+
+test("a sandbox's people have reserved addresses of their own", async () => {
+  const { SANDBOX_PERSONAS, sandboxPersonaEmail } = await import("../lib/demo.ts");
+  const a = sandboxPersonaEmail("eeeeeeee-1111-0000-0000-000000000001", "margaret");
+  const b = sandboxPersonaEmail("ffffffff-1111-0000-0000-000000000001", "margaret");
+  assert.equal(a, "margaret.eeeeeeee@sandbox.example.com");
+  assert.notEqual(a, b, "each sandbox gets its own Margaret, never the shared demo account");
+  assert.equal(SANDBOX_PERSONAS[0].key, "admin");
+  assert.ok(SANDBOX_PERSONAS.some((p) => p.key === "liam"), "the secretary, who can run meetings");
+});

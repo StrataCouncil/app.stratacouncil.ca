@@ -140,6 +140,7 @@ async function demoToday(): Promise<AdminOverview["demo"]> {
   const { data, error } = await db
     .from("demo_visitors")
     .select("first_opened_at")
+    .is("sandbox_id", null)
     .gt("expires_at", new Date().toISOString())
     .limit(1000);
   if (error) {

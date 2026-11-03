@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { APP_URL } from "@/lib/app-url";
 import { IS_DEMO } from "@/lib/demo";
+import { demoRestricted } from "@/lib/demo-sandbox";
 import { MailtrapSendError, sendTransactionalEmail } from "@/lib/email/mailtrap";
 import { notifyUser } from "@/lib/email/notify";
 import { corporationInviteEmail, joinRequestApprovedEmail } from "@/lib/email/templates";
@@ -108,7 +109,7 @@ async function emailInvite(params: {
     corporationName: corp?.building_name || corp?.legal_name || params.corporationId,
     inviterName: params.inviterName,
   });
-  await sendTransactionalEmail({ to: params.to, subject, html, text });
+  await sendTransactionalEmail({ to: params.to, subject, html, text, corporationId: params.corporationId });
 }
 
 async function findProfileByEmail(email: string) {
@@ -245,6 +246,7 @@ export async function sendInvite(
   }
 
   // The demo (lib/demo.ts) emails no one: the invite just waits as pending.
+  if (IS_DEMO && !(await demoRestricted())) return { ok: true, notice: `Invite saved for ${email}. This is a sandbox, so the email went to you.` };
   return { ok: true, notice: IS_DEMO ? `Invite saved for ${email}. It's pending (this is the demo, so no email was sent).` : `Invite sent to ${email}.` };
 }
 
@@ -295,7 +297,11 @@ export async function resendInvite(corporationId: string, inviteId: string): Pro
 
   return {
     ok: true,
-    notice: IS_DEMO ? `Still pending for ${invite.invited_email} (this is the demo, so no email was sent).` : `Invite re-sent to ${invite.invited_email}.`,
+    notice: !IS_DEMO
+      ? `Invite re-sent to ${invite.invited_email}.`
+      : (await demoRestricted())
+        ? `Still pending for ${invite.invited_email} (this is the demo, so no email was sent).`
+        : `Re-sent. This is a sandbox, so the email went to you.`,
   };
 }
 

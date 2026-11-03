@@ -86,6 +86,41 @@ export function demoLinkEnds(now: Date = new Date()): Date {
   return endOfDemoDay(now, DEMO_LINK_DAYS);
 }
 
+/**
+ * Sandboxes (supabase/demo/demo.sql): a Super Admin's test strata on the
+ * demo site, with a sign-in link for each person in it, so features can be
+ * tried with several people at once. Everything in it is fictional; the
+ * demo's limits don't apply, and every email it sends goes to the Super
+ * Admin who made it. Lasts SANDBOX_DAYS, renewable from the console.
+ */
+export const SANDBOX_DAYS = 7;
+
+export function sandboxEnds(now: Date = new Date()): Date {
+  return endOfDemoDay(now, SANDBOX_DAYS);
+}
+
+export interface SandboxPersona {
+  /** "admin" is the Super Admin as the strata's admin; the rest are lib/demo-kit/people.ts CAST keys. */
+  key: string;
+  label: string;
+}
+
+/** Who you can sign in as in a sandbox, in the order the console lists them. */
+export const SANDBOX_PERSONAS: SandboxPersona[] = [
+  { key: "admin", label: "Admin (you)" },
+  { key: "margaret", label: "President" },
+  { key: "tomasz", label: "Vice President" },
+  { key: "adaeze", label: "Treasurer" },
+  { key: "liam", label: "Secretary" },
+  { key: "ruth", label: "Member at large" },
+  { key: "dev", label: "Strata manager" },
+];
+
+/** A sandbox person's own address: reserved (example.com), so it can never deliver. */
+export function sandboxPersonaEmail(sandboxId: string, persona: string) {
+  return `${persona}.${sandboxId.slice(0, 8)}@sandbox.example.com`;
+}
+
 /** "Tuesday, October 7": the last day a link works. */
 export function demoDayLabel(expiresAt: Date) {
   // The day that ends at expiresAt: a minute before it.

@@ -25,7 +25,12 @@ export interface DemoVisitorRow {
   setup_started_at: string | null;
   first_opened_at: string | null;
   landing: DemoLanding;
+  /** A Super Admin's sandbox (supabase/demo/demo.sql): the group, and who this link signs in as. */
+  sandbox_id: string | null;
+  persona: string | null;
 }
+
+const VISITOR_COLUMNS = "id, token, full_name, email, expires_at, user_id, corporation_id, setup_started_at, first_opened_at, landing, sandbox_id, persona";
 
 export type OpenDemoResult =
   | { ok: true; corporationId: string; email: string; userId: string; landing: DemoLanding }
@@ -48,7 +53,7 @@ export async function openDemoLink(token: string): Promise<OpenDemoResult> {
   const admin = createAdminClient();
   const { data: visitor, error: lookupError } = await admin
     .from("demo_visitors")
-    .select("id, token, full_name, email, expires_at, user_id, corporation_id, setup_started_at, first_opened_at, landing")
+    .select(VISITOR_COLUMNS)
     .eq("token", token)
     .maybeSingle<DemoVisitorRow>();
   if (lookupError) {
@@ -57,6 +62,7 @@ export async function openDemoLink(token: string): Promise<OpenDemoResult> {
   }
   if (!visitor) return { ok: false, reason: "unknown" };
   if (Date.parse(visitor.expires_at) <= Date.now()) return { ok: false, reason: "expired" };
+  if (visitor.sandbox_id) return openSandboxLink(admin, visitor);
 
   // Ready once the strata is made and filled (setup_started_at cleared).
   const isReady = (v: DemoVisitorRow | null) => Boolean(v?.corporation_id && v.user_id && !v.setup_started_at);
@@ -93,7 +99,7 @@ export async function openDemoLink(token: string): Promise<OpenDemoResult> {
         await sleep(750);
         const { data } = await admin
           .from("demo_visitors")
-          .select("id, token, full_name, email, expires_at, user_id, corporation_id, setup_started_at, first_opened_at, landing")
+          .select(VISITOR_COLUMNS)
           .eq("id", visitor.id)
           .single<DemoVisitorRow>();
         if (isReady(data)) ready = data;
@@ -119,11 +125,89 @@ export async function openDemoLink(token: string): Promise<OpenDemoResult> {
   };
 }
 
+function accountMetadata(visitor: DemoVisitorRow) {
+  return {
+    demo_visitor_id: visitor.id,
+    demo_expires_at: visitor.expires_at,
+    // A sandbox's people (lib/demo-sandbox.ts): only the service role sets these.
+    ...(visitor.sandbox_id && visitor.persona ? { demo_sandbox_id: visitor.sandbox_id, demo_persona: visitor.persona } : {}),
+  };
+}
+
 function stampAccount(admin: SupabaseClient, userId: string, visitor: DemoVisitorRow) {
   return admin.auth.admin.updateUserById(userId, {
-    app_metadata: { demo_visitor_id: visitor.id, demo_expires_at: visitor.expires_at },
+    app_metadata: accountMetadata(visitor),
     user_metadata: { full_name: visitor.full_name },
   });
+}
+
+/**
+ * A sandbox link (lib/demo.ts, SANDBOX_*). The whole sandbox is set up the
+ * first time any of its links is opened: an account for each person (the
+ * admin, and this sandbox's own copies of the council and manager, at
+ * reserved addresses that can't deliver), one strata with the admin's link
+ * as its owner, and the fictional kit with those people in it. Later
+ * links, and later visits, sign straight in.
+ */
+async function openSandboxLink(admin: SupabaseClient, visitor: DemoVisitorRow): Promise<OpenDemoResult> {
+  const loadGroup = async () => {
+    const { data } = await admin.from("demo_visitors").select(VISITOR_COLUMNS).eq("sandbox_id", visitor.sandbox_id!).returns<DemoVisitorRow[]>();
+    return data ?? [];
+  };
+  let group = await loadGroup();
+  let lead = group.find((r) => r.persona === "admin");
+  if (!lead) return { ok: false, reason: "unknown" };
+  const isReady = (rows: DemoVisitorRow[]) => {
+    const l = rows.find((r) => r.persona === "admin");
+    const me = rows.find((r) => r.id === visitor.id);
+    return Boolean(l?.corporation_id && l.user_id && !l.setup_started_at && me?.user_id && me.corporation_id);
+  };
+
+  if (!isReady(group)) {
+    const { data: claimed, error: claimError } = await admin.rpc("demo_claim_setup", { p_visitor_id: lead.id });
+    if (claimError) {
+      console.error("[openSandboxLink] claim:", claimError.message);
+      return { ok: false, reason: "busy" };
+    }
+    if (claimed === true) {
+      let corporationId: string | null = null;
+      try {
+        if (lead.corporation_id) await discardStrata(admin, lead.id, lead.corporation_id);
+        const accounts = new Map<string, string>();
+        for (const row of group) accounts.set(row.id, await visitorAccount(admin, row));
+        const { data, error } = await admin.rpc("demo_create_strata", { p_visitor_id: lead.id, p_user_id: accounts.get(lead.id) });
+        if (error || !data) throw new Error(error?.message ?? "no strata");
+        corporationId = data as string;
+        const people = new Map(group.filter((r) => r.persona !== "admin").map((r) => [r.persona!, accounts.get(r.id)!]));
+        await buildDemoStrata(admin, corporationId, new Date(), people);
+        for (const row of group) {
+          if (row.id === lead.id) continue;
+          await admin.from("demo_visitors").update({ user_id: accounts.get(row.id), corporation_id: corporationId }).eq("id", row.id);
+        }
+        await admin.from("demo_visitors").update({ setup_started_at: null }).eq("id", lead.id);
+      } catch (err) {
+        console.error("[openSandboxLink] setup failed:", err instanceof Error ? err.message : err);
+        if (corporationId) await discardStrata(admin, lead.id, corporationId).catch(() => undefined);
+        await admin.rpc("demo_claim_setup", { p_visitor_id: lead.id, p_release: true });
+        return { ok: false, reason: "busy" };
+      }
+    } else {
+      for (let i = 0; i < 80 && !isReady(group); i++) {
+        await sleep(750);
+        group = await loadGroup();
+      }
+      if (!isReady(group)) return { ok: false, reason: "busy" };
+    }
+    group = await loadGroup();
+    lead = group.find((r) => r.persona === "admin")!;
+  }
+
+  const me = group.find((r) => r.id === visitor.id)!;
+  // Renewed from the console: the account carries the new end date.
+  await stampAccount(admin, me.user_id!, me);
+  const now = new Date().toISOString();
+  await admin.from("demo_visitors").update({ first_opened_at: me.first_opened_at ?? now, last_opened_at: now }).eq("id", me.id);
+  return { ok: true, corporationId: me.corporation_id!, email: me.email, userId: me.user_id!, landing: "strata" };
 }
 
 /**
@@ -137,7 +221,7 @@ async function visitorAccount(admin: SupabaseClient, visitor: DemoVisitorRow): P
       email: visitor.email,
       email_confirm: true,
       user_metadata: { full_name: visitor.full_name },
-      app_metadata: { demo_visitor_id: visitor.id, demo_expires_at: visitor.expires_at },
+      app_metadata: accountMetadata(visitor),
     });
   let { data, error } = await create();
   if (error && /already|exists|registered/i.test(error.message)) {

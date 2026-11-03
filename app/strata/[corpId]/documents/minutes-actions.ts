@@ -11,6 +11,7 @@ import { pseudonymize } from "@/lib/pii";
 import { askClaudeJson, ClaudeRefusalError } from "@/lib/ai/claude";
 import { registerUploadedDocuments, type UploadedFile } from "@/app/strata/[corpId]/documents/actions";
 import { IS_DEMO, demoLimitFail } from "@/lib/demo";
+import { demoRestricted } from "@/lib/demo-sandbox";
 
 /**
  * Historic minutes (doc03 Stage 5a — "upload your historic minutes"):
@@ -79,7 +80,7 @@ const SCHEMA = {
 
 export async function analyzeHistoricMinutes(corpId: string, file: UploadedFile): Promise<({ ok: true } & HistoricAnalysis) | Fail> {
   // The demo has only its own materials (lib/demo.ts).
-  if (IS_DEMO) return demoLimitFail();
+  if (await demoRestricted()) return demoLimitFail();
   const access = await getStrataAccess(corpId);
   if (!access?.canRunMeetings) return { ok: false, error: "Historic minutes are added by your secretary, admin, or whoever runs meetings." };
   if (!access.subscribed && access.freeMeetingUsed) {
@@ -182,7 +183,7 @@ export async function saveHistoricMinutes(
   decisions: ExtractedDecision[]
 ): Promise<{ ok: true; recorded: number } | Fail> {
   // The demo has only its own materials (lib/demo.ts).
-  if (IS_DEMO) return demoLimitFail();
+  if (await demoRestricted()) return demoLimitFail();
   const access = await getStrataAccess(corpId);
   if (!access?.canRunMeetings) return { ok: false, error: "You can't add historic minutes." };
   if (meta.meetingDate && !/^\d{4}-\d{2}-\d{2}$/.test(meta.meetingDate)) return { ok: false, error: "Enter the meeting date as YYYY-MM-DD." };

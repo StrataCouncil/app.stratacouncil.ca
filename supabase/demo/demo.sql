@@ -50,6 +50,27 @@ alter table public.demo_visitors add column if not exists landing text not null 
 alter table public.demo_visitors drop constraint if exists demo_visitors_landing_check;
 alter table public.demo_visitors add constraint demo_visitors_landing_check check (landing in ('strata', 'training'));
 
+-- Sandboxes (2026-11-04): a Super Admin's test strata, for trying features
+-- with several people at once before real customers use them. One sandbox
+-- is a group of rows sharing sandbox_id, one per person you can sign in as
+-- (persona): 'admin' (the Super Admin, as the strata's admin) and copies of
+-- the fictional council and manager made for this sandbox alone (never the
+-- shared demo_cast accounts, which are in every visitor's strata). The
+-- strata is built once, by whichever link is opened first, and lasts 7
+-- days (renewable from the console). email_to is the Super Admin's own
+-- address: every email the sandbox would send goes there instead
+-- (lib/demo-email.ts). Sandboxes have no demo limits and no activity log.
+alter table public.demo_visitors add column if not exists sandbox_id uuid;
+alter table public.demo_visitors add column if not exists persona text;
+alter table public.demo_visitors add column if not exists email_to text;
+alter table public.demo_visitors drop constraint if exists demo_visitors_sandbox_check;
+alter table public.demo_visitors add constraint demo_visitors_sandbox_check check (
+  (sandbox_id is null and persona is null and email_to is null)
+  or (sandbox_id is not null and persona is not null and char_length(persona) between 1 and 40
+      and email_to is not null and char_length(email_to) between 3 and 320)
+);
+create index if not exists demo_visitors_sandbox_idx on public.demo_visitors (sandbox_id) where sandbox_id is not null;
+
 -- Search vectors for the fictional strata's documents, by a hash of the
 -- (PII-stripped) passage: every visitor's strata has the same documents,
 -- so each passage is sent to the embeddings service once, not per visitor.

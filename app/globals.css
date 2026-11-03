@@ -9057,3 +9057,38 @@ a.kb-card:hover {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+/* A Super Admin's sandbox on the demo site (lib/demo-sandbox.ts). */
+.demo-banner--sandbox {
+  background: var(--accent-dark);
+}
+.sandbox__top {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+.sandbox__top p {
+  max-width: 46rem;
+}
+.sandbox {
+  border-top: 1px solid var(--line);
+  padding-top: 1rem;
+  margin-top: 1rem;
+}
+.sandbox__head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.6rem;
+  font-size: 0.92rem;
+}
+.sandbox__actions,
+.sandbox__link {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}

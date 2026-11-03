@@ -13,6 +13,7 @@ import {
 } from "@/lib/roster-csv";
 import { EMAIL_RE } from "@/lib/strata";
 import { DEMO_LIMIT_MESSAGE, IS_DEMO } from "@/lib/demo";
+import { demoRestricted } from "@/lib/demo-sandbox";
 
 /**
  * Server Actions behind Strata Lots (doc02 §2a). Every write goes through
@@ -60,7 +61,7 @@ function parse(csv: string): { ok: true; rows: RosterUploadRow[] } | { ok: false
 
 export async function previewRosterUpload(corporationId: string, csv: string): Promise<PreviewResult> {
   // The demo has only its own materials (lib/demo.ts).
-  if (IS_DEMO) return { ok: false, errors: [DEMO_LIMIT_MESSAGE] };
+  if (await demoRestricted()) return { ok: false, errors: [DEMO_LIMIT_MESSAGE] };
   const parsed = parse(csv);
   if (!parsed.ok) return parsed;
 
@@ -130,7 +131,7 @@ export async function previewRosterUpload(corporationId: string, csv: string): P
 
 export async function applyRosterUpload(corporationId: string, csv: string): Promise<ApplyResult> {
   // The demo has only its own materials (lib/demo.ts).
-  if (IS_DEMO) return { ok: false, errors: [DEMO_LIMIT_MESSAGE] };
+  if (await demoRestricted()) return { ok: false, errors: [DEMO_LIMIT_MESSAGE] };
   const parsed = parse(csv);
   if (!parsed.ok) return parsed;
 
