@@ -1,34 +1,31 @@
-import { extractText, getDocumentProxy } from "unpdf";
 import mammoth from "mammoth";
+import { mergeOcr, ocrPdfPages, pdfTextByPage, type OcrSummary } from "./ocr.ts";
 
 /**
  * Text out of an uploaded or fetched file. Runs entirely on our own
  * servers — nothing is sent anywhere to read it.
  *
- * Scanned PDFs (no text layer) come back as `needs_text` rather than being
- * sent to an AI model to read: that would hand the raw, unstripped page
- * images to a third party, which the PII rule doesn't allow.
+ * A PDF with pages that have no text layer (scanned) comes back as
+ * `needs_ocr`, with those pages: they're read by OCR on our own servers
+ * (lib/kb/ocr.ts), never sent to an AI model to read, which would hand the
+ * raw, unstripped page images to a third party. The background indexer
+ * reads them a few pages at a time; extractWithOcr() reads a short one
+ * straight away. `needs_text` is what's left when OCR found nothing.
  */
 export type Extraction =
-  | { status: "ok"; text: string }
+  | { status: "ok"; text: string; ocr?: OcrSummary }
+  | { status: "needs_ocr"; scanned: number[]; totalPages: number }
   | { status: "needs_text" }
   | { status: "unsupported"; reason: string };
-
-/** Fewer characters than this from a multi-page PDF means there's no real text layer. */
-const MIN_TEXT_PER_PAGE = 40;
 
 export async function extractDocumentText(bytes: Uint8Array, fileName: string, mimeType?: string | null): Promise<Extraction> {
   const ext = fileName.toLowerCase().split(".").pop() ?? "";
   const mime = (mimeType ?? "").toLowerCase();
 
   if (ext === "pdf" || mime === "application/pdf") {
-    const pdf = await getDocumentProxy(bytes);
-    const { totalPages, text } = await extractText(pdf, { mergePages: true });
-    const cleaned = normalize(text);
-    if (cleaned.replace(/\s/g, "").length < Math.max(100, totalPages * MIN_TEXT_PER_PAGE)) {
-      return { status: "needs_text" };
-    }
-    return { status: "ok", text: cleaned };
+    const { pages, scanned } = await pdfTextByPage(bytes);
+    if (scanned.length) return { status: "needs_ocr", scanned, totalPages: pages.length };
+    return { status: "ok", text: normalize(pages.join("\n\n")) };
   }
   if (ext === "docx" || mime.includes("wordprocessingml")) {
     const { value } = await mammoth.extractRawText({ buffer: Buffer.from(bytes) });
@@ -41,6 +38,33 @@ export async function extractDocumentText(bytes: Uint8Array, fileName: string, m
     return { status: "ok", text: normalize(htmlToText(new TextDecoder().decode(bytes))) };
   }
   return { status: "unsupported", reason: "Only PDF, Word (.docx) and text files can be indexed." };
+}
+
+/**
+ * The same, reading up to `maxOcrPages` scanned pages straight away, for
+ * uploads read while the person waits (historic minutes, an agenda). Past
+ * that, the rest of the scan is left out (ocr.skipped says how many).
+ */
+export async function extractWithOcr(bytes: Uint8Array, fileName: string, mimeType: string | null | undefined, maxOcrPages: number): Promise<Extraction> {
+  const first = await extractDocumentText(bytes, fileName, mimeType);
+  if (first.status !== "needs_ocr") return first;
+  return readScannedPages(bytes, first.scanned, maxOcrPages);
+}
+
+/** Reads a PDF's scanned pages (up to `maxOcrPages`) and puts them among its text pages. */
+export async function readScannedPages(bytes: Uint8Array, scanned: number[], maxOcrPages: number): Promise<Extraction> {
+  const { pages } = await pdfTextByPage(bytes);
+  const toRead = scanned.slice(0, maxOcrPages);
+  const ocr = await ocrPdfPages(bytes, toRead);
+  return finishOcr(pages, ocr, scanned.length - toRead.length);
+}
+
+/** Text pages plus OCR'd pages: the document's text, or needs_text if there's still nothing to read. */
+export function finishOcr(textPages: string[], ocr: Awaited<ReturnType<typeof ocrPdfPages>>, skipped: number): Extraction {
+  const { text, summary } = mergeOcr(textPages, ocr, skipped);
+  const cleaned = normalize(text);
+  if (cleaned.replace(/\s/g, "").length < 20) return { status: "needs_text" };
+  return { status: "ok", text: cleaned, ocr: summary };
 }
 
 function normalize(text: string) {

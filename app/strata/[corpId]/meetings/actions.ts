@@ -27,7 +27,7 @@ import { registerUploadedDocuments, type UploadedFile } from "@/app/strata/[corp
 import { isDocumentCategory } from "@/lib/documents";
 import { checkAttachments } from "@/lib/meetings/attachments";
 import { checkRatificationLinks } from "@/lib/data/discussions";
-import { extractDocumentText } from "@/lib/kb/extract";
+import { extractWithOcr } from "@/lib/kb/extract";
 import { loadStripContext } from "@/lib/kb/privacy";
 import { pseudonymize } from "@/lib/pii";
 import { agendaVersion } from "@/lib/meetings/agenda-version";
@@ -424,12 +424,11 @@ export async function parseUploadedAgenda(corpId: string, formData: FormData): P
   if (!(file instanceof File) || file.size === 0) return { ok: false, error: "Choose an agenda file." };
   if (file.size > 10 * 1024 * 1024) return { ok: false, error: "That file is over 10 MB." };
 
-  const extracted = await extractDocumentText(new Uint8Array(await file.arrayBuffer()), file.name, file.type).catch(
-    () => null
-  );
+  // A scanned agenda is read by OCR on our own servers (lib/kb/ocr.ts), up to 10 pages.
+  const extracted = await extractWithOcr(new Uint8Array(await file.arrayBuffer()), file.name, file.type, 10).catch(() => null);
   if (!extracted || extracted.status === "unsupported") return { ok: false, error: "Upload a PDF, Word (.docx) or text file." };
-  if (extracted.status === "needs_text") {
-    return { ok: false, error: "That PDF has no text in it (it looks scanned). Upload a searchable copy, or build the agenda by hand." };
+  if (extracted.status !== "ok") {
+    return { ok: false, error: "We couldn't read any text in that PDF, even from the scan. Upload a clearer copy, or build the agenda by hand." };
   }
   if (extracted.text.trim().length < 20) return { ok: false, error: "That file looks empty." };
 

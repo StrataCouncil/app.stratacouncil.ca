@@ -12,6 +12,9 @@ import { meetingFormatLabels, meetingTypeLabels } from "@/lib/meetings/agenda";
 import { formatMeetingWhen } from "@/lib/meetings/format";
 import { meetingStatus } from "@/lib/meetings/status";
 
+// An upload read here may be a scan, read by OCR while the person waits (lib/kb/ocr.ts).
+export const maxDuration = 120;
+
 /**
  * One meeting before it runs: details, the agenda builder (for whoever
  * can run meetings), and Launch. Once launched, the launcher runs it from

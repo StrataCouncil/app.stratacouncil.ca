@@ -47,9 +47,9 @@ function statusText(e: LegislationEntry) {
     case "pending":
       return "Waiting to index";
     case "processing":
-      return "Indexing";
+      return e.readFromScan ? "Reading the scan…" : "Indexing";
     case "needs_text":
-      return "No text layer";
+      return "Couldn’t read this scan";
     case "not_indexable":
       return "Can't be read";
     default:
@@ -130,8 +130,11 @@ function EntryRow({ e, onError }: { e: LegislationEntry; onError: (m: string) =>
           {statusText(e)}
         </span>
         {e.error && e.status !== "indexed" ? <div className="roster-table__meta legis-row-error">{e.error}</div> : null}
+        {e.status === "indexed" && e.readFromScan ? (
+          <div className="roster-table__meta">Read from scan{e.unclearPages > 0 ? `; ${e.unclearPages} pages unclear` : ""}.</div>
+        ) : null}
         {e.status === "needs_text" ? (
-          <div className="roster-table__meta">Scanned PDF. Upload a text PDF, Word or HTML version.</div>
+          <div className="roster-table__meta">No text found, even from the scan. Upload a clearer copy, or a text PDF, Word or HTML version.</div>
         ) : null}
       </td>
       <td className="legis-actions">

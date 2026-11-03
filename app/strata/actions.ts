@@ -8,7 +8,7 @@ import { createClient } from "@/lib/supabase/server";
 import { inviteIsPending, notifyInviteAccepted } from "@/lib/email/invite-accepted";
 import { IS_DEMO } from "@/lib/demo";
 import { EMAIL_RE, isJurisdictionCode, normalizeStrataPlanNumber } from "@/lib/strata";
-import { extractDocumentText } from "@/lib/kb/extract";
+import { extractWithOcr } from "@/lib/kb/extract";
 import { stripPII } from "@/lib/pii";
 import { askClaudeJson } from "@/lib/ai/claude";
 import { reconcilePlan } from "@/lib/strata-plan";
@@ -283,7 +283,8 @@ export async function parseStrataPlan(strataPlanNumber: string, planStoragePath:
   if (downloadError || !file) return { ok: false, error: "The upload didn't finish. Upload the plan again." };
 
   try {
-    const extracted = await extractDocumentText(new Uint8Array(await file.arrayBuffer()), "plan.pdf", "application/pdf");
+    // Older plans are often scans: read by OCR on our own servers (lib/kb/ocr.ts), up to 25 pages.
+    const extracted = await extractWithOcr(new Uint8Array(await file.arrayBuffer()), "plan.pdf", "application/pdf", 25);
     if (extracted.status !== "ok") {
       await save({ status: "no_text" });
       return { ok: true, status: "no_text" };

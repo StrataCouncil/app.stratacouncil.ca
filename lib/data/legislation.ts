@@ -15,6 +15,9 @@ export interface LegislationEntry {
   chunkCount: number | null;
   uploadedAt: string;
   indexedAt: string | null;
+  /** Read from a scan by OCR (0071), and how many pages were hard to read. */
+  readFromScan: boolean;
+  unclearPages: number;
 }
 
 /** Every library entry, for the Super Admin screen. Null when the caller isn't a Super Admin. */
@@ -24,7 +27,7 @@ export async function listLegislation(): Promise<LegislationEntry[] | null> {
   const { data } = await admin.supabase
     .from("legislation_documents")
     .select(
-      "id, title, short_name, kind, current_to, file_name, size_bytes, indexing_status, indexing_error, section_count, chunk_count, uploaded_at, indexed_at"
+      "id, title, short_name, kind, current_to, file_name, size_bytes, indexing_status, indexing_error, section_count, chunk_count, uploaded_at, indexed_at, text_source, ocr_unclear_pages"
     )
     .order("kind")
     .order("title");
@@ -42,5 +45,7 @@ export async function listLegislation(): Promise<LegislationEntry[] | null> {
     chunkCount: r.chunk_count,
     uploadedAt: r.uploaded_at,
     indexedAt: r.indexed_at,
+    readFromScan: r.text_source === "ocr",
+    unclearPages: r.ocr_unclear_pages ?? 0,
   }));
 }

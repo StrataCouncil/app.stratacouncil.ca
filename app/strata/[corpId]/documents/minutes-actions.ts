@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getStrataAccess } from "@/lib/data/strata";
 import { DOCUMENTS_BUCKET } from "@/lib/documents";
-import { extractDocumentText } from "@/lib/kb/extract";
+import { extractWithOcr } from "@/lib/kb/extract";
 import { loadStripContext } from "@/lib/kb/privacy";
 import { pseudonymize } from "@/lib/pii";
 import { askClaudeJson, ClaudeRefusalError } from "@/lib/ai/claude";
@@ -93,16 +93,17 @@ export async function analyzeHistoricMinutes(corpId: string, file: UploadedFile)
   const admin = createAdminClient();
   const { data: blob, error } = await admin.storage.from(DOCUMENTS_BUCKET).download(file.path);
   if (error || !blob) return { ok: false, error: "The upload didn't finish. Please try again." };
-  const extracted = await extractDocumentText(new Uint8Array(await blob.arrayBuffer()), file.name, file.type).catch(() => null);
+  // A scanned copy is read by OCR on our own servers (lib/kb/ocr.ts), up to 20 pages while you wait.
+  const extracted = await extractWithOcr(new Uint8Array(await blob.arrayBuffer()), file.name, file.type, 20).catch(() => null);
 
   const discard = () => admin.storage.from(DOCUMENTS_BUCKET).remove([file.path]);
   if (!extracted || extracted.status === "unsupported") {
     await discard();
     return { ok: false, error: "Upload a PDF, Word (.docx) or text file." };
   }
-  if (extracted.status === "needs_text") {
+  if (extracted.status !== "ok") {
     await discard();
-    return { ok: false, error: "That PDF has no text in it (it looks scanned). Upload a searchable copy." };
+    return { ok: false, error: "We couldn't read any text in that PDF, even from the scan. Upload a clearer copy." };
   }
 
   // The strata plan check, on our side.

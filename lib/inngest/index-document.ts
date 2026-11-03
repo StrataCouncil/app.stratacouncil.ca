@@ -3,7 +3,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { askClaudeJson } from "@/lib/ai/claude";
 import { chunkText } from "@/lib/kb/chunk";
 import { embed, toVectorLiteral } from "@/lib/kb/embed";
-import { extractDocumentText } from "@/lib/kb/extract";
+import { extractDocumentText, finishOcr } from "@/lib/kb/extract";
+import { OCR_MAX_PAGES, ocrPdfPages, pdfTextByPage, type OcrPage } from "@/lib/kb/ocr";
 import { fetchLink, LinkFetchError } from "@/lib/kb/fetch-link";
 import { loadStripContext, stripForCorporation, stripForGlobal } from "@/lib/kb/privacy";
 import { DOCUMENT_INDEX_EVENT, inngest } from "@/lib/inngest/client";
@@ -13,7 +14,9 @@ import { DOCUMENT_INDEX_EVENT, inngest } from "@/lib/inngest/client";
  *
  *   1. extract — read the file (or fetch the link once) on our own
  *      servers, store the raw text on the document row, which only the
- *      corporation's members can read.
+ *      corporation's members can read. Scanned pages (no text layer) are
+ *      read by OCR, also on our own servers (lib/kb/ocr.ts), a few pages
+ *      per step so a long scan never runs into a time limit.
  *   2. embed — strip PII, classify the document type from a stripped
  *      sample, chunk, embed with Voyage, replace this document's chunks.
  *      If the corporation is subscribed right now, also write an
@@ -55,37 +58,16 @@ export const indexDocument = inngest.createFunction(
 
     const extracted = await step.run("extract", async () => {
       const admin = createAdminClient();
-      const { data: doc } = await admin
-        .from("documents")
-        .select("id, corporation_id, storage_path, file_name, mime_type, source_type, url")
-        .eq("id", documentId)
-        .maybeSingle();
-      if (!doc || !doc.corporation_id) return { status: "gone" as const };
+      const loaded = await loadDocument(documentId);
+      if (!loaded) return { status: "gone" as const };
       await admin.from("documents").update({ indexing_status: "processing", indexing_error: null }).eq("id", documentId);
 
-      let bytes: Uint8Array;
-      let name = doc.file_name ?? "";
-      let mime = doc.mime_type as string | null;
-      try {
-        if (doc.source_type === "link") {
-          const fetched = await fetchLink(doc.url!);
-          bytes = fetched.bytes;
-          mime = fetched.contentType.split(";")[0];
-          name = new URL(fetched.finalUrl).pathname.split("/").pop() || "page.html";
-        } else {
-          const slash = doc.storage_path!.indexOf("/");
-          const { data, error } = await admin.storage
-            .from(doc.storage_path!.slice(0, slash))
-            .download(doc.storage_path!.slice(slash + 1));
-          if (error || !data) throw new Error(`Couldn't read the stored file: ${error?.message ?? "missing"}`);
-          bytes = new Uint8Array(await data.arrayBuffer());
-        }
-      } catch (err) {
-        if (err instanceof LinkFetchError) throw new NonRetriableError(err.message);
-        throw err;
+      const result = await extractDocumentText(loaded.bytes, loaded.name, loaded.mime);
+      if (result.status === "needs_ocr") {
+        await admin.from("documents").update({ text_source: "ocr", ocr_attempted_at: new Date().toISOString() }).eq("id", documentId);
+        const pages = result.scanned.slice(0, OCR_MAX_PAGES);
+        return { status: "ocr" as const, pages, skipped: result.scanned.length - pages.length };
       }
-
-      const result = await extractDocumentText(bytes, name, mime);
       if (result.status === "needs_text") {
         await admin.from("documents").update({ indexing_status: "needs_text" }).eq("id", documentId);
         return { status: "stopped" as const };
@@ -101,12 +83,52 @@ export const indexDocument = inngest.createFunction(
         await admin.from("documents").update({ indexing_status: "needs_text" }).eq("id", documentId);
         return { status: "stopped" as const };
       }
-      const { error: saveError } = await admin.from("documents").update({ document_text: result.text }).eq("id", documentId);
+      const { error: saveError } = await admin
+        .from("documents")
+        .update({ document_text: result.text, text_source: "text", ocr_pages: null, ocr_unclear_pages: null, ocr_skipped_pages: null, ocr_confidence: null })
+        .eq("id", documentId);
       if (saveError) throw new Error(`Couldn't save the document's text: ${saveError.message}`);
       return { status: "ok" as const };
     });
 
-    if (extracted.status !== "ok") return extracted;
+    if (extracted.status === "ocr") {
+      // Six pages a step: about 15 seconds each.
+      const read: OcrPage[] = [];
+      for (let i = 0; i < extracted.pages.length; i += 6) {
+        const batch = extracted.pages.slice(i, i + 6);
+        read.push(
+          ...(await step.run(`ocr-pages-${batch[0]}-${batch[batch.length - 1]}`, async () => {
+            const loaded = await loadDocument(documentId);
+            if (!loaded) throw new NonRetriableError("The document was deleted.");
+            return ocrPdfPages(loaded.bytes, batch);
+          }))
+        );
+      }
+      const saved = await step.run("ocr-save", async () => {
+        const admin = createAdminClient();
+        const loaded = await loadDocument(documentId);
+        if (!loaded) return { status: "gone" as const };
+        const result = finishOcr((await pdfTextByPage(loaded.bytes)).pages, read, extracted.skipped);
+        if (result.status !== "ok") {
+          await admin.from("documents").update({ indexing_status: "needs_text", ocr_pages: read.length }).eq("id", documentId);
+          return { status: "stopped" as const };
+        }
+        const { error } = await admin
+          .from("documents")
+          .update({
+            document_text: result.text,
+            text_source: "ocr",
+            ocr_pages: result.ocr?.read ?? read.length,
+            ocr_unclear_pages: result.ocr?.unclear ?? 0,
+            ocr_skipped_pages: result.ocr?.skipped ?? 0,
+            ocr_confidence: result.ocr?.confidence ?? null,
+          })
+          .eq("id", documentId);
+        if (error) throw new Error(`Couldn't save the document's text: ${error.message}`);
+        return { status: "ok" as const };
+      });
+      if (saved.status !== "ok") return saved;
+    } else if (extracted.status !== "ok") return extracted;
 
     return step.run("embed", async () => {
       const admin = createAdminClient();
@@ -172,6 +194,34 @@ export const indexDocument = inngest.createFunction(
     });
   }
 );
+
+/** The document's file (or its link, fetched once more), read on our own servers. */
+async function loadDocument(documentId: string): Promise<{ bytes: Uint8Array; name: string; mime: string | null } | null> {
+  const admin = createAdminClient();
+  const { data: doc } = await admin
+    .from("documents")
+    .select("id, corporation_id, storage_path, file_name, mime_type, source_type, url")
+    .eq("id", documentId)
+    .maybeSingle();
+  if (!doc || !doc.corporation_id) return null;
+  try {
+    if (doc.source_type === "link") {
+      const fetched = await fetchLink(doc.url!);
+      return {
+        bytes: fetched.bytes,
+        mime: fetched.contentType.split(";")[0],
+        name: new URL(fetched.finalUrl).pathname.split("/").pop() || "page.html",
+      };
+    }
+    const slash = doc.storage_path!.indexOf("/");
+    const { data, error } = await admin.storage.from(doc.storage_path!.slice(0, slash)).download(doc.storage_path!.slice(slash + 1));
+    if (error || !data) throw new Error(`Couldn't read the stored file: ${error?.message ?? "missing"}`);
+    return { bytes: new Uint8Array(await data.arrayBuffer()), name: doc.file_name ?? "", mime: doc.mime_type as string | null };
+  } catch (err) {
+    if (err instanceof LinkFetchError) throw new NonRetriableError(err.message);
+    throw err;
+  }
+}
 
 async function classify(strippedText: string) {
   const { docType } = await askClaudeJson<{ docType: string }>({

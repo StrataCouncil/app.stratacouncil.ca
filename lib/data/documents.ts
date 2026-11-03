@@ -24,10 +24,16 @@ export interface RepositoryDocument {
   hasFile: boolean;
   /** The server's fingerprint of the file (0065), once it's been read. */
   sha256: string | null;
+  /** Some or all of the text was read from a scan by OCR (0071). */
+  readFromScan: boolean;
+  /** Scanned pages read with low confidence. */
+  unclearPages: number;
+  /** Scanned pages past the OCR page limit, not read. */
+  skippedPages: number;
 }
 
 const COLUMNS =
-  "id, title, file_name, category, source_type, url, mime_type, size_bytes, indexing_status, indexing_error, indexed_at, uploaded_at, storage_path, content_sha256, uploader:profiles!documents_uploaded_by_fkey(full_name)";
+  "id, title, file_name, category, source_type, url, mime_type, size_bytes, indexing_status, indexing_error, indexed_at, uploaded_at, storage_path, content_sha256, text_source, ocr_unclear_pages, ocr_skipped_pages, uploader:profiles!documents_uploaded_by_fkey(full_name)";
 
 type Row = {
   id: string;
@@ -44,6 +50,9 @@ type Row = {
   uploaded_at: string;
   storage_path: string | null;
   content_sha256: string | null;
+  text_source: "text" | "ocr" | null;
+  ocr_unclear_pages: number | null;
+  ocr_skipped_pages: number | null;
   uploader: { full_name: string | null } | null;
 };
 
@@ -64,6 +73,9 @@ function toDocument(r: Row): RepositoryDocument {
     uploadedBy: r.uploader?.full_name ?? null,
     hasFile: Boolean(r.storage_path),
     sha256: r.content_sha256,
+    readFromScan: r.text_source === "ocr",
+    unclearPages: r.ocr_unclear_pages ?? 0,
+    skippedPages: r.ocr_skipped_pages ?? 0,
   };
 }
 

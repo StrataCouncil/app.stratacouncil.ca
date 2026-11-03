@@ -1,7 +1,8 @@
 import { NonRetriableError } from "inngest";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { embed, toVectorLiteral } from "@/lib/kb/embed";
-import { extractDocumentText } from "@/lib/kb/extract";
+import { extractDocumentText, finishOcr } from "@/lib/kb/extract";
+import { OCR_MAX_PAGES, ocrPdfPages, pdfTextByPage, type OcrPage } from "@/lib/kb/ocr";
 import { carryChunkIds, chunkLegislation, detectCurrentTo } from "@/lib/kb/legislation";
 import { stripForLibrary } from "@/lib/kb/privacy";
 import { LEGISLATION_INDEX_EVENT, inngest } from "@/lib/inngest/client";
@@ -10,7 +11,7 @@ import { mirrorLegislationToDemo } from "@/lib/demo-mirror";
 
 /**
  * Index one Knowledge Base entry (doc04 §5): read the file on our own
- * servers, split Acts and regulations by section, embed, and replace the
+ * servers (scanned pages by OCR, a few per step, lib/kb/ocr.ts), split Acts and regulations by section, embed, and replace the
  * entry's chunks. Guidance is PII-stripped first; Acts and regulations are
  * public law and go as written (see stripForLibrary).
  */
@@ -42,9 +43,12 @@ export const indexLegislation = inngest.createFunction(
       if (!doc || !doc.storage_path) return { status: "gone" as const };
       await admin.from("legislation_documents").update({ indexing_status: "processing", indexing_error: null }).eq("id", id);
 
-      const { data, error } = await admin.storage.from(LEGISLATION_BUCKET).download(doc.storage_path);
-      if (error || !data) throw new Error(`Couldn't read the stored file: ${error?.message ?? "missing"}`);
-      const result = await extractDocumentText(new Uint8Array(await data.arrayBuffer()), doc.file_name ?? "", doc.mime_type);
+      const result = await extractDocumentText(await loadEntry(doc.storage_path), doc.file_name ?? "", doc.mime_type);
+      if (result.status === "needs_ocr") {
+        await admin.from("legislation_documents").update({ text_source: "ocr", ocr_attempted_at: new Date().toISOString() }).eq("id", id);
+        const pages = result.scanned.slice(0, OCR_MAX_PAGES);
+        return { status: "ocr" as const, pages, skipped: result.scanned.length - pages.length, storagePath: doc.storage_path, currentTo: doc.current_to as string | null };
+      }
       if (result.status === "needs_text" || (result.status === "ok" && !result.text.trim())) {
         await admin.from("legislation_documents").update({ indexing_status: "needs_text" }).eq("id", id);
         return { status: "stopped" as const };
@@ -58,12 +62,40 @@ export const indexLegislation = inngest.createFunction(
       }
       await admin
         .from("legislation_documents")
-        .update({ document_text: result.text, current_to: doc.current_to ?? detectCurrentTo(result.text) })
+        .update({ document_text: result.text, current_to: doc.current_to ?? detectCurrentTo(result.text), text_source: "text", ocr_pages: null, ocr_unclear_pages: null, ocr_skipped_pages: null, ocr_confidence: null })
         .eq("id", id);
       return { status: "ok" as const };
     });
 
-    if (extracted.status !== "ok") return extracted;
+    if (extracted.status === "ocr") {
+      const read: OcrPage[] = [];
+      for (let i = 0; i < extracted.pages.length; i += 6) {
+        const batch = extracted.pages.slice(i, i + 6);
+        read.push(...(await step.run(`ocr-pages-${batch[0]}-${batch[batch.length - 1]}`, async () => ocrPdfPages(await loadEntry(extracted.storagePath), batch))));
+      }
+      const saved = await step.run("ocr-save", async () => {
+        const admin = createAdminClient();
+        const result = finishOcr((await pdfTextByPage(await loadEntry(extracted.storagePath))).pages, read, extracted.skipped);
+        if (result.status !== "ok") {
+          await admin.from("legislation_documents").update({ indexing_status: "needs_text", ocr_pages: read.length }).eq("id", id);
+          return { status: "stopped" as const };
+        }
+        await admin
+          .from("legislation_documents")
+          .update({
+            document_text: result.text,
+            current_to: extracted.currentTo ?? detectCurrentTo(result.text),
+            text_source: "ocr",
+            ocr_pages: result.ocr?.read ?? read.length,
+            ocr_unclear_pages: result.ocr?.unclear ?? 0,
+            ocr_skipped_pages: result.ocr?.skipped ?? 0,
+            ocr_confidence: result.ocr?.confidence ?? null,
+          })
+          .eq("id", id);
+        return { status: "ok" as const };
+      });
+      if (saved.status !== "ok") return saved;
+    } else if (extracted.status !== "ok") return extracted;
 
     const indexed = await step.run("embed", async () => {
       const admin = createAdminClient();
@@ -132,4 +164,10 @@ function friendly(error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
   if (message.includes("VOYAGE_API_KEY")) return "Indexing isn't set up yet (missing embeddings key).";
   return message.slice(0, 300);
+}
+
+async function loadEntry(storagePath: string): Promise<Uint8Array> {
+  const { data, error } = await createAdminClient().storage.from(LEGISLATION_BUCKET).download(storagePath);
+  if (error || !data) throw new Error(`Couldn't read the stored file: ${error?.message ?? "missing"}`);
+  return new Uint8Array(await data.arrayBuffer());
 }
