@@ -46,8 +46,21 @@ export interface ClosedVote {
   closedAt: string;
 }
 
+/** Someone joining or leaving a launched meeting (0074). */
+export interface PresenceEvent {
+  id: number;
+  userId: string | null;
+  name: string;
+  /** Their council lot, if they have one. */
+  lot: string | null;
+  event: "joined" | "left" | "marked_left";
+  at: string;
+}
+
 export interface LiveState {
   status: "DRAFT" | "LIVE" | "ADJOURNED";
+  /** Launched (it may not be called to order yet). */
+  launched: boolean;
   agenda: unknown;
   attendance: Record<string, string>;
   currentItemId: string | null;
@@ -58,6 +71,7 @@ export interface LiveState {
   /** The member's council lot; null for a manager or anyone without a vote. */
   myLot: string | null;
   conflicts: LiveConflict[];
+  presence: PresenceEvent[];
   openVote: OpenVote | null;
   closedVotes: ClosedVote[];
 }
@@ -77,6 +91,7 @@ export function parseLiveState(raw: unknown): LiveState | null {
   const ov = r.openVote ? obj(r.openVote) : null;
   return {
     status,
+    launched: r.launched === true || status === "LIVE",
     agenda: r.agenda ?? [],
     attendance: Object.fromEntries(Object.entries(obj(r.attendance)).map(([k, v]) => [k, str(v)])),
     currentItemId: str(r.currentItemId) || null,
@@ -89,6 +104,13 @@ export function parseLiveState(raw: unknown): LiveState | null {
       const o = obj(c);
       return { itemId: str(o.itemId), lot: str(o.lot), note: str(o.note) };
     }),
+    presence: arr(r.presence)
+      .map((p) => {
+        const o = obj(p);
+        const event = o.event === "joined" || o.event === "left" || o.event === "marked_left" ? o.event : null;
+        return event ? { id: int(o.id), userId: str(o.userId) || null, name: str(o.name), lot: str(o.lot) || null, event, at: str(o.at) } : null;
+      })
+      .filter((p): p is PresenceEvent => p !== null),
     openVote: ov
       ? {
           id: str(ov.id),
@@ -165,4 +187,65 @@ export function conflictLine(lots: string[]): string {
   return lots.length === 1
     ? `${list} declared a conflict of interest, left the meeting for this item and did not vote.`
     : `${list} declared conflicts of interest, left the meeting for this item and did not vote.`;
+}
+
+/** Who's in the meeting now: each person's latest event is a join. */
+export function inMeeting(presence: PresenceEvent[]): PresenceEvent[] {
+  const last = new Map<string, PresenceEvent>();
+  for (const p of [...presence].sort((a, b) => a.id - b.id)) last.set(p.userId ?? `lot:${p.lot}`, p);
+  return [...last.values()].filter((p) => p.event === "joined");
+}
+
+/**
+ * The attendance after applying join and leave events the screen hasn't
+ * applied yet (ids above `afterId`): joining marks a council lot present,
+ * leaving marks it left. Lots without a council seat aren't in attendance.
+ */
+export function applyPresence(
+  attendance: Record<string, string>,
+  presence: PresenceEvent[],
+  afterId: number
+): { attendance: Record<string, string>; lastId: number; changed: boolean } {
+  const out = { ...attendance };
+  let lastId = afterId;
+  let changed = false;
+  for (const p of [...presence].sort((a, b) => a.id - b.id)) {
+    if (p.id <= afterId) continue;
+    lastId = Math.max(lastId, p.id);
+    if (!p.lot) continue;
+    const next = p.event === "joined" ? "present" : out[p.lot] === "present" ? "left" : out[p.lot];
+    if (next && out[p.lot] !== next) {
+      out[p.lot] = next;
+      changed = true;
+    }
+  }
+  return { attendance: out, lastId, changed };
+}
+
+/**
+ * Agenda items that don't take a conflict of interest: the procedural ones
+ * (Call to Order, approving the agenda or minutes, electing a chair, the
+ * next meeting date, adjournment). Matched by title, as the rest of the
+ * meeting rules are.
+ */
+export function takesConflicts(text: string): boolean {
+  const t = text.toLowerCase();
+  return !(
+    t.includes("call to order") ||
+    t.includes("adjourn") ||
+    (t.includes("approv") && (t.includes("agenda") || t.includes("minutes"))) ||
+    (t.includes("adopt") && (t.includes("agenda") || t.includes("minutes"))) ||
+    (t.includes("elect") && t.includes("chair")) ||
+    t.includes("next meeting")
+  );
+}
+
+/** "SL005 joined the meeting at 7:42 p.m." and "SL019 left the meeting at 8:15 p.m.", for the minutes. */
+export function movementLines(presence: PresenceEvent[], calledToOrderAt: string | null, time: (iso: string) => string): string[] {
+  if (!calledToOrderAt) return [];
+  const start = Date.parse(calledToOrderAt);
+  return [...presence]
+    .filter((p) => p.lot && Date.parse(p.at) > start)
+    .sort((a, b) => a.id - b.id)
+    .map((p) => `${p.lot} ${p.event === "joined" ? "joined" : "left"} the meeting at ${time(p.at)}.`);
 }

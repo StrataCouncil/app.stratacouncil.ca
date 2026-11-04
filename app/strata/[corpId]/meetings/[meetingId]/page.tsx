@@ -4,6 +4,7 @@ import { StrataSphereNav } from "@/components/StrataSphereNav";
 import { AgendaBuilder } from "@/components/meetings/AgendaBuilder";
 import { agendaVersion } from "@/lib/meetings/agenda-version";
 import { AgendaView } from "@/components/meetings/AgendaView";
+import { AgendaCheckout } from "@/components/meetings/AgendaCheckout";
 import { DeleteMeetingButton, EditMeetingDetailsButton } from "@/components/meetings/MeetingActions";
 import { getStrataAccess } from "@/lib/data/strata";
 import { ratificationCandidates } from "@/lib/data/discussions";
@@ -81,9 +82,9 @@ export default async function MeetingPage({ params }: { params: Promise<{ corpId
               Export agenda (.docx)
             </a>
           )}
-          {!launchedByMe && meeting.status === "LIVE" && canFollow && (
-            <Link href={`/strata/${corpId}/meetings/${meetingId}/live`} className="button button-primary" data-testid="follow-meeting">
-              Follow the meeting
+          {!launchedByMe && meeting.launchedBy !== null && meeting.status !== "ADJOURNED" && canFollow && (
+            <Link href={`/strata/${corpId}/meetings/${meetingId}/live`} className="button button-primary" data-testid="join-meeting">
+              Join meeting
             </Link>
           )}
           {launchedByMe && meeting.status !== "ADJOURNED" && (
@@ -101,22 +102,28 @@ export default async function MeetingPage({ params }: { params: Promise<{ corpId
 
       {launchedByOther && meeting.status !== "ADJOURNED" && (
         <p className="roster-notice" data-testid="meeting-running-elsewhere">
-          {meeting.launchedByName ?? "Someone else"} is running this meeting. You&rsquo;ll see the agenda here; the meeting
-          itself is only visible to whoever is running it.
+          {meeting.launchedByName ?? "Someone else"} is running this meeting.{" "}
+          {canFollow ? "Join it with the Join meeting button." : "You\u2019ll see the agenda here."}
         </p>
       )}
 
       {canEdit ? (
-        <AgendaBuilder
-          corpId={corpId}
+        <AgendaCheckout
           meetingId={meetingId}
-          meetingType={meeting.type}
-          initialAgenda={meeting.agenda}
-          initialVersion={agendaVersion(meeting.agenda)}
-          initialNotes={notes}
-          aiAvailable={access.subscribed || trialAvailable}
-          launch={{ subscribed: access.subscribed, trialAvailable, isAdmin: access.isAdmin }}
-          ratifications={meeting.type === "council" ? await ratificationCandidates(corpId, meetingId) : []}
+          editor={
+            <AgendaBuilder
+              corpId={corpId}
+              meetingId={meetingId}
+              meetingType={meeting.type}
+              initialAgenda={meeting.agenda}
+              initialVersion={agendaVersion(meeting.agenda)}
+              initialNotes={notes}
+              aiAvailable={access.subscribed || trialAvailable}
+              launch={{ subscribed: access.subscribed, trialAvailable, isAdmin: access.isAdmin }}
+              ratifications={meeting.type === "council" ? await ratificationCandidates(corpId, meetingId) : []}
+            />
+          }
+          viewer={<AgendaView corpId={corpId} agenda={meeting.agenda} />}
         />
       ) : (
         <AgendaView corpId={corpId} agenda={meeting.agenda} />

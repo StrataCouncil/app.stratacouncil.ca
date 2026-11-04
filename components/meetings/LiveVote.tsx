@@ -186,13 +186,13 @@ export function ConflictsPanel(props: {
                 </option>
               ))}
             </select>
-            <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="The nature of the conflict (for the minutes)" maxLength={500} aria-label="The nature of the conflict" />
+            <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="The nature of the conflict (required; goes in the minutes)" maxLength={500} aria-label="The nature of the conflict" />
             <button
               type="button"
               className="button button-primary button-small"
-              disabled={!lot || props.busy}
+              disabled={!lot || note.trim().length < 3 || props.busy}
               onClick={() => {
-                props.onDeclare(lot, note);
+                props.onDeclare(lot, note.trim());
                 setAdding(false);
                 setLot("");
                 setNote("");

@@ -331,3 +331,14 @@ export function discussionClosedEmail(params: { corporationName: string; title: 
   const text = `A council discussion for ${params.corporationName} has been closed:\n\n${params.title}\n${params.result} (${params.tally}).\n\n${next} The vote record is in Documents, under Meetings & Records:\n\n${params.openUrl}`;
   return { subject: `Discussion closed: ${params.title}`, html, text };
 }
+
+/** To council and the manager when a meeting is launched (0074): join from the Meetings tab. */
+export function meetingStartedEmail(params: { corporationName: string; meetingLabel: string; runnerName: string; joinUrl: string }) {
+  const html = wrap(`
+    <p style="margin:0 0 16px;font-size:16px;color:${INK};">The ${escapeHtml(params.meetingLabel.toLowerCase())} for <strong>${escapeHtml(params.corporationName)}</strong> has started${params.runnerName ? `, run by ${escapeHtml(params.runnerName)}` : ""}.</p>
+    <p style="margin:0 0 8px;font-size:14px;color:${MUTED};">Join to follow the agenda and vote. Joining records your attendance.</p>
+    ${button(params.joinUrl, "Join the meeting")}
+  `);
+  const text = `The ${params.meetingLabel.toLowerCase()} for ${params.corporationName} has started${params.runnerName ? `, run by ${params.runnerName}` : ""}.\n\nJoin to follow the agenda and vote. Joining records your attendance:\n\n${params.joinUrl}`;
+  return { subject: `${params.meetingLabel} has started: ${params.corporationName}`, html, text };
+}

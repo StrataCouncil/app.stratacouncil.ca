@@ -5,7 +5,8 @@ import type { AgendaItem, DecisionType, MeetingType, Motion } from "./agenda.ts"
  * Pure; shared by Meeting Mode, minutes generation and their tests.
  */
 
-export type AttendanceStatus = "" | "present" | "regrets" | "proxy";
+/** "left": was present, and left the meeting before it ended (0074). Not counted toward quorum. */
+export type AttendanceStatus = "" | "present" | "regrets" | "proxy" | "left";
 
 export const isGeneralMeeting = (type: MeetingType) => type === "agm" || type === "sgm";
 

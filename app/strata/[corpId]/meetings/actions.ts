@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { emailMeetingStarted } from "@/lib/meetings/server";
 import { getStrataAccess } from "@/lib/data/strata";
 import {
   autoPopulate,
@@ -113,7 +114,9 @@ export async function createMeeting(corpId: string, input: MeetingDetailsInput):
       location: input.location.trim() || null,
       chair_name: chair,
       created_by: access.userId,
-      ...(restricted ? { agenda: await demoMeetingAgenda(createAdminClient(), access.corpId) } : {}),
+      // The demo's agenda, already written: locked in a visitor's demo,
+      // editable in a Super Admin's sandbox (every field filled in, for testing).
+      ...(IS_DEMO ? { agenda: await demoMeetingAgenda(createAdminClient(), access.corpId) } : {}),
     })
     .select("id")
     .single();
@@ -196,6 +199,10 @@ export async function saveAgenda(
 ): Promise<Ok<{ version: string }> | (Fail & { conflict?: boolean })> {
   if (!(await runner(corpId))) return { ok: false, error: "You can't edit this agenda." };
   const supabase = await createClient();
+  // One editor at a time (0074): saving also keeps the checkout fresh.
+  const claim = await claimAgenda(meetingId);
+  if (!claim.ok) return claim;
+  if (!claim.mine) return { ok: false, error: `${claim.editor} is editing this agenda. You can edit it when they're done.` };
   const { data: current, error: readError } = await supabase
     .from("meetings")
     .select("agenda, status, launched_by")
@@ -605,6 +612,42 @@ export async function launchMeeting(
     return { ok: false, error: known ? error.message : "Couldn't launch the meeting.", subscriptionRequired };
   }
   await logDemoActivity({ kind: "meeting.launched", detail: { meetingId } });
+  // Launched (not resumed): council and the manager get a link to join (0074),
+  // and the agenda is no longer anyone's to edit.
+  if (data !== "resumed") {
+    await supabase.rpc("release_agenda", { p_meeting_id: meetingId });
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user) await emailMeetingStarted(corpId, meetingId, user.id).catch((err) => console.error("[launchMeeting] email", err instanceof Error ? err.message : err));
+  }
   refresh(corpId, meetingId);
   return { ok: true, result: data as string };
+}
+
+export type AgendaClaim = Ok<{ mine: true }> | Ok<{ mine: false; editor: string; since: string }> | Fail;
+
+/**
+ * Takes (or keeps) the agenda for editing (0074): one person who can run
+ * meetings at a time. A checkout untouched for 15 minutes can be taken.
+ */
+export async function claimAgenda(meetingId: string): Promise<AgendaClaim> {
+  if (!/^[0-9a-f-]{36}$/i.test(meetingId)) return { ok: false, error: "That meeting isn't available." };
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("claim_agenda", { p_meeting_id: meetingId });
+  if (error || !data) {
+    const msg = error?.message ?? "";
+    if (/Only someone|has been launched/.test(msg)) return { ok: false, error: msg };
+    console.error("[claimAgenda]", error?.code, msg);
+    return { ok: false, error: "Couldn't open the agenda for editing. Try again." };
+  }
+  const r = data as { mine: boolean; editor?: string; since: string };
+  return r.mine ? { ok: true, mine: true } : { ok: true, mine: false, editor: r.editor ?? "Someone", since: r.since };
+}
+
+/** Done editing: someone else can take the agenda now. */
+export async function releaseAgenda(meetingId: string): Promise<void> {
+  if (!/^[0-9a-f-]{36}$/i.test(meetingId)) return;
+  const supabase = await createClient();
+  await supabase.rpc("release_agenda", { p_meeting_id: meetingId });
 }

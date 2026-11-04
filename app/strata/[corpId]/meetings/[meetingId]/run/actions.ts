@@ -6,13 +6,13 @@ import { getMeeting, getLotRoll } from "@/lib/data/meetings";
 import { electedChair, normalizeAgenda, meetingTypeLabels, type AgendaItem } from "@/lib/meetings/agenda";
 import { checkAttachments } from "@/lib/meetings/attachments";
 import { deferUnresolved, minutesSummary, type AttendanceStatus } from "@/lib/meetings/rules";
-import { buildMinutes } from "@/lib/meetings/minutes";
+import { buildMinutes, clockTime } from "@/lib/meetings/minutes";
 import { askStratasphere, type AssistantTurn } from "@/lib/ai/stratasphere";
 import { IS_DEMO, demoLimitFail } from "@/lib/demo";
 import { logDemoActivity, refundDemoAllowance, takeDemoAllowance } from "@/lib/demo-usage";
 import { fileDiscussionRecord } from "@/lib/discussions/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { motionCounts } from "@/lib/meetings/live";
+import { motionCounts, movementLines } from "@/lib/meetings/live";
 
 /**
  * Meeting Mode (doc01 §4): saving the running meeting, Call to Order, the
@@ -23,7 +23,7 @@ import { motionCounts } from "@/lib/meetings/live";
 
 type Fail = { ok: false; error: string };
 
-const ATTENDANCE: readonly AttendanceStatus[] = ["", "present", "regrets", "proxy"];
+const ATTENDANCE: readonly AttendanceStatus[] = ["", "present", "regrets", "proxy", "left"];
 
 function cleanAttendance(raw: Record<string, string>): Record<string, AttendanceStatus> {
   const out: Record<string, AttendanceStatus> = {};
@@ -165,9 +165,11 @@ export async function adjournMeeting(
   // Live votes and declared conflicts (0073) are taken from the database,
   // not the screen: a motion decided by a live vote keeps the counts the
   // vote recorded, and each item carries the conflicts declared on it.
-  const [{ data: closedVotes }, { data: conflictRows }] = await Promise.all([
+  const [{ data: closedVotes }, { data: conflictRows }, { data: presenceRows }] = await Promise.all([
     supabase.from("meeting_votes").select("id, votes_for, votes_against, votes_abstain, votes_missing").eq("meeting_id", meetingId).eq("status", "closed"),
     supabase.from("meeting_conflicts").select("item_id, lot_number").eq("meeting_id", meetingId),
+    // Late arrivals and departures, for the minutes (0074).
+    supabase.from("meeting_presence").select("id, user_id, lot_number, event, at").eq("meeting_id", meetingId).order("id"),
   ]);
   const votesById = new Map((closedVotes ?? []).map((v) => [v.id as string, v]));
   const agenda: AgendaItem[] = deferUnresolved(normalizeAgenda(rawAgenda)).map((raw) => {
@@ -195,6 +197,11 @@ export async function adjournMeeting(
     lotCount: roll.lots.length || corp.unit_count,
     councilCount: roll.councilLots.length,
     adjournedAt: new Date().toISOString(),
+    movements: movementLines(
+      (presenceRows ?? []).map((p) => ({ id: p.id as number, userId: p.user_id, name: "", lot: p.lot_number, event: p.event, at: p.at })),
+      meeting.actualStartAt,
+      (iso) => clockTime(iso, meeting.timezone)
+    ),
   });
 
   // Attendance may have changed since Call to Order (late arrivals).

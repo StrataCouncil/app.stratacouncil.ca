@@ -61,6 +61,8 @@ export interface MinutesContent {
     absentCount: number;
     quorumRequired: number;
     quorumMet: boolean;
+    /** Late arrivals and departures, with their times (0074). */
+    movements?: string[];
   };
   calledToOrder: boolean;
   sections: Array<{ name: string; items: MinutesItem[] }>;
@@ -101,12 +103,18 @@ export function buildMinutes(input: {
   lotCount: number;
   councilCount: number;
   adjournedAt: string;
+  /** "SL005 joined the meeting at 7:42 p.m.", from the join and leave log. */
+  movements?: string[];
 }): MinutesContent {
   const { meeting, attendance } = input;
   const general = meeting.type === "agm" || meeting.type === "sgm";
   const byStatus = (s: AttendanceStatus) => Object.keys(attendance).filter((k) => attendance[k] === s).sort();
-  const q = quorum(meeting.type, { lotCount: input.lotCount, councilCount: input.councilCount, attendance });
-  const present = byStatus("present");
+  // The minutes' quorum line is for the meeting as held: anyone who left
+  // before the end was present when it was called to order.
+  const attended = Object.fromEntries(Object.entries(attendance).map(([k, v]) => [k, v === "left" ? "present" : v])) as Record<string, AttendanceStatus>;
+  const q = quorum(meeting.type, { lotCount: input.lotCount, councilCount: input.councilCount, attendance: attended });
+  // Everyone who attended, including anyone who left before the end.
+  const present = [...byStatus("present"), ...byStatus("left")].sort();
   const proxies = byStatus("proxy");
 
   const sections = groupByCategory(input.agenda.filter((it) => !isCallToOrder(it) && !isAdjournment(it))).map((cat) => ({
@@ -161,6 +169,7 @@ export function buildMinutes(input: {
       absentCount: general ? Math.max(0, input.lotCount - present.length - proxies.length) : 0,
       quorumRequired: q.required,
       quorumMet: q.met,
+      ...(input.movements?.length ? { movements: input.movements } : {}),
     },
     calledToOrder: Boolean(meeting.actualStartAt),
     sections,
@@ -189,9 +198,12 @@ export function attendanceLines(m: MinutesContent): string[] {
   lines.push(
     `${counted} ${a.general ? "lots counted toward quorum" : "present"}. Quorum requires ${a.quorumRequired}. ${a.quorumMet ? "Quorum confirmed." : "Quorum not met."}`
   );
+  for (const l of a.movements ?? []) lines.push(l);
   return lines;
 }
 
 export function voteLine(motion: NonNullable<MinutesItem["motion"]>) {
+  // Everyone voting in favour, none opposed or abstaining: unanimous.
+  if (motion.for > 0 && !motion.against && !motion.abstain) return `unanimous, ${motion.for} in favour`;
   return `${motion.for} in favour, ${motion.against} opposed${motion.abstain ? `, ${motion.abstain} abstaining` : ""}`;
 }
