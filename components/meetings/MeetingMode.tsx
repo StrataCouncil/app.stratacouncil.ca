@@ -616,12 +616,12 @@ export function MeetingMode(props: {
 
       {live?.presenting && hiddenShow === live.presenting.at && (
         <div className="mm__alert mm__alert--showing" role="status" data-testid="mm-showing-bar">
-          Showing everyone: <strong>{live.presenting.title || "an attachment"}</strong>{" "}
+          Sharing on screen: <strong>{live.presenting.title || "an attachment"}</strong>{" "}
           <button type="button" className="link-button" onClick={() => setHiddenShow(null)}>
             View
           </button>{" "}
           <button type="button" className="link-button" onClick={() => void show(null, null)} disabled={liveBusy}>
-            Stop showing
+            Stop sharing
           </button>
         </div>
       )}
@@ -1216,11 +1216,11 @@ function ItemPanel(props: {
                 {props.called &&
                   (props.presenting?.itemId === it.id && props.presenting.attId === a.id ? (
                     <button type="button" className="button button-primary button-small" onClick={() => props.onShow(null)} data-testid={`mm-stop-showing-${a.id}`}>
-                      Stop showing
+                      Stop sharing
                     </button>
                   ) : (
                     <button type="button" className="button button-secondary button-small" onClick={() => props.onShow(a.id)} data-testid={`mm-show-${a.id}`}>
-                      Show to everyone
+                      Share on screen
                     </button>
                   ))}
               </li>

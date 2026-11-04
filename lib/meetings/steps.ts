@@ -50,7 +50,7 @@ export function itemSteps(it: AgendaItem, s: StepState): Step[] {
   const introduce = manual(
     "introduce",
     "Introduce the item",
-    "Present the background, financial implications and risks. Use Show to everyone to put an attachment on everyone's screen.",
+    "Present the background, financial implications and risks. Use Share on screen to put an attachment on everyone's screen.",
     `"Next is ${it.text}."`
   );
   const steps: Step[] = [];

@@ -156,7 +156,7 @@ export function LiveMeeting(props: {
       )}
       {state.presenting && hiddenShow === state.presenting.at && !adjourned && (
         <div className="mm__alert mm__alert--showing" role="status">
-          Shown to everyone: <strong>{state.presenting.title || "an attachment"}</strong>{" "}
+          Shared on screen: <strong>{state.presenting.title || "an attachment"}</strong>{" "}
           <button type="button" className="link-button" onClick={() => setHiddenShow(null)} data-testid="live-show-again">
             View
           </button>

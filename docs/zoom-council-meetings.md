@@ -118,7 +118,7 @@ current to 2026-10-20); both are in the Knowledge Base.
    open vote, close vote, confirm), and buttons stay off until their step
    is reached. Losing quorum shows on every screen and locks votes and
    decisions until it's back; the operator can wait, defer or adjourn.
-   Attachments: Show to everyone (0076) puts one on every member's screen
+   Attachments: Share on screen (0076) puts one on every member's screen
    over the agenda, independent of Zoom.
 5. **Conflict of interest.** Declared by the member or recorded by the
    operator: `putOnHold(userId, true)` moves them to the waiting room, their

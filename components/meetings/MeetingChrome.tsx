@@ -163,7 +163,7 @@ export function ConflictDialog(props: {
 const INLINE = /\.(pdf|png|jpe?g|gif|webp|txt)$/i;
 
 /**
- * Show to everyone (0076): the attachment the runner is showing, over the
+ * Share on screen (0076): the attachment the runner is sharing, over the
  * agenda on every screen. Anyone can hide it on their own screen; the
  * runner stops it for everyone.
  */
@@ -208,7 +208,7 @@ export function SharedViewer(props: {
       <div className="viewer" role="dialog" aria-modal="true" aria-labelledby="viewer-title" data-testid="shared-viewer">
         <div className="viewer__head">
           <div>
-            <span className="card__meta">{props.runner ? "You're showing everyone" : "Shown to everyone"}</span>
+            <span className="card__meta">{props.runner ? "You're sharing this on screen" : "Shared on screen"}</span>
             <h2 id="viewer-title">{p.title || "Attachment"}</h2>
           </div>
           <span className="viewer__actions">
@@ -219,7 +219,7 @@ export function SharedViewer(props: {
             )}
             {props.runner && props.onStop && (
               <button type="button" className="button button-primary button-small" onClick={props.onStop} disabled={props.busy} data-testid="viewer-stop">
-                Stop showing
+                Stop sharing
               </button>
             )}
             <button type="button" className="button button-secondary button-small" onClick={props.onHide} data-testid="viewer-hide">
