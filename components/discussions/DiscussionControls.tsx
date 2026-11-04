@@ -124,10 +124,19 @@ export function AuthorPanel({
   return (
     <section className="card discussion-author" data-testid="discussion-author">
       <h3>You started this discussion</h3>
-      <p className="card__meta">
-        {majority ?? "No majority yet."} Close the vote when council has decided. Council is emailed, and the vote record is filed in
-        Meetings &amp; Records.
-      </p>
+      {majority ? (
+        <p className="discussion-ready" role="status" data-testid="discussion-majority-reached">
+          <strong>{majority}</strong> You can close the discussion now. Council is emailed the result and the vote record is filed in
+          Meetings &amp; Records.{" "}
+          {/ for: /.test(majority)
+            ? "The motion then waits for ratification: it's set aside for the next council meeting, and offered when you build that agenda."
+            : "It didn't pass, so nothing goes to a meeting."}
+        </p>
+      ) : (
+        <p className="card__meta">
+          No majority yet. Close the vote when council has decided. Council is emailed, and the vote record is filed in Meetings &amp; Records.
+        </p>
+      )}
       <div className="role-editor__actions" style={{ justifyContent: "flex-start" }}>
         {editable && (
           <button type="button" className="button button-secondary" onClick={() => setEditing(true)} data-testid="discussion-edit">

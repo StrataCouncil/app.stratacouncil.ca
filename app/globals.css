@@ -9480,3 +9480,12 @@ a.kb-card:hover {
 .discussion-myvote[data-vote="none"] {
   color: var(--muted);
 }
+
+.discussion-ready {
+  background: var(--free-bg);
+  color: var(--ink);
+  border-left: 3px solid var(--free);
+  border-radius: var(--radius-sm);
+  padding: 0.6rem 0.8rem;
+  font-size: 0.92rem;
+}
