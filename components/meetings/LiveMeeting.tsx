@@ -10,7 +10,7 @@ import { getDocumentDownloadUrl } from "@/app/strata/[corpId]/documents/actions"
 import { openInNewTab } from "@/lib/open-in-tab";
 import { MemberVote } from "@/components/meetings/LiveVote";
 import { Assistant } from "@/components/meetings/MeetingMode";
-import { ConflictDialog, MeetingSide, MeetingUser } from "@/components/meetings/MeetingChrome";
+import { ConflictDialog, MeetingSide, MeetingUser, useLeaveWarning } from "@/components/meetings/MeetingChrome";
 
 /**
  * A council member (or the manager) in a meeting (0073, 0074). Opening this
@@ -62,6 +62,9 @@ export function LiveMeeting(props: {
       void refresh();
     });
   }, [meetingId, refresh]);
+
+  // Closing the window by accident would drop them out of the vote.
+  useLeaveWarning(state.status !== "ADJOURNED");
 
   const voteOpen = Boolean(state.openVote);
   useEffect(() => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { MemberAvatar } from "@/components/MemberAvatar";
 import { inMeeting, type PresenceEvent } from "@/lib/meetings/live";
 
@@ -9,6 +9,25 @@ import { inMeeting, type PresenceEvent } from "@/lib/meetings/live";
  * who's signed in, who's in the meeting, the right-hand column, and the
  * confirmation boxes that guard against accidents.
  */
+
+/**
+ * Asks before the window or tab closes, or the page reloads, while someone is
+ * in a meeting. Browsers show their own wording ("Leave site?"), and only once
+ * the person has clicked or typed on the page. Moving around inside the app,
+ * including Leave meeting and Exit, doesn't ask.
+ */
+export function useLeaveWarning(active: boolean) {
+  useEffect(() => {
+    if (!active) return;
+    const warn = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      // Older browsers need returnValue set to show the prompt.
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [active]);
+}
 
 /** The signed-in person, top right. */
 export function MeetingUser({ name, avatarUrl }: { name: string; avatarUrl: string | null }) {
