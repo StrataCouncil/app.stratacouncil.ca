@@ -515,3 +515,8 @@ export function attachmentUses(
   }
   return uses;
 }
+
+/** Decision items with no motion written yet ("11. Roof Repairs"): flagged in the builder, warned about at launch. */
+export function missingMotions(agenda: AgendaItem[]): string[] {
+  return agenda.filter((it) => NEEDS_MOTION.includes(it.type) && !it.motion?.text?.trim()).map((it) => `${it.num}. ${it.text}`);
+}

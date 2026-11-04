@@ -10,6 +10,24 @@ import { choiceLabels, votedLine, type Choice, type ClosedVote, type LiveBallot,
 
 const CHOICES: Choice[] = ["for", "against", "abstain"];
 
+/** For: a check. Against: an X. Abstain: a circle with a line through it. */
+export function ChoiceIcon({ choice }: { choice: Choice }) {
+  return (
+    <svg className="choice-icon" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
+      {choice === "for" ? (
+        <path d="M3 8.5l3.2 3.2L13 4.8" strokeLinejoin="round" />
+      ) : choice === "against" ? (
+        <path d="M4 4l8 8M12 4l-8 8" />
+      ) : (
+        <>
+          <circle cx="8" cy="8" r="5.5" />
+          <path d="M4.2 11.8l7.6-7.6" />
+        </>
+      )}
+    </svg>
+  );
+}
+
 function elapsed(fromIso: string, now: number) {
   const s = Math.max(0, Math.floor((now - new Date(fromIso).getTime()) / 1000));
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
@@ -122,10 +140,16 @@ export function RunnerVotePanel(props: {
                       onClick={() => props.onRecord(lot, c)}
                       disabled={props.busy}
                     >
+                      <ChoiceIcon choice={c} />
                       {choiceLabels[c]}
                     </button>
                   ))
-                : b && <span className={`ch ch--${b.choice}`} data-selected>{choiceLabels[b.choice]}</span>}
+                : b && (
+                    <span className={`ch ch--${b.choice}`} data-selected>
+                      <ChoiceIcon choice={b.choice} />
+                      {choiceLabels[b.choice]}
+                    </span>
+                  )}
             </span>
           </div>
         );
@@ -296,7 +320,7 @@ export function MemberVote(props: {
             disabled={props.busy}
             data-testid={`live-vote-${c}`}
           >
-            {mine === c ? "✓ " : ""}
+            <ChoiceIcon choice={c} />
             {choiceLabels[c]}
           </button>
         ))}

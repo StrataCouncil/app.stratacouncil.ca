@@ -121,13 +121,13 @@ export function itemSteps(it: AgendaItem, s: StepState): Step[] {
     steps.push(
       introduce,
       manual("discuss", "Discussion", "Open the floor.", '"The floor is open for discussion."'),
-      auto("direction", "Wrap up", "Sum up, then record consensus or move on.", it.done)
+      auto("direction", "Wrap up", "Sum up the discussion, then mark it Discussed (or Defer it).", it.done)
     );
   } else {
     steps.push(
       introduce,
       manual("questions", "Questions", "Invite questions or comments.", '"Any questions?"'),
-      auto("received", "Received", "Mark it received and move on.", it.done)
+      auto("received", "Received", "Mark it Received (or Defer it). It goes in the minutes as received for information.", it.done)
     );
   }
 

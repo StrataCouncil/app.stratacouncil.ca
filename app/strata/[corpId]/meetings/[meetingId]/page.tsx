@@ -5,11 +5,11 @@ import { AgendaBuilder } from "@/components/meetings/AgendaBuilder";
 import { agendaVersion } from "@/lib/meetings/agenda-version";
 import { AgendaView } from "@/components/meetings/AgendaView";
 import { AgendaCheckout } from "@/components/meetings/AgendaCheckout";
-import { DeleteMeetingButton, EditMeetingDetailsButton } from "@/components/meetings/MeetingActions";
+import { DeleteMeetingButton, EditMeetingDetailsButton, LaunchMeetingButton } from "@/components/meetings/MeetingActions";
 import { getStrataAccess } from "@/lib/data/strata";
 import { ratificationCandidates } from "@/lib/data/discussions";
 import { chairCandidates, getMeeting, getMeetingNotes } from "@/lib/data/meetings";
-import { meetingFormatLabels, meetingTypeLabels } from "@/lib/meetings/agenda";
+import { meetingFormatLabels, meetingTypeLabels, missingMotions } from "@/lib/meetings/agenda";
 import { formatMeetingWhen } from "@/lib/meetings/format";
 import { meetingStatus } from "@/lib/meetings/status";
 
@@ -21,8 +21,15 @@ export const maxDuration = 120;
  * can run meetings), and Launch. Once launched, the launcher runs it from
  * Meeting Mode and everyone else sees the agenda read-only.
  */
-export default async function MeetingPage({ params }: { params: Promise<{ corpId: string; meetingId: string }> }) {
+export default async function MeetingPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ corpId: string; meetingId: string }>;
+  searchParams: Promise<{ edit?: string; takenOver?: string }>;
+}) {
   const { corpId, meetingId } = await params;
+  const { edit, takenOver } = await searchParams;
   const access = await getStrataAccess(corpId);
   if (!access) notFound();
   const meeting = await getMeeting(corpId, meetingId);
@@ -33,6 +40,8 @@ export default async function MeetingPage({ params }: { params: Promise<{ corpId
   const canFollow = access.isCouncil || access.canRunMeetings || access.roles.includes("manager");
   const launchedByOther = meeting.launchedBy !== null && !launchedByMe;
   const canEdit = access.canRunMeetings && meeting.status === "DRAFT" && meeting.launchedBy === null;
+  // Edit agenda opens the editor (and takes the agenda); otherwise it's read-only.
+  const editing = canEdit && edit === "1";
   const [notes, chairOptions] = canEdit
     ? await Promise.all([getMeetingNotes(meetingId), chairCandidates(corpId)])
     : [{}, []];
@@ -77,6 +86,23 @@ export default async function MeetingPage({ params }: { params: Promise<{ corpId
             />
           )}
           {canEdit && <DeleteMeetingButton corpId={corpId} meetingId={meetingId} />}
+          {canEdit && !editing && (
+            <>
+              <Link href={`/strata/${corpId}/meetings/${meetingId}?edit=1`} className="button button-secondary" data-testid="edit-agenda">
+                Edit agenda
+              </Link>
+              <LaunchMeetingButton
+                corpId={corpId}
+                meetingId={meetingId}
+                agendaSaved
+                missingMotions={missingMotions(meeting.agenda)}
+                editHref={`/strata/${corpId}/meetings/${meetingId}?edit=1`}
+                subscribed={access.subscribed}
+                trialAvailable={trialAvailable}
+                isAdmin={access.isAdmin}
+              />
+            </>
+          )}
           {meeting.agenda.length > 0 && (
             <a className="button button-secondary button-small" href={`/strata/${corpId}/meetings/${meetingId}/agenda.docx`} data-testid="export-agenda">
               Export agenda (.docx)
@@ -94,7 +120,7 @@ export default async function MeetingPage({ params }: { params: Promise<{ corpId
           )}
           {meeting.status === "ADJOURNED" && Boolean(meeting.minutesContent) && (
             <Link href={`/strata/${corpId}/meetings/${meetingId}/minutes`} className="button button-primary" data-testid="open-minutes">
-              {meeting.minutesState === "FINAL" ? "View minutes" : "Review minutes"}
+              {meeting.minutesState === "FINAL" ? "View minutes" : "Draft minutes"}
             </Link>
           )}
         </div>
@@ -107,8 +133,14 @@ export default async function MeetingPage({ params }: { params: Promise<{ corpId
         </p>
       )}
 
-      {canEdit ? (
+      {takenOver && canEdit && !editing && (
+        <p className="agenda-lock" role="status" data-testid="agenda-taken-over">
+          {takenOver.slice(0, 120)} took over editing this agenda. Your changes were saved.
+        </p>
+      )}
+      {editing ? (
         <AgendaCheckout
+          corpId={corpId}
           meetingId={meetingId}
           editor={
             <AgendaBuilder
@@ -119,7 +151,6 @@ export default async function MeetingPage({ params }: { params: Promise<{ corpId
               initialVersion={agendaVersion(meeting.agenda)}
               initialNotes={notes}
               aiAvailable={access.subscribed || trialAvailable}
-              launch={{ subscribed: access.subscribed, trialAvailable, isAdmin: access.isAdmin }}
               ratifications={meeting.type === "council" ? await ratificationCandidates(corpId, meetingId) : []}
             />
           }

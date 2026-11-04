@@ -119,7 +119,8 @@ current to 2026-10-20); both are in the Knowledge Base.
    reached. Defer is offered instead of opening a vote. Close vote opens a
    box with the result: confirm it as carried or defeated, or go back to
    the vote (it only closes when confirmed). A deferred item is voted on
-   afresh. Losing quorum shows on every screen and locks votes and
+   afresh. Discussion items are marked Discussed and information items
+   Received (or deferred); neither needs a vote. Losing quorum shows on every screen and locks votes and
    decisions until it's back; the operator can wait, defer or adjourn.
    Attachments: Share on screen (0076) puts one on every member's screen
    over the agenda, independent of Zoom.

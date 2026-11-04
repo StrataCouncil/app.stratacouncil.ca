@@ -3874,7 +3874,22 @@ span.ch--against {
 .ch[data-selected].ch--abstain,
 span.ch--abstain {
   background: var(--locked-bg);
-  border-color: var(--ink);
+  border-color: var(--muted);
+  color: var(--muted);
+}
+.ch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.ch--for {
+  color: var(--free);
+}
+.ch--against {
+  color: var(--danger);
+}
+.ch--abstain {
+  color: var(--muted);
 }
 span.ch {
   cursor: default;
@@ -3937,10 +3952,37 @@ span.ch {
   font-weight: 600;
   cursor: pointer;
 }
-.live-vote__button[data-selected] {
+.live-vote__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+}
+/* For green with a check, Against red with an X, Abstain grey with a circle and line. */
+.live-vote__button[data-choice="for"] {
+  color: var(--free);
+}
+.live-vote__button[data-choice="against"] {
+  color: var(--danger);
+}
+.live-vote__button[data-choice="abstain"] {
+  color: var(--muted);
+}
+.live-vote__button[data-selected][data-choice="for"] {
   border-color: var(--free);
   background: var(--free-bg);
-  color: var(--free);
+}
+.live-vote__button[data-selected][data-choice="against"] {
+  border-color: var(--danger);
+  background: var(--danger-bg);
+}
+.live-vote__button[data-selected][data-choice="abstain"] {
+  border-color: var(--muted);
+  background: var(--locked-bg);
+}
+.live-vote__button .choice-icon {
+  width: 18px;
+  height: 18px;
 }
 .live-vote__note,
 .live-info {

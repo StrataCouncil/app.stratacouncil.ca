@@ -370,6 +370,8 @@ function ItemView(p: {
               {it.motion.sec && <>Seconded by {who(it.motion.sec)}</>}
             </p>
           )}
+        </>
+      )}
       {p.afterMotion}
       {(it.background || it.financial || it.risks) && (
         <div className="mm-details">
@@ -416,8 +418,6 @@ function ItemView(p: {
             </p>
           ))}
         </div>
-      )}
-        </>
       )}
     </section>
   );
