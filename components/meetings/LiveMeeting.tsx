@@ -4,13 +4,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { groupByCategory, normalizeAgenda, resolutionTypeLabels, type AgendaItem } from "@/lib/meetings/agenda";
-import { choiceLabels, conflictedLots, takesConflicts, type Choice, type LiveState } from "@/lib/meetings/live";
+import { choiceLabels, conflictedLots, inMeeting, takesConflicts, type Choice, type LiveState } from "@/lib/meetings/live";
+import { councilQuorum } from "@/lib/meetings/rules";
 import { castVote, declareConflict, getLiveState, joinMeeting, leaveMeeting } from "@/app/strata/[corpId]/meetings/[meetingId]/live/actions";
 import { getDocumentDownloadUrl } from "@/app/strata/[corpId]/documents/actions";
 import { openInNewTab } from "@/lib/open-in-tab";
 import { MemberVote } from "@/components/meetings/LiveVote";
 import { Assistant } from "@/components/meetings/MeetingMode";
-import { ConflictDialog, MeetingSide, MeetingUser, useLeaveWarning } from "@/components/meetings/MeetingChrome";
+import { ConflictDialog, MeetingSide, MeetingUser, SharedViewer, useLeaveWarning } from "@/components/meetings/MeetingChrome";
 
 /**
  * A council member (or the manager) in a meeting (0073, 0074). Opening this
@@ -31,6 +32,8 @@ export function LiveMeeting(props: {
   corpName: string;
   runnerName: string | null;
   names: Record<string, string>;
+  /** Council seats with a lot, for quorum. */
+  councilCount: number;
   me: { name: string; avatarUrl: string | null };
   initial: LiveState;
   isTrial: boolean;
@@ -46,6 +49,8 @@ export function LiveMeeting(props: {
   const [demoLeft, setDemoLeft] = useState(props.demoLeft);
   const [declaring, setDeclaring] = useState(false);
   const [joinError, setJoinError] = useState<string | null>(null);
+  // The shared attachment, hidden on this screen (by when it was shown).
+  const [hiddenShow, setHiddenShow] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     const s = await getLiveState(meetingId).catch(() => null);
@@ -83,17 +88,11 @@ export function LiveMeeting(props: {
     router.push(`/strata/${corpId}/meetings/${meetingId}`);
   }
 
-  if (state.status === "ADJOURNED") {
-    return (
-      <div className="live-ended card">
-        <h2>The meeting has adjourned</h2>
-        <p className="card__meta">The draft minutes go to council for review.</p>
-        <Link href={`/strata/${corpId}/meetings/${meetingId}`} className="button button-primary">
-          Back to the meeting
-        </Link>
-      </div>
-    );
-  }
+  const adjourned = state.status === "ADJOURNED";
+  // Quorum from who's in the meeting now (council lots), once it's called to order.
+  const hereLots = new Set(inMeeting(state.presence).map((p) => p.lot).filter(Boolean)).size;
+  const quorumNeeded = councilQuorum(props.councilCount);
+  const quorumLost = Boolean(state.calledToOrderAt) && props.councilCount > 0 && hereLots < quorumNeeded;
 
   async function cast(choice: Choice) {
     if (!state.openVote) return;
@@ -149,6 +148,20 @@ export function LiveMeeting(props: {
         </button>
       </header>
       {joinError && <div className="mm__alert" role="alert">{joinError}</div>}
+      {quorumLost && !adjourned && (
+        <div className="mm__alert mm__alert--quorum" role="alert" data-testid="live-quorum-lost">
+          <strong>Quorum lost:</strong> {hereLots} of {props.councilCount} council members are in the meeting, {quorumNeeded} needed. No decisions can be
+          made until enough members are back.
+        </div>
+      )}
+      {state.presenting && hiddenShow === state.presenting.at && !adjourned && (
+        <div className="mm__alert mm__alert--showing" role="status">
+          Shown to everyone: <strong>{state.presenting.title || "an attachment"}</strong>{" "}
+          <button type="button" className="link-button" onClick={() => setHiddenShow(null)} data-testid="live-show-again">
+            View
+          </button>
+        </div>
+      )}
 
       <div className="mm__body live__body">
         <nav className="mm__nav" aria-label="Agenda">
@@ -262,6 +275,22 @@ export function LiveMeeting(props: {
         />
       </div>
 
+      {state.presenting && hiddenShow !== state.presenting.at && !adjourned && (
+        <SharedViewer corpId={corpId} presenting={state.presenting} onHide={() => setHiddenShow(state.presenting!.at)} />
+      )}
+      {adjourned && (
+        <div className="modal-backdrop" role="presentation">
+          <div className="modal" role="alertdialog" aria-modal="true" aria-labelledby="adjourned-title" data-testid="live-adjourned">
+            <h2 id="adjourned-title">Meeting adjourned</h2>
+            <p>The draft minutes go to council for review. You&rsquo;ll find them in the Meetings tab.</p>
+            <div className="modal__actions">
+              <Link href={`/strata/${corpId}/meetings`} className="button button-primary" data-testid="live-exit">
+                Exit meeting
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
       {declaring && item && (
         <ConflictDialog
           who={`You (${state.myLot})`}

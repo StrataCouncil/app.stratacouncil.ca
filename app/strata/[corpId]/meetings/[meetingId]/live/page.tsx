@@ -47,6 +47,7 @@ export default async function LiveMeetingPage({ params }: { params: Promise<{ co
       corpName={corp?.building_name || corp?.legal_name || corpId}
       runnerName={meeting.launchedByName}
       names={Object.fromEntries(roll.lots.map((l) => [l.lot, l.name]))}
+      councilCount={roll.lots.filter((l) => l.isCouncil).length}
       me={{ name: profile?.fullName || "You", avatarUrl: profile?.avatarUrl ?? null }}
       initial={state}
       isTrial={meeting.isTrial}

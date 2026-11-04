@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { MemberAvatar } from "@/components/MemberAvatar";
-import { inMeeting, type PresenceEvent } from "@/lib/meetings/live";
+import { inMeeting, type PresenceEvent, type Presenting } from "@/lib/meetings/live";
+import { getDocumentDownloadUrl } from "@/app/strata/[corpId]/documents/actions";
 
 /**
  * Pieces shared by Meeting Mode and the members' live page (0073, 0074):
@@ -152,6 +153,90 @@ export function ConflictDialog(props: {
           <button type="button" className="button button-primary" onClick={() => props.onDeclare(note)} disabled={note.trim().length < 3 || props.busy} data-testid="conflict-declare">
             Declare conflict
           </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Shown in the page (PDFs, pictures, text); anything else opens in its own tab.
+const INLINE = /\.(pdf|png|jpe?g|gif|webp|txt)$/i;
+
+/**
+ * Show to everyone (0076): the attachment the runner is showing, over the
+ * agenda on every screen. Anyone can hide it on their own screen; the
+ * runner stops it for everyone.
+ */
+export function SharedViewer(props: {
+  corpId: string;
+  presenting: Presenting;
+  runner?: boolean;
+  busy?: boolean;
+  onStop?: () => void;
+  onHide: () => void;
+}) {
+  const { presenting: p } = props;
+  const [src, setSrc] = useState<string | null>(p.url);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    setError(null);
+    if (!p.documentId) {
+      setSrc(p.url);
+      return;
+    }
+    setSrc(null);
+    getDocumentDownloadUrl(props.corpId, p.documentId, { view: true })
+      .then((r) => {
+        if (!live) return;
+        if (r.ok) setSrc(r.url);
+        else setError(r.error);
+      })
+      .catch(() => live && setError("Couldn't open it. Try again."));
+    return () => {
+      live = false;
+    };
+  }, [props.corpId, p.documentId, p.url, p.at]);
+
+  let inline = false;
+  try {
+    inline = Boolean(src) && (p.documentId ? INLINE.test(new URL(src!).pathname) : true);
+  } catch {}
+
+  return (
+    <div className="viewer-backdrop" role="presentation">
+      <div className="viewer" role="dialog" aria-modal="true" aria-labelledby="viewer-title" data-testid="shared-viewer">
+        <div className="viewer__head">
+          <div>
+            <span className="card__meta">{props.runner ? "You're showing everyone" : "Shown to everyone"}</span>
+            <h2 id="viewer-title">{p.title || "Attachment"}</h2>
+          </div>
+          <span className="viewer__actions">
+            {src && (
+              <a className="button button-secondary button-small" href={src} target="_blank" rel="noopener noreferrer">
+                Open in a new tab
+              </a>
+            )}
+            {props.runner && props.onStop && (
+              <button type="button" className="button button-primary button-small" onClick={props.onStop} disabled={props.busy} data-testid="viewer-stop">
+                Stop showing
+              </button>
+            )}
+            <button type="button" className="button button-secondary button-small" onClick={props.onHide} data-testid="viewer-hide">
+              {props.runner ? "Back to the agenda" : "Hide"}
+            </button>
+          </span>
+        </div>
+        <div className="viewer__body">
+          {error ? (
+            <p className="form-error" role="alert">{error}</p>
+          ) : !src ? (
+            <p className="card__meta">Opening&hellip;</p>
+          ) : inline ? (
+            <iframe src={src} title={p.title || "Attachment"} className="viewer__frame" referrerPolicy="no-referrer" sandbox={p.documentId ? undefined : "allow-scripts allow-same-origin allow-popups"} />
+          ) : (
+            <p className="card__meta">This kind of file can&rsquo;t be shown here. Open it in a new tab.</p>
+          )}
         </div>
       </div>
     </div>

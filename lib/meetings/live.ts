@@ -58,6 +58,27 @@ export interface PresenceEvent {
   at: string;
 }
 
+/** An attachment the runner is showing to everyone (0076), read from the saved agenda. */
+export interface Presenting {
+  itemId: string;
+  attId: string;
+  title: string;
+  documentId: string | null;
+  /** A web link (http or https only). */
+  url: string | null;
+  at: string;
+}
+
+/** meetings.presenting as stored, checked field by field. */
+export function parsePresenting(raw: unknown): Presenting | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const o = raw as Record<string, unknown>;
+  const s = (v: unknown) => (typeof v === "string" ? v : "");
+  const url = s(o.url);
+  const p = { itemId: s(o.itemId), attId: s(o.attId), title: s(o.title), documentId: s(o.documentId) || null, url: /^https?:\/\//i.test(url) ? url : null, at: s(o.at) };
+  return p.itemId && p.attId && (p.documentId || p.url) ? p : null;
+}
+
 export interface LiveState {
   status: "DRAFT" | "LIVE" | "ADJOURNED";
   /** Launched (it may not be called to order yet). */
@@ -75,6 +96,8 @@ export interface LiveState {
   presence: PresenceEvent[];
   openVote: OpenVote | null;
   closedVotes: ClosedVote[];
+  /** What the runner is showing to everyone, if anything (0076). */
+  presenting: Presenting | null;
 }
 
 const CHOICES: readonly string[] = ["for", "against", "abstain"];
@@ -101,6 +124,7 @@ export function parseLiveState(raw: unknown): LiveState | null {
     updatedAt: str(r.updatedAt),
     isRunner: r.isRunner === true,
     myLot: str(r.myLot) || null,
+    presenting: parsePresenting(r.presenting),
     conflicts: arr(r.conflicts).map((c) => {
       const o = obj(c);
       return { itemId: str(o.itemId), lot: str(o.lot), note: str(o.note) };
