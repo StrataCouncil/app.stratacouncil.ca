@@ -4,9 +4,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { groupByCategory, normalizeAgenda, resolutionTypeLabels, type AgendaItem } from "@/lib/meetings/agenda";
-import { choiceLabels, conflictedLots, inMeeting, takesConflicts, type Choice, type LiveState } from "@/lib/meetings/live";
+import { choiceLabels, conflictedLots, inMeeting, runnerAway, takesConflicts, type Choice, type LiveState } from "@/lib/meetings/live";
 import { councilQuorum } from "@/lib/meetings/rules";
-import { castVote, declareConflict, getLiveState, joinMeeting, leaveMeeting } from "@/app/strata/[corpId]/meetings/[meetingId]/live/actions";
+import { castVote, declareConflict, getLiveState, joinMeeting, leaveMeeting, takeOverMeeting } from "@/app/strata/[corpId]/meetings/[meetingId]/live/actions";
 import { getDocumentDownloadUrl } from "@/app/strata/[corpId]/documents/actions";
 import { openInNewTab } from "@/lib/open-in-tab";
 import { MemberVote } from "@/components/meetings/LiveVote";
@@ -39,6 +39,8 @@ export function LiveMeeting(props: {
   isTrial: boolean;
   aiAvailable: boolean;
   demoLeft: number | null;
+  /** Can run this strata's meetings: offered Take over if the Runner loses connection (0079). */
+  canRunMeetings: boolean;
 }) {
   const { corpId, meetingId } = props;
   const router = useRouter();
@@ -53,9 +55,11 @@ export function LiveMeeting(props: {
   const [hiddenShow, setHiddenShow] = useState<string | null>(null);
   const [leaving, setLeaving] = useState(false);
 
+  const [now, setNow] = useState(() => Date.now());
   const refresh = useCallback(async () => {
     const s = await getLiveState(meetingId).catch(() => null);
     if (s) setState(s);
+    setNow(Date.now());
   }, [meetingId]);
 
   // Opening the page joins the meeting (once per visit).
@@ -90,6 +94,21 @@ export function LiveMeeting(props: {
   }
 
   const adjourned = state.status === "ADJOURNED";
+  // Who runs it now (0079): handed over or taken over since the page loaded.
+  const runnerName = state.lastHandover?.toName ?? props.runnerName;
+  const handedToMe = state.isRunner && !adjourned;
+  const paused = !state.isRunner && runnerAway(state, now);
+  async function takeOver() {
+    setBusy(true);
+    setError(null);
+    const r = await takeOverMeeting(meetingId).catch(() => ({ ok: false as const, error: "Couldn't reach the server. Try again." }));
+    if (!r.ok) {
+      setBusy(false);
+      setError(r.error);
+      return refresh();
+    }
+    router.push(`/strata/${corpId}/meetings/${meetingId}/run`);
+  }
   // Quorum from who's in the meeting now (council lots), once it's called to order.
   const hereLots = new Set(inMeeting(state.presence).map((p) => p.lot).filter(Boolean)).size;
   const quorumNeeded = councilQuorum(props.councilCount);
@@ -141,7 +160,7 @@ export function LiveMeeting(props: {
           <strong>{props.title}</strong>
           <span>
             {props.planNumber} &middot; {props.corpName}
-            {props.runnerName ? ` · run by ${props.runnerName}` : ""}
+            {runnerName ? ` · run by ${runnerName}` : ""}
           </span>
         </div>
         <span className="mm__spacer" />
@@ -151,6 +170,36 @@ export function LiveMeeting(props: {
         </button>
       </header>
       {joinError && <div className="mm__alert" role="alert">{joinError}</div>}
+      {handedToMe && (
+        <div className="modal-backdrop" role="presentation">
+          <div className="modal" role="alertdialog" aria-modal="true" aria-labelledby="live-handed-title" data-testid="live-handed-to-me">
+            <h2 id="live-handed-title">You&rsquo;re running the meeting</h2>
+            <p>
+              {state.lastHandover?.kind === "handed_over" ? `${state.lastHandover.fromName} handed you the meeting.` : "You are now running this meeting."} Votes,
+              attendance and the agenda are as they left them.
+            </p>
+            <div className="modal__actions">
+              <Link href={`/strata/${corpId}/meetings/${meetingId}/run`} className="button button-primary" data-testid="live-open-meeting-mode">
+                Open Meeting Mode
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
+      {paused && !adjourned && (
+        <div className="mm__alert mm__alert--quorum" role="alert" data-testid="live-runner-away">
+          <strong>Meeting paused:</strong> The person running the meeting has lost connection. The meeting is paused.
+          {props.canRunMeetings && (
+            <>
+              {" "}
+              <button type="button" className="button button-primary button-small" onClick={() => void takeOver()} disabled={busy} data-testid="live-take-over">
+                Take over the meeting
+              </button>
+            </>
+          )}
+          {error && props.canRunMeetings && <span className="form-error"> {error}</span>}
+        </div>
+      )}
       {quorumLost && !adjourned && (
         <div className="mm__alert mm__alert--quorum" role="alert" data-testid="live-quorum-lost">
           <strong>Quorum lost:</strong> {hereLots} of {props.councilCount} council members are in the meeting, {quorumNeeded} needed. No decisions can be

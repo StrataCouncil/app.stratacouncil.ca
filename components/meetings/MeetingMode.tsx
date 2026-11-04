@@ -47,17 +47,19 @@ import { MeetingSide, MeetingUser, SharedViewer, TypedConfirm, useLeaveWarning }
 import { DEMO_LIMITS, DEMO_LIMIT_MESSAGE, SIGNUP_URL } from "@/lib/demo";
 import { isDemoLimit, showDemoLimit } from "@/lib/demo-client";
 import { ConflictsPanel, RunnerVotePanel } from "@/components/meetings/LiveVote";
-import { applyPresence, isJoin, presentForItem, type Presenting, takesConflicts, type Choice, type ClosedVote, type LiveConflict, type LiveState, type OpenVote } from "@/lib/meetings/live";
+import { applyPresence, inMeeting, isJoin, presentForItem, type Presenting, takesConflicts, type Choice, type ClosedVote, type LiveConflict, type LiveState, type OpenVote } from "@/lib/meetings/live";
 import {
   cancelVote,
   closeVote,
   declareConflict,
   getLiveState,
+  handOverMeeting,
   joinMeeting,
   markJoined,
   markLeft,
   openVote,
   recordAllInFavour,
+  runnerCheckIn,
   recordVote,
   showToEveryone,
   withdrawConflict,
@@ -101,6 +103,8 @@ export function MeetingMode(props: {
   initialLive?: LiveState | null;
   /** Whoever is running it, shown top right. */
   me: { name: string; avatarUrl: string | null };
+  /** People who could take the meeting over from this Runner (0079); only those in the meeting are offered. */
+  runnerCandidates?: Array<{ userId: string; name: string }>;
 }) {
   const { corpId, meetingId, type, timezone } = props;
   const [demoLeft, setDemoLeft] = useState(props.demoLeft ?? null);
@@ -199,6 +203,19 @@ export function MeetingMode(props: {
     void joinMeeting(meetingId).then(() => refreshLive());
   }, [meetingId, refreshLive]);
   const voteOpen = Boolean(live?.openVote);
+  // The Runner's screen checks in every 20 seconds; after 2 minutes of quiet
+  // the meeting is paused for everyone and can be taken over (0079).
+  useEffect(() => {
+    void runnerCheckIn(meetingId).catch(() => {});
+    const t = setInterval(() => void runnerCheckIn(meetingId).catch(() => {}), 20000);
+    return () => clearInterval(t);
+  }, [meetingId]);
+  // Someone else runs it now (handed over, or taken over while this screen was away).
+  const handedAway = live !== null && !live.isRunner && live.status !== "ADJOURNED";
+  useEffect(() => {
+    if (handedAway) router.replace(`/strata/${corpId}/meetings/${meetingId}/live`);
+  }, [handedAway, router, corpId, meetingId]);
+  const [exitOpen, setExitOpen] = useState(false);
   useEffect(() => {
     void refreshLive();
     // Faster while a vote is open, so ballots appear as they're cast.
@@ -602,9 +619,9 @@ export function MeetingMode(props: {
           In the meeting
         </button>
         <MeetingUser name={props.me.name} avatarUrl={props.me.avatarUrl} />
-        <Link href={`/strata/${corpId}/meetings/${meetingId}`} className="button button-secondary button-small">
+        <button type="button" className="button button-secondary button-small" onClick={() => setExitOpen(true)} data-testid="mm-exit">
           Exit
-        </Link>
+        </button>
       </header>
 
       {saveError && (
@@ -902,6 +919,22 @@ export function MeetingMode(props: {
         />
       )}
       {confirm && <ConfirmDialog {...confirm} busy={busy} onCancel={() => setConfirm(null)} />}
+      {exitOpen && (
+        <ExitDialog
+          meetingId={meetingId}
+          candidates={(props.runnerCandidates ?? []).filter((c) => inMeeting(live?.presence ?? []).some((p) => p.userId === c.userId))}
+          onSave={saveNow}
+          onHandedOver={() => router.replace(`/strata/${corpId}/meetings/${meetingId}/live`)}
+          onAdjourn={() => {
+            setExitOpen(false);
+            const adj = agenda.find(isAdjournment);
+            if (!called) adjournWithoutQuorum();
+            else if (adj && !adj.done) setCurrent(adj.id);
+            else startAdjournment(agenda);
+          }}
+          onStay={() => setExitOpen(false)}
+        />
+      )}
       {recording &&
         (() => {
           const it = agenda.find((i) => i.id === recording.itemId);
@@ -1704,6 +1737,93 @@ function ConfirmDialog(props: NonNullable<Confirm> & { busy: boolean; onCancel: 
           </button>
           <button type="button" className={`button ${props.danger ? "button-danger" : "button-primary"}`} onClick={props.onConfirm} disabled={props.busy} data-testid="mm-confirm-ok">
             {props.busy ? "Working…" : props.confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Exit, for the Runner (0079): a launched meeting can't be abandoned, so it
+ * is handed to someone in it who can run meetings, or adjourned.
+ */
+function ExitDialog(props: {
+  meetingId: string;
+  candidates: Array<{ userId: string; name: string }>;
+  onSave: () => Promise<boolean>;
+  onHandedOver: () => void;
+  onAdjourn: () => void;
+  onStay: () => void;
+}) {
+  const [to, setTo] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const stay = useRef(props.onStay);
+  stay.current = props.onStay;
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && stay.current();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+  async function handOver() {
+    if (!to) return setError("Choose who takes over.");
+    setBusy(true);
+    setError(null);
+    // Their screen picks up exactly where this one is.
+    const saved = await props.onSave();
+    if (!saved) {
+      setBusy(false);
+      return setError("Couldn't save the meeting first. Check your connection and try again.");
+    }
+    const r = await handOverMeeting(props.meetingId, to).catch(() => ({ ok: false as const, error: "Couldn't reach the server. Try again." }));
+    if (!r.ok) {
+      setBusy(false);
+      return setError(r.error);
+    }
+    props.onHandedOver();
+  }
+  return (
+    <div className="modal-backdrop" onClick={props.onStay}>
+      <div className="modal" role="dialog" aria-modal="true" aria-labelledby="mm-exit-title" onClick={(e) => e.stopPropagation()} data-testid="mm-exit-dialog">
+        <h2 id="mm-exit-title">You&rsquo;re running this meeting</h2>
+        <p>A meeting that has been launched can&rsquo;t be left without someone running it. Hand it to someone in the meeting, or adjourn it.</p>
+        <h3>Hand over the meeting</h3>
+        {props.candidates.length ? (
+          <>
+            <label className="field">
+              <span>Who takes over</span>
+              <select value={to} onChange={(e) => setTo(e.target.value)} disabled={busy} data-testid="mm-exit-to">
+                <option value="">Choose someone</option>
+                {props.candidates.map((c) => (
+                  <option key={c.userId} value={c.userId}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+              <span className="field__hint">Votes, attendance and the agenda carry over. You stay in the meeting as a member.</span>
+            </label>
+            <button type="button" className="button button-primary" onClick={() => void handOver()} disabled={busy || !to} data-testid="mm-exit-hand-over">
+              {busy ? "Handing over…" : "Hand over the meeting"}
+            </button>
+          </>
+        ) : (
+          <p className="card__meta" data-testid="mm-exit-no-one">
+            No one in the meeting can run meetings. They need to join the meeting first, and be the strata&rsquo;s admin or secretary or be allowed to run
+            meetings.
+          </p>
+        )}
+        {error && (
+          <p className="form-error" role="alert">
+            {error}
+          </p>
+        )}
+        <div className="modal__actions">
+          <button type="button" className="button button-secondary" onClick={props.onStay} disabled={busy} data-testid="mm-exit-stay">
+            Stay
+          </button>
+          <button type="button" className="button button-danger" onClick={props.onAdjourn} disabled={busy} data-testid="mm-exit-adjourn">
+            Adjourn the meeting
           </button>
         </div>
       </div>

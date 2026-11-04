@@ -53,6 +53,7 @@ export default async function LiveMeetingPage({ params }: { params: Promise<{ co
       isTrial={meeting.isTrial}
       aiAvailable={aiAccess === true}
       demoLeft={demoLeft?.meeting ?? null}
+      canRunMeetings={access.canRunMeetings}
     />
   );
 }

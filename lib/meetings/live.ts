@@ -98,6 +98,18 @@ export interface LiveState {
   closedVotes: ClosedVote[];
   /** What the runner is showing to everyone, if anything (0076). */
   presenting: Presenting | null;
+  /** When the Runner's screen last checked in (0079); null before it has. */
+  runnerSeenAt: string | null;
+  /** The latest change of who runs the meeting (0079), if any. */
+  lastHandover: Handover | null;
+}
+
+export type Handover = { toUser: string; fromName: string; toName: string; kind: "handed_over" | "took_over"; at: string };
+
+/** The Runner's screen has gone quiet for 2 minutes: the meeting is paused and can be taken over (0079). */
+export function runnerAway(state: Pick<LiveState, "runnerSeenAt" | "status">, now: number): boolean {
+  if (state.status === "ADJOURNED" || !state.runnerSeenAt) return false;
+  return now - Date.parse(state.runnerSeenAt) > 2 * 60 * 1000;
 }
 
 const CHOICES: readonly string[] = ["for", "against", "abstain"];
@@ -125,6 +137,8 @@ export function parseLiveState(raw: unknown): LiveState | null {
     isRunner: r.isRunner === true,
     myLot: str(r.myLot) || null,
     presenting: parsePresenting(r.presenting),
+    runnerSeenAt: null,
+    lastHandover: null,
     conflicts: arr(r.conflicts).map((c) => {
       const o = obj(c);
       return { itemId: str(o.itemId), lot: str(o.lot), note: str(o.note) };
@@ -279,11 +293,24 @@ export function takesConflicts(text: string): boolean {
 }
 
 /** "SL005 joined the meeting at 7:42 p.m." and "SL019 left the meeting at 8:15 p.m.", for the minutes. */
-export function movementLines(presence: PresenceEvent[], calledToOrderAt: string | null, time: (iso: string) => string): string[] {
-  if (!calledToOrderAt) return [];
-  const start = Date.parse(calledToOrderAt);
-  return [...presence]
-    .filter((p) => p.lot && Date.parse(p.at) > start)
-    .sort((a, b) => a.id - b.id)
-    .map((p) => `${p.lot} ${isJoin(p.event) ? "joined" : "left"} the meeting at ${time(p.at)}.`);
+export function movementLines(
+  presence: PresenceEvent[],
+  calledToOrderAt: string | null,
+  time: (iso: string) => string,
+  handovers: Array<Pick<Handover, "fromName" | "toName" | "kind" | "at">> = []
+): string[] {
+  const start = calledToOrderAt ? Date.parse(calledToOrderAt) : null;
+  const moves = start === null
+    ? []
+    : [...presence]
+        .filter((p) => p.lot && Date.parse(p.at) > start)
+        .sort((a, b) => a.id - b.id)
+        .map((p) => ({ at: Date.parse(p.at), line: `${p.lot} ${isJoin(p.event) ? "joined" : "left"} the meeting at ${time(p.at)}.` }));
+  // Who ran the meeting, when it changed hands (0079).
+  const hands = handovers.map((h) => ({
+    at: Date.parse(h.at),
+    line: h.kind === "took_over" ? `${h.toName} took over running the meeting at ${time(h.at)}.` : `${h.fromName} handed the meeting to ${h.toName} at ${time(h.at)}.`,
+  }));
+  // Stable: joins and leaves keep their order; a handover goes where its time puts it.
+  return [...moves, ...hands].map((e, i) => ({ ...e, i })).sort((a, b) => a.at - b.at || a.i - b.i).map((e) => e.line);
 }

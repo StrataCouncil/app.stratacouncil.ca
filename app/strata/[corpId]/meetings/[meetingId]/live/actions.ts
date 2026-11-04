@@ -21,7 +21,7 @@ const DECISION_TYPES: readonly string[] = ["MAJORITY", "THREE_QUARTER", "EIGHTY_
 /** The database's own message when it's one written for people; otherwise a general one. */
 function failFrom(error: { message: string; code?: string } | null, fallback: string): Fail {
   const msg = error?.message ?? "";
-  const ours = /^(Only|This vote|Another vote|Call the meeting|That |Write the motion|Choose|No council|No quorum|Live voting|Conflicts|Declare a conflict|Describe the conflict|Unknown|What's shown)/.test(msg);
+  const ours = /^(Only|This meeting|Choose who|Join the meeting|The person running|This vote|Another vote|Call the meeting|That |Write the motion|Choose|No council|No quorum|Live voting|Conflicts|Declare a conflict|Describe the conflict|Unknown|What's shown)/.test(msg);
   if (!ours) console.error("[live voting]", error?.code, msg);
   return { ok: false, error: ours ? msg : fallback };
 }
@@ -30,16 +30,33 @@ function failFrom(error: { message: string; code?: string } | null, fallback: st
 export async function getLiveState(meetingId: string): Promise<LiveState | null> {
   if (!UUID.test(meetingId)) return null;
   const supabase = await createClient();
-  const [{ data, error }, { data: row }] = await Promise.all([
+  const [{ data, error }, { data: row }, { data: handover }] = await Promise.all([
     supabase.rpc("live_meeting_state", { p_meeting_id: meetingId }),
-    supabase.from("meetings").select("presenting").eq("id", meetingId).maybeSingle(),
+    supabase.from("meetings").select("presenting, runner_seen_at, launched_at").eq("id", meetingId).maybeSingle(),
+    supabase.from("meeting_handovers").select("to_user, from_name, to_name, kind, at").eq("meeting_id", meetingId).order("id", { ascending: false }).limit(1).maybeSingle(),
   ]);
   if (error) {
     console.error("[getLiveState]", error.code, error.message);
     return null;
   }
   const state = parseLiveState(data);
-  return state && { ...state, presenting: parsePresenting(row?.presenting) };
+  return (
+    state && {
+      ...state,
+      presenting: parsePresenting(row?.presenting),
+      // Never checked in: counted from the launch, as the database does.
+      runnerSeenAt: ((row?.runner_seen_at ?? row?.launched_at) as string | null) ?? null,
+      lastHandover: handover
+        ? {
+            toUser: handover.to_user as string,
+            fromName: (handover.from_name as string) || "Someone",
+            toName: (handover.to_name as string) || "Someone",
+            kind: handover.kind === "took_over" ? "took_over" : "handed_over",
+            at: handover.at as string,
+          }
+        : null,
+    }
+  );
 }
 
 export async function openVote(meetingId: string, itemId: string, motion: string, decisionType: string): Promise<Ok<{ voteId: string }> | Fail> {
@@ -166,4 +183,28 @@ export async function showToEveryone(meetingId: string, itemId: string | null, a
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("set_meeting_presenting", { p_meeting_id: meetingId, p_item_id: itemId, p_att_id: attId });
   return error ? failFrom(error, "Couldn't show that. Try again.") : { ok: true, presenting: parsePresenting(data) };
+}
+
+/** The Runner's screen checks in every 20 seconds (0079). */
+export async function runnerCheckIn(meetingId: string): Promise<void> {
+  if (!UUID.test(meetingId)) return;
+  const supabase = await createClient();
+  await supabase.rpc("runner_check_in", { p_meeting_id: meetingId });
+}
+
+/** Hands the meeting to someone in it who can run meetings (0079). */
+export async function handOverMeeting(meetingId: string, toUser: string): Promise<Ok | Fail> {
+  if (!UUID.test(meetingId) || !UUID.test(toUser)) return { ok: false, error: "Choose who takes over." };
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("hand_over_meeting", { p_meeting_id: meetingId, p_to: toUser });
+  if (error?.message.includes("can't run meetings")) return { ok: false, error: "That person can't run meetings." };
+  return error ? failFrom(error, "Couldn't hand the meeting over. Try again.") : { ok: true };
+}
+
+/** Takes over a meeting whose Runner has lost connection for 2 minutes (0079). */
+export async function takeOverMeeting(meetingId: string): Promise<Ok | Fail> {
+  if (!UUID.test(meetingId)) return { ok: false, error: "That meeting isn't available." };
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("take_over_meeting", { p_meeting_id: meetingId });
+  return error ? failFrom(error, "Couldn't take over the meeting. Try again.") : { ok: true };
 }
