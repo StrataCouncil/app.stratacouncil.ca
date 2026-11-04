@@ -444,32 +444,18 @@ export function MeetingMode(props: {
       return openVote(meetingId, it.id, m.text, effectiveDecisionType(type, m.dt));
     });
   }
-  // Close vote opens the record box; the vote only closes when it's recorded.
+  // Close vote opens the confirm box; the vote only closes when it's confirmed. Deferring is
+  // the alternative to holding a vote, offered beside Open vote.
   const [recording, setRecording] = useState<{ itemId: string; vote: OpenVote; tieBreak: "for" | "against" | null } | null>(null);
   function finishVote(it: AgendaItem, vote: OpenVote) {
     setLiveError(null);
     setRecording({ itemId: it.id, vote, tieBreak: null });
   }
-  /** Defer without asking (the record box already asked). */
-  function deferNow(itemId: string) {
-    const next = renumber(agenda.map((i) => (i.id === itemId ? { ...i, deferred: true } : i)));
-    setAgenda(next);
-    goNext(itemId, next);
-  }
-  async function recordTheVote(outcome: "decide" | "defer") {
+  async function recordTheVote() {
     if (!recording) return;
     const it = agenda.find((i) => i.id === recording.itemId);
     if (!it?.motion) return setRecording(null);
     const { vote, tieBreak } = recording;
-    if (outcome === "defer") {
-      // The vote is cancelled (its ballots stay in the log) and the item deferred.
-      const ok = await liveStep(() => cancelVote(vote.id));
-      if (ok) {
-        setRecording(null);
-        deferNow(it.id);
-      }
-      return;
-    }
     let decided: { counts: { for: number; against: number; abstain: number }; present: number } | null = null;
     const ok = await liveStep(async () => {
       const r = await closeVote(vote.id);
@@ -931,7 +917,7 @@ export function MeetingMode(props: {
           return (
             <div className="modal-backdrop" role="presentation">
               <div className="modal" role="alertdialog" aria-modal="true" aria-labelledby="record-title" data-testid="mm-record-vote">
-                <h2 id="record-title">{outcome === "CARRIED" ? "Motion carried" : "Motion defeated"}</h2>
+                <h2 id="record-title">{ballots.length === 0 ? "No votes yet" : outcome === "CARRIED" ? "Motion carried" : "Motion defeated"}</h2>
                 <p>&ldquo;{it.text}&rdquo;</p>
                 <p>
                   Moved by {it.motion.mover}, seconded by {it.motion.sec}.<br />
@@ -954,24 +940,22 @@ export function MeetingMode(props: {
                 )}
                 <p className="card__meta">
                   Council decisions need a majority of the {v0.eligibleLots.length} council {v0.eligibleLots.length === 1 ? "member" : "members"} present
-                  (Standard Bylaws 18(1)), so an abstention counts like a vote against. Until you record it, you can go back and change votes.
+                  (Standard Bylaws 18(1)), so an abstention counts like a vote against. Until you confirm it, you can go back and change votes.
                 </p>
                 {liveError && <p className="form-error" role="alert">{liveError}</p>}
                 <div className="modal__actions">
                   <button type="button" className="button button-secondary" onClick={() => setRecording(null)} disabled={liveBusy} data-testid="mm-record-back">
-                    Back to the vote
-                  </button>
-                  <button type="button" className="button button-secondary" onClick={() => void recordTheVote("defer")} disabled={liveBusy} data-testid="mm-record-defer">
-                    Record as DEFERRED
+                    Back
                   </button>
                   <button
                     type="button"
                     className={`button ${outcome === "CARRIED" ? "button-primary" : "button-danger"}`}
-                    onClick={() => void recordTheVote("decide")}
-                    disabled={liveBusy}
+                    onClick={() => void recordTheVote()}
+                    disabled={liveBusy || ballots.length === 0}
+                    title={ballots.length === 0 ? "Nobody has voted yet." : undefined}
                     data-testid="mm-record-outcome"
                   >
-                    Record as {outcome}
+                    Confirm as {outcome}
                   </button>
                 </div>
               </div>

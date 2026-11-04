@@ -116,9 +116,10 @@ current to 2026-10-20); both are in the Knowledge Base.
    someone has voted Against on their own screen. Each item has a
    collapsed Procedure (introduce, conflicts, motion, discussion, open the
    vote, close and record), and buttons stay off until their step is
-   reached. Close vote opens a box with the result: record it as carried
-   or defeated, as deferred, or go back to the vote (it only closes when
-   recorded). A deferred item is voted on afresh. Losing quorum shows on every screen and locks votes and
+   reached. Defer is offered instead of opening a vote. Close vote opens a
+   box with the result: confirm it as carried or defeated, or go back to
+   the vote (it only closes when confirmed). A deferred item is voted on
+   afresh. Losing quorum shows on every screen and locks votes and
    decisions until it's back; the operator can wait, defer or adjourn.
    Attachments: Share on screen (0076) puts one on every member's screen
    over the agenda, independent of Zoom.
