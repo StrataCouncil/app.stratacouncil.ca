@@ -2,11 +2,11 @@ import { decisionTypeLabels, isAdjournment, isElectChair, isNextMeeting, type Ag
 import { takesConflicts } from "./live.ts";
 
 /**
- * The Runner's steps for an agenda item, in order (Meeting Mode). Each step
- * is ticked from what's on screen (a motion with a mover and seconder, an
- * open or closed vote, the item decided), or by hand for the ones nothing
- * records (introducing the item, discussion). A step done implies every
- * step before it is too. "say" is optional wording, shown only if asked for.
+ * The Runner's steps for an agenda item, in order (Meeting Mode): a list
+ * to follow, never something to click through. Steps tick themselves from
+ * what's on screen (a motion with a mover and seconder, an open or closed
+ * vote, the item decided); a step done ticks every step before it too.
+ * "hint" and "say" (optional wording) sit collapsed under each step.
  */
 
 export type StepId =
@@ -30,15 +30,11 @@ export interface Step {
   hint: string;
   /** Optional wording for the chair. */
   say: string | null;
-  /** Ticked by hand: nothing on screen records it. */
-  manual: boolean;
   done: boolean;
 }
 
 export interface StepState {
   general: boolean;
-  /** Steps ticked by hand on this item. */
-  acked: ReadonlySet<string>;
   voteOpen: boolean;
   voteClosed: boolean;
 }
@@ -48,12 +44,13 @@ export const usesLiveVoting = (it: AgendaItem, general: boolean) => !general && 
 
 export function itemSteps(it: AgendaItem, s: StepState): Step[] {
   const m = it.motion;
-  const manual = (id: StepId, label: string, hint: string, say: string | null = null): Step => ({ id, label, hint, say, manual: true, done: s.acked.has(id) });
-  const auto = (id: StepId, label: string, hint: string, done: boolean, say: string | null = null): Step => ({ id, label, hint, say, manual: false, done });
+  // Nothing on screen records these; they tick once a later step is done.
+  const manual = (id: StepId, label: string, hint: string, say: string | null = null): Step => ({ id, label, hint, say, done: false });
+  const auto = (id: StepId, label: string, hint: string, done: boolean, say: string | null = null): Step => ({ id, label, hint, say, done });
   const introduce = manual(
     "introduce",
     "Introduce the item",
-    "Present the background, financial implications and risks. Use Show to everyone to put an attachment on everyone's screen.",
+    "Present the background, financial implications and risks. Use Share on screen to put an attachment on everyone's screen.",
     `"Next is ${it.text}."`
   );
   const steps: Step[] = [];

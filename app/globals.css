@@ -9276,9 +9276,14 @@ a.kb-card:hover {
   margin: 0.2rem 0 0;
   font-size: 0.9rem;
 }
-.mm-steps__say-toggle {
-  font-size: 0.85rem;
-  margin-top: 0.25rem;
+.mm-steps__body summary {
+  cursor: pointer;
+  font-weight: 600;
+  list-style-position: outside;
+}
+.mm-steps__step {
+  padding-top: 0.35rem;
+  padding-bottom: 0.35rem;
 }
 .mm-steps__say {
   margin: 0.35rem 0 0;

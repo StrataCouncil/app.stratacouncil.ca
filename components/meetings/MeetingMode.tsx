@@ -127,8 +127,6 @@ export function MeetingMode(props: {
   const [confirm, setConfirm] = useState<Confirm>(null);
   const [editing, setEditing] = useState<AgendaItem | null>(null);
   const [panel, setPanel] = useState<"none" | "agenda" | "assistant">("none");
-  // Steps ticked by hand, per item (introducing it, discussion).
-  const [acked, setAcked] = useState<Record<string, string[]>>({});
   // The shared attachment, hidden on this screen (by when it was shown).
   const [hiddenShow, setHiddenShow] = useState<string | null>(null);
   // A lot the runner is marking as having left (typed confirmation).
@@ -618,12 +616,12 @@ export function MeetingMode(props: {
 
       {live?.presenting && hiddenShow === live.presenting.at && (
         <div className="mm__alert mm__alert--showing" role="status" data-testid="mm-showing-bar">
-          Showing everyone: <strong>{live.presenting.title || "an attachment"}</strong>{" "}
+          Sharing on screen: <strong>{live.presenting.title || "an attachment"}</strong>{" "}
           <button type="button" className="link-button" onClick={() => setHiddenShow(null)}>
             View
           </button>{" "}
           <button type="button" className="link-button" onClick={() => void show(null, null)} disabled={liveBusy}>
-            Stop showing
+            Stop sharing
           </button>
         </div>
       )}
@@ -828,8 +826,6 @@ export function MeetingMode(props: {
               voters={votersFor(item)}
               voteCtx={ctxFor(item)}
               quorumMet={q.met}
-              acked={new Set(acked[item.id] ?? [])}
-              onAck={(id) => setAcked((a) => ({ ...a, [item.id]: [...new Set([...(a[item.id] ?? []), id])] }))}
               presenting={live?.presenting ?? null}
               onShow={(attId) => void show(attId ? item : null, attId)}
               live={
@@ -1051,10 +1047,9 @@ function Script({ title, lines }: { title: string; lines: string[] }) {
   );
 }
 
-/** The Runner's steps for the item, in order; the current one says what to do. */
-function StepList({ steps, onAck }: { steps: Step[]; onAck: (id: string) => void }) {
+/** The Runner's steps for the item, in order: a list to follow. Each opens to what to do and what to say. */
+function StepList({ steps }: { steps: Step[] }) {
   const cur = currentStep(steps);
-  const [say, setSay] = useState(false);
   return (
     <ol className="mm-steps" data-testid="mm-steps" aria-label="Steps for this item">
       {steps.map((st, i) => (
@@ -1062,26 +1057,14 @@ function StepList({ steps, onAck }: { steps: Step[]; onAck: (id: string) => void
           <span className="mm-steps__mark" aria-hidden="true">
             {st.done ? <Tick /> : i + 1}
           </span>
-          <div className="mm-steps__body">
-            <strong>{st.label}</strong>
-            <span className="visually-hidden">{st.done ? " (done)" : i === cur ? " (now)" : ""}</span>
-            {i === cur && (
-              <>
-                <p className="mm-steps__hint">{st.hint}</p>
-                {st.say && (
-                  <button type="button" className="link-button mm-steps__say-toggle" onClick={() => setSay((v) => !v)} aria-expanded={say}>
-                    {say ? "Hide what to say" : "What to say"}
-                  </button>
-                )}
-                {say && st.say && <p className="mm-steps__say">{st.say}</p>}
-              </>
-            )}
-          </div>
-          {i === cur && st.manual && (
-            <button type="button" className="button button-secondary button-small" onClick={() => onAck(st.id)} data-testid={`mm-step-done-${st.id}`}>
-              Done
-            </button>
-          )}
+          <details className="mm-steps__body">
+            <summary>
+              {st.label}
+              <span className="visually-hidden">{st.done ? " (done)" : ""}</span>
+            </summary>
+            <p className="mm-steps__hint">{st.hint}</p>
+            {st.say && <p className="mm-steps__say">{st.say}</p>}
+          </details>
         </li>
       ))}
     </ol>
@@ -1098,9 +1081,6 @@ function ItemPanel(props: {
   voters: number;
   voteCtx: VoteContext;
   quorumMet: boolean;
-  /** Steps ticked by hand on this item. */
-  acked: ReadonlySet<string>;
-  onAck: (step: string) => void;
   /** What's being shown to everyone (0076). */
   presenting: Presenting | null;
   /** Show an attachment to everyone, or stop (null). */
@@ -1147,7 +1127,6 @@ function ItemPanel(props: {
   const liveVoting = usesLiveVoting(it, props.general);
   const steps = itemSteps(it, {
     general: props.general,
-    acked: props.acked,
     voteOpen: Boolean(live?.vote),
     voteClosed: Boolean(m?.voteId),
   });
@@ -1214,56 +1193,7 @@ function ItemPanel(props: {
         <p className="mm__alert">The meeting hasn&rsquo;t been called to order yet. Nothing can be decided until it is.</p>
       )}
 
-      <StepList steps={steps} onAck={props.onAck} />
-
-      {!isNextMeeting(it) && !isAdjournment(it) && (it.background || it.financial || it.risks) && (
-        <div className="mm-details">
-          {it.background && <Detail title="Background / rationale" body={it.background} />}
-          {it.financial && <Detail title="Financial implications" body={it.financial} />}
-          {it.risks && <Detail title="Risks / compliance" body={it.risks} />}
-        </div>
-      )}
-
-      {it.atts.length > 0 && (
-        <div className="mm-details">
-          <h3 className="mm-subhead">Attachments</h3>
-          <ul className="attachment-list">
-            {it.atts.map((a) => (
-              <li key={a.id}>
-                <span className="pill">{a.kind === "link" ? "Link" : "File"}</span>
-                <button type="button" className="link-button" onClick={() => openAttachment(a.documentId, a.kind === "link" ? a.url : undefined)}>
-                  {a.title}
-                </button>
-                {props.called &&
-                  (props.presenting?.itemId === it.id && props.presenting.attId === a.id ? (
-                    <button type="button" className="button button-primary button-small" onClick={() => props.onShow(null)} data-testid={`mm-stop-showing-${a.id}`}>
-                      Stop showing
-                    </button>
-                  ) : (
-                    <button type="button" className="button button-secondary button-small" onClick={() => props.onShow(a.id)} data-testid={`mm-show-${a.id}`}>
-                      Show to everyone
-                    </button>
-                  ))}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {isNextMeeting(it) && (
-        <div className="field-grid">
-          {(["date", "time", "location"] as const).map((f) => (
-            <label className={`field${f === "location" ? " field--wide" : ""}`} key={f}>
-              <span>{f === "date" ? "Next meeting date" : f === "time" ? "Time" : "Location or link"}</span>
-              <input
-                type={f === "date" ? "date" : f === "time" ? "time" : "text"}
-                value={it.nextMeeting?.[f] ?? ""}
-                onChange={(e) => onPatch({ nextMeeting: { date: "", time: "", location: "", ...it.nextMeeting, [f]: e.target.value } })}
-              />
-            </label>
-          ))}
-        </div>
-      )}
+      <StepList steps={steps} />
 
       {m && isElectChair(it) && (
         <label className="field">
@@ -1287,21 +1217,6 @@ function ItemPanel(props: {
           </datalist>
           <span className="field__hint">Once the motion carries, this person chairs the meeting and is named in the minutes.</span>
         </label>
-      )}
-
-      {live && props.called && !it.done && takesConflicts(it.text) && (
-        <ConflictsPanel
-          conflicts={live.conflicts}
-          present={live.allPresent}
-          names={props.names}
-          canEdit
-          busy={live.busy}
-          onDeclare={live.onDeclare}
-          onWithdraw={live.onWithdraw}
-        />
-      )}
-      {live && it.done && live.conflicts.length > 0 && (
-        <ConflictsPanel conflicts={live.conflicts} present={[]} names={props.names} canEdit={false} busy onDeclare={() => {}} onWithdraw={() => {}} />
       )}
 
       {m && (
@@ -1432,6 +1347,70 @@ function ItemPanel(props: {
               <p className="card__meta">Tied vote. With only 2 strata lots there is no deciding vote, so the tie stands.</p>
             )
           )}
+        </div>
+      )}
+
+      {live && props.called && !it.done && takesConflicts(it.text) && (
+        <ConflictsPanel
+          conflicts={live.conflicts}
+          present={live.allPresent}
+          names={props.names}
+          canEdit
+          busy={live.busy}
+          onDeclare={live.onDeclare}
+          onWithdraw={live.onWithdraw}
+        />
+      )}
+      {live && it.done && live.conflicts.length > 0 && (
+        <ConflictsPanel conflicts={live.conflicts} present={[]} names={props.names} canEdit={false} busy onDeclare={() => {}} onWithdraw={() => {}} />
+      )}
+
+      {!isNextMeeting(it) && !isAdjournment(it) && (it.background || it.financial || it.risks) && (
+        <div className="mm-details">
+          {it.background && <Detail title="Background / rationale" body={it.background} />}
+          {it.financial && <Detail title="Financial implications" body={it.financial} />}
+          {it.risks && <Detail title="Risks / compliance" body={it.risks} />}
+        </div>
+      )}
+
+      {it.atts.length > 0 && (
+        <div className="mm-details">
+          <h3 className="mm-subhead">Attachments</h3>
+          <ul className="attachment-list">
+            {it.atts.map((a) => (
+              <li key={a.id}>
+                <span className="pill">{a.kind === "link" ? "Link" : "File"}</span>
+                <button type="button" className="link-button" onClick={() => openAttachment(a.documentId, a.kind === "link" ? a.url : undefined)}>
+                  {a.title}
+                </button>
+                {props.called &&
+                  (props.presenting?.itemId === it.id && props.presenting.attId === a.id ? (
+                    <button type="button" className="button button-primary button-small" onClick={() => props.onShow(null)} data-testid={`mm-stop-showing-${a.id}`}>
+                      Stop sharing
+                    </button>
+                  ) : (
+                    <button type="button" className="button button-secondary button-small" onClick={() => props.onShow(a.id)} data-testid={`mm-show-${a.id}`}>
+                      Share on screen
+                    </button>
+                  ))}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {isNextMeeting(it) && (
+        <div className="field-grid">
+          {(["date", "time", "location"] as const).map((f) => (
+            <label className={`field${f === "location" ? " field--wide" : ""}`} key={f}>
+              <span>{f === "date" ? "Next meeting date" : f === "time" ? "Time" : "Location or link"}</span>
+              <input
+                type={f === "date" ? "date" : f === "time" ? "time" : "text"}
+                value={it.nextMeeting?.[f] ?? ""}
+                onChange={(e) => onPatch({ nextMeeting: { date: "", time: "", location: "", ...it.nextMeeting, [f]: e.target.value } })}
+              />
+            </label>
+          ))}
         </div>
       )}
 

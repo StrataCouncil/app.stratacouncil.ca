@@ -156,7 +156,7 @@ export function LiveMeeting(props: {
       )}
       {state.presenting && hiddenShow === state.presenting.at && !adjourned && (
         <div className="mm__alert mm__alert--showing" role="status">
-          Shown to everyone: <strong>{state.presenting.title || "an attachment"}</strong>{" "}
+          Shared on screen: <strong>{state.presenting.title || "an attachment"}</strong>{" "}
           <button type="button" className="link-button" onClick={() => setHiddenShow(null)} data-testid="live-show-again">
             View
           </button>
@@ -216,9 +216,14 @@ export function LiveMeeting(props: {
               </p>
             </section>
           ) : (
-            <ItemView item={item} names={props.names} conflicted={conflicted} voteOpen={state.openVote?.itemId === item.id} onOpenAttachment={openAttachment} />
-          )}
-
+            <ItemView
+              item={item}
+              names={props.names}
+              conflicted={conflicted}
+              voteOpen={state.openVote?.itemId === item.id}
+              onOpenAttachment={openAttachment}
+              afterMotion={
+                <>
           {item && m && !iAmConflicted && (
             <section className="mm-panel live__vote">
               {openHere ? (
@@ -254,6 +259,11 @@ export function LiveMeeting(props: {
               · you&rsquo;ll step out of the meeting for this item and won&rsquo;t vote on it (SPA s.32)
             </p>
           )}
+                </>
+              }
+            />
+          )}
+
         </main>
 
         <MeetingSide
@@ -315,6 +325,8 @@ function ItemView(p: {
   conflicted: string[];
   voteOpen: boolean;
   onOpenAttachment: (id: string | null, url?: string) => void;
+  /** The vote and the conflict link, right under the motion. */
+  afterMotion?: React.ReactNode;
 }) {
   const who = (lot: string) => (p.names[lot] ? `${lot} · ${p.names[lot]}` : lot);
   const it = p.item;
@@ -333,6 +345,18 @@ function ItemView(p: {
           </div>
         </div>
       </div>
+      {it.motion && (
+        <>
+          <h3 className="mm-subhead">Motion</h3>
+          <div className="live__motion">{it.motion.text || <span className="card__meta">The motion will appear here.</span>}</div>
+          {(it.motion.mover || it.motion.sec) && (
+            <p className="card__meta">
+              {it.motion.mover && <>Moved by {who(it.motion.mover)}</>}
+              {it.motion.mover && it.motion.sec && " · "}
+              {it.motion.sec && <>Seconded by {who(it.motion.sec)}</>}
+            </p>
+          )}
+      {p.afterMotion}
       {(it.background || it.financial || it.risks) && (
         <div className="mm-details">
           {it.background && (
@@ -379,17 +403,6 @@ function ItemView(p: {
           ))}
         </div>
       )}
-      {it.motion && (
-        <>
-          <h3 className="mm-subhead">Motion</h3>
-          <div className="live__motion">{it.motion.text || <span className="card__meta">The motion will appear here.</span>}</div>
-          {(it.motion.mover || it.motion.sec) && (
-            <p className="card__meta">
-              {it.motion.mover && <>Moved by {who(it.motion.mover)}</>}
-              {it.motion.mover && it.motion.sec && " · "}
-              {it.motion.sec && <>Seconded by {who(it.motion.sec)}</>}
-            </p>
-          )}
         </>
       )}
     </section>
