@@ -63,7 +63,10 @@ export function MeetingSide(props: {
           <ul className="mm-here">
             {here.map((p) => (
               <li key={p.userId ?? p.lot ?? p.id}>
-                <span>{p.lot ? `${p.lot} · ${props.names[p.lot] || p.name}` : `${p.name} (no vote)`}</span>
+                <span>
+                  {p.lot ? `${p.lot} · ${props.names[p.lot] || p.name}` : `${p.name} (no vote)`}
+                  {p.event === "marked_joined" && <span className="card__meta"> (added by runner)</span>}
+                </span>
                 <span className="card__meta">since {clock(p.at)}</span>
               </li>
             ))}

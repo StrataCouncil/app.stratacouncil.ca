@@ -20,14 +20,32 @@ test("in the meeting: each person's latest event decides, and anyone can rejoin"
 
 test("presence the runner hasn't seen is applied to attendance, once", () => {
   const presence = [ev(1, "SL001", "joined", "t"), ev(2, "SL002", "joined", "t"), ev(3, "SL001", "left", "t"), ev(4, null, "joined", "t", "manager")];
-  const r = applyPresence({ SL009: "regrets" }, presence, 0);
+  const r = applyPresence({ SL009: "regrets" }, presence, 0, "2000-01-01T00:00:00Z");
   assert.deepEqual(r.attendance, { SL009: "regrets", SL001: "left", SL002: "present" });
   assert.equal(r.lastId, 4);
   assert.equal(r.changed, true);
   // Seen already: the runner's own changes since then stand.
-  const again = applyPresence({ ...r.attendance, SL002: "regrets" }, presence, r.lastId);
+  const again = applyPresence({ ...r.attendance, SL002: "regrets" }, presence, r.lastId, "2000-01-01T00:00:00Z");
   assert.equal(again.changed, false);
   assert.equal(again.attendance.SL002, "regrets");
+});
+
+test("the runner marking someone present counts like joining online, one line per lot", () => {
+  const presence = [
+    ev(1, "SL005", "marked_joined", "2026-11-04T19:20:00Z", "u5"),
+    ev(2, "SL005", "joined", "2026-11-04T19:25:00Z", "u5"),
+    ev(3, "SL006", "marked_joined", "2026-11-04T19:26:00Z", null as never),
+  ];
+  assert.deepEqual(applyPresence({}, presence, 0, "2026-11-04T19:00:00Z").attendance, { SL005: "present", SL006: "present" });
+  assert.deepEqual(inMeeting(presence).map((p) => [p.lot, p.event]), [["SL005", "joined"], ["SL006", "marked_joined"]]);
+  assert.deepEqual(movementLines(presence.slice(0, 1), "2026-11-04T19:00:00Z", (iso) => iso.slice(11, 16)), ["SL005 joined the meeting at 19:20."]);
+});
+
+test("leaving before Call to Order clears the lot; after it, they're recorded as left", () => {
+  const presence = [ev(1, "SL001", "joined", "2026-11-04T18:50:00Z"), ev(2, "SL001", "left", "2026-11-04T18:55:00Z")];
+  assert.deepEqual(applyPresence({}, presence, 0, null).attendance, {});
+  assert.deepEqual(applyPresence({}, presence, 0, "2026-11-04T19:00:00Z").attendance, {});
+  assert.deepEqual(applyPresence({}, presence, 0, "2026-11-04T18:52:00Z").attendance, { SL001: "left" });
 });
 
 test("leaving only changes a lot that was present", () => {

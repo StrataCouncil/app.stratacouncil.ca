@@ -136,3 +136,12 @@ export async function markLeft(meetingId: string, lot: string, confirm: string):
   if (error?.message.includes("isn't marked present")) return { ok: false, error: "That lot isn't marked present." };
   return error ? failFrom(error, "Couldn't mark them as having left. Try again.") : { ok: true };
 }
+
+/** The runner marks a council lot present (on the phone, in the room), at this time (0075). */
+export async function markJoined(meetingId: string, lot: string): Promise<Ok | Fail> {
+  if (!UUID.test(meetingId) || !LOT.test(lot)) return { ok: false, error: "That lot isn't on council." };
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("mark_joined_meeting", { p_meeting_id: meetingId, p_lot: lot });
+  if (error?.message.includes("isn't on council")) return { ok: false, error: "That lot isn't on council." };
+  return error ? failFrom(error, "Couldn't mark them present. Try again.") : { ok: true };
+}
