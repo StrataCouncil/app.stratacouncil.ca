@@ -18,7 +18,7 @@ const day = (iso: string) => new Date(`${iso.slice(0, 10)}T12:00:00Z`).toLocaleD
 export default async function DiscussionPage({ params }: { params: Promise<{ corpId: string; discussionId: string }> }) {
   const { corpId, discussionId } = await params;
   const access = await getStrataAccess(corpId);
-  if (!access?.isCouncil) notFound();
+  if (!access?.seesDiscussions) notFound();
   const d = await getDiscussion(corpId, discussionId);
   if (!d) notFound();
 
@@ -120,7 +120,11 @@ export default async function DiscussionPage({ params }: { params: Promise<{ cor
         <aside className="discussion-side">
           {open && d.mine && <VotePanel corpId={corpId} discussionId={d.id} current={d.mine.vote} />}
           {open && !d.mine && (
-            <p className="card discussion-note">You joined council after this discussion opened, so you can follow it but not vote.</p>
+            <p className="card discussion-note">
+              {access.isCouncil
+                ? "You joined council after this discussion opened, so you can follow it but not vote."
+                : "Only council members vote. You can follow the discussion and comment."}
+            </p>
           )}
 
           <section className="card discussion-tally" data-testid="discussion-tally">

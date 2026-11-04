@@ -26,6 +26,8 @@ export interface DiscussionSummary {
   /** Votes cast so far, of the voters (visible counts only, for anyone recused). */
   voted: number;
   voters: number;
+  /** Your own vote: undefined when you aren't a voter on it, null when you haven't voted yet. */
+  myVote?: DiscussionVote | null;
 }
 
 export interface DiscussionVoter {
@@ -94,10 +96,12 @@ export async function discussionsOnPendingAgendas(corpId: string, client?: Clien
 
 export async function listDiscussions(corpId: string): Promise<DiscussionSummary[]> {
   const supabase = await createClient();
-  const [{ data, error }, { data: voters }] = await Promise.all([
+  const [{ data, error }, { data: voters }, { data: auth }] = await Promise.all([
     supabase.from("discussions").select(COLUMNS).eq("corporation_id", corpId).order("created_at", { ascending: false }),
-    supabase.from("discussion_voters").select("discussion_id, vote"),
+    supabase.from("discussion_voters").select("discussion_id, user_id, vote"),
+    supabase.auth.getUser(),
   ]);
+  const me = auth.user?.id ?? null;
   if (error) console.error("[listDiscussions]", error.message);
   return (data ?? []).map((d) => {
     const mine = (voters ?? []).filter((v) => v.discussion_id === d.id);
@@ -113,6 +117,8 @@ export async function listDiscussions(corpId: string): Promise<DiscussionSummary
       ratifiedAt: d.ratified_at,
       voted: mine.filter((v) => v.vote).length,
       voters: mine.length,
+      // Your own vote: undefined when you aren't a voter, null when you haven't voted.
+      myVote: me && mine.some((v) => v.user_id === me) ? ((mine.find((v) => v.user_id === me)?.vote as DiscussionVote | null) ?? null) : undefined,
     };
   });
 }

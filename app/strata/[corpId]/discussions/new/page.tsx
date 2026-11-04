@@ -10,7 +10,7 @@ import { getStrataAccess } from "@/lib/data/strata";
 export default async function NewDiscussionPage({ params }: { params: Promise<{ corpId: string }> }) {
   const { corpId } = await params;
   const access = await getStrataAccess(corpId);
-  if (!access?.isCouncil) notFound();
+  if (!access?.seesDiscussions) notFound();
   const locked = !access.subscribed && (await listDiscussions(corpId)).length > 0;
   return (
     <>

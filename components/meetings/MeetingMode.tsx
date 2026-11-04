@@ -70,7 +70,7 @@ import {
  * assistant, and adjournment. Everything saves as it changes.
  */
 
-type Lot = { lot: string; name: string; isCouncil: boolean };
+type Lot = { lot: string; name: string; isCouncil: boolean; role?: string | null };
 type Turn = { role: "user" | "assistant"; content: string; error?: boolean };
 type Confirm = { title: string; body: React.ReactNode; confirmLabel: string; danger?: boolean; onConfirm: () => void } | null;
 
@@ -456,7 +456,9 @@ export function MeetingMode(props: {
     if (!recording) return;
     const it = agenda.find((i) => i.id === recording.itemId);
     if (!it?.motion) return setRecording(null);
-    const { vote, tieBreak } = recording;
+    const president = props.lots.find((l) => l.role === "president");
+    const { vote } = recording;
+    const tieBreak = president && vote.eligibleLots.includes(president.lot) ? recording.tieBreak : null;
     let decided: { counts: { for: number; against: number; abstain: number }; present: number } | null = null;
     const ok = await liveStep(async () => {
       const r = await closeVote(vote.id);
@@ -912,7 +914,11 @@ export function MeetingMode(props: {
           const preview = { ...it.motion, for: count("for"), against: count("against"), abstain: count("abstain") + missing, tieBreak: recording.tieBreak };
           const ctx = { ...ctxFor(it), present: v0.eligibleLots.length };
           const v = evaluateVote(preview, ctx);
-          const tie = isTie(preview) && tieBreakAllowed(preview, ctx);
+          // Only the president casts a deciding vote, and only when voting on this item (Standard Bylaws 18(2)).
+          const president = props.lots.find((l) => l.role === "president");
+          const presidentVoting = Boolean(president && v0.eligibleLots.includes(president.lot));
+          const tied = isTie(preview) && tieBreakAllowed(preview, ctx);
+          const tie = tied && presidentVoting;
           const outcome = v.passing ? "CARRIED" : "DEFEATED";
           return (
             <div className="modal-backdrop" role="presentation">
@@ -925,7 +931,9 @@ export function MeetingMode(props: {
                 </p>
                 {tie && (
                   <label className="field" data-testid="mm-record-tie-break">
-                    <span>Tied vote: president&rsquo;s deciding vote</span>
+                    <span>
+                      Tied vote: {president!.name ? `${president!.name} (${president!.lot})` : president!.lot}, president, may cast a deciding vote
+                    </span>
                     <select
                       value={recording.tieBreak ?? ""}
                       onChange={(e) => setRecording({ ...recording, tieBreak: e.target.value === "for" || e.target.value === "against" ? e.target.value : null })}
@@ -934,8 +942,16 @@ export function MeetingMode(props: {
                       <option value="for">In favour</option>
                       <option value="against">Against</option>
                     </select>
-                    <span className="field__hint">The president may break a tie with a second, deciding vote (Standard Bylaws 18(2)), if your bylaws allow it.</span>
+                    <span className="field__hint">
+                      Their first vote is already counted above; this is a second, optional vote that breaks the tie (Standard Bylaws 18(2)), if your bylaws
+                      allow it.
+                    </span>
                   </label>
+                )}
+                {tied && !presidentVoting && (
+                  <p className="card__meta" data-testid="mm-record-no-tie-break">
+                    Tied vote. The president isn&rsquo;t voting on this item, so there&rsquo;s no deciding vote and the tie stands.
+                  </p>
                 )}
                 <p className="card__meta">
                   Council decisions need a majority of the {v0.eligibleLots.length} council {v0.eligibleLots.length === 1 ? "member" : "members"} present

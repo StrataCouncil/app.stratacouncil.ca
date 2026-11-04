@@ -333,12 +333,32 @@ export function discussionClosedEmail(params: { corporationName: string; title: 
 }
 
 /** To council and the manager when a meeting is launched (0074): join from the Meetings tab. */
-export function meetingStartedEmail(params: { corporationName: string; meetingLabel: string; runnerName: string; joinUrl: string }) {
+export function meetingStartedEmail(params: {
+  corporationName: string;
+  meetingLabel: string;
+  runnerName: string;
+  joinUrl: string;
+  /** The agenda, read-only (signing in first). */
+  agendaUrl: string;
+  /** The meeting's location or link, if one was set. */
+  location: string | null;
+}) {
+  const loc = params.location?.trim() || null;
+  const locIsLink = Boolean(loc && /^https?:\/\//i.test(loc));
+  const locHtml = loc
+    ? `<p style="margin:0 0 8px;font-size:14px;color:${INK};">${locIsLink ? "Meeting link" : "Where"}: ${
+        locIsLink ? `<a href="${escapeHtml(loc)}" style="color:${INK};">${escapeHtml(loc)}</a>` : escapeHtml(loc)
+      }</p>`
+    : "";
   const html = wrap(`
     <p style="margin:0 0 16px;font-size:16px;color:${INK};">The ${escapeHtml(params.meetingLabel.toLowerCase())} for <strong>${escapeHtml(params.corporationName)}</strong> has started${params.runnerName ? `, run by ${escapeHtml(params.runnerName)}` : ""}.</p>
+    ${locHtml}
     <p style="margin:0 0 8px;font-size:14px;color:${MUTED};">Join to follow the agenda and vote. Joining records your attendance.</p>
     ${button(params.joinUrl, "Join the meeting")}
+    <p style="margin:16px 0 0;font-size:14px;color:${MUTED};"><a href="${escapeHtml(params.agendaUrl)}" style="color:${INK};">View the agenda</a></p>
   `);
-  const text = `The ${params.meetingLabel.toLowerCase()} for ${params.corporationName} has started${params.runnerName ? `, run by ${params.runnerName}` : ""}.\n\nJoin to follow the agenda and vote. Joining records your attendance:\n\n${params.joinUrl}`;
+  const text = `The ${params.meetingLabel.toLowerCase()} for ${params.corporationName} has started${params.runnerName ? `, run by ${params.runnerName}` : ""}.${
+    loc ? `\n\n${locIsLink ? "Meeting link" : "Where"}: ${loc}` : ""
+  }\n\nJoin to follow the agenda and vote. Joining records your attendance:\n\n${params.joinUrl}\n\nView the agenda:\n\n${params.agendaUrl}`;
   return { subject: `${params.meetingLabel} has started: ${params.corporationName}`, html, text };
 }

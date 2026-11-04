@@ -6,6 +6,10 @@ import { acceptedExtensions, fileExtension, MAX_DOCUMENT_BYTES } from "@/lib/doc
 import { DISCUSSION_FILES_BUCKET, emailCouncil, fileDiscussionRecord } from "@/lib/discussions/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { getStrataAccess } from "@/lib/data/strata";
+import { draftMotionText } from "@/lib/ai/draft-motion";
+import { IS_DEMO, demoLimitFail, type DemoLimitFail } from "@/lib/demo";
+import { logDemoActivity, refundDemoAllowance, takeDemoAllowance } from "@/lib/demo-usage";
 
 /**
  * Council discussions (0070). The database decides who may do what
@@ -33,6 +37,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 function reason(message: string, fallback: string) {
   const known = [
     "Only council",
+    "Only council members and those who run meetings",
     "Only the person",
     "free_discussion_used",
     "motion_locked",
@@ -241,4 +246,39 @@ export async function registerDiscussionFiles(
   }
   refresh(corpId, id);
   return { ok: true };
+}
+
+/**
+ * Draft a discussion's motion with Stratasphere, from its title and context
+ * fields (personal details swapped out first, as for agenda items). Nothing
+ * is saved: the draft lands in the motion field to edit.
+ */
+export async function draftDiscussionMotion(
+  corpId: string,
+  input: { title: string; background: string; financial: string; risks: string }
+): Promise<Ok<{ motionText: string }> | Fail | DemoLimitFail> {
+  const access = await getStrataAccess(corpId);
+  if (!access?.seesDiscussions) return { ok: false, error: "Only council members and those who run meetings can start a discussion." };
+  if (!access.subscribed && access.freeMeetingUsed) {
+    return { ok: false, error: "Drafting a motion uses Stratasphere AI, which needs a subscription." };
+  }
+  if (!String(input.title ?? "").trim()) return { ok: false, error: "Give the discussion a title first." };
+  if (IS_DEMO && !(await takeDemoAllowance("motions"))) {
+    await logDemoActivity({ kind: "limit", detail: { reason: "motion drafts" } });
+    return demoLimitFail();
+  }
+  const r = await draftMotionText(access.corpId, "council, voting on a motion between meetings", {
+    label: "Discussion",
+    text: String(input.title).slice(0, 500),
+    background: String(input.background ?? ""),
+    financial: String(input.financial ?? ""),
+    risks: String(input.risks ?? ""),
+    decisionType: "Majority of council",
+  });
+  if (!r.ok) {
+    if (IS_DEMO) await refundDemoAllowance("motions");
+    return r;
+  }
+  await logDemoActivity({ kind: "motion.drafted", detail: { item: input.title, motion: r.motionText } });
+  return r;
 }

@@ -2,7 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { createDiscussion, updateDiscussion, type DiscussionInput } from "@/app/strata/[corpId]/discussions/actions";
+import { createDiscussion, draftDiscussionMotion, updateDiscussion, type DiscussionInput } from "@/app/strata/[corpId]/discussions/actions";
+import { isDemoLimit, showDemoLimit } from "@/lib/demo-client";
 import { uploadDiscussionFiles } from "@/components/discussions/upload";
 
 /**
@@ -28,6 +29,16 @@ export function DiscussionForm({
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  const [drafting, setDrafting] = useState(false);
+  async function draftMotion() {
+    setDrafting(true);
+    setError(null);
+    const res = await draftDiscussionMotion(corpId, fields).catch(() => ({ ok: false as const, error: "Couldn't draft a motion. Try again, or write it by hand." }));
+    setDrafting(false);
+    if (isDemoLimit(res)) return showDemoLimit("motion drafts");
+    if (!res.ok) return setError(res.error);
+    setFields((f) => ({ ...f, motion: res.motionText }));
+  }
   const set = (k: keyof DiscussionInput) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setFields({ ...fields, [k]: e.target.value });
 
   const submit = (e: React.FormEvent) => {
@@ -77,12 +88,25 @@ export function DiscussionForm({
         <label className="field field--wide">
           <span>Motion</span>
           <textarea rows={3} value={fields.motion} onChange={set("motion")} maxLength={4000} required placeholder="THAT council obtain three quotes for roof replacement." data-testid="discussion-motion" />
-          <span className="field__hint">Once anyone has voted, the motion and its attachments can&rsquo;t be changed.</span>
+          <span className="field__hint item-editor__motion-tools">
+            Draft it with AI from the title and the details above, then edit as needed. Once anyone has voted, the motion and its attachments
+            can&rsquo;t be changed.
+            <button
+              type="button"
+              className="button button-secondary button-small"
+              onClick={() => void draftMotion()}
+              disabled={drafting || pending || !fields.title.trim()}
+              title={fields.title.trim() ? undefined : "Give the discussion a title first."}
+              data-testid="discussion-draft-motion"
+            >
+              {drafting ? "Drafting…" : "Draft with AI"}
+            </button>
+          </span>
         </label>
         <label className="field field--wide">
           <span>{discussionId ? "Add attachments" : "Attachments"}</span>
           <input type="file" multiple onChange={(e) => setFiles(Array.from(e.target.files ?? []))} data-testid="discussion-files" />
-          <span className="field__hint">PDF, Word, Excel, images and other documents, up to 50 MB each. Only council can open them.</span>
+          <span className="field__hint">PDF, Word, Excel, images and other documents, up to 50 MB each. Only council and those who run meetings can open them.</span>
         </label>
       </div>
       {error && (

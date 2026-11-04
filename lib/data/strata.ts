@@ -27,6 +27,8 @@ export interface StrataAccess {
   canBill: boolean;
   /** Secretary, admin, or the "Can run meetings" switch (0014). */
   canRunMeetings: boolean;
+  /** Discussions (0078): council, or anyone who runs meetings (a Super Admin included). */
+  seesDiscussions: boolean;
   userId: string;
   /** A Super Admin managing a strata they aren't a member of. */
   superAdminOnly: boolean;
@@ -79,6 +81,7 @@ export const getStrataAccess = cache(async (corpId: string): Promise<StrataAcces
     // The demo shows its own made-up Billing page (components/DemoBilling.tsx).
     canBill: canBill === true,
     canRunMeetings: canRun === true,
+    seesDiscussions: onCouncil === true || canRun === true,
     userId: user.id,
     superAdminOnly: superAdmin === true && !membership,
     isCouncil: onCouncil === true,

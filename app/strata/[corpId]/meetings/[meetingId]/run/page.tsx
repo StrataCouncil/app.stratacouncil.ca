@@ -48,7 +48,7 @@ export default async function MeetingModePage({ params }: { params: Promise<{ co
       initialAttendance={meeting.attendance}
       initialAgendaApproved={meeting.agendaApproved}
       initialNotes={notes}
-      lots={roll.lots.map(({ lot, name, isCouncil }) => ({ lot, name, isCouncil }))}
+      lots={roll.lots.map(({ lot, name, isCouncil, role }) => ({ lot, name, isCouncil, role }))}
       isTrial={meeting.isTrial}
       aiAvailable={aiAccess === true}
       demoLeft={demoLeft?.meeting ?? null}

@@ -33,6 +33,7 @@ import { loadStripContext } from "@/lib/kb/privacy";
 import { pseudonymize } from "@/lib/pii";
 import { agendaVersion } from "@/lib/meetings/agenda-version";
 import { askClaudeJson, ClaudeRefusalError } from "@/lib/ai/claude";
+import { draftMotionText } from "@/lib/ai/draft-motion";
 import { isGeneralMeeting } from "@/lib/meetings/rules";
 import { queueDocumentIndexing } from "@/lib/kb/queue";
 import { DEMO_EDITABLE_ITEM_ID, IS_DEMO, demoLimitFail, lockDemoAgenda, type DemoLimitFail } from "@/lib/demo";
@@ -527,52 +528,20 @@ export async function draftMotion(
     .maybeSingle();
   const meetingLabel = meeting ? meetingTypeLabels[meeting.type as MeetingType] : "meeting";
 
-  const ctx = await loadStripContext(createAdminClient(), access.corpId);
-  const p = pseudonymize(
-    [
-      `Agenda item: ${input.text.slice(0, 500)}`,
-      input.background.trim() && `Background: ${input.background.slice(0, 4000)}`,
-      input.financial.trim() && `Financial implications: ${input.financial.slice(0, 2000)}`,
-      input.risks.trim() && `Risks / compliance: ${input.risks.slice(0, 2000)}`,
-      `Decision type: ${decisionTypeLabels[input.decisionType]}`,
-    ]
-      .filter(Boolean)
-      .join("\n"),
-    ctx.people,
-    ctx.identity
-  );
-
-  try {
-    const out = await askClaudeJson<{ motionText: string }>({
-      effort: "low",
-      maxTokens: 1000,
-      system:
-        `You draft motions for a BC strata corporation's ${meetingLabel}, in the form minutes record them. ` +
-        "Write one motion as a single sentence starting with \"THAT\" (or \"BE IT RESOLVED by a 3/4 vote of the owners that\" for a 3/4 resolution, and the matching wording for 80% or unanimous resolutions). " +
-        "Be specific to the item, use plain language, and cite the Strata Property Act only where the item clearly calls for it. " +
-        "Placeholders like [REF-3] stand for names and other details; copy them exactly. Use [square brackets] for anything the item doesn't say, such as an amount or date. " +
-        "Never invent facts.",
-      messages: [{ role: "user", content: p.text }],
-      schema: MOTION_SCHEMA,
-    });
-    const motionText = p.restore(out.motionText ?? "").trim();
-    if (!motionText) {
-      await refundDemoAllowance("motions");
-      return { ok: false, error: "Stratasphere couldn't draft a motion for that item. Write it by hand." };
-    }
-    await logDemoActivity({ kind: "motion.drafted", detail: { item: input.text, motion: motionText } });
-    return { ok: true, motionText };
-  } catch (err) {
-    console.error("[draftMotion]", err instanceof Error ? err.message : err);
+  const r = await draftMotionText(access.corpId, `${meetingLabel}`, {
+    label: "Agenda item",
+    text: input.text,
+    background: input.background,
+    financial: input.financial,
+    risks: input.risks,
+    decisionType: decisionTypeLabels[input.decisionType],
+  });
+  if (!r.ok) {
     await refundDemoAllowance("motions");
-    return {
-      ok: false,
-      error:
-        err instanceof ClaudeRefusalError
-          ? "Stratasphere couldn't draft a motion for that item. Write it by hand."
-          : "Couldn't draft a motion. Try again, or write it by hand.",
-    };
+    return r;
   }
+  await logDemoActivity({ kind: "motion.drafted", detail: { item: input.text, motion: r.motionText } });
+  return r;
 }
 
 export async function launchMeeting(
