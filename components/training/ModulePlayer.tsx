@@ -1,10 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { completeSection } from "@/app/training/actions";
 import { SlideView, Transcript } from "@/components/training/SlideView";
-import { slideRequirements, type FurtherReading, type Objective, type PlayerContent, type PlayerSlide } from "@/lib/training/slides";
+import { type FurtherReading, type Objective, type PlayerContent, type PlayerSlide } from "@/lib/training/slides";
 
 type Page =
   | { key: string; kind: "intro"; sectionIndex: number; title: string }
@@ -18,14 +18,11 @@ const defaultSettings: Settings = { largeText: false, autoplay: true, shortcuts:
 /**
  * The learner's module player, one slide at a time: the module's topics
  * down the side (ticked when done, locked until reached), a title bar with
- * a counter, and Prev / Next underneath. Next waits until the slide is
- * finished: narration heard to the end, the question answered, every
- * section or card opened. Nothing is graded. Progress saves as each topic
- * is finished.
+ * a counter, and Prev / Next underneath. Next is always available: adult
+ * learners can skip ahead before the narration or activity is finished.
+ * Nothing is graded. Progress saves as each topic is finished.
  *
- * `preview` (the builder) never saves and every topic can be opened, but
- * each slide still waits like it does for learners unless the author
- * turns on `skipWaits`.
+ * `preview` (the builder) never saves and every topic can be opened.
  */
 export function ModulePlayer({
   moduleId,
@@ -36,7 +33,6 @@ export function ModulePlayer({
   track,
   nextModule,
   preview = false,
-  skipWaits = false,
   startScreenId,
   hrefBase = "/training",
 }: {
@@ -48,8 +44,6 @@ export function ModulePlayer({
   track: { title: string; slug: string };
   nextModule: { id: string; title: string } | null;
   preview?: boolean;
-  /** Author preview only: let Next through without waiting. */
-  skipWaits?: boolean;
   startScreenId?: string;
   /** Where track and module links point. */
   hrefBase?: string;
@@ -99,25 +93,6 @@ export function ModulePlayer({
   const page = pages[Math.min(index, pages.length - 1)];
   const screen = page?.kind === "screen" ? page.screen : null;
   const pageMusic = screen ? screen.music : page?.kind === "intro" ? content.introMusic : page?.kind === "recap" ? content.outroMusic : null;
-  const required = useMemo(() => (screen ? slideRequirements(screen) : []), [screen]);
-  // What's been finished on the current screen; tied to the screen so moving on starts fresh.
-  const [sat, setSat] = useState<{ at: number; ids: Set<string> }>({ at: index, ids: new Set() });
-  const satisfied = sat.at === index ? sat.ids : new Set<string>();
-  const satisfy = useCallback(
-    (id: string) =>
-      setSat((s) => {
-        const ids = s.at === index ? s.ids : new Set<string>();
-        return ids.has(id) ? s : { at: index, ids: new Set(ids).add(id) };
-      }),
-    [index]
-  );
-  // Screens the learner has already finished (moved past with Next) don't wait again.
-  const [passed, setPassed] = useState<Set<number>>(new Set());
-  const alreadyDone =
-    skipWaits ||
-    passed.has(index) ||
-    (!preview && (index < reached || Boolean(page && done.has(sections[page.sectionIndex]?.id))));
-  const ready = alreadyDone || required.every((id) => satisfied.has(id));
 
   // ── Narration ──
   const audio = useRef<HTMLAudioElement>(null);
@@ -166,7 +141,7 @@ export function ModulePlayer({
 
   async function next() {
     interacted.current = true;
-    if (!ready || saving) return;
+    if (saving) return;
     setError(null);
     const section = sections[page.sectionIndex];
     if (lastOfSection && section && !done.has(section.id)) {
@@ -179,7 +154,6 @@ export function ModulePlayer({
       }
       setDone((d) => new Set(d).add(section.id));
     }
-    setPassed((p) => (p.has(index) ? p : new Set(p).add(index)));
     if (isLast) {
       setFinished(true);
     } else {
@@ -226,11 +200,6 @@ export function ModulePlayer({
   }
 
   const currentSection = page.sectionIndex;
-  const waitingOn = !ready
-    ? required.includes("narration") && !satisfied.has("narration")
-      ? "Next unlocks when the narration finishes."
-      : "Finish the activity on this slide to continue."
-    : null;
 
   return (
     <div className="player" data-large-text={settings.largeText}>
@@ -315,7 +284,7 @@ export function ModulePlayer({
             <div className="player__screen" key={page.key}>
               {page.kind === "intro" && <Intro objectives={content.objectives} />}
               {page.kind === "recap" && <Recap moduleTitle={moduleTitle} objectives={content.objectives} reading={content.furtherReading} />}
-              {screen && <SlideView slide={screen} onDone={() => satisfy("element")} />}
+              {screen && <SlideView slide={screen} />}
             </div>
 
             {/* Keyed by the track, so slides that share music keep playing it without a break. */}
@@ -350,7 +319,6 @@ export function ModulePlayer({
                     onEnded={() => {
                       setPlaying(false);
                       setProgress(1);
-                      satisfy("narration");
                     }}
                   />
                   <button type="button" className="player__icon" onClick={togglePlay} aria-label={playing ? "Pause narration" : "Play narration"}>
@@ -372,7 +340,7 @@ export function ModulePlayer({
                   </button>
                 </>
               ) : (
-                <span className="player__waiting">{waitingOn}</span>
+                <span className="player__waiting" aria-hidden="true" />
               )}
               <div className="player__settings">
                 <button
@@ -400,14 +368,12 @@ export function ModulePlayer({
                 type="button"
                 className="player__nav player__nav--next"
                 onClick={next}
-                disabled={!ready || saving}
-                title={waitingOn ?? undefined}
+                disabled={saving}
                 data-testid="player-next"
               >
                 {saving ? "Saving…" : isLast ? "Finish" : "Next"} <ChevronIcon dir="right" />
               </button>
             </div>
-            {narration && waitingOn && <p className="player__waiting player__waiting--below">{waitingOn}</p>}
           </>
         )}
       </main>
@@ -438,9 +404,9 @@ function Intro({ objectives }: { objectives: Objective[] }) {
         ))}
       </ul>
       <aside className="player__howto">
-        <strong>How this works.</strong> Move through the slides with Next. When a slide has narration, a question or
-        something to select, Next unlocks once you&rsquo;ve finished it. There&rsquo;s no pass or fail. Your progress saves at
-        the end of each topic, so you can stop and pick up later.
+        <strong>How this works.</strong> Move through the slides with Next, at your own pace: you can move on before the
+        narration or an activity is finished. There&rsquo;s no pass or fail. Your progress saves at the end of each topic, so
+        you can stop and pick up later.
       </aside>
     </div>
   );

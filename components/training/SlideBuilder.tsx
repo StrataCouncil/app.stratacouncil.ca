@@ -761,7 +761,6 @@ function Preview({
   startId?: string;
 }) {
   const [device, setDevice] = useState<"desktop" | "phone">("desktop");
-  const [skipWaits, setSkipWaits] = useState(true);
   return (
     <div className="builder__preview">
       <div className="builder__devices" role="group" aria-label="Preview width">
@@ -772,15 +771,9 @@ function Preview({
           Phone
         </button>
       </div>
-      <label className="be-check builder__skip">
-        <input type="checkbox" checked={skipWaits} onChange={(e) => setSkipWaits(e.target.checked)} />
-        Let me skip ahead (authors only; learners always wait for narration and activities)
-      </label>
       <div className="builder__frame builder__frame--player" data-device={device}>
         <ModulePlayer
           preview
-          skipWaits={skipWaits}
-          key={skipWaits ? "skip" : "wait"}
           moduleId="preview"
           moduleTitle={title}
           version={0}

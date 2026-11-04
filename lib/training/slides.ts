@@ -618,10 +618,3 @@ export function coverOf(content: PlayerContent): ModuleCover | null {
   return null;
 }
 
-/** What the learner must finish on a slide before Next: the narration heard to the end, the element done. */
-export function slideRequirements(s: PlayerSlide): string[] {
-  const ids: string[] = [];
-  if (s.narration) ids.push("narration");
-  if (s.element) ids.push("element");
-  return ids;
-}

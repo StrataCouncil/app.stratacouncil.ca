@@ -6233,10 +6233,6 @@ abbr.role-tag--short {
   font-size: 0.85rem;
   color: var(--muted);
 }
-.player__waiting--below {
-  margin: -0.5rem 0 0;
-  text-align: right;
-}
 .player__settings {
   position: relative;
 }
@@ -6821,10 +6817,6 @@ abbr.role-tag--short {
   border-radius: var(--radius-sm);
   background: var(--paper);
   color: var(--ink);
-}
-.builder__skip {
-  font-size: 0.82rem;
-  color: var(--muted);
 }
 
 /* Screen layout: less crowding, distinct callouts and cards, full-bleed photos */
