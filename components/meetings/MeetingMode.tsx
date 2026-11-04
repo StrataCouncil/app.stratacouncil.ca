@@ -1195,55 +1195,6 @@ function ItemPanel(props: {
 
       <StepList steps={steps} />
 
-      {!isNextMeeting(it) && !isAdjournment(it) && (it.background || it.financial || it.risks) && (
-        <div className="mm-details">
-          {it.background && <Detail title="Background / rationale" body={it.background} />}
-          {it.financial && <Detail title="Financial implications" body={it.financial} />}
-          {it.risks && <Detail title="Risks / compliance" body={it.risks} />}
-        </div>
-      )}
-
-      {it.atts.length > 0 && (
-        <div className="mm-details">
-          <h3 className="mm-subhead">Attachments</h3>
-          <ul className="attachment-list">
-            {it.atts.map((a) => (
-              <li key={a.id}>
-                <span className="pill">{a.kind === "link" ? "Link" : "File"}</span>
-                <button type="button" className="link-button" onClick={() => openAttachment(a.documentId, a.kind === "link" ? a.url : undefined)}>
-                  {a.title}
-                </button>
-                {props.called &&
-                  (props.presenting?.itemId === it.id && props.presenting.attId === a.id ? (
-                    <button type="button" className="button button-primary button-small" onClick={() => props.onShow(null)} data-testid={`mm-stop-showing-${a.id}`}>
-                      Stop sharing
-                    </button>
-                  ) : (
-                    <button type="button" className="button button-secondary button-small" onClick={() => props.onShow(a.id)} data-testid={`mm-show-${a.id}`}>
-                      Share on screen
-                    </button>
-                  ))}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {isNextMeeting(it) && (
-        <div className="field-grid">
-          {(["date", "time", "location"] as const).map((f) => (
-            <label className={`field${f === "location" ? " field--wide" : ""}`} key={f}>
-              <span>{f === "date" ? "Next meeting date" : f === "time" ? "Time" : "Location or link"}</span>
-              <input
-                type={f === "date" ? "date" : f === "time" ? "time" : "text"}
-                value={it.nextMeeting?.[f] ?? ""}
-                onChange={(e) => onPatch({ nextMeeting: { date: "", time: "", location: "", ...it.nextMeeting, [f]: e.target.value } })}
-              />
-            </label>
-          ))}
-        </div>
-      )}
-
       {m && isElectChair(it) && (
         <label className="field">
           <span>Nominee for chair</span>
@@ -1266,21 +1217,6 @@ function ItemPanel(props: {
           </datalist>
           <span className="field__hint">Once the motion carries, this person chairs the meeting and is named in the minutes.</span>
         </label>
-      )}
-
-      {live && props.called && !it.done && takesConflicts(it.text) && (
-        <ConflictsPanel
-          conflicts={live.conflicts}
-          present={live.allPresent}
-          names={props.names}
-          canEdit
-          busy={live.busy}
-          onDeclare={live.onDeclare}
-          onWithdraw={live.onWithdraw}
-        />
-      )}
-      {live && it.done && live.conflicts.length > 0 && (
-        <ConflictsPanel conflicts={live.conflicts} present={[]} names={props.names} canEdit={false} busy onDeclare={() => {}} onWithdraw={() => {}} />
       )}
 
       {m && (
@@ -1411,6 +1347,70 @@ function ItemPanel(props: {
               <p className="card__meta">Tied vote. With only 2 strata lots there is no deciding vote, so the tie stands.</p>
             )
           )}
+        </div>
+      )}
+
+      {live && props.called && !it.done && takesConflicts(it.text) && (
+        <ConflictsPanel
+          conflicts={live.conflicts}
+          present={live.allPresent}
+          names={props.names}
+          canEdit
+          busy={live.busy}
+          onDeclare={live.onDeclare}
+          onWithdraw={live.onWithdraw}
+        />
+      )}
+      {live && it.done && live.conflicts.length > 0 && (
+        <ConflictsPanel conflicts={live.conflicts} present={[]} names={props.names} canEdit={false} busy onDeclare={() => {}} onWithdraw={() => {}} />
+      )}
+
+      {!isNextMeeting(it) && !isAdjournment(it) && (it.background || it.financial || it.risks) && (
+        <div className="mm-details">
+          {it.background && <Detail title="Background / rationale" body={it.background} />}
+          {it.financial && <Detail title="Financial implications" body={it.financial} />}
+          {it.risks && <Detail title="Risks / compliance" body={it.risks} />}
+        </div>
+      )}
+
+      {it.atts.length > 0 && (
+        <div className="mm-details">
+          <h3 className="mm-subhead">Attachments</h3>
+          <ul className="attachment-list">
+            {it.atts.map((a) => (
+              <li key={a.id}>
+                <span className="pill">{a.kind === "link" ? "Link" : "File"}</span>
+                <button type="button" className="link-button" onClick={() => openAttachment(a.documentId, a.kind === "link" ? a.url : undefined)}>
+                  {a.title}
+                </button>
+                {props.called &&
+                  (props.presenting?.itemId === it.id && props.presenting.attId === a.id ? (
+                    <button type="button" className="button button-primary button-small" onClick={() => props.onShow(null)} data-testid={`mm-stop-showing-${a.id}`}>
+                      Stop sharing
+                    </button>
+                  ) : (
+                    <button type="button" className="button button-secondary button-small" onClick={() => props.onShow(a.id)} data-testid={`mm-show-${a.id}`}>
+                      Share on screen
+                    </button>
+                  ))}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {isNextMeeting(it) && (
+        <div className="field-grid">
+          {(["date", "time", "location"] as const).map((f) => (
+            <label className={`field${f === "location" ? " field--wide" : ""}`} key={f}>
+              <span>{f === "date" ? "Next meeting date" : f === "time" ? "Time" : "Location or link"}</span>
+              <input
+                type={f === "date" ? "date" : f === "time" ? "time" : "text"}
+                value={it.nextMeeting?.[f] ?? ""}
+                onChange={(e) => onPatch({ nextMeeting: { date: "", time: "", location: "", ...it.nextMeeting, [f]: e.target.value } })}
+              />
+            </label>
+          ))}
         </div>
       )}
 
