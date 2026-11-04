@@ -113,10 +113,12 @@ current to 2026-10-20); both are in the Knowledge Base.
    fill the tally; the operator still confirms the decision. The minutes say
    "unanimous" whenever every vote was in favour. In an open vote, All in
    favour (0076) sets For for everyone who hasn't voted themselves, unless
-   someone has voted Against on their own screen. Each item shows the
-   operator its steps in order (introduce, conflicts, motion, discussion,
-   open vote, close vote, confirm), and buttons stay off until their step
-   is reached. Losing quorum shows on every screen and locks votes and
+   someone has voted Against on their own screen. Each item has a
+   collapsed Procedure (introduce, conflicts, motion, discussion, open the
+   vote, close and record), and buttons stay off until their step is
+   reached. Close vote opens a box with the result: record it as carried
+   or defeated, as deferred, or go back to the vote (it only closes when
+   recorded). A deferred item is voted on afresh. Losing quorum shows on every screen and locks votes and
    decisions until it's back; the operator can wait, defer or adjourn.
    Attachments: Share on screen (0076) puts one on every member's screen
    over the agenda, independent of Zoom.

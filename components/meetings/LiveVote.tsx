@@ -34,6 +34,7 @@ export function RunnerVotePanel(props: {
   /** Why the vote can't open yet (no motion, mover or seconder; no quorum). */
   openBlocked: string | null;
   onOpen: () => void;
+  onDefer: () => void;
   onRecord: (lot: string, choice: Choice) => void;
   /** For, for everyone who hasn't voted themselves. */
   onAllInFavour: () => void;
@@ -69,6 +70,9 @@ export function RunnerVotePanel(props: {
               <button type="button" className="button button-primary button-small" onClick={props.onOpen} disabled={props.busy || Boolean(props.openBlocked)} data-testid="mm-open-vote">
                 Open vote
               </button>
+              <button type="button" className="button button-secondary button-small" onClick={props.onDefer} disabled={props.busy} data-testid="mm-defer">
+                Defer
+              </button>
               <span className="card__meta" data-testid="mm-open-vote-hint">
                 {props.openBlocked ?? "Council members vote on their own screens; you can enter a vote for anyone on the phone or in the room."}
               </span>
@@ -92,24 +96,6 @@ export function RunnerVotePanel(props: {
       <div className="mm-live__head">
         <span className="live-badge">Vote open {elapsed(vote.openedAt, props.now)}</span>
         <span className="card__meta">{votedLine({ votedCount: ballots.size, eligibleLots: vote.eligibleLots })} · members see the result when you close it</span>
-        <span className="mm-live__actions">
-          <button type="button" className="button button-secondary button-small" onClick={props.onCancel} disabled={props.busy}>
-            Cancel vote
-          </button>
-          <button
-            type="button"
-            className="button button-secondary button-small"
-            onClick={props.onAllInFavour}
-            disabled={props.busy || selfAgainst}
-            title={selfAgainst ? "Someone voted Against on their own screen." : "For, for everyone who hasn't voted on their own screen."}
-            data-testid="mm-all-in-favour"
-          >
-            All in favour
-          </button>
-          <button type="button" className="button button-primary button-small" onClick={props.onClose} disabled={props.busy} data-testid="mm-close-vote">
-            Close vote
-          </button>
-        </span>
       </div>
       {vote.eligibleLots.map((lot) => {
         const b = ballots.get(lot);
@@ -157,6 +143,24 @@ export function RunnerVotePanel(props: {
         </span>
       </div>
       {props.error && <p className="mm-action-error" role="alert">{props.error}</p>}
+        <div className="mm-live__actions mm-live__actions--below">
+        <button type="button" className="button button-secondary button-small" onClick={props.onCancel} disabled={props.busy}>
+          Cancel vote
+        </button>
+        <button
+          type="button"
+          className="button button-secondary button-small"
+          onClick={props.onAllInFavour}
+          disabled={props.busy || selfAgainst}
+          title={selfAgainst ? "Someone voted Against on their own screen." : "For, for everyone who hasn't voted on their own screen."}
+          data-testid="mm-all-in-favour"
+        >
+          All in favour
+        </button>
+        <button type="button" className="button button-primary button-small" onClick={props.onClose} disabled={props.busy} data-testid="mm-close-vote">
+          Close vote
+        </button>
+      </div>
     </div>
   );
 }
@@ -176,6 +180,8 @@ export function ConflictsPanel(props: {
   const [adding, setAdding] = useState(false);
   const [lot, setLot] = useState("");
   const [note, setNote] = useState("");
+  // Withdrawing a declaration asks first: it takes it off the record, not the person out of the meeting.
+  const [withdrawing, setWithdrawing] = useState<string | null>(null);
   const who = (l: string) => (props.names[l] ? `${props.names[l]}, ${l}` : l);
   const declared = new Set(props.conflicts.map((c) => c.lot));
   const candidates = props.present.filter((l) => !declared.has(l));
@@ -186,11 +192,31 @@ export function ConflictsPanel(props: {
       {props.conflicts.map((c) => (
         <p key={c.lot} className="mm-conflicts__row">
           <strong>{who(c.lot)}</strong> declared a conflict of interest{c.note ? `: ${c.note}` : ""}. They take no part in this item and aren&rsquo;t counted for its votes.
-          {props.canEdit && (
-            <button type="button" className="link-button" onClick={() => props.onWithdraw(c.lot)} disabled={props.busy}>
-              Remove
-            </button>
-          )}
+          {props.canEdit &&
+            (withdrawing === c.lot ? (
+              <span className="mm-conflicts__confirm">
+                Withdraw {who(c.lot)}&rsquo;s declaration? It comes off the record and they&rsquo;re counted for this item again.{" "}
+                <button
+                  type="button"
+                  className="link-button"
+                  onClick={() => {
+                    props.onWithdraw(c.lot);
+                    setWithdrawing(null);
+                  }}
+                  disabled={props.busy}
+                  data-testid={`mm-withdraw-confirm-${c.lot}`}
+                >
+                  Withdraw it
+                </button>{" "}
+                <button type="button" className="link-button" onClick={() => setWithdrawing(null)}>
+                  Keep it
+                </button>
+              </span>
+            ) : (
+              <button type="button" className="link-button" onClick={() => setWithdrawing(c.lot)} disabled={props.busy} data-testid={`mm-withdraw-${c.lot}`}>
+                Withdraw declaration
+              </button>
+            ))}
         </p>
       ))}
       {props.canEdit &&
