@@ -41,7 +41,7 @@ import { saveItemNote } from "@/app/strata/[corpId]/meetings/actions";
 import { getDocumentDownloadUrl } from "@/app/strata/[corpId]/documents/actions";
 import { openInNewTab } from "@/lib/open-in-tab";
 import { ItemEditor } from "@/components/meetings/ItemEditor";
-import { MeetingSide, MeetingUser, TypedConfirm } from "@/components/meetings/MeetingChrome";
+import { MeetingSide, MeetingUser, TypedConfirm, useLeaveWarning } from "@/components/meetings/MeetingChrome";
 import { DEMO_LIMITS, DEMO_LIMIT_MESSAGE, SIGNUP_URL } from "@/lib/demo";
 import { isDemoLimit, showDemoLimit } from "@/lib/demo-client";
 import { ConflictsPanel, RunnerVotePanel } from "@/components/meetings/LiveVote";
@@ -129,6 +129,9 @@ export function MeetingMode(props: {
     const t = setInterval(() => setNow(Date.now()), 15000);
     return () => clearInterval(t);
   }, []);
+
+  // Closing the window by accident would leave the meeting without whoever runs it.
+  useLeaveWarning(true);
 
   // ── Autosave ─────────────────────────────────────────────────────────
   const firstRender = useRef(true);
