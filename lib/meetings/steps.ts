@@ -96,7 +96,7 @@ export function itemSteps(it: AgendaItem, s: StepState): Step[] {
         auto(
           "close",
           "Close the vote and confirm the result",
-          "When everyone has voted, close it. A box shows the result: confirm it as carried or defeated, or go back to the vote. Anyone who hasn't voted is counted as abstaining.",
+          "Close vote unlocks once everyone present has voted (enter Abstain for anyone who won't). A box confirms the result; if it's wrong, go back and fix the vote.",
           s.voteClosed || it.done,
           '"The motion is carried." (or defeated)'
         )

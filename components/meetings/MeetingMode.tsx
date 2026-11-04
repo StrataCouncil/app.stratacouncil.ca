@@ -917,12 +917,11 @@ export function MeetingMode(props: {
           return (
             <div className="modal-backdrop" role="presentation">
               <div className="modal" role="alertdialog" aria-modal="true" aria-labelledby="record-title" data-testid="mm-record-vote">
-                <h2 id="record-title">{ballots.length === 0 ? "No votes yet" : outcome === "CARRIED" ? "Motion carried" : "Motion defeated"}</h2>
+                <h2 id="record-title">{outcome === "CARRIED" ? "Motion carried" : "Motion defeated"}</h2>
                 <p>&ldquo;{it.text}&rdquo;</p>
                 <p>
                   Moved by {it.motion.mover}, seconded by {it.motion.sec}.<br />
-                  {preview.for} in favour, {preview.against} opposed, {preview.abstain} abstaining
-                  {missing ? ` (${missing} didn't vote, recorded as abstaining)` : ""} · {v0.eligibleLots.length} present for this item.
+                  {preview.for} in favour, {preview.against} opposed, {preview.abstain} abstaining · {v0.eligibleLots.length} present for this item.
                 </p>
                 {tie && (
                   <label className="field" data-testid="mm-record-tie-break">
@@ -940,7 +939,7 @@ export function MeetingMode(props: {
                 )}
                 <p className="card__meta">
                   Council decisions need a majority of the {v0.eligibleLots.length} council {v0.eligibleLots.length === 1 ? "member" : "members"} present
-                  (Standard Bylaws 18(1)), so an abstention counts like a vote against. Until you confirm it, you can go back and change votes.
+                  (Standard Bylaws 18(1)), so an abstention counts like a vote against. If this isn&rsquo;t right, go back and fix the vote.
                 </p>
                 {liveError && <p className="form-error" role="alert">{liveError}</p>}
                 <div className="modal__actions">
@@ -951,8 +950,7 @@ export function MeetingMode(props: {
                     type="button"
                     className={`button ${outcome === "CARRIED" ? "button-primary" : "button-danger"}`}
                     onClick={() => void recordTheVote()}
-                    disabled={liveBusy || ballots.length === 0}
-                    title={ballots.length === 0 ? "Nobody has voted yet." : undefined}
+                    disabled={liveBusy}
                     data-testid="mm-record-outcome"
                   >
                     Confirm as {outcome}

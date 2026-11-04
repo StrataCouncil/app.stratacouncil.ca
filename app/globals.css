@@ -9293,6 +9293,10 @@ a.kb-card:hover {
   justify-content: flex-end;
   flex-wrap: wrap;
 }
+.mm-live__waiting {
+  margin: 0.6rem 0 0;
+  text-align: right;
+}
 .mm-conflicts__confirm {
   display: block;
   margin-top: 0.3rem;

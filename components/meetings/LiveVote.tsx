@@ -88,6 +88,8 @@ export function RunnerVotePanel(props: {
   const tally = { for: 0, against: 0, abstain: 0 } as Record<Choice, number>;
   for (const b of ballots.values()) tally[b.choice] += 1;
   const need = Math.floor(vote.eligibleLots.length / 2) + 1;
+  // Close vote waits for a vote from everyone present for the item (Abstain counts).
+  const waitingOn = vote.eligibleLots.filter((l) => !ballots.has(l));
   // All in favour isn't offered once a member has voted Against themselves.
   const selfAgainst = [...ballots.values()].some((b) => b.choice === "against" && !b.forOther && b.lot !== props.ownLot);
 
@@ -143,6 +145,11 @@ export function RunnerVotePanel(props: {
         </span>
       </div>
       {props.error && <p className="mm-action-error" role="alert">{props.error}</p>}
+      {waitingOn.length > 0 && (
+        <p className="card__meta mm-live__waiting" data-testid="mm-close-waiting">
+          Close vote unlocks once everyone has voted: waiting on {waitingOn.map(who).join("; ")}. Enter Abstain for anyone who won&rsquo;t vote.
+        </p>
+      )}
         <div className="mm-live__actions mm-live__actions--below">
         <button type="button" className="button button-secondary button-small" onClick={props.onCancel} disabled={props.busy}>
           Cancel vote
@@ -157,7 +164,14 @@ export function RunnerVotePanel(props: {
         >
           All in favour
         </button>
-        <button type="button" className="button button-primary button-small" onClick={props.onClose} disabled={props.busy} data-testid="mm-close-vote">
+        <button
+          type="button"
+          className="button button-primary button-small"
+          onClick={props.onClose}
+          disabled={props.busy || waitingOn.length > 0}
+          title={waitingOn.length ? "Everyone present needs a vote first." : undefined}
+          data-testid="mm-close-vote"
+        >
           Close vote
         </button>
       </div>
