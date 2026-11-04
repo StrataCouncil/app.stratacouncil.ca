@@ -39,3 +39,21 @@ export async function emailMeetingStarted(corpId: string, meetingId: string, lau
   });
   await Promise.all((active ?? []).map((m) => notifyUser(m.user_id as string, message)));
 }
+
+/**
+ * People who could run this strata's meetings (0079), for the Runner's
+ * Hand over list: active members who are its admin or secretary, or have
+ * been allowed to. The database checks again when the meeting is handed over.
+ */
+export async function runnerCandidates(corpId: string, excludeUser: string): Promise<Array<{ userId: string; name: string }>> {
+  const admin = createAdminClient();
+  const [{ data: members }, { data: roles }] = await Promise.all([
+    admin.from("corporation_memberships").select("user_id, can_run_meetings").eq("corporation_id", corpId).eq("status", "active"),
+    admin.from("corporation_role_assignments").select("user_id").eq("corporation_id", corpId).in("role", ["admin", "secretary"]),
+  ]);
+  const byRole = new Set((roles ?? []).map((r) => r.user_id as string));
+  const ids = (members ?? []).filter((m) => m.can_run_meetings || byRole.has(m.user_id as string)).map((m) => m.user_id as string).filter((id) => id !== excludeUser);
+  if (!ids.length) return [];
+  const { data: profiles } = await admin.from("profiles").select("id, full_name").in("id", ids);
+  return (profiles ?? []).map((p) => ({ userId: p.id as string, name: (p.full_name as string) || "Someone" }));
+}

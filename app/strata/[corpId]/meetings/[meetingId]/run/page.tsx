@@ -6,6 +6,7 @@ import { getCurrentProfile } from "@/lib/data/profile";
 import { createClient } from "@/lib/supabase/server";
 import { autoPopulate } from "@/lib/meetings/agenda";
 import { demoAllowanceLeft } from "@/lib/demo-usage";
+import { runnerCandidates } from "@/lib/meetings/server";
 import { getLiveState } from "../live/actions";
 
 export const metadata = { title: "Meeting Mode" };
@@ -21,7 +22,7 @@ export default async function MeetingModePage({ params }: { params: Promise<{ co
   if (meeting.launchedBy !== access.userId) redirect(`/strata/${corpId}/meetings/${meetingId}`);
 
   const supabase = await createClient();
-  const [notes, roll, { data: corp }, { data: aiAccess }, demoLeft, live, profile] = await Promise.all([
+  const [notes, roll, { data: corp }, { data: aiAccess }, demoLeft, live, profile, candidates] = await Promise.all([
     getMeetingNotes(meetingId),
     getLotRoll(corpId),
     supabase.from("strata_corporations").select("strata_plan_number, legal_name, building_name").eq("strata_plan_number", corpId).maybeSingle(),
@@ -29,6 +30,7 @@ export default async function MeetingModePage({ params }: { params: Promise<{ co
     demoAllowanceLeft(),
     getLiveState(meetingId),
     getCurrentProfile(),
+    runnerCandidates(corpId, access.userId),
   ]);
 
   return (
@@ -54,6 +56,7 @@ export default async function MeetingModePage({ params }: { params: Promise<{ co
       demoLeft={demoLeft?.meeting ?? null}
       initialLive={live}
       me={{ name: profile?.fullName || "You", avatarUrl: profile?.avatarUrl ?? null }}
+      runnerCandidates={candidates}
     />
   );
 }
