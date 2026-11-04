@@ -58,8 +58,8 @@ function LockIcon() {
 }
 
 export function StrataSphereNav({ active }: { active: string }) {
-  const { corpId, subscribed, pending, canBill, canManage, isCouncil } = useStrata();
-  const items = allItems.filter((i) => (!i.managersOnly || canManage) && (!i.billingOnly || canBill) && (!i.councilOnly || isCouncil));
+  const { corpId, subscribed, pending, canBill, canManage, seesDiscussions } = useStrata();
+  const items = allItems.filter((i) => (!i.managersOnly || canManage) && (!i.billingOnly || canBill) && (!i.councilOnly || seesDiscussions));
   const [prompt, setPrompt] = useState<string | null>(null);
 
   return (

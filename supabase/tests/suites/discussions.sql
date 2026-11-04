@@ -36,13 +36,14 @@ select pg_temp.expect('visitors can''t settle ratifications themselves',
 select pg_temp.expect('the files bucket is private', (select not public from storage.buckets where id = 'discussion-files'));
 
 set role authenticated;
--- Only council can start one: not the manager, an owner, or the strata's admin (Bob).
+-- Council and those who run meetings can start one: not a manager who can't run meetings, or an owner.
 set test.uid = '70000000-0000-0000-0000-000000000005';
 select pg_temp.expect_error($q$select create_discussion('BCS-1234', 'Roof', '', '', '', 'THAT council get three quotes.')$q$, 'Only council members');
 set test.uid = '70000000-0000-0000-0000-000000000006';
 select pg_temp.expect_error($q$select create_discussion('BCS-1234', 'Roof', '', '', '', 'THAT council get three quotes.')$q$, 'Only council members');
+-- The strata's admin (Bob) runs meetings, so since 0078 they may start one too (checked, not used up here).
 set test.uid = '00000000-0000-0000-0000-00000000000b';
-select pg_temp.expect_error($q$select create_discussion('BCS-1234', 'Roof', '', '', '', 'THAT council get three quotes.')$q$, 'Only council members');
+select pg_temp.expect('the admin, who runs meetings, may start one (0078)', can_see_discussions('BCS-1234'));
 
 -- Tess starts one; council as it stands is the voters.
 set test.uid = '70000000-0000-0000-0000-000000000002';
@@ -62,8 +63,9 @@ set test.uid = '70000000-0000-0000-0000-000000000006';
 select pg_temp.expect('an owner sees no discussions', (select count(*) = 0 from discussions));
 set test.uid = '00000000-0000-0000-0000-00000000000d';
 set test.aal = 'aal2';
-select pg_temp.expect('a Super Admin sees no discussions', (select count(*) = 0 from discussions));
-select pg_temp.expect('or votes', (select count(*) = 0 from discussion_voters));
+select pg_temp.expect('a Super Admin reads every discussion (0078)', (select count(*) > 0 from discussions));
+select pg_temp.expect('and their votes, but is never a voter', (select count(*) > 0 from discussion_voters)
+  and not exists (select 1 from discussion_voters where user_id = '00000000-0000-0000-0000-00000000000d'));
 
 -- Nobody writes the tables directly.
 set test.uid = '70000000-0000-0000-0000-000000000002';

@@ -125,6 +125,7 @@ export default async function StrataSphereLayout({
               canManage: Boolean(access?.isAdmin || access?.roles.includes("manager")),
               canBill: access?.canBill ?? false,
               isCouncil: access?.isCouncil ?? false,
+              seesDiscussions: access?.seesDiscussions ?? false,
             }}
           >
             {children}

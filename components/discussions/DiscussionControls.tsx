@@ -6,6 +6,8 @@ import { addComment, castVote, closeDiscussion, type DiscussionInput } from "@/a
 import { DiscussionForm } from "@/components/discussions/DiscussionForm";
 import { uploadDiscussionFiles } from "@/components/discussions/upload";
 import type { DiscussionVote } from "@/lib/discussions/tally";
+import { ChoiceIcon } from "@/components/meetings/LiveVote";
+import Link from "next/link";
 
 /** Your vote: For, Against, Abstain, or a declared conflict of interest (s. 32), which needs a reason. */
 export function VotePanel({ corpId, discussionId, current }: { corpId: string; discussionId: string; current: DiscussionVote | null }) {
@@ -31,7 +33,9 @@ export function VotePanel({ corpId, discussionId, current }: { corpId: string; d
           <button
             key={v}
             type="button"
-            className={`button ${current === v ? "button-primary" : "button-secondary"}`}
+            className="discussion-vote__choice"
+            data-choice={v}
+            data-selected={current === v || undefined}
             aria-pressed={current === v}
             disabled={pending}
             onClick={() => {
@@ -40,6 +44,7 @@ export function VotePanel({ corpId, discussionId, current }: { corpId: string; d
             }}
             data-testid={`vote-${v}`}
           >
+            <ChoiceIcon choice={v} />
             {v === "for" ? "For" : v === "against" ? "Against" : "Abstain"}
           </button>
         ))}
@@ -69,7 +74,16 @@ export function VotePanel({ corpId, discussionId, current }: { corpId: string; d
           </button>
         </div>
       )}
-      {current && current !== "recused" && <p className="card__meta">You can change your vote until the discussion is closed.</p>}
+      {current && current !== "recused" && (
+        <>
+          <p className="card__meta">
+            Your vote ({current === "for" ? "For" : current === "against" ? "Against" : "Abstain"}) is recorded. You can change it until the discussion is closed.
+          </p>
+          <Link href={`/strata/${corpId}/discussions?voted=${discussionId}`} className="button button-primary discussion-vote__done" data-testid="discussion-done">
+            Done
+          </Link>
+        </>
+      )}
       {error && (
         <p className="form-error" role="alert">
           {error}

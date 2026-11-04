@@ -18,8 +18,10 @@ export interface StrataContextValue {
   canManage: boolean;
   /** The admin, or anyone they've given billing access to (0046): uses Billing and subscribes. */
   canBill: boolean;
-  /** On council (0070): sees Discussions. Not managers, owners or Super Admins. */
+  /** On council (0070). */
   isCouncil: boolean;
+  /** Sees Discussions (0078): council, or anyone who runs meetings (a Super Admin included). */
+  seesDiscussions: boolean;
 }
 
 const StrataContext = createContext<StrataContextValue | null>(null);

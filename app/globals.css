@@ -3663,8 +3663,12 @@ li[data-done="true"] .checklist__mark {
 .mm-private textarea {
   width: 100%;
   margin-top: 0.5rem;
-  font: inherit;
-  padding: 0.5rem;
+  /* Same as the Minutes summary above it. */
+  font-family: inherit;
+  font-size: 0.95rem;
+  line-height: inherit;
+  padding: 0.65em 0.85em;
+  color: var(--ink);
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   background: var(--paper);
@@ -9420,4 +9424,59 @@ a.kb-card:hover {
   .viewer {
     border-radius: 0;
   }
+}
+
+/* Discussions (0078): vote buttons like Meeting Mode, your own vote on the list. */
+.discussion-vote__choice {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.6rem 1rem;
+  border-radius: var(--radius-sm);
+  border: 2px solid var(--line);
+  background: var(--surface);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.discussion-vote__choice[data-choice="for"] {
+  color: var(--free);
+}
+.discussion-vote__choice[data-choice="against"] {
+  color: var(--danger);
+}
+.discussion-vote__choice[data-choice="abstain"] {
+  color: var(--muted);
+}
+.discussion-vote__choice[data-selected][data-choice="for"] {
+  border-color: var(--free);
+  background: var(--free-bg);
+}
+.discussion-vote__choice[data-selected][data-choice="against"] {
+  border-color: var(--danger);
+  background: var(--danger-bg);
+}
+.discussion-vote__choice[data-selected][data-choice="abstain"] {
+  border-color: var(--muted);
+  background: var(--locked-bg);
+}
+.discussion-vote__done {
+  margin-top: 0.5rem;
+}
+.discussion-myvote {
+  margin-top: 0.3rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.discussion-myvote[data-vote="for"] {
+  color: var(--free);
+}
+.discussion-myvote[data-vote="against"] {
+  color: var(--danger);
+}
+.discussion-myvote[data-vote="abstain"],
+.discussion-myvote[data-vote="recused"],
+.discussion-myvote[data-vote="none"] {
+  color: var(--muted);
 }
