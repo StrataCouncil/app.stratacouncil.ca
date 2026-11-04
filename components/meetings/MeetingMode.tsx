@@ -35,17 +35,18 @@ import {
   type AttendanceStatus,
   type VoteContext,
 } from "@/lib/meetings/rules";
-import { callToOrderScript, itemScript, zonedInstant } from "@/lib/meetings/scripts";
+import { callToOrderScript, zonedInstant } from "@/lib/meetings/scripts";
+import { currentStep, itemSteps, usesLiveVoting, type Step } from "@/lib/meetings/steps";
 import { adjournMeeting, askMeetingAssistant, callToOrder, saveMeetingState } from "@/app/strata/[corpId]/meetings/[meetingId]/run/actions";
 import { saveItemNote } from "@/app/strata/[corpId]/meetings/actions";
 import { getDocumentDownloadUrl } from "@/app/strata/[corpId]/documents/actions";
 import { openInNewTab } from "@/lib/open-in-tab";
 import { ItemEditor } from "@/components/meetings/ItemEditor";
-import { MeetingSide, MeetingUser, TypedConfirm, useLeaveWarning } from "@/components/meetings/MeetingChrome";
+import { MeetingSide, MeetingUser, SharedViewer, TypedConfirm, useLeaveWarning } from "@/components/meetings/MeetingChrome";
 import { DEMO_LIMITS, DEMO_LIMIT_MESSAGE, SIGNUP_URL } from "@/lib/demo";
 import { isDemoLimit, showDemoLimit } from "@/lib/demo-client";
 import { ConflictsPanel, RunnerVotePanel } from "@/components/meetings/LiveVote";
-import { applyPresence, isJoin, presentForItem, takesConflicts, type Choice, type ClosedVote, type LiveConflict, type LiveState, type OpenVote } from "@/lib/meetings/live";
+import { applyPresence, isJoin, presentForItem, type Presenting, takesConflicts, type Choice, type ClosedVote, type LiveConflict, type LiveState, type OpenVote } from "@/lib/meetings/live";
 import {
   cancelVote,
   closeVote,
@@ -55,7 +56,9 @@ import {
   markJoined,
   markLeft,
   openVote,
+  recordAllInFavour,
   recordVote,
+  showToEveryone,
   withdrawConflict,
 } from "@/app/strata/[corpId]/meetings/[meetingId]/live/actions";
 
@@ -124,6 +127,10 @@ export function MeetingMode(props: {
   const [confirm, setConfirm] = useState<Confirm>(null);
   const [editing, setEditing] = useState<AgendaItem | null>(null);
   const [panel, setPanel] = useState<"none" | "agenda" | "assistant">("none");
+  // Steps ticked by hand, per item (introducing it, discussion).
+  const [acked, setAcked] = useState<Record<string, string[]>>({});
+  // The shared attachment, hidden on this screen (by when it was shown).
+  const [hiddenShow, setHiddenShow] = useState<string | null>(null);
   // A lot the runner is marking as having left (typed confirmation).
   const [marking, setMarking] = useState<string | null>(null);
   const [markError, setMarkError] = useState<string | null>(null);
@@ -412,6 +419,21 @@ export function MeetingMode(props: {
     await refreshLive();
     return result.ok;
   }
+  async function show(it: AgendaItem | null, attId: string | null) {
+    setLiveBusy(true);
+    setLiveError(null);
+    // What's shown is read from the saved agenda.
+    if (it && !(await saveNow())) {
+      setLiveBusy(false);
+      return setLiveError("Couldn't save the agenda. Try again.");
+    }
+    const r = await showToEveryone(meetingId, it?.id ?? null, attId).catch(() => ({ ok: false as const, error: "Couldn't reach the server. Try again." }));
+    setLiveBusy(false);
+    if (!r.ok) return setLiveError(r.error);
+    setHiddenShow(null);
+    await refreshLive();
+  }
+
   async function startVote(it: AgendaItem) {
     const m = it.motion;
     if (!m?.text.trim()) return setLiveError("Write the motion before opening the vote.");
@@ -588,6 +610,32 @@ export function MeetingMode(props: {
       {quorumDeadlinePassed && !q.met && (
         <div className="mm__alert" role="alert">
           30 minutes have passed since the scheduled start and quorum hasn&rsquo;t been confirmed. No decisions may be made.{" "}
+          <button type="button" className="link-button" onClick={adjournWithoutQuorum}>
+            Adjourn the meeting
+          </button>
+        </div>
+      )}
+
+      {live?.presenting && hiddenShow === live.presenting.at && (
+        <div className="mm__alert mm__alert--showing" role="status" data-testid="mm-showing-bar">
+          Showing everyone: <strong>{live.presenting.title || "an attachment"}</strong>{" "}
+          <button type="button" className="link-button" onClick={() => setHiddenShow(null)}>
+            View
+          </button>{" "}
+          <button type="button" className="link-button" onClick={() => void show(null, null)} disabled={liveBusy}>
+            Stop showing
+          </button>
+        </div>
+      )}
+      {called && !q.met && (
+        <div className="mm__alert mm__alert--quorum" role="alert" data-testid="mm-quorum-lost">
+          <strong>Quorum lost:</strong> {q.counted} present, {q.required} needed. No decisions can be made until quorum is back. Wait for members to
+          return{item?.motion && !item.done ? ", defer this item," : ""} or adjourn.{" "}
+          {item?.motion && !item.done && (
+            <button type="button" className="link-button" onClick={() => defer(item)}>
+              Defer this item
+            </button>
+          )}{" "}
           <button type="button" className="link-button" onClick={adjournWithoutQuorum}>
             Adjourn the meeting
           </button>
@@ -779,6 +827,11 @@ export function MeetingMode(props: {
               present={general ? present : presentForItem(present, conflicts, item.id)}
               voters={votersFor(item)}
               voteCtx={ctxFor(item)}
+              quorumMet={q.met}
+              acked={new Set(acked[item.id] ?? [])}
+              onAck={(id) => setAcked((a) => ({ ...a, [item.id]: [...new Set([...(a[item.id] ?? []), id])] }))}
+              presenting={live?.presenting ?? null}
+              onShow={(attId) => void show(attId ? item : null, attId)}
               live={
                 general
                   ? null
@@ -795,6 +848,7 @@ export function MeetingMode(props: {
                       now: liveNow,
                       onOpen: () => void startVote(item),
                       onRecord: (lot: string, choice: Choice) => void liveStep(() => recordVote(live!.openVote!.id, lot, choice)),
+                      onAllInFavour: () => live?.openVote && void liveStep(() => recordAllInFavour(live.openVote!.id)),
                       onClose: () => live?.openVote && finishVote(item, live.openVote),
                       onCancel: () => live?.openVote && void liveStep(() => cancelVote(live.openVote!.id)),
                       onDeclare: (lot: string, note: string) => void liveStep(() => declareConflict(meetingId, item.id, lot, note)),
@@ -855,6 +909,16 @@ export function MeetingMode(props: {
         />
       )}
       {confirm && <ConfirmDialog {...confirm} busy={busy} onCancel={() => setConfirm(null)} />}
+      {live?.presenting && hiddenShow !== live.presenting.at && (
+        <SharedViewer
+          corpId={corpId}
+          presenting={live.presenting}
+          runner
+          busy={liveBusy}
+          onStop={() => void show(null, null)}
+          onHide={() => setHiddenShow(live.presenting!.at)}
+        />
+      )}
       {marking && (
         <TypedConfirm
           title={`${marking}${names[marking] ? ` (${names[marking]})` : ""} left the meeting?`}
@@ -987,6 +1051,43 @@ function Script({ title, lines }: { title: string; lines: string[] }) {
   );
 }
 
+/** The Runner's steps for the item, in order; the current one says what to do. */
+function StepList({ steps, onAck }: { steps: Step[]; onAck: (id: string) => void }) {
+  const cur = currentStep(steps);
+  const [say, setSay] = useState(false);
+  return (
+    <ol className="mm-steps" data-testid="mm-steps" aria-label="Steps for this item">
+      {steps.map((st, i) => (
+        <li key={st.id} className="mm-steps__step" data-state={st.done ? "done" : i === cur ? "current" : "todo"} data-testid={`mm-step-${st.id}`}>
+          <span className="mm-steps__mark" aria-hidden="true">
+            {st.done ? <Tick /> : i + 1}
+          </span>
+          <div className="mm-steps__body">
+            <strong>{st.label}</strong>
+            <span className="visually-hidden">{st.done ? " (done)" : i === cur ? " (now)" : ""}</span>
+            {i === cur && (
+              <>
+                <p className="mm-steps__hint">{st.hint}</p>
+                {st.say && (
+                  <button type="button" className="link-button mm-steps__say-toggle" onClick={() => setSay((v) => !v)} aria-expanded={say}>
+                    {say ? "Hide what to say" : "What to say"}
+                  </button>
+                )}
+                {say && st.say && <p className="mm-steps__say">{st.say}</p>}
+              </>
+            )}
+          </div>
+          {i === cur && st.manual && (
+            <button type="button" className="button button-secondary button-small" onClick={() => onAck(st.id)} data-testid={`mm-step-done-${st.id}`}>
+              Done
+            </button>
+          )}
+        </li>
+      ))}
+    </ol>
+  );
+}
+
 function ItemPanel(props: {
   corpId: string;
   item: AgendaItem;
@@ -996,6 +1097,14 @@ function ItemPanel(props: {
   /** Everyone who can vote: those present, plus proxies at a general meeting. */
   voters: number;
   voteCtx: VoteContext;
+  quorumMet: boolean;
+  /** Steps ticked by hand on this item. */
+  acked: ReadonlySet<string>;
+  onAck: (step: string) => void;
+  /** What's being shown to everyone (0076). */
+  presenting: Presenting | null;
+  /** Show an attachment to everyone, or stop (null). */
+  onShow: (attId: string | null) => void;
   /** Live voting and conflicts (0073); council meetings only. */
   live: null | {
     vote: OpenVote | null;
@@ -1010,6 +1119,7 @@ function ItemPanel(props: {
     now: number;
     onOpen: () => void;
     onRecord: (lot: string, choice: Choice) => void;
+    onAllInFavour: () => void;
     onClose: () => void;
     onCancel: () => void;
     onDeclare: (lot: string, note: string) => void;
@@ -1031,10 +1141,39 @@ function ItemPanel(props: {
 }) {
   const { item: it, onPatch } = props;
   const m = it.motion;
-  const script = itemScript(it, props.general);
   const vote = m ? evaluateVote(m, props.voteCtx) : null;
   const [note, setNote] = useState(props.note);
   const live = props.live;
+  const liveVoting = usesLiveVoting(it, props.general);
+  const steps = itemSteps(it, {
+    general: props.general,
+    acked: props.acked,
+    voteOpen: Boolean(live?.vote),
+    voteClosed: Boolean(m?.voteId),
+  });
+  // What has to happen first; buttons stay off until it has.
+  const openBlocked = !m
+    ? null
+    : !m.text.trim()
+      ? "Write the motion first."
+      : !m.mover || !m.sec
+        ? "Record who moved and seconded the motion first."
+        : !props.quorumMet
+          ? "No quorum: no vote can open."
+          : null;
+  const confirmBlocked = !m
+    ? null
+    : !props.quorumMet
+      ? "No quorum: no decisions can be made."
+      : live?.vote
+        ? "Close the vote first."
+        : !m.mover || !m.sec
+          ? "Record who moved and seconded the motion first."
+          : liveVoting && !m.voteId
+            ? "Open the vote and close it first."
+            : !liveVoting && m.for + m.against + m.abstain === 0
+              ? "Count the vote first."
+              : null;
   const locked = it.done || !props.called;
   // While a live vote is open, or once one counted this motion, the counts aren't typed by hand.
   const countsLocked = locked || Boolean(live?.vote) || Boolean(m?.voteId);
@@ -1075,7 +1214,7 @@ function ItemPanel(props: {
         <p className="mm__alert">The meeting hasn&rsquo;t been called to order yet. Nothing can be decided until it is.</p>
       )}
 
-      {script && <Script title="Chair script" lines={[script]} />}
+      <StepList steps={steps} onAck={props.onAck} />
 
       {!isNextMeeting(it) && !isAdjournment(it) && (it.background || it.financial || it.risks) && (
         <div className="mm-details">
@@ -1095,6 +1234,16 @@ function ItemPanel(props: {
                 <button type="button" className="link-button" onClick={() => openAttachment(a.documentId, a.kind === "link" ? a.url : undefined)}>
                   {a.title}
                 </button>
+                {props.called &&
+                  (props.presenting?.itemId === it.id && props.presenting.attId === a.id ? (
+                    <button type="button" className="button button-primary button-small" onClick={() => props.onShow(null)} data-testid={`mm-stop-showing-${a.id}`}>
+                      Stop showing
+                    </button>
+                  ) : (
+                    <button type="button" className="button button-secondary button-small" onClick={() => props.onShow(a.id)} data-testid={`mm-show-${a.id}`}>
+                      Show to everyone
+                    </button>
+                  ))}
               </li>
             ))}
           </ul>
@@ -1198,13 +1347,15 @@ function ItemPanel(props: {
               busy={live.busy}
               error={live.error}
               now={live.now}
+              openBlocked={openBlocked}
               onOpen={live.onOpen}
               onRecord={live.onRecord}
+              onAllInFavour={live.onAllInFavour}
               onClose={live.onClose}
               onCancel={live.onCancel}
             />
           )}
-          {!live?.vote && (
+          {(!liveVoting || it.done) && (
             <>
           <div className="mm-tally">
             {(["for", "against", "abstain"] as const).map((k) => {
@@ -1284,6 +1435,11 @@ function ItemPanel(props: {
         </div>
       )}
 
+      {!it.done && props.called && m && confirmBlocked && !props.actionError && (
+        <p className="card__meta mm-actions__why" data-testid="mm-confirm-why">
+          {confirmBlocked}
+        </p>
+      )}
       {!it.done && props.called && props.actionError && (
         <p className="mm-action-error" role="alert" data-testid="mm-action-error">
           {props.actionError}
@@ -1306,7 +1462,14 @@ function ItemPanel(props: {
                   Consensus
                 </button>
               )}
-              <button type="button" className="button button-primary" onClick={props.onConfirm} data-testid="mm-confirm-decision">
+              <button
+                type="button"
+                className="button button-primary"
+                onClick={props.onConfirm}
+                disabled={Boolean(confirmBlocked)}
+                title={confirmBlocked ?? undefined}
+                data-testid="mm-confirm-decision"
+              >
                 Confirm decision
               </button>
             </>

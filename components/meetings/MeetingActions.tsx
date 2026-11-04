@@ -39,6 +39,7 @@ export function LaunchMeetingButton({
   trialAvailable,
   isAdmin,
   agendaSaved,
+  missingMotions = [],
 }: {
   corpId: string;
   meetingId: string;
@@ -46,6 +47,8 @@ export function LaunchMeetingButton({
   trialAvailable: boolean;
   isAdmin: boolean;
   agendaSaved: boolean;
+  /** Decision items with no motion yet: a warning, not a block. */
+  missingMotions?: string[];
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -100,6 +103,17 @@ export function LaunchMeetingButton({
               AI and every document you&rsquo;ve uploaded. You can set up as many draft meetings as you like, but only one can be
               launched before subscribing. While it&rsquo;s launched, only you can change it or see its private notes.
             </p>
+          )}
+          {!blocked && missingMotions.length > 0 && (
+            <div className="form-alert" role="status" data-testid="launch-missing-motions">
+              {missingMotions.length === 1 ? "This decision item has" : "These decision items have"} no motion yet. You can write it during the meeting; no vote
+              can open without one.
+              <ul>
+                {missingMotions.map((m) => (
+                  <li key={m}>{m}</li>
+                ))}
+              </ul>
+            </div>
           )}
           {error && <p className="form-error" role="alert">{error}</p>}
           <div className="role-editor__actions">

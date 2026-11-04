@@ -9224,3 +9224,142 @@ a.kb-card:hover {
   background: var(--locked-bg);
   color: var(--ink);
 }
+
+/* Meeting Mode (0076): the Runner's steps, Show to everyone, quorum lost. */
+.mm-steps {
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0.25rem 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+.mm-steps__step {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.5rem 0.9rem;
+}
+.mm-steps__step[data-state="todo"] {
+  color: var(--muted);
+}
+.mm-steps__step[data-state="current"] {
+  background: var(--paper);
+  border-left: 3px solid var(--accent);
+  padding-left: calc(0.9rem - 3px);
+}
+.mm-steps__mark {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  border: 1.5px solid var(--line);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+.mm-steps__step[data-state="current"] .mm-steps__mark {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.mm-steps__step[data-state="done"] .mm-steps__mark {
+  border-color: var(--free);
+  background: var(--free-bg);
+  color: var(--free);
+}
+.mm-steps__body {
+  flex: 1;
+  min-width: 0;
+}
+.mm-steps__hint {
+  margin: 0.2rem 0 0;
+  font-size: 0.9rem;
+}
+.mm-steps__say-toggle {
+  font-size: 0.85rem;
+  margin-top: 0.25rem;
+}
+.mm-steps__say {
+  margin: 0.35rem 0 0;
+  font-style: italic;
+  color: var(--muted);
+}
+.mm-actions__why {
+  text-align: right;
+  margin: 0.4rem 0 0;
+}
+.mm__alert--quorum {
+  font-weight: 500;
+  flex-wrap: wrap;
+}
+.mm__alert--showing {
+  background: #e3ecf5;
+  color: #2c5d8f;
+  flex-wrap: wrap;
+}
+.pill--warn {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+.attachment-list li {
+  flex-wrap: wrap;
+}
+.viewer-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(27, 42, 65, 0.55);
+  display: flex;
+  padding: 1.25rem;
+  z-index: 60;
+}
+.viewer {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: 0 12px 40px rgba(27, 42, 65, 0.3);
+}
+.viewer__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--line);
+}
+.viewer__head h2 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+.viewer__actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.viewer__body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--paper);
+}
+.viewer__frame {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #fff;
+}
+@media (max-width: 760px) {
+  .viewer-backdrop {
+    padding: 0;
+  }
+  .viewer {
+    border-radius: 0;
+  }
+}

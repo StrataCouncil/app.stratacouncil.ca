@@ -11,6 +11,7 @@ import {
   isAdjournment,
   isCallToOrder,
   makeItem,
+  NEEDS_MOTION,
   newCategoryId,
   newMotion,
   renumber,
@@ -60,6 +61,9 @@ function ratificationItem(c: RatificationCandidate, agenda: AgendaItem[]): Agend
     atts: c.recordDocumentId ? [{ id: `a_${c.recordDocumentId}`, kind: "document", documentId: c.recordDocumentId, title: `Council vote record: ${c.title}` }] : [],
   });
 }
+
+/** A decision item with no motion written yet: flagged, and Launch warns (a vote can't open without one). */
+const needsMotion = (it: AgendaItem) => NEEDS_MOTION.includes(it.type) && !it.motion?.text?.trim();
 
 /** Where a new ratification item goes: after the other ratifications, else after the administrative items. */
 function insertRatification(agenda: AgendaItem[], item: AgendaItem): AgendaItem[] {
@@ -373,7 +377,13 @@ export function AgendaBuilder({
           Save agenda
         </button>
         {launch && (
-          <LaunchMeetingButton corpId={corpId} meetingId={meetingId} agendaSaved={!dirty && !pending} {...launch} />
+          <LaunchMeetingButton
+            corpId={corpId}
+            meetingId={meetingId}
+            agendaSaved={!dirty && !pending}
+            missingMotions={agenda.filter(needsMotion).map((i) => `${i.num}. ${i.text}`)}
+            {...launch}
+          />
         )}
       </div>
       {error && !conflict && <p className="form-error" role="alert">{error}</p>}
@@ -433,6 +443,11 @@ export function AgendaBuilder({
                   {it.atts.length > 0 && <span className="card__meta">{it.atts.length} attached</span>}
                   {notes[it.id] && <span className="card__meta">Note</span>}
                   <span className={`rtag rtag--${it.type.toLowerCase()}`}>{resolutionTypeShort[it.type]}</span>
+                  {needsMotion(it) && (
+                    <span className="pill pill--warn" data-testid={`agenda-no-motion-${it.num}`}>
+                      No motion yet
+                    </span>
+                  )}
                   {demoRestricted && !locked(it) && <span className="pill">Yours to edit</span>}
                   <div className="agenda-row__tools">
                     {!demoRestricted && (

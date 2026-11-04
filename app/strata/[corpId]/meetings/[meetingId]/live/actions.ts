@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { motionCounts, parseLiveState, type Choice, type LiveState } from "@/lib/meetings/live";
+import { motionCounts, parseLiveState, parsePresenting, type Choice, type LiveState, type Presenting } from "@/lib/meetings/live";
 import { logDemoActivity } from "@/lib/demo-usage";
 
 /**
@@ -21,7 +21,7 @@ const DECISION_TYPES: readonly string[] = ["MAJORITY", "THREE_QUARTER", "EIGHTY_
 /** The database's own message when it's one written for people; otherwise a general one. */
 function failFrom(error: { message: string; code?: string } | null, fallback: string): Fail {
   const msg = error?.message ?? "";
-  const ours = /^(Only|This vote|Another vote|Call the meeting|That |Write the motion|Choose|No council|No quorum|Live voting|Conflicts|Declare a conflict|Describe the conflict|Unknown)/.test(msg);
+  const ours = /^(Only|This vote|Another vote|Call the meeting|That |Write the motion|Choose|No council|No quorum|Live voting|Conflicts|Declare a conflict|Describe the conflict|Unknown|What's shown)/.test(msg);
   if (!ours) console.error("[live voting]", error?.code, msg);
   return { ok: false, error: ours ? msg : fallback };
 }
@@ -30,12 +30,16 @@ function failFrom(error: { message: string; code?: string } | null, fallback: st
 export async function getLiveState(meetingId: string): Promise<LiveState | null> {
   if (!UUID.test(meetingId)) return null;
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc("live_meeting_state", { p_meeting_id: meetingId });
+  const [{ data, error }, { data: row }] = await Promise.all([
+    supabase.rpc("live_meeting_state", { p_meeting_id: meetingId }),
+    supabase.from("meetings").select("presenting").eq("id", meetingId).maybeSingle(),
+  ]);
   if (error) {
     console.error("[getLiveState]", error.code, error.message);
     return null;
   }
-  return parseLiveState(data);
+  const state = parseLiveState(data);
+  return state && { ...state, presenting: parsePresenting(row?.presenting) };
 }
 
 export async function openVote(meetingId: string, itemId: string, motion: string, decisionType: string): Promise<Ok<{ voteId: string }> | Fail> {
@@ -144,4 +148,22 @@ export async function markJoined(meetingId: string, lot: string): Promise<Ok | F
   const { error } = await supabase.rpc("mark_joined_meeting", { p_meeting_id: meetingId, p_lot: lot });
   if (error?.message.includes("isn't on council")) return { ok: false, error: "That lot isn't on council." };
   return error ? failFrom(error, "Couldn't mark them present. Try again.") : { ok: true };
+}
+
+/** Every vote not cast by the member themselves becomes For (0076); refused once anyone votes Against themselves. */
+export async function recordAllInFavour(voteId: string): Promise<Ok | Fail> {
+  if (!UUID.test(voteId)) return { ok: false, error: "That vote isn't available." };
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("record_all_in_favour", { p_vote_id: voteId });
+  return error ? failFrom(error, "Couldn't record that. Try again.") : { ok: true };
+}
+
+/** Shows one of the agenda's attachments on everyone's screen, or stops (itemId and attId null). */
+export async function showToEveryone(meetingId: string, itemId: string | null, attId: string | null): Promise<Ok<{ presenting: Presenting | null }> | Fail> {
+  if (!UUID.test(meetingId) || (itemId !== null && (!itemId || itemId.length > 100)) || (attId !== null && (!attId || attId.length > 100))) {
+    return { ok: false, error: "That attachment isn't available." };
+  }
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("set_meeting_presenting", { p_meeting_id: meetingId, p_item_id: itemId, p_att_id: attId });
+  return error ? failFrom(error, "Couldn't show that. Try again.") : { ok: true, presenting: parsePresenting(data) };
 }

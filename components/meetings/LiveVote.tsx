@@ -31,8 +31,12 @@ export function RunnerVotePanel(props: {
   busy: boolean;
   error: string | null;
   now: number;
+  /** Why the vote can't open yet (no motion, mover or seconder; no quorum). */
+  openBlocked: string | null;
   onOpen: () => void;
   onRecord: (lot: string, choice: Choice) => void;
+  /** For, for everyone who hasn't voted themselves. */
+  onAllInFavour: () => void;
   onClose: () => void;
   onCancel: () => void;
 }) {
@@ -62,10 +66,12 @@ export function RunnerVotePanel(props: {
             <span className="card__meta">A vote is open on item {props.otherOpenItem}. Close it before opening another.</span>
           ) : (
             <>
-              <button type="button" className="button button-primary button-small" onClick={props.onOpen} disabled={props.busy} data-testid="mm-open-vote">
+              <button type="button" className="button button-primary button-small" onClick={props.onOpen} disabled={props.busy || Boolean(props.openBlocked)} data-testid="mm-open-vote">
                 Open vote
               </button>
-              <span className="card__meta">Council members vote on their own screens; you can enter a vote for anyone. Or count a show of hands below.</span>
+              <span className="card__meta" data-testid="mm-open-vote-hint">
+                {props.openBlocked ?? "Council members vote on their own screens; you can enter a vote for anyone on the phone or in the room."}
+              </span>
             </>
           )}
         </div>
@@ -78,6 +84,8 @@ export function RunnerVotePanel(props: {
   const tally = { for: 0, against: 0, abstain: 0 } as Record<Choice, number>;
   for (const b of ballots.values()) tally[b.choice] += 1;
   const need = Math.floor(vote.eligibleLots.length / 2) + 1;
+  // All in favour isn't offered once a member has voted Against themselves.
+  const selfAgainst = [...ballots.values()].some((b) => b.choice === "against" && !b.forOther && b.lot !== props.ownLot);
 
   return (
     <div className="mm-live" data-testid="mm-live-open">
@@ -87,6 +95,16 @@ export function RunnerVotePanel(props: {
         <span className="mm-live__actions">
           <button type="button" className="button button-secondary button-small" onClick={props.onCancel} disabled={props.busy}>
             Cancel vote
+          </button>
+          <button
+            type="button"
+            className="button button-secondary button-small"
+            onClick={props.onAllInFavour}
+            disabled={props.busy || selfAgainst}
+            title={selfAgainst ? "Someone voted Against on their own screen." : "For, for everyone who hasn't voted on their own screen."}
+            data-testid="mm-all-in-favour"
+          >
+            All in favour
           </button>
           <button type="button" className="button button-primary button-small" onClick={props.onClose} disabled={props.busy} data-testid="mm-close-vote">
             Close vote
