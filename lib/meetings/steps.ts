@@ -93,7 +93,13 @@ export function itemSteps(it: AgendaItem, s: StepState): Step[] {
           s.voteOpen || s.voteClosed,
           '"The vote is open."'
         ),
-        auto("close", "Close the vote", "When everyone has voted, close it. Anyone who hasn't voted is counted as abstaining.", s.voteClosed)
+        auto(
+          "close",
+          "Close the vote and confirm the result",
+          "Close vote unlocks once everyone present has voted (enter Abstain for anyone who won't). A box confirms the result; if it's wrong, go back and fix the vote.",
+          s.voteClosed || it.done,
+          '"The motion is carried." (or defeated)'
+        )
       );
     } else {
       const dt = s.general ? decisionTypeLabels[m.dt] : "majority";
@@ -107,7 +113,10 @@ export function itemSteps(it: AgendaItem, s: StepState): Step[] {
         )
       );
     }
-    steps.push(auto("confirm", "Confirm the decision", "Confirm the outcome. It goes in the minutes.", it.done, '"The motion is carried." (or defeated)'));
+    // A hand count is confirmed with its own button; a live vote is recorded as it closes.
+    if (!usesLiveVoting(it, s.general)) {
+      steps.push(auto("confirm", "Confirm the decision", "Confirm the outcome. It goes in the minutes.", it.done, '"The motion is carried." (or defeated)'));
+    }
   } else if (it.type === "FOR_DISCUSSION") {
     steps.push(
       introduce,

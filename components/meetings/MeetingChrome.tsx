@@ -164,8 +164,8 @@ const INLINE = /\.(pdf|png|jpe?g|gif|webp|txt)$/i;
 
 /**
  * Share on screen (0076): the attachment the runner is sharing, over the
- * agenda on every screen. Anyone can hide it on their own screen; the
- * runner stops it for everyone.
+ * agenda on every screen. Members can hide it on their own screen; the
+ * runner has one button, Stop sharing.
  */
 export function SharedViewer(props: {
   corpId: string;
@@ -173,7 +173,8 @@ export function SharedViewer(props: {
   runner?: boolean;
   busy?: boolean;
   onStop?: () => void;
-  onHide: () => void;
+  /** Members only: hide it on this screen. The runner just stops sharing. */
+  onHide?: () => void;
 }) {
   const { presenting: p } = props;
   const [src, setSrc] = useState<string | null>(p.url);
@@ -222,9 +223,11 @@ export function SharedViewer(props: {
                 Stop sharing
               </button>
             )}
-            <button type="button" className="button button-secondary button-small" onClick={props.onHide} data-testid="viewer-hide">
-              {props.runner ? "Back to the agenda" : "Hide"}
-            </button>
+            {!props.runner && (
+              <button type="button" className="button button-secondary button-small" onClick={props.onHide} data-testid="viewer-hide">
+                Hide
+              </button>
+            )}
           </span>
         </div>
         <div className="viewer__body">

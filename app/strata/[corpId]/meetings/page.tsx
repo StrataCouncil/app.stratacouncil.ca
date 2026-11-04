@@ -58,7 +58,9 @@ export default async function MeetingsPage({ params }: { params: Promise<{ corpI
   const checklistDone = steps.every((s) => s.done);
 
   const upcoming = meetings.filter((m) => m.status !== "ADJOURNED");
-  const past = meetings.filter((m) => m.status === "ADJOURNED");
+  // Most recent first: by date, then start time (two meetings on one day).
+  const when = (m: MeetingRecord) => `${m.meetingDate} ${m.startTime ?? ""}`;
+  const past = meetings.filter((m) => m.status === "ADJOURNED").sort((a, b) => when(b).localeCompare(when(a)));
 
   return (
     <>
@@ -185,7 +187,7 @@ function MeetingSection({
                   </Link>
                 ) : m.status === "ADJOURNED" && (m.minutesState === "FINAL" || (m.minutesState === "DRAFT" && seesDrafts)) ? (
                   <Link href={`/strata/${corpId}/meetings/${m.id}/minutes`} className="button button-secondary button-small">
-                    {m.minutesState === "FINAL" ? "Minutes" : "Review minutes"}
+                    {m.minutesState === "FINAL" ? "Minutes" : "Draft minutes"}
                   </Link>
                 ) : (
                   <Link href={`/strata/${corpId}/meetings/${m.id}`} className="button button-secondary button-small">

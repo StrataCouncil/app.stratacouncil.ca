@@ -127,8 +127,6 @@ export function MeetingMode(props: {
   const [confirm, setConfirm] = useState<Confirm>(null);
   const [editing, setEditing] = useState<AgendaItem | null>(null);
   const [panel, setPanel] = useState<"none" | "agenda" | "assistant">("none");
-  // The shared attachment, hidden on this screen (by when it was shown).
-  const [hiddenShow, setHiddenShow] = useState<string | null>(null);
   // A lot the runner is marking as having left (typed confirmation).
   const [marking, setMarking] = useState<string | null>(null);
   const [markError, setMarkError] = useState<string | null>(null);
@@ -145,7 +143,10 @@ export function MeetingMode(props: {
 
   // ── Autosave ─────────────────────────────────────────────────────────
   const firstRender = useRef(true);
-  const currentItemId = current === ATTENDANCE_VIEW ? null : current;
+  // While the Runner is on Attendance, members keep seeing the last item.
+  const lastItem = useRef<string | null>(current === ATTENDANCE_VIEW ? null : current);
+  if (current !== ATTENDANCE_VIEW) lastItem.current = current;
+  const currentItemId = current === ATTENDANCE_VIEW ? lastItem.current : current;
   const latest = useRef({ agenda, attendance, agendaApproved, currentItemId });
   latest.current = { agenda, attendance, agendaApproved, currentItemId };
   useEffect(() => {
@@ -428,41 +429,47 @@ export function MeetingMode(props: {
     const r = await showToEveryone(meetingId, it?.id ?? null, attId).catch(() => ({ ok: false as const, error: "Couldn't reach the server. Try again." }));
     setLiveBusy(false);
     if (!r.ok) return setLiveError(r.error);
-    setHiddenShow(null);
     await refreshLive();
   }
 
   async function startVote(it: AgendaItem) {
     const m = it.motion;
     if (!m?.text.trim()) return setLiveError("Write the motion before opening the vote.");
+    // A deferred item, or one voted on before: a fresh vote, with whoever is here now.
+    if (it.deferred || m.voteId || m.for + m.against + m.abstain > 0) {
+      patchItem(it.id, { deferred: false, motion: { ...m, for: 0, against: 0, abstain: 0, voteId: undefined, tieBreak: null } });
+    }
     await liveStep(async () => {
       if (!(await saveNow())) return { ok: false as const, error: "Couldn't save the agenda. Check your connection and try again." };
       return openVote(meetingId, it.id, m.text, effectiveDecisionType(type, m.dt));
     });
   }
+  // Close vote opens the confirm box; the vote only closes when it's confirmed. Deferring is
+  // the alternative to holding a vote, offered beside Open vote.
+  const [recording, setRecording] = useState<{ itemId: string; vote: OpenVote; tieBreak: "for" | "against" | null } | null>(null);
   function finishVote(it: AgendaItem, vote: OpenVote) {
-    const ballots = vote.ballots?.length ?? 0;
-    const missing = vote.eligibleLots.length - ballots;
-    const close = () =>
-      liveStep(async () => {
-        const r = await closeVote(vote.id);
-        if (!r.ok) return r;
-        // The counts come from the database; the motion keeps them (and its link to the vote).
-        patchItem(it.id, { motion: { ...it.motion!, ...r.counts, voteId: vote.id } });
-        return { ok: true as const };
-      }).then(() => setConfirm(null));
-    if (missing > 0) {
-      setConfirm({
-        title: "Close the vote?",
-        confirmLabel: "Close vote",
-        body: (
-          <p>
-            {missing} of {vote.eligibleLots.length} council {vote.eligibleLots.length === 1 ? "member hasn't" : "members haven't"} voted. They&rsquo;ll be recorded as abstaining, which for a council vote has the same effect as voting against (Standard Bylaws 18(1)).
-          </p>
-        ),
-        onConfirm: () => void close(),
-      });
-    } else void close();
+    setLiveError(null);
+    setRecording({ itemId: it.id, vote, tieBreak: null });
+  }
+  async function recordTheVote() {
+    if (!recording) return;
+    const it = agenda.find((i) => i.id === recording.itemId);
+    if (!it?.motion) return setRecording(null);
+    const { vote, tieBreak } = recording;
+    let decided: { counts: { for: number; against: number; abstain: number }; present: number } | null = null;
+    const ok = await liveStep(async () => {
+      const r = await closeVote(vote.id);
+      if (!r.ok) return r;
+      decided = r;
+      return { ok: true as const };
+    });
+    if (!ok || !decided) return;
+    const d = decided as { counts: { for: number; against: number; abstain: number }; present: number };
+    // The counts come from the database; the outcome follows them.
+    const motion = { ...it.motion, ...d.counts, voteId: vote.id, tieBreak };
+    const v = evaluateVote(motion, { ...ctxFor(it), present: d.present });
+    setRecording(null);
+    recordOutcome({ ...it, motion }, v.passing ? "CARRIED" : "DEFEATED", { ...d.counts, voteId: vote.id, tieBreak });
   }
 
   // ── Adjournment ─────────────────────────────────────────────────────
@@ -614,17 +621,6 @@ export function MeetingMode(props: {
         </div>
       )}
 
-      {live?.presenting && hiddenShow === live.presenting.at && (
-        <div className="mm__alert mm__alert--showing" role="status" data-testid="mm-showing-bar">
-          Sharing on screen: <strong>{live.presenting.title || "an attachment"}</strong>{" "}
-          <button type="button" className="link-button" onClick={() => setHiddenShow(null)}>
-            View
-          </button>{" "}
-          <button type="button" className="link-button" onClick={() => void show(null, null)} disabled={liveBusy}>
-            Stop sharing
-          </button>
-        </div>
-      )}
       {called && !q.met && (
         <div className="mm__alert mm__alert--quorum" role="alert" data-testid="mm-quorum-lost">
           <strong>Quorum lost:</strong> {q.counted} present, {q.required} needed. No decisions can be made until quorum is back. Wait for members to
@@ -868,7 +864,6 @@ export function MeetingMode(props: {
               onReceived={() => markReceived(item)}
               onSkip={() => goNext(item.id)}
               onEdit={() => guardApproved(() => setEditing(item))}
-              onTakeUp={() => patchItem(item.id, { deferred: false })}
             />
           )}
         </main>
@@ -905,16 +900,67 @@ export function MeetingMode(props: {
         />
       )}
       {confirm && <ConfirmDialog {...confirm} busy={busy} onCancel={() => setConfirm(null)} />}
-      {live?.presenting && hiddenShow !== live.presenting.at && (
-        <SharedViewer
-          corpId={corpId}
-          presenting={live.presenting}
-          runner
-          busy={liveBusy}
-          onStop={() => void show(null, null)}
-          onHide={() => setHiddenShow(live.presenting!.at)}
-        />
-      )}
+      {recording &&
+        (() => {
+          const it = agenda.find((i) => i.id === recording.itemId);
+          if (!it?.motion) return null;
+          // The vote as it stands, ballots from the live state (it keeps changing until recorded).
+          const v0 = live?.openVote?.id === recording.vote.id ? live.openVote : recording.vote;
+          const ballots = v0.ballots ?? [];
+          const count = (c: Choice) => ballots.filter((b) => b.choice === c).length;
+          const missing = Math.max(0, v0.eligibleLots.length - ballots.length);
+          const preview = { ...it.motion, for: count("for"), against: count("against"), abstain: count("abstain") + missing, tieBreak: recording.tieBreak };
+          const ctx = { ...ctxFor(it), present: v0.eligibleLots.length };
+          const v = evaluateVote(preview, ctx);
+          const tie = isTie(preview) && tieBreakAllowed(preview, ctx);
+          const outcome = v.passing ? "CARRIED" : "DEFEATED";
+          return (
+            <div className="modal-backdrop" role="presentation">
+              <div className="modal" role="alertdialog" aria-modal="true" aria-labelledby="record-title" data-testid="mm-record-vote">
+                <h2 id="record-title">{outcome === "CARRIED" ? "Motion carried" : "Motion defeated"}</h2>
+                <p>&ldquo;{it.text}&rdquo;</p>
+                <p>
+                  Moved by {it.motion.mover}, seconded by {it.motion.sec}.<br />
+                  {preview.for} in favour, {preview.against} opposed, {preview.abstain} abstaining · {v0.eligibleLots.length} present for this item.
+                </p>
+                {tie && (
+                  <label className="field" data-testid="mm-record-tie-break">
+                    <span>Tied vote: president&rsquo;s deciding vote</span>
+                    <select
+                      value={recording.tieBreak ?? ""}
+                      onChange={(e) => setRecording({ ...recording, tieBreak: e.target.value === "for" || e.target.value === "against" ? e.target.value : null })}
+                    >
+                      <option value="">None cast (the tie stands)</option>
+                      <option value="for">In favour</option>
+                      <option value="against">Against</option>
+                    </select>
+                    <span className="field__hint">The president may break a tie with a second, deciding vote (Standard Bylaws 18(2)), if your bylaws allow it.</span>
+                  </label>
+                )}
+                <p className="card__meta">
+                  Council decisions need a majority of the {v0.eligibleLots.length} council {v0.eligibleLots.length === 1 ? "member" : "members"} present
+                  (Standard Bylaws 18(1)), so an abstention counts like a vote against. If this isn&rsquo;t right, go back and fix the vote.
+                </p>
+                {liveError && <p className="form-error" role="alert">{liveError}</p>}
+                <div className="modal__actions">
+                  <button type="button" className="button button-secondary" onClick={() => setRecording(null)} disabled={liveBusy} data-testid="mm-record-back">
+                    Back
+                  </button>
+                  <button
+                    type="button"
+                    className={`button ${outcome === "CARRIED" ? "button-primary" : "button-danger"}`}
+                    onClick={() => void recordTheVote()}
+                    disabled={liveBusy}
+                    data-testid="mm-record-outcome"
+                  >
+                    Confirm as {outcome}
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+      {live?.presenting && <SharedViewer corpId={corpId} presenting={live.presenting} runner busy={liveBusy} onStop={() => void show(null, null)} />}
       {marking && (
         <TypedConfirm
           title={`${marking}${names[marking] ? ` (${names[marking]})` : ""} left the meeting?`}
@@ -1047,27 +1093,30 @@ function Script({ title, lines }: { title: string; lines: string[] }) {
   );
 }
 
-/** The Runner's steps for the item, in order: a list to follow. Each opens to what to do and what to say. */
-function StepList({ steps }: { steps: Step[] }) {
+/** The Runner's steps for the item, collapsed: a list to follow, each with what to say. */
+function Procedure({ steps }: { steps: Step[] }) {
   const cur = currentStep(steps);
   return (
-    <ol className="mm-steps" data-testid="mm-steps" aria-label="Steps for this item">
-      {steps.map((st, i) => (
-        <li key={st.id} className="mm-steps__step" data-state={st.done ? "done" : i === cur ? "current" : "todo"} data-testid={`mm-step-${st.id}`}>
-          <span className="mm-steps__mark" aria-hidden="true">
-            {st.done ? <Tick /> : i + 1}
-          </span>
-          <details className="mm-steps__body">
-            <summary>
-              {st.label}
-              <span className="visually-hidden">{st.done ? " (done)" : ""}</span>
-            </summary>
-            <p className="mm-steps__hint">{st.hint}</p>
-            {st.say && <p className="mm-steps__say">{st.say}</p>}
-          </details>
-        </li>
-      ))}
-    </ol>
+    <details className="mm-detail mm-procedure" data-testid="mm-steps">
+      <summary>Procedure</summary>
+      <ol className="mm-steps" aria-label="Steps for this item">
+        {steps.map((st, i) => (
+          <li key={st.id} className="mm-steps__step" data-state={st.done ? "done" : i === cur ? "current" : "todo"} data-testid={`mm-step-${st.id}`}>
+            <span className="mm-steps__mark" aria-hidden="true">
+              {st.done ? <Tick /> : i + 1}
+            </span>
+            <div className="mm-steps__body">
+              <span className="mm-steps__label">
+                {st.label}
+                <span className="visually-hidden">{st.done ? " (done)" : ""}</span>
+              </span>
+              <span className="mm-steps__hint">{st.hint}</span>
+              {st.say && <span className="mm-steps__say">{st.say}</span>}
+            </div>
+          </li>
+        ))}
+      </ol>
+    </details>
   );
 }
 
@@ -1117,7 +1166,6 @@ function ItemPanel(props: {
   onReceived: () => void;
   onSkip: () => void;
   onEdit: () => void;
-  onTakeUp: () => void;
 }) {
   const { item: it, onPatch } = props;
   const m = it.motion;
@@ -1193,7 +1241,7 @@ function ItemPanel(props: {
         <p className="mm__alert">The meeting hasn&rsquo;t been called to order yet. Nothing can be decided until it is.</p>
       )}
 
-      <StepList steps={steps} />
+      <Procedure steps={steps} />
 
       {m && isElectChair(it) && (
         <label className="field">
@@ -1251,102 +1299,6 @@ function ItemPanel(props: {
               </select>
             </label>
           </div>
-          {live && props.called && !it.done && !isElectChair(it) && (
-            <RunnerVotePanel
-              vote={live.vote}
-              otherOpenItem={live.otherOpenItem}
-              closed={live.closed}
-              present={props.present}
-              names={props.names}
-              ownLot={live.ownLot}
-              busy={live.busy}
-              error={live.error}
-              now={live.now}
-              openBlocked={openBlocked}
-              onOpen={live.onOpen}
-              onRecord={live.onRecord}
-              onAllInFavour={live.onAllInFavour}
-              onClose={live.onClose}
-              onCancel={live.onCancel}
-            />
-          )}
-          {(!liveVoting || it.done) && (
-            <>
-          <div className="mm-tally">
-            {(["for", "against", "abstain"] as const).map((k) => {
-              // Nobody votes twice: the three counts together can't exceed the voters present.
-              const others = m.for + m.against + m.abstain - m[k];
-              const max = Math.max(0, props.voters - others);
-              return (
-              <div className="mm-tally__box" key={k}>
-                <span className="mm-tally__label">{k === "for" ? "In favour" : k === "against" ? "Opposed" : "Abstain"}</span>
-                <div className="mm-tally__controls">
-                  <button type="button" className="icon-button" aria-label={`One fewer ${k}`} onClick={() => setMotion({ [k]: Math.max(0, m[k] - 1) })} disabled={countsLocked}>
-                    &minus;
-                  </button>
-                  <input
-                    type="number"
-                    min={0}
-                    inputMode="numeric"
-                    value={m[k]}
-                    max={max}
-                    onChange={(e) => setMotion({ [k]: Math.min(max, Math.max(0, Math.floor(Number(e.target.value) || 0))) })}
-                    disabled={countsLocked}
-                    aria-label={k === "for" ? "Votes in favour" : k === "against" ? "Votes opposed" : "Abstentions"}
-                    data-testid={`mm-votes-${k}`}
-                  />
-                  <button
-                    type="button"
-                    className="icon-button"
-                    aria-label={`One more ${k}`}
-                    onClick={() => setMotion({ [k]: Math.min(max, m[k] + 1) })}
-                    disabled={countsLocked || m[k] >= max}
-                  >
-                    +
-                  </button>
-                </div>
-              </div>
-              );
-            })}
-          </div>
-          {!it.done && (
-            <p className="card__meta mm-tally__count" data-testid="mm-votes-counted">
-              {m.for + m.against + m.abstain} of {props.voters} {props.voters === 1 ? "voter" : "voters"} counted
-              {props.voters - (m.for + m.against + m.abstain) > 0
-                ? ` · ${props.voters - (m.for + m.against + m.abstain)} not yet counted`
-                : ""}
-            </p>
-          )}
-          <p className="mm-threshold" data-state={it.done ? m.outcome?.toLowerCase() : vote && vote.total > 0 ? (vote.passing ? "passing" : "failing") : "pending"}>
-            {it.done
-              ? m.outcome
-              : vote && vote.total > 0
-                ? `${thresholdText(vote)}: ${vote.passing ? "passing" : "failing"}`
-                : "No votes recorded yet"}
-          </p>
-            </>
-          )}
-          {!it.done && isTie(m) && (
-            tieBreakAllowed(m, props.voteCtx) ? (
-              <label className="field" data-testid="mm-tie-break">
-                <span>Tied vote: president&rsquo;s deciding vote</span>
-                <select
-                  value={m.tieBreak ?? ""}
-                  onChange={(e) => setMotion({ tieBreak: e.target.value === "for" || e.target.value === "against" ? e.target.value : null })}
-                  disabled={locked}
-                >
-                  <option value="">None cast (the tie stands)</option>
-                  <option value="for">In favour</option>
-                  <option value="against">Against</option>
-                </select>
-                <span className="field__hint">
-                  The president may break a tie with a second, deciding vote ({props.general ? "Standard Bylaws 27(5)" : "Standard Bylaws 18(2)"}), if your bylaws allow it.
-                </span>
-              </label>
-            ) : (
-              <p className="card__meta">Tied vote. With only 2 strata lots there is no deciding vote, so the tie stands.</p>
-            )
-          )}
         </div>
       )}
 
@@ -1414,7 +1366,109 @@ function ItemPanel(props: {
         </div>
       )}
 
-      {!it.done && props.called && m && confirmBlocked && !props.actionError && (
+      {m && liveVoting && !it.done && live && props.called && (
+        <div className="mm-vote mm-vote--ballot" data-testid="mm-ballot-card">
+          <h3 className="mm-subhead">Vote</h3>
+          <RunnerVotePanel
+            vote={live.vote}
+            otherOpenItem={live.otherOpenItem}
+            closed={live.closed}
+            present={props.present}
+            names={props.names}
+            ownLot={live.ownLot}
+            busy={live.busy}
+            error={live.error}
+            now={live.now}
+            openBlocked={openBlocked}
+            onOpen={live.onOpen}
+            onDefer={props.onDefer}
+            onRecord={live.onRecord}
+            onAllInFavour={live.onAllInFavour}
+            onClose={live.onClose}
+            onCancel={live.onCancel}
+          />
+        </div>
+      )}
+      {m && (!liveVoting || it.done) && (
+        <div className="mm-vote mm-vote--ballot">
+          <h3 className="mm-subhead">Vote</h3>
+          <div className="mm-tally">
+            {(["for", "against", "abstain"] as const).map((k) => {
+              // Nobody votes twice: the three counts together can't exceed the voters present.
+              const others = m.for + m.against + m.abstain - m[k];
+              const max = Math.max(0, props.voters - others);
+              return (
+              <div className="mm-tally__box" key={k}>
+                <span className="mm-tally__label">{k === "for" ? "In favour" : k === "against" ? "Opposed" : "Abstain"}</span>
+                <div className="mm-tally__controls">
+                  <button type="button" className="icon-button" aria-label={`One fewer ${k}`} onClick={() => setMotion({ [k]: Math.max(0, m[k] - 1) })} disabled={countsLocked}>
+                    &minus;
+                  </button>
+                  <input
+                    type="number"
+                    min={0}
+                    inputMode="numeric"
+                    value={m[k]}
+                    max={max}
+                    onChange={(e) => setMotion({ [k]: Math.min(max, Math.max(0, Math.floor(Number(e.target.value) || 0))) })}
+                    disabled={countsLocked}
+                    aria-label={k === "for" ? "Votes in favour" : k === "against" ? "Votes opposed" : "Abstentions"}
+                    data-testid={`mm-votes-${k}`}
+                  />
+                  <button
+                    type="button"
+                    className="icon-button"
+                    aria-label={`One more ${k}`}
+                    onClick={() => setMotion({ [k]: Math.min(max, m[k] + 1) })}
+                    disabled={countsLocked || m[k] >= max}
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+              );
+            })}
+          </div>
+          {!it.done && (
+            <p className="card__meta mm-tally__count" data-testid="mm-votes-counted">
+              {m.for + m.against + m.abstain} of {props.voters} {props.voters === 1 ? "voter" : "voters"} counted
+              {props.voters - (m.for + m.against + m.abstain) > 0
+                ? ` · ${props.voters - (m.for + m.against + m.abstain)} not yet counted`
+                : ""}
+            </p>
+          )}
+          <p className="mm-threshold" data-state={it.done ? m.outcome?.toLowerCase() : vote && vote.total > 0 ? (vote.passing ? "passing" : "failing") : "pending"}>
+            {it.done
+              ? m.outcome
+              : vote && vote.total > 0
+                ? `${thresholdText(vote)}: ${vote.passing ? "passing" : "failing"}`
+                : "No votes recorded yet"}
+          </p>
+          {!it.done && !liveVoting && isTie(m) && (
+            tieBreakAllowed(m, props.voteCtx) ? (
+              <label className="field" data-testid="mm-tie-break">
+                <span>Tied vote: president&rsquo;s deciding vote</span>
+                <select
+                  value={m.tieBreak ?? ""}
+                  onChange={(e) => setMotion({ tieBreak: e.target.value === "for" || e.target.value === "against" ? e.target.value : null })}
+                  disabled={locked}
+                >
+                  <option value="">None cast (the tie stands)</option>
+                  <option value="for">In favour</option>
+                  <option value="against">Against</option>
+                </select>
+                <span className="field__hint">
+                  The president may break a tie with a second, deciding vote ({props.general ? "Standard Bylaws 27(5)" : "Standard Bylaws 18(2)"}), if your bylaws allow it.
+                </span>
+              </label>
+            ) : (
+              <p className="card__meta">Tied vote. With only 2 strata lots there is no deciding vote, so the tie stands.</p>
+            )
+          )}
+        </div>
+      )}
+
+      {!it.done && props.called && m && !liveVoting && confirmBlocked && !props.actionError && (
         <p className="card__meta mm-actions__why" data-testid="mm-confirm-why">
           {confirmBlocked}
         </p>
@@ -1424,33 +1478,32 @@ function ItemPanel(props: {
           {props.actionError}
         </p>
       )}
-      {!it.done && props.called && (
+      {!it.done && props.called && (!m || !liveVoting || it.type === "FOR_DIRECTION" || it.type === "FOR_DISCUSSION") && (
         <div className="mm-actions">
-          {it.deferred && (
-            <button type="button" className="button button-secondary" onClick={props.onTakeUp}>
-              Take it up now
-            </button>
-          )}
           {m ? (
             <>
-              <button type="button" className="button button-secondary" onClick={props.onDefer} data-testid="mm-defer">
-                Defer
-              </button>
-              {(it.type === "FOR_DIRECTION" || it.type === "FOR_DISCUSSION") && (
+              {(it.type === "FOR_DIRECTION" || it.type === "FOR_DISCUSSION") && !live?.vote && (
                 <button type="button" className="button button-secondary" onClick={props.onConsensus}>
                   Consensus
                 </button>
               )}
-              <button
-                type="button"
-                className="button button-primary"
-                onClick={props.onConfirm}
-                disabled={Boolean(confirmBlocked)}
-                title={confirmBlocked ?? undefined}
-                data-testid="mm-confirm-decision"
-              >
-                Confirm decision
-              </button>
+              {!liveVoting && (
+                <>
+                  <button type="button" className="button button-secondary" onClick={props.onDefer} data-testid="mm-defer">
+                    Defer
+                  </button>
+                  <button
+                    type="button"
+                    className="button button-primary"
+                    onClick={props.onConfirm}
+                    disabled={Boolean(confirmBlocked)}
+                    title={confirmBlocked ?? undefined}
+                    data-testid="mm-confirm-decision"
+                  >
+                    Confirm decision
+                  </button>
+                </>
+              )}
             </>
           ) : (
             <>

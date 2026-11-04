@@ -10,10 +10,10 @@ const council = (vote: { open?: boolean; closed?: boolean } = {}) => ({
 });
 const ids = (steps: { id: string }[]) => steps.map((s) => s.id);
 
-test("a council decision runs in order: introduce, conflicts, motion, discussion, vote, close, confirm", () => {
+test("a council decision runs in order: introduce, conflicts, motion, discussion, vote, close and record", () => {
   const it = makeItem("Roof repairs", "New Business", { type: "FOR_DECISION", motion: newMotion("MAJORITY", "THAT the roof be repaired") });
   const steps = itemSteps(it, council());
-  assert.deepEqual(ids(steps), ["introduce", "conflicts", "motion", "discuss", "vote", "close", "confirm"]);
+  assert.deepEqual(ids(steps), ["introduce", "conflicts", "motion", "discuss", "vote", "close"]);
   assert.equal(currentStep(steps), 0);
 });
 
@@ -27,10 +27,8 @@ test("steps tick themselves from what's on screen, and a later step ticks the ea
   // Vote open: close is next.
   steps = itemSteps(it, council({ open: true }));
   assert.equal(steps[currentStep(steps)].id, "close");
-  // Vote closed: confirm is next.
-  steps = itemSteps(it, council({ closed: true }));
-  assert.equal(steps[currentStep(steps)].id, "confirm");
-  // Decided: nothing left.
+  // Recorded: nothing left.
+  assert.equal(currentStep(itemSteps(it, council({ closed: true }))), -1);
   assert.equal(currentStep(itemSteps({ ...it, done: true }, council({ closed: true }))), -1);
 });
 
@@ -46,7 +44,7 @@ test("procedural items ask for no conflicts; adjournment skips introduction and 
   const approve = makeItem("Approval of the Agenda", "Opening", { type: "FOR_APPROVAL", motion: newMotion("MAJORITY", "THAT the agenda be approved") });
   assert.ok(!ids(itemSteps(approve, council())).includes("conflicts"));
   const adjourn = makeItem("Adjournment", "Closing", { type: "FOR_DECISION", motion: newMotion("MAJORITY", "THAT the meeting adjourn") });
-  assert.deepEqual(ids(itemSteps(adjourn, council())), ["motion", "vote", "close", "confirm"]);
+  assert.deepEqual(ids(itemSteps(adjourn, council())), ["motion", "vote", "close"]);
 });
 
 test("electing a chair, and general meetings, count the vote by hand", () => {

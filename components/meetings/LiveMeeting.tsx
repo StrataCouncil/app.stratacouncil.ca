@@ -11,7 +11,7 @@ import { getDocumentDownloadUrl } from "@/app/strata/[corpId]/documents/actions"
 import { openInNewTab } from "@/lib/open-in-tab";
 import { MemberVote } from "@/components/meetings/LiveVote";
 import { Assistant } from "@/components/meetings/MeetingMode";
-import { ConflictDialog, MeetingSide, MeetingUser, SharedViewer, useLeaveWarning } from "@/components/meetings/MeetingChrome";
+import { ConflictDialog, MeetingSide, MeetingUser, SharedViewer, TypedConfirm, useLeaveWarning } from "@/components/meetings/MeetingChrome";
 
 /**
  * A council member (or the manager) in a meeting (0073, 0074). Opening this
@@ -51,6 +51,7 @@ export function LiveMeeting(props: {
   const [joinError, setJoinError] = useState<string | null>(null);
   // The shared attachment, hidden on this screen (by when it was shown).
   const [hiddenShow, setHiddenShow] = useState<string | null>(null);
+  const [leaving, setLeaving] = useState(false);
 
   const refresh = useCallback(async () => {
     const s = await getLiveState(meetingId).catch(() => null);
@@ -125,6 +126,8 @@ export function LiveMeeting(props: {
 
   const conflicted = item ? conflictedLots(state.conflicts, item.id) : [];
   const iAmConflicted = Boolean(item && state.myLot && conflicted.includes(state.myLot));
+  // Stepped out for the item the meeting is on: nothing shared reaches them meanwhile.
+  const steppedOut = Boolean(followingId && state.myLot && conflictedLots(state.conflicts, followingId).includes(state.myLot));
   const openHere = item && state.openVote?.itemId === item.id ? state.openVote : null;
   const canVote = Boolean(openHere && state.myLot && openHere.eligibleLots.includes(state.myLot));
   const closedHere = item ? state.closedVotes.filter((v) => v.itemId === item.id) : [];
@@ -143,7 +146,7 @@ export function LiveMeeting(props: {
         </div>
         <span className="mm__spacer" />
         <MeetingUser name={props.me.name} avatarUrl={props.me.avatarUrl} />
-        <button type="button" className="button button-secondary button-small" onClick={leave} disabled={busy} data-testid="leave-meeting">
+        <button type="button" className="button button-secondary button-small" onClick={() => setLeaving(true)} disabled={busy} data-testid="leave-meeting">
           Leave meeting
         </button>
       </header>
@@ -154,7 +157,7 @@ export function LiveMeeting(props: {
           made until enough members are back.
         </div>
       )}
-      {state.presenting && hiddenShow === state.presenting.at && !adjourned && (
+      {state.presenting && hiddenShow === state.presenting.at && !adjourned && !steppedOut && (
         <div className="mm__alert mm__alert--showing" role="status">
           Shared on screen: <strong>{state.presenting.title || "an attachment"}</strong>{" "}
           <button type="button" className="link-button" onClick={() => setHiddenShow(null)} data-testid="live-show-again">
@@ -285,7 +288,18 @@ export function LiveMeeting(props: {
         />
       </div>
 
-      {state.presenting && hiddenShow !== state.presenting.at && !adjourned && (
+      {leaving && (
+        <TypedConfirm
+          title="Leave the meeting?"
+          body={<p>You&rsquo;re recorded as having left at this time and no longer count for quorum or votes. You can rejoin any time from the Meetings tab.</p>}
+          phrase="Leave meeting"
+          confirmLabel="Leave meeting"
+          busy={busy}
+          onCancel={() => setLeaving(false)}
+          onConfirm={() => void leave()}
+        />
+      )}
+      {state.presenting && hiddenShow !== state.presenting.at && !adjourned && !steppedOut && (
         <SharedViewer corpId={corpId} presenting={state.presenting} onHide={() => setHiddenShow(state.presenting!.at)} />
       )}
       {adjourned && (
