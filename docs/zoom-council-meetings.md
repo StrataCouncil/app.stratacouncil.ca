@@ -92,19 +92,31 @@ current to 2026-10-20); both are in the Knowledge Base.
    The server mints the Meeting SDK signature (role 0, 1 for the host) and
    sets the display name ("Jane, SL12") and `customerKey` (our membership
    id), so every Zoom participant maps to a known council member. Waiting
-   room on.
+   room on. Built ahead of Zoom (0074): launching emails council and the
+   manager a Join meeting link, and Join meeting shows in the Meetings tab
+   from launch (before Call to Order). Joining records the time and marks
+   the council lot present; Leave records the exit time; anyone can rejoin.
+   The operator can mark someone as having left only by typing "Left
+   meeting". Someone who has left no longer counts for quorum, and no vote
+   can open or decision be confirmed without quorum. Arrivals and departures
+   after Call to Order go in the minutes.
 3. **Meeting room.** Component View video on one side, agenda on the other.
    The operator has the Meeting Mode controls plus Open vote / Close vote;
    members see the current item and three vote buttons while a vote is
    open. Live updates through Supabase Realtime; each vote is one row,
    immutable once the vote closes.
 4. **Quorum and decisions** use `quorum()` and `evaluateVote()`. Vote totals
-   fill the tally; the operator still confirms the decision.
+   fill the tally; the operator still confirms the decision. There is no
+   Unanimous button: the minutes say "unanimous" whenever every vote was in
+   favour.
 5. **Conflict of interest.** Declared by the member or recorded by the
    operator: `putOnHold(userId, true)` moves them to the waiting room, their
    buttons disappear, they're left out of "members present" for that item,
    then `putOnHold(userId, false)` brings them back. The declaration goes in
-   the minutes.
+   the minutes. Its nature is required (0074), and the member's screen
+   shows that they've stepped out until the meeting moves on. Procedural
+   items (Call to Order, approving the agenda or minutes, electing a chair,
+   Next Meeting, Adjournment) take no conflict.
 6. **Distribute minutes.** Email approved minutes to every lot's address,
    log each delivery, warn before the 2-week deadline (SB 19).
 

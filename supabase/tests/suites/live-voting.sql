@@ -125,7 +125,7 @@ set test.uid = '00000000-0000-0000-0000-00000000000f';
 select pg_temp.expect_error($q$select cast_meeting_vote((select id from ids where name = 'v2'), 'for')$q$, 'Only council members present');
 set test.uid = '00000000-0000-0000-0000-00000000000c';
 select cast_meeting_vote((select id from ids where name = 'v2'), 'for');
-select declare_meeting_conflict('73000000-0000-0000-0000-0000000000aa', 'i5', 'SL002', '');
+select declare_meeting_conflict('73000000-0000-0000-0000-0000000000aa', 'i5', 'SL002', 'Cousin is the contractor');
 reset role;
 select pg_temp.expect('declaring during an open vote takes them out of it',
   (select eligible_lots = array['SL001'] from meeting_votes where id = (select id from ids where name = 'v2'))

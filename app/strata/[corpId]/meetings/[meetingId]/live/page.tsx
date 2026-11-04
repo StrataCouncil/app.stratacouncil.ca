@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { LiveMeeting } from "@/components/meetings/LiveMeeting";
 import { getStrataAccess } from "@/lib/data/strata";
 import { getLotRoll, getMeeting } from "@/lib/data/meetings";
+import { getCurrentProfile } from "@/lib/data/profile";
 import { meetingTypeLabels } from "@/lib/meetings/agenda";
 import { createClient } from "@/lib/supabase/server";
 import { demoAllowanceLeft } from "@/lib/demo-usage";
@@ -21,16 +22,18 @@ export default async function LiveMeetingPage({ params }: { params: Promise<{ co
   if (!access) notFound();
   const meeting = await getMeeting(corpId, meetingId);
   if (!meeting) notFound();
-  if (meeting.launchedBy === access.userId && meeting.status === "LIVE") redirect(`/strata/${corpId}/meetings/${meetingId}/run`);
-  if (meeting.status !== "LIVE") redirect(`/strata/${corpId}/meetings/${meetingId}`);
+  // Open from launch until adjournment (0074).
+  if (meeting.launchedBy === null || meeting.status === "ADJOURNED") redirect(`/strata/${corpId}/meetings/${meetingId}`);
+  if (meeting.launchedBy === access.userId) redirect(`/strata/${corpId}/meetings/${meetingId}/run`);
 
   const supabase = await createClient();
-  const [state, roll, { data: corp }, { data: aiAccess }, demoLeft] = await Promise.all([
+  const [state, roll, { data: corp }, { data: aiAccess }, demoLeft, profile] = await Promise.all([
     getLiveState(meetingId),
     getLotRoll(corpId),
     supabase.from("strata_corporations").select("strata_plan_number, legal_name, building_name").eq("strata_plan_number", corpId).maybeSingle(),
     supabase.rpc("has_stratasphere_access", { target_corporation_id: corpId }),
     demoAllowanceLeft(),
+    getCurrentProfile(),
   ]);
   // Not on council, not the manager and can't run meetings: the meeting page instead.
   if (!state) redirect(`/strata/${corpId}/meetings/${meetingId}`);
@@ -44,6 +47,7 @@ export default async function LiveMeetingPage({ params }: { params: Promise<{ co
       corpName={corp?.building_name || corp?.legal_name || corpId}
       runnerName={meeting.launchedByName}
       names={Object.fromEntries(roll.lots.map((l) => [l.lot, l.name]))}
+      me={{ name: profile?.fullName || "You", avatarUrl: profile?.avatarUrl ?? null }}
       initial={state}
       isTrial={meeting.isTrial}
       aiAvailable={aiAccess === true}

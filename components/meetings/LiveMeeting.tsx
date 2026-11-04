@@ -1,21 +1,27 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { groupByCategory, normalizeAgenda, resolutionTypeLabels, type AgendaItem } from "@/lib/meetings/agenda";
-import { choiceLabels, conflictedLots, type Choice, type LiveState } from "@/lib/meetings/live";
-import { castVote, declareConflict, getLiveState } from "@/app/strata/[corpId]/meetings/[meetingId]/live/actions";
+import { choiceLabels, conflictedLots, takesConflicts, type Choice, type LiveState } from "@/lib/meetings/live";
+import { castVote, declareConflict, getLiveState, joinMeeting, leaveMeeting } from "@/app/strata/[corpId]/meetings/[meetingId]/live/actions";
 import { getDocumentDownloadUrl } from "@/app/strata/[corpId]/documents/actions";
 import { openInNewTab } from "@/lib/open-in-tab";
 import { MemberVote } from "@/components/meetings/LiveVote";
 import { Assistant } from "@/components/meetings/MeetingMode";
+import { ConflictDialog, MeetingSide, MeetingUser } from "@/components/meetings/MeetingChrome";
 
 /**
- * A council member following a meeting live (0073). Read-only: the agenda
- * follows the person running it (a member can look back at an earlier
- * item), each item's background, financial implications, risks and
- * attachments, the motion, and while a vote is open, their own vote. The
- * result shows once the vote closes. Stratasphere is there, collapsed.
+ * A council member (or the manager) in a meeting (0073, 0074). Opening this
+ * page joins the meeting, which records their attendance; Leave records
+ * that they left, and they can come back any time. Read-only: the agenda
+ * follows the person running it (they can look back at an earlier item),
+ * with each item's background, financial implications, risks, attachments
+ * and motion, and while a vote is open, their own vote; the result shows
+ * once it closes. Declaring a conflict takes them out of that item until
+ * it's done. On the right: who's in the meeting (where the Zoom video will
+ * go) and Stratasphere, collapsed.
  */
 export function LiveMeeting(props: {
   corpId: string;
@@ -25,25 +31,38 @@ export function LiveMeeting(props: {
   corpName: string;
   runnerName: string | null;
   names: Record<string, string>;
+  me: { name: string; avatarUrl: string | null };
   initial: LiveState;
   isTrial: boolean;
   aiAvailable: boolean;
   demoLeft: number | null;
 }) {
   const { corpId, meetingId } = props;
+  const router = useRouter();
   const [state, setState] = useState<LiveState>(props.initial);
   const [viewing, setViewing] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [assistantOpen, setAssistantOpen] = useState(false);
   const [demoLeft, setDemoLeft] = useState(props.demoLeft);
   const [declaring, setDeclaring] = useState(false);
-  const [note, setNote] = useState("");
+  const [joinError, setJoinError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     const s = await getLiveState(meetingId).catch(() => null);
     if (s) setState(s);
   }, [meetingId]);
+
+  // Opening the page joins the meeting (once per visit).
+  const joined = useRef(false);
+  useEffect(() => {
+    if (joined.current) return;
+    joined.current = true;
+    void joinMeeting(meetingId).then((r) => {
+      if (!r.ok) setJoinError(r.error);
+      void refresh();
+    });
+  }, [meetingId, refresh]);
+
   const voteOpen = Boolean(state.openVote);
   useEffect(() => {
     const t = setInterval(() => void refresh(), voteOpen ? 2000 : 4000);
@@ -54,7 +73,12 @@ export function LiveMeeting(props: {
   const followingId = state.currentItemId;
   const shownId = viewing ?? followingId;
   const item = agenda.find((i) => i.id === shownId) ?? null;
-  const who = (lot: string) => (props.names[lot] ? `${lot} · ${props.names[lot]}` : lot);
+
+  async function leave() {
+    setBusy(true);
+    await leaveMeeting(meetingId).catch(() => undefined);
+    router.push(`/strata/${corpId}/meetings/${meetingId}`);
+  }
 
   if (state.status === "ADJOURNED") {
     return (
@@ -80,14 +104,14 @@ export function LiveMeeting(props: {
     await refresh();
   }
 
-  async function declare() {
+  async function declare(note: string) {
     if (!item || !state.myLot) return;
     setBusy(true);
     const r = await declareConflict(meetingId, item.id, state.myLot, note).catch(() => ({ ok: false as const, error: "Couldn't record the conflict. Try again." }));
     setBusy(false);
+    if (!r.ok) return setError(r.error);
     setDeclaring(false);
-    setNote("");
-    if (!r.ok) setError(r.error);
+    setError(null);
     await refresh();
   }
 
@@ -116,16 +140,16 @@ export function LiveMeeting(props: {
           </span>
         </div>
         <span className="mm__spacer" />
-        <button type="button" className="button button-secondary button-small" onClick={() => setAssistantOpen((o) => !o)} aria-expanded={assistantOpen}>
-          {assistantOpen ? "Hide Stratasphere" : "Stratasphere"}
+        <MeetingUser name={props.me.name} avatarUrl={props.me.avatarUrl} />
+        <button type="button" className="button button-secondary button-small" onClick={leave} disabled={busy} data-testid="leave-meeting">
+          Leave meeting
         </button>
-        <Link href={`/strata/${corpId}/meetings/${meetingId}`} className="button button-secondary button-small">
-          Leave
-        </Link>
       </header>
+      {joinError && <div className="mm__alert" role="alert">{joinError}</div>}
 
-      <div className="mm__body live__body" data-assistant={assistantOpen || undefined}>
+      <div className="mm__body live__body">
         <nav className="mm__nav" aria-label="Agenda">
+          {state.chair && <div className="mm-nav__chair mm-nav__chair--top card__meta">Chair: {state.chair}</div>}
           <p className="live__follow card__meta">
             {viewing && viewing !== followingId ? (
               <button type="button" className="link-button" onClick={() => setViewing(null)} data-testid="live-back-to-current">
@@ -158,27 +182,28 @@ export function LiveMeeting(props: {
               ))}
             </div>
           ))}
-          {state.chair && <div className="mm-nav__chair card__meta">Chair: {state.chair}</div>}
         </nav>
 
         <main className="mm__main">
-          {!state.calledToOrderAt && <p className="mm__alert">The meeting hasn&rsquo;t been called to order yet.</p>}
+          {!state.calledToOrderAt && <p className="mm__alert">The meeting hasn&rsquo;t been called to order yet. You&rsquo;re in, and counted present.</p>}
           {!item ? (
             <section className="mm-panel">
-              <h2>Attendance</h2>
-              <p className="card__meta">The meeting is starting. The agenda follows along once it&rsquo;s called to order.</p>
+              <h2>Waiting to start</h2>
+              <p className="card__meta">The agenda follows along once the person running the meeting opens the first item. Click any item on the left to read it now.</p>
+            </section>
+          ) : iAmConflicted ? (
+            <section className="mm-panel live-out" data-testid="live-stepped-out">
+              <h2>You&rsquo;ve stepped out for item {item.num}</h2>
+              <p>
+                You declared a conflict of interest on &ldquo;{item.text}&rdquo;, so you take no part while it&rsquo;s discussed and voted on (Strata
+                Property Act s.32). You&rsquo;re back in when the meeting moves on.
+              </p>
             </section>
           ) : (
-            <ItemView
-              item={item}
-              names={props.names}
-              conflicted={conflicted}
-              voteOpen={state.openVote?.itemId === item.id}
-              onOpenAttachment={openAttachment}
-            />
+            <ItemView item={item} names={props.names} conflicted={conflicted} voteOpen={state.openVote?.itemId === item.id} onOpenAttachment={openAttachment} />
           )}
 
-          {item && m && (
+          {item && m && !iAmConflicted && (
             <section className="mm-panel live__vote">
               {openHere ? (
                 canVote ? (
@@ -186,51 +211,39 @@ export function LiveMeeting(props: {
                     <h3 className="mm-subhead">Your vote</h3>
                     <MemberVote vote={openHere} runnerName={props.runnerName} busy={busy} error={error} onCast={cast} />
                   </>
-                ) : iAmConflicted ? (
-                  <p className="live-info">You declared a conflict of interest on this item, so you don&rsquo;t vote on it.</p>
                 ) : (
                   <p className="live-info">A vote is open. Council members present vote on their own screens.</p>
                 )
               ) : lastClosed ? (
                 <p className="live-info" data-testid="live-result">
-                  <b>
-                    {item.done && m.outcome ? (m.outcome === "CARRIED" ? "Carried" : "Defeated") : "Vote closed"}:
-                  </b>{" "}
-                  {lastClosed.for} {choiceLabels.for.toLowerCase()}, {lastClosed.against} {choiceLabels.against.toLowerCase()}, {lastClosed.abstain + lastClosed.missing} abstaining
-                  {" "}({lastClosed.present} present).
+                  <b>{item.done && m.outcome ? (m.outcome === "CARRIED" ? "Carried" : "Defeated") : "Vote closed"}:</b>{" "}
+                  {lastClosed.against === 0 && lastClosed.abstain + lastClosed.missing === 0 && lastClosed.for > 0
+                    ? `unanimous, ${lastClosed.for} in favour`
+                    : `${lastClosed.for} ${choiceLabels.for.toLowerCase()}, ${lastClosed.against} ${choiceLabels.against.toLowerCase()}, ${lastClosed.abstain + lastClosed.missing} abstaining`}{" "}
+                  ({lastClosed.present} present).
                 </p>
               ) : item.done && m.outcome ? (
                 <p className="live-info">
                   <b>{m.outcome === "CARRIED" ? "Carried" : "Defeated"}</b>: {m.for} in favour, {m.against} opposed{m.abstain ? `, ${m.abstain} abstaining` : ""}.
                 </p>
               ) : null}
-
-              {state.myLot && state.calledToOrderAt && !item.done && !iAmConflicted && (
-                declaring ? (
-                  <div className="mm-conflicts__add">
-                    <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="The nature of the conflict (for the minutes)" maxLength={500} aria-label="The nature of the conflict" />
-                    <button type="button" className="button button-primary button-small" onClick={declare} disabled={busy} data-testid="live-declare-confirm">
-                      Declare
-                    </button>
-                    <button type="button" className="link-button" onClick={() => setDeclaring(false)}>
-                      Cancel
-                    </button>
-                  </div>
-                ) : (
-                  <p className="card__meta live__conflict">
-                    <button type="button" className="link-button" onClick={() => setDeclaring(true)} data-testid="live-declare">
-                      I have a conflict of interest on this item
-                    </button>{" "}
-                    · you won&rsquo;t vote on it, and it goes in the minutes (SPA s.32)
-                  </p>
-                )
-              )}
             </section>
+          )}
+
+          {item && state.myLot && !item.done && !iAmConflicted && takesConflicts(item.text) && (
+            <p className="card__meta live__conflict">
+              <button type="button" className="link-button" onClick={() => setDeclaring(true)} data-testid="live-declare">
+                I have a conflict of interest on this item
+              </button>{" "}
+              · you&rsquo;ll step out of the meeting for this item and won&rsquo;t vote on it (SPA s.32)
+            </p>
           )}
         </main>
 
-        <aside className="mm__assistant live__assistant" aria-label="Stratasphere assistant" hidden={!assistantOpen}>
-          {assistantOpen && (
+        <MeetingSide
+          presence={state.presence}
+          names={props.names}
+          assistant={
             <Assistant
               key={item?.id ?? "none"}
               corpId={corpId}
@@ -242,22 +255,36 @@ export function LiveMeeting(props: {
               demoLeft={demoLeft}
               setDemoLeft={setDemoLeft}
             />
-          )}
-        </aside>
+          }
+        />
       </div>
+
+      {declaring && item && (
+        <ConflictDialog
+          who={`You (${state.myLot})`}
+          itemTitle={item.text}
+          busy={busy}
+          error={error}
+          onDeclare={declare}
+          onCancel={() => {
+            setDeclaring(false);
+            setError(null);
+          }}
+        />
+      )}
     </div>
   );
 }
 
 /** An agenda item, read-only. Outside LiveMeeting so its open sections survive each refresh. */
 function ItemView(p: {
-item: AgendaItem;
-names: Record<string, string>;
-conflicted: string[];
-voteOpen: boolean;
-onOpenAttachment: (id: string | null, url?: string) => void;
+  item: AgendaItem;
+  names: Record<string, string>;
+  conflicted: string[];
+  voteOpen: boolean;
+  onOpenAttachment: (id: string | null, url?: string) => void;
 }) {
-const who = (lot: string) => (p.names[lot] ? `${lot} · ${p.names[lot]}` : lot);
+  const who = (lot: string) => (p.names[lot] ? `${lot} · ${p.names[lot]}` : lot);
   const it = p.item;
   return (
     <section className="mm-panel" data-testid="live-item">

@@ -178,9 +178,10 @@ function MeetingSection({
                 {m.launchedBy === userId && m.status !== "ADJOURNED" ? (
                   <Link href={`/strata/${corpId}/meetings/${m.id}/run`} className="button button-primary button-small">
                     Resume
-                  </Link>) : m.status === "LIVE" && canFollow ? (
-                  <Link href={`/strata/${corpId}/meetings/${m.id}/live`} className="button button-primary button-small" data-testid={`follow-${m.id}`}>
-                    Follow
+                  </Link>
+                ) : m.launchedBy !== null && m.status !== "ADJOURNED" && canFollow ? (
+                  <Link href={`/strata/${corpId}/meetings/${m.id}/live`} className="button button-primary button-small" data-testid={`join-${m.id}`}>
+                    Join meeting
                   </Link>
                 ) : m.status === "ADJOURNED" && (m.minutesState === "FINAL" || (m.minutesState === "DRAFT" && seesDrafts)) ? (
                   <Link href={`/strata/${corpId}/meetings/${m.id}/minutes`} className="button button-secondary button-small">

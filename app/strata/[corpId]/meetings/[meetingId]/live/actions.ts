@@ -21,7 +21,7 @@ const DECISION_TYPES: readonly string[] = ["MAJORITY", "THREE_QUARTER", "EIGHTY_
 /** The database's own message when it's one written for people; otherwise a general one. */
 function failFrom(error: { message: string; code?: string } | null, fallback: string): Fail {
   const msg = error?.message ?? "";
-  const ours = /^(Only|This vote|Another vote|Call the meeting|That |Write the motion|Choose|No council|Live voting|Conflicts|Declare a conflict|Unknown)/.test(msg);
+  const ours = /^(Only|This vote|Another vote|Call the meeting|That |Write the motion|Choose|No council|No quorum|Live voting|Conflicts|Declare a conflict|Describe the conflict|Unknown)/.test(msg);
   if (!ours) console.error("[live voting]", error?.code, msg);
   return { ok: false, error: ours ? msg : fallback };
 }
@@ -104,4 +104,35 @@ export async function withdrawConflict(meetingId: string, itemId: string, lot: s
   const supabase = await createClient();
   const { error } = await supabase.rpc("withdraw_meeting_conflict", { p_meeting_id: meetingId, p_item_id: itemId, p_lot: lot });
   return error ? failFrom(error, "Couldn't remove the conflict. Try again.") : { ok: true };
+}
+
+/** Joins (or rejoins) a launched meeting: a council member's lot is marked present (0074). */
+export async function joinMeeting(meetingId: string): Promise<Ok | Fail> {
+  if (!UUID.test(meetingId)) return { ok: false, error: "That meeting isn't available." };
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("join_meeting", { p_meeting_id: meetingId });
+  if (error) {
+    if (error.message.includes("isn't running")) return { ok: false, error: "This meeting isn't running." };
+    if (error.message.includes("isn't available")) return { ok: false, error: "This meeting isn't available to you." };
+    return failFrom(error, "Couldn't join the meeting. Try again.");
+  }
+  return { ok: true };
+}
+
+/** Leaves the meeting; the exit time is recorded. */
+export async function leaveMeeting(meetingId: string): Promise<Ok | Fail> {
+  if (!UUID.test(meetingId)) return { ok: false, error: "That meeting isn't available." };
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("leave_meeting", { p_meeting_id: meetingId });
+  return error ? failFrom(error, "Couldn't record that you left. Try again.") : { ok: true };
+}
+
+/** The runner marks a council lot as having left, after typing "Left meeting". */
+export async function markLeft(meetingId: string, lot: string, confirm: string): Promise<Ok | Fail> {
+  if (!UUID.test(meetingId) || !LOT.test(lot)) return { ok: false, error: "That lot isn't in this meeting." };
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("mark_left_meeting", { p_meeting_id: meetingId, p_lot: lot, p_confirm: String(confirm ?? "").slice(0, 40) });
+  if (error?.message.includes('Type "Left meeting"')) return { ok: false, error: 'Type "Left meeting" to confirm.' };
+  if (error?.message.includes("isn't marked present")) return { ok: false, error: "That lot isn't marked present." };
+  return error ? failFrom(error, "Couldn't mark them as having left. Try again.") : { ok: true };
 }

@@ -41,15 +41,18 @@ import { saveItemNote } from "@/app/strata/[corpId]/meetings/actions";
 import { getDocumentDownloadUrl } from "@/app/strata/[corpId]/documents/actions";
 import { openInNewTab } from "@/lib/open-in-tab";
 import { ItemEditor } from "@/components/meetings/ItemEditor";
+import { MeetingSide, MeetingUser, TypedConfirm } from "@/components/meetings/MeetingChrome";
 import { DEMO_LIMITS, DEMO_LIMIT_MESSAGE, SIGNUP_URL } from "@/lib/demo";
 import { isDemoLimit, showDemoLimit } from "@/lib/demo-client";
 import { ConflictsPanel, RunnerVotePanel } from "@/components/meetings/LiveVote";
-import { presentForItem, type Choice, type ClosedVote, type LiveConflict, type LiveState, type OpenVote } from "@/lib/meetings/live";
+import { applyPresence, presentForItem, takesConflicts, type Choice, type ClosedVote, type LiveConflict, type LiveState, type OpenVote } from "@/lib/meetings/live";
 import {
   cancelVote,
   closeVote,
   declareConflict,
   getLiveState,
+  joinMeeting,
+  markLeft,
   openVote,
   recordVote,
   withdrawConflict,
@@ -91,6 +94,8 @@ export function MeetingMode(props: {
   demoLeft?: number | null;
   /** Live votes and conflicts as loaded with the page (0073). */
   initialLive?: LiveState | null;
+  /** Whoever is running it, shown top right. */
+  me: { name: string; avatarUrl: string | null };
 }) {
   const { corpId, meetingId, type, timezone } = props;
   const [demoLeft, setDemoLeft] = useState(props.demoLeft ?? null);
@@ -109,11 +114,14 @@ export function MeetingMode(props: {
   const [notes, setNotes] = useState(props.initialNotes);
   const [saveState, setSaveState] = useState<"saved" | "saving" | "error">("saved");
   const [saveError, setSaveError] = useState<string | null>(null);
-  // Why Confirm decision or Unanimous didn't go ahead, shown beside those buttons.
+  // Why Confirm decision didn't go ahead, shown beside it.
   const [actionError, setActionError] = useState<{ itemId: string; message: string } | null>(null);
   const [confirm, setConfirm] = useState<Confirm>(null);
   const [editing, setEditing] = useState<AgendaItem | null>(null);
   const [panel, setPanel] = useState<"none" | "agenda" | "assistant">("none");
+  // A lot the runner is marking as having left (typed confirmation).
+  const [marking, setMarking] = useState<string | null>(null);
+  const [markError, setMarkError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   // Coarse clock for the quorum deadline; the visible timer ticks on its own.
   const [now, setNow] = useState(() => Date.now());
@@ -156,11 +164,24 @@ export function MeetingMode(props: {
   const [liveNow, setLiveNow] = useState(() => Date.now());
   const [liveBusy, setLiveBusy] = useState(false);
   const [liveError, setLiveError] = useState<string | null>(null);
+  // Joins and leaves (0074) are written to attendance by the database; the
+  // ones this screen hasn't seen yet are applied here, so its autosave
+  // keeps them rather than writing over them.
+  const presenceSeen = useRef((props.initialLive?.presence ?? []).reduce((n, p) => Math.max(n, p.id), 0));
   const refreshLive = useCallback(async () => {
     const s = await getLiveState(meetingId).catch(() => null);
-    if (s) setLive(s);
+    if (s) {
+      setLive(s);
+      const r = applyPresence(latest.current.attendance, s.presence, presenceSeen.current);
+      presenceSeen.current = r.lastId;
+      if (r.changed) setAttendance(r.attendance as Record<string, AttendanceStatus>);
+    }
     setLiveNow(Date.now());
   }, [meetingId]);
+  // Whoever runs the meeting is in it too.
+  useEffect(() => {
+    void joinMeeting(meetingId).then(() => refreshLive());
+  }, [meetingId, refreshLive]);
   const voteOpen = Boolean(live?.openVote);
   useEffect(() => {
     void refreshLive();
@@ -206,7 +227,8 @@ export function MeetingMode(props: {
   const cycle: AttendanceStatus[] = general ? ["", "present", "regrets", "proxy"] : ["", "present", "regrets"];
   function cycleLot(lot: string) {
     setAttendance((a) => {
-      const next = cycle[(cycle.indexOf(a[lot] ?? "") + 1) % cycle.length];
+      // Someone who left comes back as present.
+    const next = cycle[(Math.max(0, cycle.indexOf(a[lot] ?? "")) + 1) % cycle.length];
       const out = { ...a };
       if (next) out[lot] = next;
       else delete out[lot];
@@ -247,6 +269,8 @@ export function MeetingMode(props: {
     const voters = votersFor(it);
     const voteCtx = ctxFor(it);
     if (live?.openVote?.itemId === it.id) return blockAction(it, "Close the vote first.");
+    // People leave: no decision is made once quorum is lost.
+    if (!q.met) return blockAction(it, `No quorum: ${q.counted} present, ${q.required} needed. No decisions can be made until quorum is restored.`);
     if (isElectChair(it) && !it.nominee?.trim()) return blockAction(it, "Enter the nominee first.");
     if (!m.mover || !m.sec) return blockAction(it, "Choose a mover and a seconder first.");
     if (m.mover === m.sec) return blockAction(it, "The mover and seconder must be different lots.");
@@ -304,32 +328,6 @@ export function MeetingMode(props: {
     setConfirm(null);
     if (isAdjournment(it) && outcome === "CARRIED") return startAdjournment(next);
     goNext(it.id, next);
-  }
-
-  function unanimous(it: AgendaItem) {
-    const m = it.motion!;
-    const voters = votersFor(it);
-    const voteCtx = ctxFor(it);
-    if (live?.openVote?.itemId === it.id) return blockAction(it, "A vote is open on this item. Close it, or cancel it to record a unanimous vote.");
-    if (m.voteId) return blockAction(it, "This motion was counted in the app. Confirm the decision instead.");
-    if (!m.mover || !m.sec) return blockAction(it, "Choose a mover and a seconder first.");
-    if (m.mover === m.sec) return blockAction(it, "The mover and seconder must be different lots.");
-    if (isElectChair(it) && !it.nominee?.trim()) return blockAction(it, "Enter the nominee first.");
-    // Everyone present in favour isn't always enough: 80% and unanimous resolutions count every lot's vote.
-    const v = evaluateVote({ ...m, for: voters, against: 0, abstain: 0, tieBreak: null }, voteCtx);
-    if (!v.passing) {
-      return blockAction(
-        it,
-        `All ${voters} present in favour isn't enough: this ${decisionTypeLabels[v.dt]} needs ${v.needed ?? "more"} of the ${v.of} eligible votes. Record the votes instead.`
-      );
-    }
-    setActionError(null);
-    setConfirm({
-      title: "Unanimous vote",
-      confirmLabel: "Record as unanimous",
-      body: <p>&ldquo;{it.text}&rdquo; — record as carried unanimously, {voters} in favour?</p>,
-      onConfirm: () => recordOutcome(it, "CARRIED", { for: voters, against: 0, abstain: 0 }),
-    });
   }
 
   function defer(it: AgendaItem) {
@@ -541,8 +539,9 @@ export function MeetingMode(props: {
           Agenda
         </button>
         <button type="button" className="button button-secondary button-small mm__toggle" onClick={() => setPanel(panel === "assistant" ? "none" : "assistant")} aria-expanded={panel === "assistant"}>
-          Stratasphere
+          In the meeting
         </button>
+        <MeetingUser name={props.me.name} avatarUrl={props.me.avatarUrl} />
         <Link href={`/strata/${corpId}/meetings/${meetingId}`} className="button button-secondary button-small">
           Exit
         </Link>
@@ -567,6 +566,14 @@ export function MeetingMode(props: {
 
       <div className="mm__body" data-panel={panel}>
         <nav className="mm__nav" aria-label="Agenda">
+          <div className="mm-nav__chair mm-nav__chair--top card__meta">
+            Chair: {chair || "not set"}
+            {!agenda.some((i) => isElectChair(i) && !i.done) && (
+              <button type="button" className="link-button" onClick={electChair} data-testid="mm-elect-chair">
+                Elect a chair
+              </button>
+            )}
+          </div>
           <button type="button" className="mm-nav__item" data-active={current === ATTENDANCE_VIEW} data-done={called} onClick={() => { setCurrent(ATTENDANCE_VIEW); setPanel("none"); }}>
             <span className="mm-nav__check" aria-hidden="true">{called ? <Tick /> : null}</span>
             Attendance <span className="card__meta">({q.counted})</span>
@@ -600,14 +607,6 @@ export function MeetingMode(props: {
           <button type="button" className="button button-secondary button-small mm-nav__add" onClick={addItem} data-testid="mm-add-item">
             Add item
           </button>
-          <div className="mm-nav__chair card__meta">
-            Chair: {chair || "not set"}
-            {!agenda.some((i) => isElectChair(i) && !i.done) && (
-              <button type="button" className="link-button" onClick={electChair} data-testid="mm-elect-chair">
-                Elect a chair
-              </button>
-            )}
-          </div>
         </nav>
 
         <main className="mm__main">
@@ -617,7 +616,7 @@ export function MeetingMode(props: {
               <p className="card__meta">
                 {general
                   ? "Every strata lot. Tap a lot to cycle: present, regrets, proxy. Proxies count toward quorum."
-                  : "Council members. Tap to cycle: present, regrets. Late arrivals can be added any time."}
+                  : "Council members. Joining the meeting marks them present; you can also tap to cycle: present, regrets. Someone who has left is no longer counted for quorum or votes."}
               </p>
               <QuorumBar q={q} general={general} />
               <div className="mm-roll__bulk">
@@ -644,13 +643,37 @@ export function MeetingMode(props: {
                 </p>
               ) : (
                 <div className="mm-roll">
-                  {roll.map((lot) => (
-                    <button type="button" key={lot} className="mm-roll__lot" data-status={attendance[lot] || "none"} onClick={() => cycleLot(lot)} data-testid={`att-${lot}`}>
-                      <strong>{lot}</strong>
-                      {!general && names[lot] && <span>{names[lot]}</span>}
-                      <em>{statusLabel(attendance[lot] ?? "")}</em>
-                    </button>
-                  ))}
+                  {roll.map((lot) => {
+                    const moves = (live?.presence ?? []).filter((p) => p.lot === lot);
+                    const last = moves[moves.length - 1];
+                    return (
+                      <div key={lot} className="mm-roll__cell">
+                        <button type="button" className="mm-roll__lot" data-status={attendance[lot] || "none"} onClick={() => cycleLot(lot)} data-testid={`att-${lot}`}>
+                          <strong>{lot}</strong>
+                          {!general && names[lot] && <span>{names[lot]}</span>}
+                          <em>{statusLabel(attendance[lot] ?? "")}</em>
+                          {last && (
+                            <small className="mm-roll__time">
+                              {last.event === "joined" ? "Joined" : "Left"} {clockAt(last.at, timezone)}
+                            </small>
+                          )}
+                        </button>
+                        {!general && attendance[lot] === "present" && (
+                          <button
+                            type="button"
+                            className="link-button mm-roll__left"
+                            onClick={() => {
+                              setMarkError(null);
+                              setMarking(lot);
+                            }}
+                            data-testid={`mark-left-${lot}`}
+                          >
+                            Mark as left
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
               {!called && (
@@ -726,7 +749,6 @@ export function MeetingMode(props: {
               }}
               actionError={actionError?.itemId === item.id ? actionError.message : null}
               onConfirm={() => confirmDecision(item)}
-              onUnanimous={() => unanimous(item)}
               onDefer={() => defer(item)}
               onConsensus={() => consensus(item)}
               onReceived={() => markReceived(item)}
@@ -737,19 +759,23 @@ export function MeetingMode(props: {
           )}
         </main>
 
-        <aside className="mm__assistant" aria-label="Stratasphere assistant">
-          <Assistant
-            key={item?.id ?? "none"}
-            corpId={corpId}
-            meetingId={meetingId}
-            item={item}
-            agenda={agenda}
-            aiAvailable={props.aiAvailable}
-            isTrial={props.isTrial}
-            demoLeft={demoLeft}
-            setDemoLeft={setDemoLeft}
-          />
-        </aside>
+        <MeetingSide
+          presence={live?.presence ?? []}
+          names={names}
+          assistant={
+            <Assistant
+              key={item?.id ?? "none"}
+              corpId={corpId}
+              meetingId={meetingId}
+              item={item}
+              agenda={agenda}
+              aiAvailable={props.aiAvailable}
+              isTrial={props.isTrial}
+              demoLeft={demoLeft}
+              setDemoLeft={setDemoLeft}
+            />
+          }
+        />
       </div>
 
       {editing && (
@@ -765,6 +791,25 @@ export function MeetingMode(props: {
         />
       )}
       {confirm && <ConfirmDialog {...confirm} busy={busy} onCancel={() => setConfirm(null)} />}
+      {marking && (
+        <TypedConfirm
+          title={`${marking}${names[marking] ? ` (${names[marking]})` : ""} left the meeting?`}
+          body={<p>They&rsquo;re recorded as having left at this time, and no longer count for quorum or votes. They can rejoin any time.</p>}
+          phrase="Left meeting"
+          confirmLabel="Mark as left"
+          busy={busy}
+          error={markError}
+          onCancel={() => setMarking(null)}
+          onConfirm={async () => {
+            setBusy(true);
+            const r = await markLeft(meetingId, marking, "Left meeting").catch(() => ({ ok: false as const, error: "Couldn't reach the server. Try again." }));
+            setBusy(false);
+            if (!r.ok) return setMarkError(r.error);
+            setMarking(null);
+            await refreshLive();
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -795,7 +840,11 @@ function MeetingClock({ startedAt, scheduled }: { startedAt: string | null; sche
 }
 
 function statusLabel(s: AttendanceStatus) {
-  return s === "present" ? "Present" : s === "regrets" ? "Regrets" : s === "proxy" ? "Proxy" : "—";
+  return s === "present" ? "Present" : s === "regrets" ? "Regrets" : s === "proxy" ? "Proxy" : s === "left" ? "Left" : "—";
+}
+
+function clockAt(iso: string, timeZone: string) {
+  return new Date(iso).toLocaleTimeString("en-CA", { hour: "numeric", minute: "2-digit", timeZone });
 }
 
 function QuorumBar({ q, general }: { q: ReturnType<typeof quorum>; general: boolean }) {
@@ -906,10 +955,9 @@ function ItemPanel(props: {
   note: string;
   onNote: (body: string) => void;
   onPatch: (patch: Partial<AgendaItem>) => void;
-  /** Why the last Confirm decision or Unanimous didn't go ahead. */
+  /** Why the last Confirm decision didn't go ahead. */
   actionError: string | null;
   onConfirm: () => void;
-  onUnanimous: () => void;
   onDefer: () => void;
   onConsensus: () => void;
   onReceived: () => void;
@@ -1028,7 +1076,7 @@ function ItemPanel(props: {
         </label>
       )}
 
-      {live && props.called && !it.done && (
+      {live && props.called && !it.done && takesConflicts(it.text) && (
         <ConflictsPanel
           conflicts={live.conflicts}
           present={live.allPresent}
@@ -1194,9 +1242,6 @@ function ItemPanel(props: {
                   Consensus
                 </button>
               )}
-              <button type="button" className="button button-secondary" onClick={props.onUnanimous} data-testid="mm-unanimous">
-                Unanimous
-              </button>
               <button type="button" className="button button-primary" onClick={props.onConfirm} data-testid="mm-confirm-decision">
                 Confirm decision
               </button>
