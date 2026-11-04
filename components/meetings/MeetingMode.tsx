@@ -127,8 +127,6 @@ export function MeetingMode(props: {
   const [confirm, setConfirm] = useState<Confirm>(null);
   const [editing, setEditing] = useState<AgendaItem | null>(null);
   const [panel, setPanel] = useState<"none" | "agenda" | "assistant">("none");
-  // Steps ticked by hand, per item (introducing it, discussion).
-  const [acked, setAcked] = useState<Record<string, string[]>>({});
   // The shared attachment, hidden on this screen (by when it was shown).
   const [hiddenShow, setHiddenShow] = useState<string | null>(null);
   // A lot the runner is marking as having left (typed confirmation).
@@ -828,8 +826,6 @@ export function MeetingMode(props: {
               voters={votersFor(item)}
               voteCtx={ctxFor(item)}
               quorumMet={q.met}
-              acked={new Set(acked[item.id] ?? [])}
-              onAck={(id) => setAcked((a) => ({ ...a, [item.id]: [...new Set([...(a[item.id] ?? []), id])] }))}
               presenting={live?.presenting ?? null}
               onShow={(attId) => void show(attId ? item : null, attId)}
               live={
@@ -1051,10 +1047,9 @@ function Script({ title, lines }: { title: string; lines: string[] }) {
   );
 }
 
-/** The Runner's steps for the item, in order; the current one says what to do. */
-function StepList({ steps, onAck }: { steps: Step[]; onAck: (id: string) => void }) {
+/** The Runner's steps for the item, in order: a list to follow. Each opens to what to do and what to say. */
+function StepList({ steps }: { steps: Step[] }) {
   const cur = currentStep(steps);
-  const [say, setSay] = useState(false);
   return (
     <ol className="mm-steps" data-testid="mm-steps" aria-label="Steps for this item">
       {steps.map((st, i) => (
@@ -1062,26 +1057,14 @@ function StepList({ steps, onAck }: { steps: Step[]; onAck: (id: string) => void
           <span className="mm-steps__mark" aria-hidden="true">
             {st.done ? <Tick /> : i + 1}
           </span>
-          <div className="mm-steps__body">
-            <strong>{st.label}</strong>
-            <span className="visually-hidden">{st.done ? " (done)" : i === cur ? " (now)" : ""}</span>
-            {i === cur && (
-              <>
-                <p className="mm-steps__hint">{st.hint}</p>
-                {st.say && (
-                  <button type="button" className="link-button mm-steps__say-toggle" onClick={() => setSay((v) => !v)} aria-expanded={say}>
-                    {say ? "Hide what to say" : "What to say"}
-                  </button>
-                )}
-                {say && st.say && <p className="mm-steps__say">{st.say}</p>}
-              </>
-            )}
-          </div>
-          {i === cur && st.manual && (
-            <button type="button" className="button button-secondary button-small" onClick={() => onAck(st.id)} data-testid={`mm-step-done-${st.id}`}>
-              Done
-            </button>
-          )}
+          <details className="mm-steps__body">
+            <summary>
+              {st.label}
+              <span className="visually-hidden">{st.done ? " (done)" : ""}</span>
+            </summary>
+            <p className="mm-steps__hint">{st.hint}</p>
+            {st.say && <p className="mm-steps__say">{st.say}</p>}
+          </details>
         </li>
       ))}
     </ol>
@@ -1098,9 +1081,6 @@ function ItemPanel(props: {
   voters: number;
   voteCtx: VoteContext;
   quorumMet: boolean;
-  /** Steps ticked by hand on this item. */
-  acked: ReadonlySet<string>;
-  onAck: (step: string) => void;
   /** What's being shown to everyone (0076). */
   presenting: Presenting | null;
   /** Show an attachment to everyone, or stop (null). */
@@ -1147,7 +1127,6 @@ function ItemPanel(props: {
   const liveVoting = usesLiveVoting(it, props.general);
   const steps = itemSteps(it, {
     general: props.general,
-    acked: props.acked,
     voteOpen: Boolean(live?.vote),
     voteClosed: Boolean(m?.voteId),
   });
@@ -1214,7 +1193,7 @@ function ItemPanel(props: {
         <p className="mm__alert">The meeting hasn&rsquo;t been called to order yet. Nothing can be decided until it is.</p>
       )}
 
-      <StepList steps={steps} onAck={props.onAck} />
+      <StepList steps={steps} />
 
       {!isNextMeeting(it) && !isAdjournment(it) && (it.background || it.financial || it.risks) && (
         <div className="mm-details">
