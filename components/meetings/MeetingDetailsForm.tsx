@@ -7,6 +7,7 @@ import {
   meetingFormatLabels,
   meetingFormats,
   meetingTimezones,
+  comingSoonMeetingTypes,
   meetingTypeLabels,
   meetingTypes,
 } from "@/lib/meetings/agenda";
@@ -46,6 +47,8 @@ export function MeetingDetailsForm({
       chairName: chairOptions[0]?.label ?? "",
     }
   );
+  // What the meeting was when the form opened (an existing AGM keeps its type).
+  const [startType] = useState(form.type);
   // Chair: one of the usual office holders, elected at the meeting, or
   // someone else typed in.
   // A new meeting defaults to the President.
@@ -97,11 +100,16 @@ export function MeetingDetailsForm({
           <span>Meeting type</span>
           <select value={form.type} onChange={set("type")} required data-testid="meeting-type">
             {/* The demo's meeting is a council meeting (its agenda is written for one). */}
-            {(demoRestricted ? (["council"] as const) : meetingTypes).map((t) => (
-              <option key={t} value={t}>
-                {meetingTypeLabels[t]}
-              </option>
-            ))}
+            {(demoRestricted ? (["council"] as const) : meetingTypes).map((t) => {
+              // AGMs and SGMs are coming soon; a meeting already of that type keeps it.
+              const soon = comingSoonMeetingTypes.includes(t) && t !== startType;
+              return (
+                <option key={t} value={t} disabled={soon}>
+                  {meetingTypeLabels[t]}
+                  {soon ? " (coming soon)" : ""}
+                </option>
+              );
+            })}
           </select>
         </label>
         <label className="field">

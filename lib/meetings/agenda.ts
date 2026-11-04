@@ -9,6 +9,12 @@ import { isWebUrl } from "../web-url.ts";
 export const meetingTypes = ["council", "agm", "sgm", "committee"] as const;
 export type MeetingType = (typeof meetingTypes)[number];
 
+/**
+ * General meetings can't be created yet: notice to owners (SPA s.45), owner
+ * sign-in, proxies and who may vote aren't built. Existing ones stay as they are.
+ */
+export const comingSoonMeetingTypes: readonly MeetingType[] = ["agm", "sgm"];
+
 export const meetingTypeLabels: Record<MeetingType, string> = {
   council: "Strata Council Meeting",
   agm: "Annual General Meeting",

@@ -12,6 +12,7 @@ import {
   makeItem,
   meetingFormats,
   meetingTypes,
+  comingSoonMeetingTypes,
   newCategoryId,
   newMotion,
   normalizeAgenda,
@@ -95,6 +96,7 @@ export async function createMeeting(corpId: string, input: MeetingDetailsInput):
   if (restricted) input = { ...input, type: "council" };
   const invalid = validateDetails(input);
   if (invalid) return { ok: false, error: invalid };
+  if ((comingSoonMeetingTypes as readonly string[]).includes(input.type)) return { ok: false, error: "AGMs and SGMs are coming soon." };
   if (restricted && !(await takeDemoAllowance("meetings"))) {
     await logDemoActivity({ kind: "limit", detail: { reason: "second meeting" } });
     return demoLimitFail();
@@ -141,6 +143,11 @@ export async function updateMeetingDetails(
   const invalid = validateDetails(input);
   if (invalid) return { ok: false, error: invalid };
   const supabase = await createClient();
+  // A meeting can't be changed into an AGM or SGM yet; one that already is stays one.
+  if ((comingSoonMeetingTypes as readonly string[]).includes(input.type)) {
+    const { data: current } = await supabase.from("meetings").select("type").eq("id", meetingId).maybeSingle();
+    if (current?.type !== input.type) return { ok: false, error: "AGMs and SGMs are coming soon." };
+  }
   const { data, error } = await supabase
     .from("meetings")
     .update({
