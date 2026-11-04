@@ -84,7 +84,8 @@ export function MeetingDetailsForm({
         const result = await createMeeting(corpId, form);
         if (isDemoLimit(result)) return showDemoLimit("second meeting");
         if (!result.ok) return setError(result.error);
-        router.push(`/strata/${corpId}/meetings/${result.id}`);
+        // A new meeting opens straight into its agenda editor.
+        router.push(`/strata/${corpId}/meetings/${result.id}?edit=1`);
       }
     });
   }

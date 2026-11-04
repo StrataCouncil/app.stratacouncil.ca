@@ -4,7 +4,8 @@ import { StrataSphereNav } from "@/components/StrataSphereNav";
 import { getStrataAccess } from "@/lib/data/strata";
 import { listMeetings, type MeetingRecord } from "@/lib/data/meetings";
 import { createClient } from "@/lib/supabase/server";
-import { meetingTypeLabels } from "@/lib/meetings/agenda";
+import { meetingTypeLabels, missingMotions } from "@/lib/meetings/agenda";
+import { LaunchMeetingButton } from "@/components/meetings/MeetingActions";
 import { formatMeetingWhen } from "@/lib/meetings/format";
 import { meetingStatus } from "@/lib/meetings/status";
 import { RequestSubscriptionButton } from "@/components/RequestSubscriptionButton";
@@ -130,8 +131,8 @@ export default async function MeetingsPage({ params }: { params: Promise<{ corpI
         </div>
       )}
 
-      <MeetingSection title="Upcoming and in progress" meetings={upcoming} corpId={corpId} userId={access.userId} seesDrafts={access.isCouncil || access.canRunMeetings} canFollow={access.isCouncil || access.canRunMeetings || access.roles.includes("manager")} empty={IS_DEMO ? "No meetings scheduled. Press New meeting: the agenda is written for you, ready to run in Meeting Mode." : "No meetings scheduled."} />
-      {past.length > 0 && <MeetingSection title="Past meetings" meetings={past} corpId={corpId} userId={access.userId} seesDrafts={access.isCouncil || access.canRunMeetings} canFollow={access.isCouncil || access.canRunMeetings || access.roles.includes("manager")} />}
+      <MeetingSection title="Upcoming and in progress" meetings={upcoming} corpId={corpId} userId={access.userId} seesDrafts={access.isCouncil || access.canRunMeetings} canFollow={access.isCouncil || access.canRunMeetings || access.roles.includes("manager")} launch={access.canRunMeetings ? { subscribed: access.subscribed, trialAvailable, isAdmin: access.isAdmin } : null} empty={IS_DEMO ? "No meetings scheduled. Press New meeting: the agenda is written for you, ready to run in Meeting Mode." : "No meetings scheduled."} />
+      {past.length > 0 && <MeetingSection title="Past meetings" meetings={past} corpId={corpId} userId={access.userId} seesDrafts={access.isCouncil || access.canRunMeetings} canFollow={access.isCouncil || access.canRunMeetings || access.roles.includes("manager")} launch={null} />}
     </>
   );
 }
@@ -143,6 +144,7 @@ function MeetingSection({
   userId,
   seesDrafts,
   canFollow,
+  launch,
   empty,
 }: {
   title: string;
@@ -153,6 +155,8 @@ function MeetingSection({
   seesDrafts: boolean;
   /** Can follow a live meeting (0073): council, the manager, anyone who runs meetings. */
   canFollow: boolean;
+  /** Can run meetings: draft rows get Edit agenda and Launch meeting. */
+  launch: { subscribed: boolean; trialAvailable: boolean; isAdmin: boolean } | null;
   empty?: string;
 }) {
   return (
@@ -189,9 +193,23 @@ function MeetingSection({
                   <Link href={`/strata/${corpId}/meetings/${m.id}/minutes`} className="button button-secondary button-small">
                     {m.minutesState === "FINAL" ? "Minutes" : "Draft minutes"}
                   </Link>
+                ) : launch && m.status === "DRAFT" && m.launchedBy === null ? (
+                  <>
+                    <Link href={`/strata/${corpId}/meetings/${m.id}?edit=1`} className="button button-secondary button-small" data-testid={`edit-agenda-${m.id}`}>
+                      Edit agenda
+                    </Link>
+                    <LaunchMeetingButton
+                      corpId={corpId}
+                      meetingId={m.id}
+                      missingMotions={missingMotions(m.agenda)}
+                      editHref={`/strata/${corpId}/meetings/${m.id}?edit=1`}
+                      className="button button-primary button-small"
+                      {...launch}
+                    />
+                  </>
                 ) : (
                   <Link href={`/strata/${corpId}/meetings/${m.id}`} className="button button-secondary button-small">
-                    Agenda
+                    View agenda
                   </Link>
                 )}
               </div>

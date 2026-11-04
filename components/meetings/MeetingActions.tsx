@@ -38,17 +38,22 @@ export function LaunchMeetingButton({
   subscribed,
   trialAvailable,
   isAdmin,
-  agendaSaved,
+  agendaSaved = true,
   missingMotions = [],
+  editHref,
+  className = "button button-primary",
 }: {
   corpId: string;
   meetingId: string;
   subscribed: boolean;
   trialAvailable: boolean;
   isAdmin: boolean;
-  agendaSaved: boolean;
+  agendaSaved?: boolean;
   /** Decision items with no motion yet: a warning, not a block. */
   missingMotions?: string[];
+  /** Where Edit agenda goes from the missing-motion warning. */
+  editHref?: string;
+  className?: string;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -74,16 +79,16 @@ export function LaunchMeetingButton({
     <>
       <button
         type="button"
-        className={`button ${agendaSaved ? "button-primary" : "button-secondary"}`}
+        className={className}
         onClick={() => setOpen(true)}
         disabled={!agendaSaved}
         title={agendaSaved ? undefined : "Save the agenda first."}
         data-testid="launch-meeting"
       >
-        Launch Meeting Mode
+        Launch meeting
       </button>
       {open && (
-        <Dialog title="Launch Meeting Mode?" onClose={() => setOpen(false)}>
+        <Dialog title="Launch the meeting?" onClose={() => setOpen(false)}>
           {blocked && subscriptionPending ? (
             <>
               <p>Your free meeting has been used. You can launch this one as soon as your subscription goes through.</p>
@@ -117,9 +122,15 @@ export function LaunchMeetingButton({
           )}
           {error && <p className="form-error" role="alert">{error}</p>}
           <div className="role-editor__actions">
-            <button type="button" className="button button-secondary" onClick={() => setOpen(false)} disabled={pending}>
-              Not now
-            </button>
+            {!blocked && missingMotions.length > 0 && editHref ? (
+              <Link href={editHref} className="button button-secondary" data-testid="launch-edit-agenda">
+                Edit agenda
+              </Link>
+            ) : (
+              <button type="button" className="button button-secondary" onClick={() => setOpen(false)} disabled={pending}>
+                Not now
+              </button>
+            )}
             {(blocked || needsSubscription) && subscriptionPending ? null : blocked || needsSubscription ? (
               isAdmin ? (
                 <Link href={`/strata/${corpId}/billing`} className="button button-primary">
@@ -130,7 +141,7 @@ export function LaunchMeetingButton({
               )
             ) : (
               <button type="button" className="button button-primary" onClick={launch} disabled={pending} data-testid="launch-confirm">
-                {pending ? "Launching…" : subscribed ? "Launch" : "Use my free meeting"}
+                {pending ? "Launching…" : subscribed ? "Launch meeting" : "Use my free meeting"}
               </button>
             )}
           </div>

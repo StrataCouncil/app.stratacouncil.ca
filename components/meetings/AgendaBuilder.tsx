@@ -1,7 +1,7 @@
 "use client";
 
 import { useDemoRestricted } from "@/components/DemoContext";
-import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   agendaFromTemplate,
@@ -22,7 +22,7 @@ import {
 import { parseUploadedAgenda, saveAgenda, saveItemNote } from "@/app/strata/[corpId]/meetings/actions";
 import { isGeneralMeeting } from "@/lib/meetings/rules";
 import { ItemEditor } from "@/components/meetings/ItemEditor";
-import { LaunchMeetingButton } from "@/components/meetings/MeetingActions";
+import { useAgendaEditing } from "@/components/meetings/AgendaCheckout";
 import { DEMO_EDITABLE_ITEM_ID } from "@/lib/demo";
 import { isDemoLimit, showDemoLimit } from "@/lib/demo-client";
 import { ratificationMotion } from "@/lib/discussions/tally";
@@ -64,6 +64,7 @@ function ratificationItem(c: RatificationCandidate, agenda: AgendaItem[]): Agend
 
 /** A decision item with no motion written yet: flagged, and Launch warns (a vote can't open without one). */
 const needsMotion = (it: AgendaItem) => NEEDS_MOTION.includes(it.type) && !it.motion?.text?.trim();
+// (lib/meetings/agenda.ts missingMotions lists the same items for the launch warning.)
 
 /** Where a new ratification item goes: after the other ratifications, else after the administrative items. */
 function insertRatification(agenda: AgendaItem[], item: AgendaItem): AgendaItem[] {
@@ -90,7 +91,6 @@ export function AgendaBuilder({
   initialVersion,
   initialNotes,
   aiAvailable,
-  launch,
   ratifications = [],
 }: {
   corpId: string;
@@ -101,8 +101,6 @@ export function AgendaBuilder({
   initialVersion: string;
   initialNotes: Record<string, string>;
   aiAvailable: boolean;
-  /** Present when the viewer may launch this meeting. */
-  launch?: { subscribed: boolean; trialAvailable: boolean; isAdmin: boolean };
   /** Council meetings only: discussions awaiting ratification (0070). */
   ratifications?: RatificationCandidate[];
 }) {
@@ -119,7 +117,8 @@ export function AgendaBuilder({
   const [editing, setEditing] = useState<AgendaItem | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
+  const [saving, setSaving] = useState(false);
+  const pending = saving;
   const uploadRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -137,21 +136,47 @@ export function AgendaBuilder({
     setStatus(null);
   }, []);
 
-  function save(overwrite = false) {
+  // The latest agenda, for saving from outside a render (a takeover, Save agenda).
+  const latest = useRef({ agenda, version, dirty });
+  latest.current = { agenda, version, dirty };
+
+  /** Saves if there's anything to save; true when it's saved (or nothing changed). */
+  async function persist(overwrite = false): Promise<boolean> {
+    if (!latest.current.dirty && !overwrite) return true;
     setError(null);
-    startTransition(async () => {
-      const result = await saveAgenda(corpId, meetingId, agenda, version, { overwrite });
-      if (!result.ok) {
-        // Your changes stay on screen either way; nothing is lost.
-        setConflict(Boolean("conflict" in result && result.conflict));
-        return setError(result.error);
-      }
-      setVersion(result.version);
-      setConflict(false);
-      setDirty(false);
-      setStatus("Agenda saved.");
-      router.refresh();
-    });
+    setSaving(true);
+    const result = await saveAgenda(corpId, meetingId, latest.current.agenda, latest.current.version, { overwrite }).catch(() => ({
+      ok: false as const,
+      error: "Couldn't save. Check your connection; your changes are still here.",
+    }));
+    setSaving(false);
+    if (!result.ok) {
+      // Your changes stay on screen either way; nothing is lost.
+      setConflict(Boolean("conflict" in result && result.conflict));
+      setError(result.error);
+      return false;
+    }
+    setVersion(result.version);
+    latest.current = { ...latest.current, version: result.version, dirty: false };
+    setConflict(false);
+    setDirty(false);
+    setStatus("Changes saved.");
+    return true;
+  }
+  function save(overwrite = false) {
+    void persist(overwrite).then((ok) => ok && router.refresh());
+  }
+  // A takeover saves whatever is here before handing the agenda over.
+  const editSession = useAgendaEditing();
+  useEffect(() => {
+    editSession?.setSaver(() => persist());
+    return () => editSession?.setSaver(null);
+  });
+  /** Save agenda: save, let go of the agenda, back to the Meetings tab. */
+  async function saveAndExit() {
+    if (!(await persist())) return;
+    if (editSession) await editSession.exit();
+    else router.push(`/strata/${corpId}/meetings`);
   }
 
   function discardAndReload() {
@@ -354,7 +379,7 @@ export function AgendaBuilder({
         <p className="sync-note" role="note" style={{ marginBottom: "1rem" }} data-testid="demo-agenda-note">
           <span>
             Your agenda is written and ready. Open <strong>Roof Repairs</strong> under New Business to make it your own: change
-            the details, write a motion or have Stratasphere&trade; draft one. Then save and launch the meeting.
+            the details, write a motion or have Stratasphere&trade; draft one. Then save the agenda and launch the meeting from the Meetings tab.
           </span>
         </p>
       )}
@@ -367,24 +392,14 @@ export function AgendaBuilder({
         <span className="agenda-builder__state" role="status">
           {pending ? "Saving…" : dirty ? "Unsaved changes" : status}
         </span>
-        <button
-          type="button"
-          className={`button ${dirty ? "button-primary" : "button-secondary"}`}
-          onClick={() => save()}
-          disabled={pending || !dirty}
-          data-testid="agenda-save"
-        >
+        {dirty && (
+          <button type="button" className="button button-secondary" onClick={() => save()} disabled={pending} data-testid="agenda-save-changes">
+            Save changes
+          </button>
+        )}
+        <button type="button" className="button button-primary" onClick={() => void saveAndExit()} disabled={pending} data-testid="agenda-save">
           Save agenda
         </button>
-        {launch && (
-          <LaunchMeetingButton
-            corpId={corpId}
-            meetingId={meetingId}
-            agendaSaved={!dirty && !pending}
-            missingMotions={agenda.filter(needsMotion).map((i) => `${i.num}. ${i.text}`)}
-            {...launch}
-          />
-        )}
       </div>
       {error && !conflict && <p className="form-error" role="alert">{error}</p>}
       {conflict && (

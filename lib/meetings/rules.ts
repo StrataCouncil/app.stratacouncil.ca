@@ -187,6 +187,8 @@ export function minutesSummary(it: AgendaItem): string {
   if (it.deferred && !it.done) return `${it.text} was deferred to a future meeting.`;
   const m = it.motion;
   if (it.consensus) return `${it.text} was reviewed and accepted by consensus.`;
+  // Discussion needs no acceptance or vote; the minutes just record it was discussed.
+  if (it.type === "FOR_DISCUSSION" && !m) return `${it.text} was discussed.`;
   if (it.type === "FOR_INFORMATION" || it.type === "FOR_DISCUSSION" || !m) {
     return `${it.text} was presented for information. The item was received and placed on file.`;
   }

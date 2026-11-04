@@ -36,6 +36,7 @@ import {
   type VoteContext,
 } from "@/lib/meetings/rules";
 import { callToOrderScript, zonedInstant } from "@/lib/meetings/scripts";
+import { clockTime } from "@/lib/meetings/minutes";
 import { currentStep, itemSteps, usesLiveVoting, type Step } from "@/lib/meetings/steps";
 import { adjournMeeting, askMeetingAssistant, callToOrder, saveMeetingState } from "@/app/strata/[corpId]/meetings/[meetingId]/run/actions";
 import { saveItemNote } from "@/app/strata/[corpId]/meetings/actions";
@@ -862,7 +863,6 @@ export function MeetingMode(props: {
               onDefer={() => defer(item)}
               onConsensus={() => consensus(item)}
               onReceived={() => markReceived(item)}
-              onSkip={() => goNext(item.id)}
               onEdit={() => guardApproved(() => setEditing(item))}
             />
           )}
@@ -1050,7 +1050,7 @@ function CallToOrderPanel(props: {
       {props.called ? (
         <p>
           Called to order at{" "}
-          {new Date(props.startedAt!).toLocaleTimeString("en-CA", { hour: "numeric", minute: "2-digit", timeZone: props.timezone, timeZoneName: "short" })}. The
+          {clockTime(props.startedAt, props.timezone)}. The
           clock is running.
         </p>
       ) : (
@@ -1164,7 +1164,6 @@ function ItemPanel(props: {
   onDefer: () => void;
   onConsensus: () => void;
   onReceived: () => void;
-  onSkip: () => void;
   onEdit: () => void;
 }) {
   const { item: it, onPatch } = props;
@@ -1478,11 +1477,11 @@ function ItemPanel(props: {
           {props.actionError}
         </p>
       )}
-      {!it.done && props.called && (!m || !liveVoting || it.type === "FOR_DIRECTION" || it.type === "FOR_DISCUSSION") && (
+      {!it.done && props.called && (!m || !liveVoting || it.type === "FOR_DIRECTION") && (
         <div className="mm-actions">
           {m ? (
             <>
-              {(it.type === "FOR_DIRECTION" || it.type === "FOR_DISCUSSION") && !live?.vote && (
+              {it.type === "FOR_DIRECTION" && !live?.vote && (
                 <button type="button" className="button button-secondary" onClick={props.onConsensus}>
                   Consensus
                 </button>
@@ -1507,16 +1506,13 @@ function ItemPanel(props: {
             </>
           ) : (
             <>
-              <button type="button" className="button button-secondary" onClick={props.onSkip}>
-                Skip for now
-              </button>
-              {it.type === "FOR_DISCUSSION" && (
-                <button type="button" className="button button-secondary" onClick={props.onConsensus}>
-                  Consensus
+              {!isNextMeeting(it) && (
+                <button type="button" className="button button-secondary" onClick={props.onDefer} data-testid="mm-defer">
+                  Defer
                 </button>
               )}
               <button type="button" className="button button-primary" onClick={props.onReceived} data-testid="mm-next">
-                {it.type === "FOR_INFORMATION" ? "Received, next item" : "Done, next item"}
+                {it.type === "FOR_INFORMATION" ? "Received" : it.type === "FOR_DISCUSSION" ? "Discussed" : "Done, next item"}
               </button>
             </>
           )}
@@ -1536,7 +1532,7 @@ function ItemPanel(props: {
         </label>
       )}
 
-      <details className="mm-private">
+      <details className="mm-private" open>
         <summary>Private notes</summary>
         <textarea
           rows={3}

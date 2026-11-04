@@ -10,6 +10,7 @@ import {
   type MeetingFormat,
   type MeetingType,
 } from "./agenda.ts";
+import { zoneLabel } from "./format.ts";
 import { minutesSummary, motionNote, quorum, type AttendanceStatus } from "./rules.ts";
 import { conflictLine } from "./live.ts";
 
@@ -176,11 +177,11 @@ export function buildMinutes(input: {
   };
 }
 
-/** "7:02 p.m. PDT" in the meeting's own time zone. */
+/** "7:02 p.m. PT" in the meeting's own time zone (never PDT or PST). */
 export function clockTime(iso: string | null, timezone: string) {
   if (!iso) return "—";
-  return new Date(iso)
-    .toLocaleTimeString("en-CA", { hour: "numeric", minute: "2-digit", timeZone: timezone, timeZoneName: "short" });
+  const time = new Date(iso).toLocaleTimeString("en-CA", { hour: "numeric", minute: "2-digit", timeZone: timezone });
+  return `${time} ${zoneLabel(timezone)}`;
 }
 
 export function attendanceLines(m: MinutesContent): string[] {

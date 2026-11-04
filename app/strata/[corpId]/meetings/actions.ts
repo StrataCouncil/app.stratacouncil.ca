@@ -625,7 +625,10 @@ export async function launchMeeting(
   return { ok: true, result: data as string };
 }
 
-export type AgendaClaim = Ok<{ mine: true }> | Ok<{ mine: false; editor: string; since: string }> | Fail;
+export type AgendaClaim =
+  | Ok<{ mine: true; takeover: string | null }>
+  | Ok<{ mine: false; editor: string; since: string; requested: boolean }>
+  | Fail;
 
 /**
  * Takes (or keeps) the agenda for editing (0074): one person who can run
@@ -641,8 +644,23 @@ export async function claimAgenda(meetingId: string): Promise<AgendaClaim> {
     console.error("[claimAgenda]", error?.code, msg);
     return { ok: false, error: "Couldn't open the agenda for editing. Try again." };
   }
-  const r = data as { mine: boolean; editor?: string; since: string };
-  return r.mine ? { ok: true, mine: true } : { ok: true, mine: false, editor: r.editor ?? "Someone", since: r.since };
+  const r = data as { mine: boolean; editor?: string; since: string; takeover?: string; requested?: boolean };
+  return r.mine
+    ? { ok: true, mine: true, takeover: r.takeover ?? null }
+    : { ok: true, mine: false, editor: r.editor ?? "Someone", since: r.since, requested: r.requested === true };
+}
+
+/** Asks whoever is editing the agenda to hand it over (0077): their screen saves and lets go. */
+export async function requestAgendaTakeover(meetingId: string): Promise<Ok | Fail> {
+  if (!/^[0-9a-f-]{36}$/i.test(meetingId)) return { ok: false, error: "That meeting isn't available." };
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("request_agenda_takeover", { p_meeting_id: meetingId });
+  if (error) {
+    if (/Only someone|has been launched/.test(error.message)) return { ok: false, error: error.message };
+    console.error("[requestAgendaTakeover]", error.code, error.message);
+    return { ok: false, error: "Couldn't ask for the agenda. Try again." };
+  }
+  return { ok: true };
 }
 
 /** Done editing: someone else can take the agenda now. */

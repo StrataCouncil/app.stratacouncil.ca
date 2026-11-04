@@ -1,21 +1,55 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { claimAgenda, releaseAgenda } from "@/app/strata/[corpId]/meetings/actions";
+import { claimAgenda, releaseAgenda, requestAgendaTakeover } from "@/app/strata/[corpId]/meetings/actions";
 
 /**
- * One editor at a time (0074). Opening the agenda takes it for editing; while
- * someone else has it, everyone else sees it read-only and can check again.
- * The checkout is kept alive while the page is open and handed back on
- * leaving, or with Done editing; one left untouched for 15 minutes can be taken.
+ * Editing an agenda (0074, 0077): one editor at a time. Edit agenda opens
+ * this; it takes the agenda, renews the hold every 20 seconds and lets go
+ * on leaving. Save agenda in the builder saves and goes back to the
+ * Meetings tab. While someone else has it, a person who runs meetings can
+ * take it over: the editor's screen saves their changes and hands it over
+ * (or, if that screen has gone, it passes after a minute).
  */
-export function AgendaCheckout({ meetingId, editor, viewer }: { meetingId: string; editor: React.ReactNode; viewer: React.ReactNode }) {
+
+type Editing = {
+  /** The builder registers how to save its changes (true when saved, or nothing to save). */
+  setSaver: (save: (() => Promise<boolean>) | null) => void;
+  /** Done editing: let go of the agenda and go back to the Meetings tab. */
+  exit: () => Promise<void>;
+};
+const EditingContext = createContext<Editing | null>(null);
+export const useAgendaEditing = () => useContext(EditingContext);
+
+export function AgendaCheckout({
+  corpId,
+  meetingId,
+  editor,
+  viewer,
+}: {
+  corpId: string;
+  meetingId: string;
+  editor: React.ReactNode;
+  viewer: React.ReactNode;
+}) {
   const router = useRouter();
-  const [state, setState] = useState<{ kind: "checking" } | { kind: "mine" } | { kind: "theirs"; editor: string; since: string } | { kind: "error"; error: string } | { kind: "done" }>({
-    kind: "checking",
-  });
+  type State =
+    | { kind: "checking" }
+    | { kind: "mine" }
+    | { kind: "theirs"; editor: string; since: string; requested: boolean }
+    | { kind: "error"; error: string };
+  const [state, setState] = useState<State>({ kind: "checking" });
+  const [asking, setAsking] = useState(false);
   const holding = useRef(false);
+  const saver = useRef<(() => Promise<boolean>) | null>(null);
+  const handingOver = useRef(false);
+  const meetingPage = `/strata/${corpId}/meetings/${meetingId}`;
+
+  const release = useCallback(() => {
+    if (holding.current) void releaseAgenda(meetingId);
+    holding.current = false;
+  }, [meetingId]);
 
   const claim = useCallback(async () => {
     const r = await claimAgenda(meetingId).catch(() => ({ ok: false as const, error: "Couldn't open the agenda for editing. Try again." }));
@@ -23,66 +57,80 @@ export function AgendaCheckout({ meetingId, editor, viewer }: { meetingId: strin
       holding.current = false;
       return setState({ kind: "error", error: r.error });
     }
-    holding.current = r.mine;
-    setState(r.mine ? { kind: "mine" } : { kind: "theirs", editor: r.editor, since: r.since });
-  }, [meetingId]);
+    if (r.mine) {
+      holding.current = true;
+      setState({ kind: "mine" });
+      // Someone asked for it: save what's here, hand it over, and say who has it.
+      if (r.takeover && !handingOver.current) {
+        handingOver.current = true;
+        await (saver.current?.() ?? Promise.resolve(true)).catch(() => false);
+        release();
+        router.push(`${meetingPage}?takenOver=${encodeURIComponent(r.takeover)}`);
+      }
+      return;
+    }
+    holding.current = false;
+    setState({ kind: "theirs", editor: r.editor, since: r.since, requested: r.requested });
+  }, [meetingId, meetingPage, release, router]);
 
   useEffect(() => {
     void claim();
-    const release = () => {
-      if (holding.current) void releaseAgenda(meetingId);
-      holding.current = false;
-    };
     window.addEventListener("pagehide", release);
     return () => {
       window.removeEventListener("pagehide", release);
       release();
     };
-  }, [claim, meetingId]);
+  }, [claim, release]);
 
-  // Keeps the checkout alive while editing.
-  const mine = state.kind === "mine";
+  // Renew while editing; check back often while waiting for a handover.
+  const waiting = state.kind === "theirs" && state.requested;
   useEffect(() => {
-    if (!mine) return;
-    const t = setInterval(() => void claim(), 2 * 60 * 1000);
+    if (state.kind !== "mine" && !waiting) return;
+    const t = setInterval(() => void claim(), waiting ? 5000 : 20000);
     return () => clearInterval(t);
-  }, [mine, claim]);
+  }, [state.kind, waiting, claim]);
 
-  async function done() {
-    if (!window.confirm("Done editing? Anything you haven't saved is lost, and someone else can edit the agenda.")) return;
-    holding.current = false;
-    await releaseAgenda(meetingId).catch(() => undefined);
-    setState({ kind: "done" });
-    router.refresh();
+  const editing: Editing = {
+    setSaver: (save) => {
+      saver.current = save;
+    },
+    exit: async () => {
+      holding.current = false;
+      await releaseAgenda(meetingId).catch(() => undefined);
+      router.push(`/strata/${corpId}/meetings`);
+    },
+  };
+
+  async function takeOver() {
+    setAsking(true);
+    const r = await requestAgendaTakeover(meetingId).catch(() => ({ ok: false as const, error: "Couldn't ask for the agenda. Try again." }));
+    setAsking(false);
+    if (!r.ok) return setState({ kind: "error", error: r.error });
+    await claim();
   }
 
-  if (state.kind === "mine") {
-    return (
-      <>
-        <div className="agenda-lock" data-state="mine" data-testid="agenda-lock">
-          <span>You&rsquo;re editing this agenda. Others who run meetings see it read-only until you&rsquo;re done.</span>
-          <button type="button" className="button button-secondary button-small" onClick={done} data-testid="agenda-done-editing">
-            Done editing
-          </button>
-        </div>
-        {editor}
-      </>
-    );
-  }
+  if (state.kind === "mine") return <EditingContext.Provider value={editing}>{editor}</EditingContext.Provider>;
   return (
     <>
       {state.kind !== "checking" && (
         <div className="agenda-lock" data-state={state.kind} role="status" data-testid="agenda-lock">
           <span>
             {state.kind === "theirs"
-              ? `${state.editor} is editing this agenda (since ${new Date(state.since).toLocaleTimeString("en-CA", { hour: "numeric", minute: "2-digit" })}). It's read-only for you until they're done.`
-              : state.kind === "done"
-                ? "You're done editing. Someone else who runs meetings can edit the agenda now."
-                : state.error}
+              ? state.requested
+                ? `Asking ${state.editor} to hand over the agenda. Their changes are saved first; if their screen doesn't answer, it passes to you within a minute.`
+                : `${state.editor} is editing this agenda (since ${new Date(state.since).toLocaleTimeString("en-CA", { hour: "numeric", minute: "2-digit" })}). It's read-only for you until they're done.`
+              : state.error}
           </span>
-          <button type="button" className="button button-secondary button-small" onClick={() => void claim()} data-testid="agenda-check-again">
-            {state.kind === "done" ? "Edit agenda" : "Check again"}
-          </button>
+          {state.kind === "theirs" && !state.requested && (
+            <button type="button" className="button button-secondary button-small" onClick={() => void takeOver()} disabled={asking} data-testid="agenda-take-over">
+              Take over editing
+            </button>
+          )}
+          {state.kind === "error" && (
+            <button type="button" className="button button-secondary button-small" onClick={() => void claim()} data-testid="agenda-check-again">
+              Try again
+            </button>
+          )}
         </div>
       )}
       {viewer}
