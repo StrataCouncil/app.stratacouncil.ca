@@ -53,7 +53,8 @@ export interface PresenceEvent {
   name: string;
   /** Their council lot, if they have one. */
   lot: string | null;
-  event: "joined" | "left" | "marked_left";
+  /** marked_joined and marked_left were entered by whoever runs the meeting (0075). */
+  event: "joined" | "marked_joined" | "left" | "marked_left";
   at: string;
 }
 
@@ -107,7 +108,7 @@ export function parseLiveState(raw: unknown): LiveState | null {
     presence: arr(r.presence)
       .map((p) => {
         const o = obj(p);
-        const event = o.event === "joined" || o.event === "left" || o.event === "marked_left" ? o.event : null;
+        const event = o.event === "joined" || o.event === "marked_joined" || o.event === "left" || o.event === "marked_left" ? o.event : null;
         return event ? { id: int(o.id), userId: str(o.userId) || null, name: str(o.name), lot: str(o.lot) || null, event, at: str(o.at) } : null;
       })
       .filter((p): p is PresenceEvent => p !== null),
@@ -192,8 +193,14 @@ export function conflictLine(lots: string[]): string {
 /** Who's in the meeting now: each person's latest event is a join. */
 export function inMeeting(presence: PresenceEvent[]): PresenceEvent[] {
   const last = new Map<string, PresenceEvent>();
-  for (const p of [...presence].sort((a, b) => a.id - b.id)) last.set(p.userId ?? `lot:${p.lot}`, p);
-  return [...last.values()].filter((p) => p.event === "joined");
+  // One line per council lot, however they joined; people without a lot by account.
+  for (const p of [...presence].sort((a, b) => a.id - b.id)) last.set(p.lot ? `lot:${p.lot}` : `user:${p.userId}`, p);
+  return [...last.values()].filter((p) => isJoin(p.event));
+}
+
+/** Joined online or marked present by the runner. */
+export function isJoin(event: PresenceEvent["event"]) {
+  return event === "joined" || event === "marked_joined";
 }
 
 /**
@@ -204,7 +211,9 @@ export function inMeeting(presence: PresenceEvent[]): PresenceEvent[] {
 export function applyPresence(
   attendance: Record<string, string>,
   presence: PresenceEvent[],
-  afterId: number
+  afterId: number,
+  /** Leaving before Call to Order just clears the lot, as the database does (0075). */
+  calledToOrderAt: string | null = null
 ): { attendance: Record<string, string>; lastId: number; changed: boolean } {
   const out = { ...attendance };
   let lastId = afterId;
@@ -213,7 +222,12 @@ export function applyPresence(
     if (p.id <= afterId) continue;
     lastId = Math.max(lastId, p.id);
     if (!p.lot) continue;
-    const next = p.event === "joined" ? "present" : out[p.lot] === "present" ? "left" : out[p.lot];
+    if (!isJoin(p.event) && out[p.lot] === "present" && (!calledToOrderAt || Date.parse(p.at) < Date.parse(calledToOrderAt))) {
+      delete out[p.lot];
+      changed = true;
+      continue;
+    }
+    const next = isJoin(p.event) ? "present" : out[p.lot] === "present" ? "left" : out[p.lot];
     if (next && out[p.lot] !== next) {
       out[p.lot] = next;
       changed = true;
@@ -247,5 +261,5 @@ export function movementLines(presence: PresenceEvent[], calledToOrderAt: string
   return [...presence]
     .filter((p) => p.lot && Date.parse(p.at) > start)
     .sort((a, b) => a.id - b.id)
-    .map((p) => `${p.lot} ${p.event === "joined" ? "joined" : "left"} the meeting at ${time(p.at)}.`);
+    .map((p) => `${p.lot} ${isJoin(p.event) ? "joined" : "left"} the meeting at ${time(p.at)}.`);
 }

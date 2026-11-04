@@ -45,13 +45,14 @@ import { MeetingSide, MeetingUser, TypedConfirm, useLeaveWarning } from "@/compo
 import { DEMO_LIMITS, DEMO_LIMIT_MESSAGE, SIGNUP_URL } from "@/lib/demo";
 import { isDemoLimit, showDemoLimit } from "@/lib/demo-client";
 import { ConflictsPanel, RunnerVotePanel } from "@/components/meetings/LiveVote";
-import { applyPresence, presentForItem, takesConflicts, type Choice, type ClosedVote, type LiveConflict, type LiveState, type OpenVote } from "@/lib/meetings/live";
+import { applyPresence, isJoin, presentForItem, takesConflicts, type Choice, type ClosedVote, type LiveConflict, type LiveState, type OpenVote } from "@/lib/meetings/live";
 import {
   cancelVote,
   closeVote,
   declareConflict,
   getLiveState,
   joinMeeting,
+  markJoined,
   markLeft,
   openVote,
   recordVote,
@@ -106,7 +107,11 @@ export function MeetingMode(props: {
   const [attendance, setAttendance] = useState<Record<string, AttendanceStatus>>(props.initialAttendance);
   const [agendaApproved, setAgendaApproved] = useState(props.initialAgendaApproved);
   const [chair, setChair] = useState(props.chairName);
-  const [startedAt, setStartedAt] = useState<string | null>(props.actualStartAt);
+  const [startedAt, setStartedAtState] = useState<string | null>(props.actualStartAt);
+  const setStartedAt = (at: string | null) => {
+    startedRef.current = at;
+    setStartedAtState(at);
+  };
   const [current, setCurrent] = useState<string>(() => {
     if (!props.actualStartAt) return ATTENDANCE_VIEW;
     return props.initialAgenda.find((i) => !i.done && !i.deferred)?.id ?? props.initialAgenda[0]?.id ?? ATTENDANCE_VIEW;
@@ -171,11 +176,12 @@ export function MeetingMode(props: {
   // ones this screen hasn't seen yet are applied here, so its autosave
   // keeps them rather than writing over them.
   const presenceSeen = useRef((props.initialLive?.presence ?? []).reduce((n, p) => Math.max(n, p.id), 0));
+  const startedRef = useRef<string | null>(props.actualStartAt);
   const refreshLive = useCallback(async () => {
     const s = await getLiveState(meetingId).catch(() => null);
     if (s) {
       setLive(s);
-      const r = applyPresence(latest.current.attendance, s.presence, presenceSeen.current);
+      const r = applyPresence(latest.current.attendance, s.presence, presenceSeen.current, startedRef.current);
       presenceSeen.current = r.lastId;
       if (r.changed) setAttendance(r.attendance as Record<string, AttendanceStatus>);
     }
@@ -240,6 +246,27 @@ export function MeetingMode(props: {
   }
   function markAll(status: AttendanceStatus) {
     setAttendance(status ? Object.fromEntries(roll.map((l) => [l, status])) : {});
+  }
+
+  // Council meetings (0075): marking someone present records the time, as
+  // joining online does; taking someone out is always Mark as left.
+  async function markPresent(lots: string[]) {
+    if (!lots.length) return;
+    setAttendance((a) => ({ ...a, ...Object.fromEntries(lots.map((l) => [l, "present" as AttendanceStatus])) }));
+    setBusy(true);
+    const results = await Promise.all(lots.map((l) => markJoined(meetingId, l).catch(() => ({ ok: false as const, error: "Couldn't reach the server. Try again." }))));
+    setBusy(false);
+    const failed = results.find((r) => !r.ok);
+    if (failed && !failed.ok) setSaveError(failed.error);
+    await refreshLive();
+  }
+  function toggleRegrets(lot: string) {
+    setAttendance((a) => {
+      const out = { ...a };
+      if (out[lot] === "regrets") delete out[lot];
+      else out[lot] = "regrets";
+      return out;
+    });
   }
 
   // ── Call to Order ───────────────────────────────────────────────────
@@ -619,20 +646,41 @@ export function MeetingMode(props: {
               <p className="card__meta">
                 {general
                   ? "Every strata lot. Tap a lot to cycle: present, regrets, proxy. Proxies count toward quorum."
-                  : "Council members. Joining the meeting marks them present; you can also tap to cycle: present, regrets. Someone who has left is no longer counted for quorum or votes."}
+                  : "Council members. Joining the meeting marks them present. Tap anyone who isn\u2019t (on the phone, in the room) to mark them present; the time is recorded. Someone who has left no longer counts for quorum or votes."}
               </p>
               <QuorumBar q={q} general={general} />
-              <div className="mm-roll__bulk">
-                <button type="button" className="button button-secondary button-small" onClick={() => markAll("present")}>
-                  All present
-                </button>
-                <button type="button" className="button button-secondary button-small" onClick={() => markAll("regrets")}>
-                  All regrets
-                </button>
-                <button type="button" className="button button-secondary button-small" onClick={() => markAll("")}>
-                  Clear
-                </button>
-              </div>
+              {general ? (
+                <div className="mm-roll__bulk">
+                  <button type="button" className="button button-secondary button-small" onClick={() => markAll("present")}>
+                    All present
+                  </button>
+                  <button type="button" className="button button-secondary button-small" onClick={() => markAll("regrets")}>
+                    All regrets
+                  </button>
+                  <button type="button" className="button button-secondary button-small" onClick={() => markAll("")}>
+                    Clear
+                  </button>
+                </div>
+              ) : (
+                <div className="mm-roll__bulk">
+                  <button
+                    type="button"
+                    className="button button-secondary button-small"
+                    disabled={busy}
+                    onClick={() => void markPresent(roll.filter((l) => attendance[l] !== "present"))}
+                    data-testid="mm-all-present"
+                  >
+                    Everyone else present
+                  </button>
+                  <button
+                    type="button"
+                    className="button button-secondary button-small"
+                    onClick={() => setAttendance((a) => ({ ...a, ...Object.fromEntries(roll.filter((l) => !a[l]).map((l) => [l, "regrets" as AttendanceStatus])) }))}
+                  >
+                    Regrets for the rest
+                  </button>
+                </div>
+              )}
               {roll.length === 0 ? (
                 <p className="roster-notice">
                   {general ? (
@@ -651,13 +699,21 @@ export function MeetingMode(props: {
                     const last = moves[moves.length - 1];
                     return (
                       <div key={lot} className="mm-roll__cell">
-                        <button type="button" className="mm-roll__lot" data-status={attendance[lot] || "none"} onClick={() => cycleLot(lot)} data-testid={`att-${lot}`}>
+                        <button
+                          type="button"
+                          className="mm-roll__lot"
+                          data-status={attendance[lot] || "none"}
+                          onClick={() => (general ? cycleLot(lot) : attendance[lot] !== "present" && void markPresent([lot]))}
+                          aria-disabled={!general && attendance[lot] === "present" ? true : undefined}
+                          title={!general && attendance[lot] === "present" ? "Present. Use Mark as left if they leave." : undefined}
+                          data-testid={`att-${lot}`}
+                        >
                           <strong>{lot}</strong>
                           {!general && names[lot] && <span>{names[lot]}</span>}
                           <em>{statusLabel(attendance[lot] ?? "")}</em>
                           {last && (
                             <small className="mm-roll__time">
-                              {last.event === "joined" ? "Joined" : "Left"} {clockAt(last.at, timezone)}
+                              {last.event === "marked_joined" ? "Marked present" : isJoin(last.event) ? "Joined" : "Left"} {clockAt(last.at, timezone)}
                             </small>
                           )}
                         </button>
@@ -672,6 +728,11 @@ export function MeetingMode(props: {
                             data-testid={`mark-left-${lot}`}
                           >
                             Mark as left
+                          </button>
+                        )}
+                        {!general && attendance[lot] !== "present" && attendance[lot] !== "left" && (
+                          <button type="button" className="link-button mm-roll__left" onClick={() => toggleRegrets(lot)} data-testid={`regrets-${lot}`}>
+                            {attendance[lot] === "regrets" ? "Clear regrets" : "Regrets"}
                           </button>
                         )}
                       </div>

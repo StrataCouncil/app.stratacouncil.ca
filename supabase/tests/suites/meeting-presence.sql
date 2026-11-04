@@ -76,7 +76,7 @@ select pg_temp.expect('the live state works from launch', (live_meeting_state('7
 set test.uid = '00000000-0000-0000-0000-00000000000f';
 select join_meeting('74000000-0000-0000-0000-0000000000aa');
 select leave_meeting('74000000-0000-0000-0000-0000000000aa');
-select pg_temp.expect('leaving marks the lot left', (select attendance ->> 'SL003' = 'left' from meetings where id = '74000000-0000-0000-0000-0000000000aa'));
+select pg_temp.expect('leaving before Call to Order clears the lot (0075)', (select not (attendance ? 'SL003') from meetings where id = '74000000-0000-0000-0000-0000000000aa'));
 select join_meeting('74000000-0000-0000-0000-0000000000aa');
 select pg_temp.expect('and rejoining, present again', (select attendance ->> 'SL003' = 'present' from meetings where id = '74000000-0000-0000-0000-0000000000aa')
   and (select count(*) = 3 from meeting_presence where user_id = '00000000-0000-0000-0000-00000000000f'));
@@ -95,7 +95,7 @@ select pg_temp.expect_error($q$select mark_left_meeting('74000000-0000-0000-0000
 set test.uid = '00000000-0000-0000-0000-00000000000b';
 select pg_temp.expect_error($q$select mark_left_meeting('74000000-0000-0000-0000-0000000000aa', 'SL003', 'yes')$q$, 'Type "Left meeting"');
 select mark_left_meeting('74000000-0000-0000-0000-0000000000aa', 'SL003', '  left MEETING ');
-select pg_temp.expect('marked left by the runner', (select attendance ->> 'SL003' = 'left' from meetings where id = '74000000-0000-0000-0000-0000000000aa')
+select pg_temp.expect('marked left by the runner', (select not (attendance ? 'SL003') from meetings where id = '74000000-0000-0000-0000-0000000000aa')
   and exists (select 1 from meeting_presence where event = 'marked_left' and lot_number = 'SL003' and by_user = '00000000-0000-0000-0000-00000000000b'));
 select pg_temp.expect_error($q$select mark_left_meeting('74000000-0000-0000-0000-0000000000aa', 'SL003', 'Left meeting')$q$, 'isn''t marked present');
 reset role;

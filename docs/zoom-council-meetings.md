@@ -97,7 +97,11 @@ current to 2026-10-20); both are in the Knowledge Base.
    from launch (before Call to Order). Joining records the time and marks
    the council lot present; Leave records the exit time; anyone can rejoin.
    The operator can mark someone as having left only by typing "Left
-   meeting". Someone who has left no longer counts for quorum, and no vote
+   meeting", and can mark someone present (on the phone, in the room) at any
+   time, which records the time the same way (0075). Leaving before Call to
+   Order just clears the lot. During an open vote, someone who leaves
+   without having voted drops out of it (a ballot already cast stands),
+   someone who arrives can vote, and the vote can't close without quorum. Someone who has left no longer counts for quorum, and no vote
    can open or decision be confirmed without quorum. Arrivals and departures
    after Call to Order go in the minutes.
 3. **Meeting room.** Component View video on one side, agenda on the other.
