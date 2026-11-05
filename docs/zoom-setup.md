@@ -26,13 +26,15 @@ meeting, but set them here too so nothing slips through.
 | Setting | Set to | Why |
 | --- | --- | --- |
 | Waiting room | On | A member who declares a conflict is moved there; the Runner brings them back. |
-| Allow participants to join before host | Off | Nobody is in the meeting before the Runner. |
+| Allow participants to join before host | Off | Nobody is in the meeting before the Runner. If you can't find it, skip it: the app turns it off on every meeting it creates. |
 | Require a passcode when scheduling new meetings | On | Members never see it; the app passes it for them. |
 | Embed passcode in invite link | Off | The link is never shared. |
 | Mask phone numbers in the participant list | On | Phone numbers are personal information. |
 | Allow participants to rename themselves | Off | Names come from StrataCouncil ("Jane, SL12"). |
 | Screen sharing: who can share | Host only | Members see documents through Share on Screen in StrataCouncil. |
-| Chat (in-meeting chat) | Off (recommended) | Keeps the meeting's record in StrataCouncil's minutes. Your call. |
+| Chat | Off (the main Chat switch) | Keeps the meeting's record in StrataCouncil's minutes. Decided 2026-11-05; turn on later if people ask. |
+| Only authenticated users can join meetings from Web client | Off | Members join through StrataCouncil, not with a Zoom login; on, it would block them. |
+| Approve or block entry for users from specific countries/regions | Off | A council member travelling abroad must still get in. |
 | Meeting reactions, polls | Off | Votes happen in StrataCouncil. |
 
 **Recording tab**
@@ -49,7 +51,7 @@ meeting, but set them here too so nothing slips through.
 | --- | --- |
 | Meeting summary, smart recording, questions | Off |
 
-Decided 2026-11-04: no recordings, transcripts or AI summaries. The minutes
+Not shown on the free plan; the app turns summaries off on every meeting it creates anyway. Decided 2026-11-04: no recordings, transcripts or AI summaries. The minutes
 are the record.
 
 **Later, on a paid plan:** Settings, In Meeting (Advanced), **Select data
