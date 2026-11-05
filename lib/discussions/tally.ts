@@ -81,6 +81,32 @@ export function ratificationMotion(motion: string, closedOn: string): string {
 }
 
 /** "4 for, 1 against, 1 abstained, 1 recused, 0 didn't vote". */
+/** While a vote is open: "3 for, 1 against, 0 abstaining, 3 still to vote" (and any recused). */
+export function openTallyLine(t: Pick<Tally, "for" | "against" | "abstain" | "recused" | "missing">): string {
+  return `${t.for} for, ${t.against} against, ${t.abstain} abstaining, ${t.missing} still to vote${t.recused ? `, ${t.recused} recused` : ""}`;
+}
+
 export function tallyLine(t: Pick<Tally, "for" | "against" | "abstain" | "recused" | "missing">): string {
   return `${t.for} for, ${t.against} against, ${t.abstain} abstained, ${t.recused} recused, ${t.missing} didn’t vote`;
+}
+
+/**
+ * The Result column (0081). A vote between meetings decides nothing until a
+ * meeting ratifies it, so a motion that passed is "Carried, awaiting
+ * ratification" until then.
+ */
+export function resultLabel(d: {
+  status: DiscussionStatus;
+  result: DiscussionResult | null;
+  voteRequired: boolean;
+  voted: number;
+  voters: number;
+}): { label: string; tone: "good" | "bad" | "neutral" | "open" } {
+  if (!d.voteRequired) return { label: "No vote", tone: "neutral" };
+  if (d.status === "open") return { label: `Voting: ${d.voted} of ${d.voters} voted`, tone: "open" };
+  if (d.status === "awaiting_ratification") return { label: "Carried, awaiting ratification", tone: "good" };
+  if (d.status === "ratified") return { label: "Carried and ratified", tone: "good" };
+  if (d.status === "not_ratified") return { label: "Not ratified", tone: "bad" };
+  if (d.result === "not_supported") return { label: "Defeated", tone: "bad" };
+  return { label: "No majority", tone: "neutral" };
 }

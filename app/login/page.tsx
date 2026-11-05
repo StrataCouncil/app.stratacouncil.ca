@@ -27,7 +27,9 @@ export default function LoginPage() {
 
 function LoginForm() {
   const [state, formAction, pending] = useActionState(sendOtp, initialSendOtpState);
-  const linkError = useSearchParams().get("error");
+  const params = useSearchParams();
+  const linkError = params.get("error");
+  const next = params.get("next") ?? "";
 
   if (state.status === "sent") {
     return (
@@ -64,6 +66,7 @@ function LoginForm() {
         <p>Sign in to continue your training or your strata&rsquo;s Stratasphere&trade;.</p>
         <form action={formAction}>
           <input type="hidden" name="intent" value="signin" />
+          <input type="hidden" name="next" value={next} />
           <div className="field">
             <label htmlFor="email">Email</label>
             <input

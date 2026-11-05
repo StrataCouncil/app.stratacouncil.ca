@@ -28,6 +28,8 @@ export interface DiscussionInput {
   financial: string;
   risks: string;
   motion: string;
+  /** Off: a council conversation with nothing to vote on (0081). Set when it opens. */
+  voteRequired?: boolean;
 }
 
 const MAX_FILES = 10;
@@ -46,6 +48,8 @@ function reason(message: string, fallback: string) {
     "conflict of interest",
     "weren't on council",
     "taking part",
+    "has no vote",
+    "Write the motion",
   ];
   if (!known.some((k) => message.includes(k))) return fallback;
   return message.replace(/^[a-z_]+: /, "");
@@ -56,7 +60,7 @@ function refresh(corpId: string, id?: string) {
   if (id) revalidatePath(`/strata/${corpId}/discussions/${id}`);
 }
 
-function clean(input: DiscussionInput): DiscussionInput | string {
+function clean(input: DiscussionInput, voteRequired = true): DiscussionInput | string {
   const out = {
     title: String(input.title ?? "").trim().slice(0, 200),
     background: String(input.background ?? "").trim().slice(0, 10000),
@@ -65,12 +69,13 @@ function clean(input: DiscussionInput): DiscussionInput | string {
     motion: String(input.motion ?? "").trim().slice(0, 4000),
   };
   if (!out.title) return "Give the discussion a title.";
-  if (!out.motion) return "Write the motion council is voting on.";
+  if (voteRequired && !out.motion) return "Write the motion council is voting on.";
   return out;
 }
 
 export async function createDiscussion(corpId: string, input: DiscussionInput): Promise<Ok<{ id: string }> | Fail> {
-  const fields = clean(input);
+  const voteRequired = input.voteRequired !== false;
+  const fields = clean(input, voteRequired);
   if (typeof fields === "string") return { ok: false, error: fields };
   const supabase = await createClient();
   const {
@@ -78,6 +83,7 @@ export async function createDiscussion(corpId: string, input: DiscussionInput): 
   } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "Please sign in again." };
   const { data, error } = await supabase.rpc("create_discussion", {
+    p_vote_required: voteRequired,
     p_corporation_id: corpId,
     p_title: fields.title,
     p_background: fields.background,
@@ -95,7 +101,8 @@ export async function createDiscussion(corpId: string, input: DiscussionInput): 
 }
 
 export async function updateDiscussion(corpId: string, id: string, input: DiscussionInput): Promise<Ok | Fail> {
-  const fields = clean(input);
+  // Whether it has a vote is fixed when it opens; the database checks the motion against that.
+  const fields = clean(input, input.voteRequired !== false);
   if (typeof fields === "string") return { ok: false, error: fields };
   const { error } = await (await createClient()).rpc("update_discussion", {
     p_discussion_id: id,
@@ -124,8 +131,15 @@ export async function castVote(corpId: string, id: string, vote: string, recusal
 export async function addComment(corpId: string, id: string, body: string): Promise<Ok<{ commentId: string }> | Fail> {
   const text = String(body ?? "").trim().slice(0, 5000);
   if (!text) return { ok: false, error: "Write your comment first." };
-  const { data, error } = await (await createClient()).rpc("add_discussion_comment", { p_discussion_id: id, p_body: text });
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Please sign in again." };
+  const { data, error } = await supabase.rpc("add_discussion_comment", { p_discussion_id: id, p_body: text });
   if (error || !data) return { ok: false, error: reason(error?.message ?? "", "Couldn't post your comment.") };
+  // Council gets the thread by email (0081); a failed email is logged, the comment stands.
+  await emailCouncil(id, "comment", user.id).catch((err) => console.error("[addComment] email", err instanceof Error ? err.message : err));
   refresh(corpId, id);
   return { ok: true, commentId: data as string };
 }

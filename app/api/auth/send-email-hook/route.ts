@@ -70,10 +70,26 @@ function buildConfirmUrl(emailData: SendEmailHookPayload["email_data"]): string 
   const url = new URL("/auth/confirm", APP_URL);
   url.searchParams.set("token_hash", emailData.token_hash);
   url.searchParams.set("type", emailData.email_action_type);
-  if (emailData.redirect_to) {
-    url.searchParams.set("next", emailData.redirect_to);
-  }
+  const next = returnPath(emailData.redirect_to);
+  if (next) url.searchParams.set("next", next);
   return url.toString();
+}
+
+/**
+ * Where to go after signing in: the page someone was sent to sign in from
+ * (sendOtp puts it on /auth/confirm as ?next=), on this site only. Anything
+ * else, including another site, is dropped and they land on the home page.
+ */
+function returnPath(redirectTo: string | undefined): string | null {
+  if (!redirectTo) return null;
+  try {
+    const u = new URL(redirectTo, APP_URL);
+    if (u.host !== new URL(APP_URL).host) return null;
+    if (u.pathname === "/auth/confirm") return u.searchParams.get("next");
+    return `${u.pathname}${u.search}`;
+  } catch {
+    return null;
+  }
 }
 
 function selectTemplate(actionType: string, confirmUrl: string) {

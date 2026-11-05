@@ -16,7 +16,10 @@ export function ScreenGate({ corpId, children }: { corpId: string; children: Rea
   // The Library and the Stratasphere assistant work on phones; Meeting Mode
   // and the rest of the governance tools stay desktop-only.
   const mobileOk =
-    pathname.startsWith(`/strata/${corpId}/guides`) || pathname.startsWith(`/strata/${corpId}/assistant`);
+    pathname.startsWith(`/strata/${corpId}/guides`) ||
+    pathname.startsWith(`/strata/${corpId}/assistant`) ||
+    // An email's vote button (0081): council votes from their phones.
+    /^\/strata\/[^/]+\/discussions\/[^/]+\/vote$/.test(pathname);
 
   return (
     <>
