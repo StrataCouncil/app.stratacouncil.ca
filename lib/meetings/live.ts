@@ -314,3 +314,8 @@ export function movementLines(
   // Stable: joins and leaves keep their order; a handover goes where its time puts it.
   return [...moves, ...hands].map((e, i) => ({ ...e, i })).sort((a, b) => a.at - b.at || a.i - b.i).map((e) => e.line);
 }
+
+/** Who's in the meeting, for the video tiles on the demo site (0080). */
+export function videoPeople(presence: PresenceEvent[], names: Record<string, string>): Array<{ key: string; name: string; lot: string | null }> {
+  return inMeeting(presence).map((p) => ({ key: p.lot ? `lot:${p.lot}` : `user:${p.userId}`, name: (p.lot && names[p.lot]) || p.name || "Council member", lot: p.lot }));
+}

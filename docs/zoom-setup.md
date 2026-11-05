@@ -32,7 +32,7 @@ meeting, but set them here too so nothing slips through.
 | Mask phone numbers in the participant list | On | Phone numbers are personal information. |
 | Allow participants to rename themselves | Off | Names come from StrataCouncil ("Jane, SL12"). |
 | Screen sharing: who can share | Host only | Members see documents through Share on Screen in StrataCouncil. |
-| Chat | "By default, allow participants to chat with": No one | Keeps the meeting's record in StrataCouncil's minutes. Decided 2026-11-05; open it up later if people ask. The main Chat switch stays locked on while "Allow users to access meeting chats before and after the meeting" is on; that's fine, because the app hides Zoom's chat panel too. |
+| Chat | "By default, allow participants to chat with": No one | Keeps the meeting's record in StrataCouncil's minutes. Decided 2026-11-05; open it up later if people ask. The main Chat switch stays locked on while "Allow users to access meeting chats before and after the meeting" is on; that's fine: with No one, members can't send chat messages, though Zoom may still show its chat button. |
 | Only authenticated users can join meetings from Web client | Off | Members join through StrataCouncil, not with a Zoom login; on, it would block them. |
 | Approve or block entry for users from specific countries/regions | Off | A council member travelling abroad must still get in. |
 | Meeting reactions, polls | Off | Votes happen in StrataCouncil. |

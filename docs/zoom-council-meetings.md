@@ -12,6 +12,17 @@ yet. Test in a sandbox on the demo site (docs/demo-site.md). Read this before st
   page stays behind the "Desktop required" notice on phones.
 - **Testing on the free Zoom plan** (2026-11-05); paid plan with the first
   paying customer or investment. Setup steps: `docs/zoom-setup.md`.
+- **When the Zoom meeting is created** (built 2026-11-05, 0080): when the
+  Runner first opens Meeting Mode for a launched Electronic or Hybrid
+  meeting, on a free host licence (`ZOOM_HOST_USERS`), not when the meeting
+  is scheduled. Members never need the link, so nothing is gained by making
+  it earlier, and a host licence is only held while the meeting runs. It
+  ends at adjournment. If Zoom cuts it off (free plan: 40 minutes), the
+  Runner restarts the video and members rejoin. Zoom runs in its own frame
+  (`public/zoom-frame.html`, Component View from Zoom's CDN) because the
+  SDK needs React 18. The Runner's screen admits people from the waiting
+  room as they arrive. Conflicts holding a member in the waiting room come
+  with step 3.
 - **Demo site:** no Zoom. Video tiles with each person's initials and name,
   and "Video appears here".
 

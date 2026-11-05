@@ -43,6 +43,8 @@ import { saveItemNote } from "@/app/strata/[corpId]/meetings/actions";
 import { getDocumentDownloadUrl } from "@/app/strata/[corpId]/documents/actions";
 import { openInNewTab } from "@/lib/open-in-tab";
 import { ItemEditor } from "@/components/meetings/ItemEditor";
+import { videoPeople } from "@/lib/meetings/live";
+import { VideoPanel } from "@/components/meetings/VideoPanel";
 import { MeetingSide, MeetingUser, SharedViewer, TypedConfirm, useLeaveWarning } from "@/components/meetings/MeetingChrome";
 import { DEMO_LIMITS, DEMO_LIMIT_MESSAGE, SIGNUP_URL } from "@/lib/demo";
 import { isDemoLimit, showDemoLimit } from "@/lib/demo-client";
@@ -890,6 +892,7 @@ export function MeetingMode(props: {
         <MeetingSide
           presence={live?.presence ?? []}
           names={names}
+          video={<VideoPanel meetingId={meetingId} isRunner={true} people={videoPeople(live?.presence ?? [], names)} />}
           assistant={
             <Assistant
               key={item?.id ?? "none"}
