@@ -6,6 +6,29 @@ yet. Test in a sandbox on the demo site (docs/demo-site.md). Read this before st
 
 ## Decisions so far
 
+- **Laptops and desktops first** (2026-11-05). Phones come later: audio
+  only, as few taps as possible from the launch email; sign-in on a phone
+  (email links, authenticator) is the hard part. Until then the members'
+  page stays behind the "Desktop required" notice on phones.
+- **Testing on the free Zoom plan** (2026-11-05); paid plan with the first
+  paying customer or investment. Setup steps: `docs/zoom-setup.md`.
+- **When the Zoom meeting is created** (built 2026-11-05, 0080): when the
+  Runner first opens Meeting Mode for a launched Electronic or Hybrid
+  meeting, on a free host licence (`ZOOM_HOST_USERS`), not when the meeting
+  is scheduled. Members never need the link, so nothing is gained by making
+  it earlier, and a host licence is only held while the meeting runs. It
+  ends at adjournment. If Zoom cuts it off (free plan: 40 minutes), the
+  Runner restarts the video and members rejoin. Zoom runs in its own frame
+  (`public/zoom-frame.html`, Component View from Zoom's CDN) because the
+  SDK needs React 18. The Runner's screen admits people from the waiting
+  room as they arrive. Conflicts holding a member in the waiting room come
+  with step 3.
+- **Demo site:** visitors get no Zoom: video tiles with each person's
+  initials and name, and "Video appears here". A Super Admin's sandbox gets
+  real Zoom (same keys on the demo project), so Zoom is tested without test
+  data on the live site. The live and demo databases each track their own
+  host use, so don't run a live meeting and a sandbox test at the same time.
+
 - Zoom is the video only. The agenda, attendance, motions, votes, decisions
   and minutes live in Stratasphere.
 - **We own the Zoom account.** Meetings are created on our account and
@@ -161,8 +184,7 @@ current to 2026-10-20); both are in the Knowledge Base.
   `chat-on-message`, among others.
 - The SDK "does not support bots or AI notetakers"; that's Realtime Media
   Streams (paid Developer Pack credits). We don't use AI Companion summaries
-  (decided 2026-11-04). AI Companion summaries from the
-  host account are a different thing and are what we use.
+  (decided 2026-11-04), and AI Companion is off on the host account.
 
 ### REST API and webhooks
 

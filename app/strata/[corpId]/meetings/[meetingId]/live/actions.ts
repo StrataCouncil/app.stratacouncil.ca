@@ -3,6 +3,11 @@
 import { createClient } from "@/lib/supabase/server";
 import { motionCounts, parseLiveState, parsePresenting, type Choice, type LiveState, type Presenting } from "@/lib/meetings/live";
 import { logDemoActivity } from "@/lib/demo-usage";
+import { IS_DEMO } from "@/lib/demo";
+import { demoRestricted } from "@/lib/demo-sandbox";
+import { zoomConfig } from "@/lib/zoom/api";
+import { meetingSdkSignature, zoomDisplayName } from "@/lib/zoom/signature";
+import { ensureZoomMeeting, openZoomMeeting, zakFor } from "@/lib/meetings/video";
 
 /**
  * Live voting (0073). Every rule (who runs the meeting, who may vote, one
@@ -207,4 +212,79 @@ export async function takeOverMeeting(meetingId: string): Promise<Ok | Fail> {
   const supabase = await createClient();
   const { error } = await supabase.rpc("take_over_meeting", { p_meeting_id: meetingId });
   return error ? failFrom(error, "Couldn't take over the meeting. Try again.") : { ok: true };
+}
+
+/** What the video panel needs (0080): join details for Zoom, or why there's no video. */
+export type VideoJoin =
+  | { kind: "none" }
+  | { kind: "demo" }
+  | { kind: "message"; tone: "info" | "error"; message: string; canRestart?: boolean }
+  | { kind: "waiting" }
+  | {
+      kind: "join";
+      sdkKey: string;
+      signature: string;
+      meetingNumber: string;
+      passcode: string;
+      userName: string;
+      customerKey: string;
+      zak: string | null;
+      host: boolean;
+    };
+
+/**
+ * Join details for the meeting's Zoom video, for someone who may follow it.
+ * The Runner's screen creates the Zoom meeting (on a free host licence) the
+ * first time it asks, and joins as host; everyone else joins once it exists.
+ * `restart` (Runner only) replaces a Zoom meeting that has ended, such as one
+ * cut off by the free plan's 40 minutes.
+ */
+export async function getVideoJoin(meetingId: string, opts: { restart?: boolean } = {}): Promise<VideoJoin> {
+  if (!UUID.test(meetingId)) return { kind: "none" };
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { kind: "none" };
+  const { data: m } = await supabase
+    .from("meetings")
+    .select("corporation_id, type, format, timezone, launched_by, status")
+    .eq("id", meetingId)
+    .maybeSingle();
+  if (!m || m.format === "in_person" || !m.launched_by || m.status === "ADJOURNED") return { kind: "none" };
+  // Demo visitors get tiles; a Super Admin's sandbox gets real Zoom, for testing off the live site.
+  if (await demoRestricted()) return { kind: "demo" };
+  // Only someone who may follow the meeting (council, manager, runners) gets past here.
+  const live = await getLiveState(meetingId);
+  if (!live) return { kind: "none" };
+
+  const cfg = zoomConfig();
+  if (!cfg) return { kind: "message", tone: "info", message: "Video isn't set up for StrataCouncil yet. The meeting works without it." };
+
+  const isRunner = m.launched_by === user.id;
+  const row = isRunner
+    ? await ensureZoomMeeting(cfg, {
+        meetingId,
+        topic: IS_DEMO ? `Sandbox test meeting, ${m.corporation_id}` : `Council meeting, ${m.corporation_id}`,
+        timezone: (m.timezone as string) || "America/Vancouver",
+        restart: Boolean(opts.restart),
+      })
+    : await openZoomMeeting(meetingId).then((r) => (r ? ({ ok: true, row: r } as const) : null));
+  if (!row) return { kind: "waiting" };
+  if (!row.ok) return { kind: "message", tone: "error", message: row.error, canRestart: !row.busy };
+
+  const { data: profile } = await supabase.from("profiles").select("full_name").eq("id", user.id).maybeSingle();
+  const zak = isRunner ? await zakFor(cfg, row.row.host_email) : null;
+  if (isRunner && !zak) return { kind: "message", tone: "error", message: "Couldn't start the video as host. Try again; the meeting itself carries on.", canRestart: true };
+  return {
+    kind: "join",
+    sdkKey: cfg.sdkKey,
+    signature: meetingSdkSignature({ sdkKey: cfg.sdkKey, sdkSecret: cfg.sdkSecret, meetingNumber: row.row.zoom_meeting_id, role: isRunner ? 1 : 0 }),
+    meetingNumber: row.row.zoom_meeting_id,
+    passcode: row.row.passcode,
+    userName: zoomDisplayName((profile?.full_name as string) ?? "", live.myLot),
+    customerKey: user.id,
+    zak,
+    host: isRunner,
+  };
 }

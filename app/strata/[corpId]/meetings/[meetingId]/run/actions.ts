@@ -13,6 +13,7 @@ import { logDemoActivity, refundDemoAllowance, takeDemoAllowance } from "@/lib/d
 import { fileDiscussionRecord } from "@/lib/discussions/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { motionCounts, movementLines } from "@/lib/meetings/live";
+import { endMeetingVideo } from "@/lib/meetings/video";
 
 /**
  * Meeting Mode (doc01 §4): saving the running meeting, Call to Order, the
@@ -219,6 +220,8 @@ export async function adjournMeeting(
     console.error("[adjournMeeting]", error.code, error.message);
     return { ok: false, error: error.message.includes("already") || error.message.includes("decided") ? error.message : "Couldn't adjourn the meeting." };
   }
+  // The Zoom meeting ends for everyone and its host licence is freed (0080).
+  await endMeetingVideo(meetingId);
   // Council votes ratified (or not) at this meeting (0070): the database
   // settled them on adjournment; their records get the outcome as a last line.
   const { data: settled } = await createAdminClient().from("discussions").select("id").eq("ratified_meeting_id", meetingId);

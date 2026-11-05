@@ -27,7 +27,8 @@ const nextConfig = {
   // Browser security settings for every page (2026-10 audit): no other site
   // may show the app inside a frame (clickjacking), files are never
   // second-guessed into another type, other sites see only our address, not
-  // the page, and the camera, microphone and location are never used.
+  // the page, and the camera, microphone and location are never used,
+  // except for meeting video (below).
   async headers() {
     return [
       {
@@ -38,6 +39,22 @@ const nextConfig = {
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+        ],
+      },
+      // Meeting video (0080): Meeting Mode and the members' meeting page may
+      // use the camera and microphone, and pass them to the Zoom frame (this
+      // site's own page). These come after the rule above, so they win.
+      {
+        source: "/strata/:corpId/meetings/:meetingId/:page(run|live)",
+        headers: [{ key: "Permissions-Policy", value: "camera=(self), microphone=(self), display-capture=(self), geolocation=()" }],
+      },
+      // The Zoom frame itself: shown only inside our own pages.
+      {
+        source: "/zoom-frame.html",
+        headers: [
+          { key: "X-Frame-Options", value: "SAMEORIGIN" },
+          { key: "Content-Security-Policy", value: "frame-ancestors 'self'" },
+          { key: "Permissions-Policy", value: "camera=(self), microphone=(self), display-capture=(self), geolocation=()" },
         ],
       },
     ];

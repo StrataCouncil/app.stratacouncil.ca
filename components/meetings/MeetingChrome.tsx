@@ -43,19 +43,22 @@ export function MeetingUser({ name, avatarUrl }: { name: string; avatarUrl: stri
 const clock = (iso: string) => new Date(iso).toLocaleTimeString("en-CA", { hour: "numeric", minute: "2-digit" });
 
 /**
- * The right-hand column: who's in the meeting (where the Zoom video will
- * go), and below it the Stratasphere assistant, collapsed until opened.
+ * The right-hand column: the meeting's video, who's in the meeting, and
+ * below them the Stratasphere assistant, collapsed until opened.
  */
 export function MeetingSide(props: {
   presence: PresenceEvent[];
   names: Record<string, string>;
   /** The assistant, rendered only while it's open. */
   assistant: React.ReactNode;
+  /** The meeting's video (0080), above who's in the meeting. */
+  video?: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const here = inMeeting(props.presence);
   return (
     <aside className="mm-side" aria-label="In the meeting and Stratasphere">
+      {props.video}
       <div className="mm-side__here" data-testid="meeting-here">
         <h3 className="mm-subhead">In the meeting ({here.length})</h3>
         {here.length === 0 ? (

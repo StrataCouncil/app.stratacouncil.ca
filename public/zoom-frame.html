@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Meeting video</title>
+<!--
+  Zoom's Meeting SDK (Component View), in its own frame (0080). It needs
+  React 18; the app runs React 19, so it lives here, loaded from Zoom, and
+  talks to the meeting page by postMessage, same origin only. The page
+  sends join details (fetched for this person from the server); this frame
+  reports how the connection is going.
+-->
+<style>
+  html, body { margin: 0; height: 100%; background: #111; color: #eee; font: 14px/1.4 system-ui, sans-serif; overflow: hidden; }
+  #zoom { width: 100%; height: 100%; }
+</style>
+<script src="https://source.zoom.us/6.10.0/lib/vendor/react.min.js"></script>
+<script src="https://source.zoom.us/6.10.0/lib/vendor/react-dom.min.js"></script>
+<script src="https://source.zoom.us/6.10.0/zoom-meeting-embedded-6.10.0.min.js"></script>
+</head>
+<body>
+<div id="zoom"></div>
+<script>
+(function () {
+  var origin = window.location.origin;
+  function tell(msg) { if (window.parent !== window) window.parent.postMessage(Object.assign({ source: "sc-zoom" }, msg), origin); }
+  var client = null;
+  var joined = false;
+  var admitted = {};
+
+  // The Runner (host) lets members in from the waiting room as they arrive.
+  // Waiting room stays on so a member with a conflict can be held there later.
+  function admitWaiting(list) {
+    if (!client || !list) return;
+    for (var i = 0; i < list.length; i++) {
+      var p = list[i];
+      if (p && p.isHold && !admitted[p.userId]) { admitted[p.userId] = true; try { client.admit(p.userId); } catch (e) {} }
+    }
+  }
+
+  function join(cfg, size) {
+    if (!window.ZoomMtgEmbedded) return tell({ type: "state", state: "failed", detail: "Zoom didn't load. Check your connection, then try again." });
+    client = window.ZoomMtgEmbedded.createClient();
+    var w = Math.max(240, Math.floor(size.width)), h = Math.max(135, Math.floor(size.height) - 60);
+    client.init({
+      zoomAppRoot: document.getElementById("zoom"),
+      language: "en-US",
+      patchJsMedia: true,
+      leaveOnPageUnload: true,
+      maximumVideosInGalleryView: 9,
+      customize: {
+        meetingInfo: ["topic", "participant"],
+        video: { isResizable: false, popper: { disableDraggable: true }, viewSizes: { default: { width: w, height: h }, ribbon: { width: w, height: h } }, defaultViewType: "gallery" }
+      }
+    }).then(function () {
+      tell({ type: "state", state: "connecting" });
+      client.on("connection-change", function (p) {
+        var s = p && p.state;
+        if (s === "Connected") { joined = true; tell({ type: "state", state: "joined" }); if (cfg.host) admitWaiting(client.getAttendeeslist()); }
+        else if (s === "Reconnecting") tell({ type: "state", state: "reconnecting" });
+        else if (s === "Closed") tell({ type: "state", state: "ended", detail: p.reason || "" });
+        else if (s === "Fail") tell({ type: "state", state: "failed", detail: p.reason || "" });
+      });
+      if (cfg.host) {
+        client.on("user-added", admitWaiting);
+        client.on("user-updated", admitWaiting);
+      }
+      return client.join({
+        signature: cfg.signature,
+        meetingNumber: cfg.meetingNumber,
+        password: cfg.passcode,
+        userName: cfg.userName,
+        customerKey: cfg.customerKey,
+        zak: cfg.zak || undefined
+      });
+    }).catch(function (err) {
+      var reason = (err && (err.reason || err.message || err.errorMessage)) || "";
+      var code = err && (err.errorCode || err.type);
+      tell({ type: "state", state: "failed", detail: String(reason), code: code == null ? null : String(code) });
+    });
+  }
+
+  window.addEventListener("message", function (e) {
+    if (e.origin !== origin || e.source !== window.parent || !e.data || e.data.source !== "sc-page") return;
+    if (e.data.type === "join" && !client) join(e.data.config, e.data.size || { width: 320, height: 240 });
+    if (e.data.type === "leave" && client && joined) { try { client.leaveMeeting(); } catch (err) {} }
+  });
+  tell({ type: "ready" });
+})();
+</script>
+</body>
+</html>
