@@ -11,6 +11,25 @@ const nextConfig = {
   // tesseract.js runs OCR in a worker thread from its own files, and
   // @napi-rs/canvas is a native module; neither can be bundled (lib/kb/ocr.ts).
   serverExternalPackages: ["unpdf", "mammoth", "tesseract.js", "@napi-rs/canvas"],
+  // @napi-rs/canvas ships a build for musl Linux (Alpine) beside the glibc
+  // one Vercel runs; tracing picks up both. Leave the unused one out (29 MB
+  // in every function that reads PDFs).
+  outputFileTracingExcludes: {
+    "*": ["node_modules/@napi-rs/canvas-linux-x64-musl/**"],
+    // The includes above match by substring ("/strata" matches every page
+    // under it), so the OCR files are taken back out of the pages that never
+    // read a scan: about 15 MB off each. Only the strata page (plan upload),
+    // a strata's overview, Documents and a document category (historic
+    // minutes), Meetings and a meeting's agenda page (agenda upload), and the
+    // background indexer keep them. A new page under /strata keeps them too
+    // until it's added here; that costs space, never breaks anything.
+    "/strata/\\[corpId\\]/{assistant,billing,calendar,council,decisions,discussions,documents/export,guides,lots,management,meetings/new,meetings/\\[meetingId\\]/,minutes}": [
+      "lib/kb/tessdata/**",
+      "node_modules/tesseract.js-core/**",
+      "node_modules/tesseract.js/**",
+      "node_modules/@napi-rs/canvas*/**",
+    ],
+  },
   // The policy template download embeds Work Sans (lib/exports/policy-docx.ts).
   // OCR (lib/kb/ocr.ts) ships with the routes that read PDFs: the English
   // model, and the engine's WebAssembly files, which it loads from disk

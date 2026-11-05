@@ -20,7 +20,8 @@ import {
   type AgendaItem,
   type MeetingType,
 } from "@/lib/meetings/agenda";
-import { parseUploadedAgenda, saveAgenda, saveItemNote } from "@/app/strata/[corpId]/meetings/actions";
+import { saveAgenda, saveItemNote } from "@/app/strata/[corpId]/meetings/actions";
+import { parseUploadedAgenda } from "@/app/strata/[corpId]/meetings/agenda-upload-actions";
 import { isGeneralMeeting } from "@/lib/meetings/rules";
 import { ItemEditor } from "@/components/meetings/ItemEditor";
 import { useAgendaEditing } from "@/components/meetings/AgendaCheckout";
