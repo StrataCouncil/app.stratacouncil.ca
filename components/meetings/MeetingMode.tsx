@@ -220,8 +220,6 @@ export function MeetingMode(props: {
     if (handedAway) router.replace(`/strata/${corpId}/meetings/${meetingId}/live`);
   }, [handedAway, router, corpId, meetingId]);
   const [exitOpen, setExitOpen] = useState(false);
-  // Shown on the Adjournment item after Exit takes the Runner there.
-  const [adjournHint, setAdjournHint] = useState(false);
   useEffect(() => {
     void refreshLive();
     // Faster while a vote is open, so ballots appear as they're cast.
@@ -625,8 +623,8 @@ export function MeetingMode(props: {
           In the meeting
         </button>
         <MeetingUser name={props.me.name} avatarUrl={props.me.avatarUrl} />
-        <button type="button" className="button button-secondary button-small" onClick={() => setExitOpen(true)} data-testid="mm-exit">
-          Exit
+        <button type="button" className="button button-secondary button-small" onClick={() => setExitOpen(true)} data-testid="mm-hand-over">
+          Hand over
         </button>
       </header>
 
@@ -658,16 +656,6 @@ export function MeetingMode(props: {
           )}{" "}
           <button type="button" className="link-button" onClick={adjournWithoutQuorum}>
             Adjourn the meeting
-          </button>
-        </div>
-      )}
-
-      {adjournHint && item && isAdjournment(item) && !item.done && (
-        <div className="mm__alert mm__alert--info" role="status" data-testid="mm-adjourn-hint">
-          <strong>To adjourn:</strong> record who moved and seconded the motion to adjourn below, then open the vote (or use All in favour).
-          When it carries, the meeting ends, the minutes are drafted and anything not dealt with is deferred to the next meeting.{" "}
-          <button type="button" className="link-button" onClick={() => setAdjournHint(false)}>
-            Got it
           </button>
         </div>
       )}
@@ -942,16 +930,6 @@ export function MeetingMode(props: {
           candidates={(props.runnerCandidates ?? []).filter((c) => inMeeting(live?.presence ?? []).some((p) => p.userId === c.userId))}
           onSave={saveNow}
           onHandedOver={() => router.replace(`/strata/${corpId}/meetings/${meetingId}/live`)}
-          called={called}
-          onAdjourn={() => {
-            setExitOpen(false);
-            const adj = agenda.find(isAdjournment);
-            if (!called) adjournWithoutQuorum();
-            else if (adj && !adj.done) {
-              setCurrent(adj.id);
-              setAdjournHint(true);
-            } else startAdjournment(agenda);
-          }}
           onStay={() => setExitOpen(false)}
         />
       )}
@@ -1773,10 +1751,7 @@ function ExitDialog(props: {
   candidates: Array<{ userId: string; name: string }>;
   onSave: () => Promise<boolean>;
   onHandedOver: () => void;
-  onAdjourn: () => void;
   onStay: () => void;
-  /** Called to order: adjourning then takes a motion (the Adjournment item). */
-  called: boolean;
 }) {
   const [to, setTo] = useState("");
   const [busy, setBusy] = useState(false);
@@ -1809,28 +1784,11 @@ function ExitDialog(props: {
   return (
     <div className="modal-backdrop" onClick={props.onStay}>
       <div className="modal" role="dialog" aria-modal="true" aria-labelledby="mm-exit-title" onClick={(e) => e.stopPropagation()} data-testid="mm-exit-dialog">
-        <h2 id="mm-exit-title">You&rsquo;re running this meeting</h2>
-        <p>A meeting that has been launched can&rsquo;t be left without someone running it. Adjourn it, or hand it to someone in the meeting who can run meetings.</p>
-        <h3>Adjourn the meeting</h3>
-        {props.called ? (
-          <>
-            <p className="card__meta">
-              A meeting that has been called to order ends with a motion to adjourn, recorded in the minutes. Anything not dealt with is deferred to
-              the next meeting.
-            </p>
-            <button type="button" className="button button-primary" onClick={props.onAdjourn} disabled={busy} data-testid="mm-exit-adjourn">
-              Go to the motion to adjourn
-            </button>
-          </>
-        ) : (
-          <>
-            <p className="card__meta">The meeting hasn&rsquo;t been called to order, so it can end now, with no business conducted.</p>
-            <button type="button" className="button button-danger" onClick={props.onAdjourn} disabled={busy} data-testid="mm-exit-adjourn">
-              Adjourn without business
-            </button>
-          </>
-        )}
-        <h3>Hand over the meeting</h3>
+        <h2 id="mm-exit-title">Hand over the meeting</h2>
+        <p>
+          Pass the running of this meeting to someone in it who can run meetings. The meeting carries on; it ends only when it&rsquo;s adjourned
+          at the Adjournment item. If your connection drops, someone who can run meetings can take it over after 2 minutes.
+        </p>
         {demoRestricted ? (
           <p className="card__meta" data-testid="mm-exit-demo">
             In the demo, the other council members are fictional, so there&rsquo;s no one to hand the meeting to. With your real council, anyone in
@@ -1867,7 +1825,7 @@ function ExitDialog(props: {
         )}
         <div className="modal__actions">
           <button type="button" className="button button-secondary" onClick={props.onStay} disabled={busy} data-testid="mm-exit-stay">
-            Stay in the meeting
+            Cancel
           </button>
         </div>
       </div>
