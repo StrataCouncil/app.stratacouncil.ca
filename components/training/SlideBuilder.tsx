@@ -1,5 +1,6 @@
 "use client";
 
+import { tz } from "@/lib/time-zone";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -674,7 +675,7 @@ export function SlideBuilder({
 
 function when(iso: string) {
   if (!iso) return "earlier";
-  return new Date(iso).toLocaleString("en-CA", { dateStyle: "medium", timeStyle: "short" });
+  return new Date(iso).toLocaleString("en-CA", { timeZone: tz("America/Vancouver", iso), dateStyle: "medium", timeStyle: "short" });
 }
 
 // ── Outline: slides grouped by topic ─────────────────────────────────────

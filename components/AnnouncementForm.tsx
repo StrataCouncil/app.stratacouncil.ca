@@ -1,5 +1,6 @@
 "use client";
 
+import { tz } from "@/lib/time-zone";
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createAnnouncement, updateAnnouncement, type AnnouncementResult } from "@/app/admin/announcements/actions";
@@ -9,7 +10,7 @@ import type { Announcement } from "@/lib/data/announcements";
 /** The date part of an end time, in British Columbia, for the date field. */
 function bcDate(iso: string | null): string {
   if (!iso) return "";
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Vancouver", year: "numeric", month: "2-digit", day: "2-digit" }).format(
+  return new Intl.DateTimeFormat("en-CA", { timeZone: tz("America/Vancouver", iso), year: "numeric", month: "2-digit", day: "2-digit" }).format(
     new Date(iso)
   );
 }

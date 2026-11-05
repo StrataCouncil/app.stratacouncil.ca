@@ -1,3 +1,4 @@
+import { tz } from "@/lib/time-zone";
 import { randomUUID } from "node:crypto";
 import { APP_URL } from "@/lib/app-url";
 import { DOCUMENTS_BUCKET } from "@/lib/documents";
@@ -117,7 +118,7 @@ export function voteLinks(openUrl: string): DiscussionVoteLinks {
 }
 
 function when(iso: string) {
-  const date = new Date(iso).toLocaleDateString("en-CA", { timeZone: "America/Vancouver", month: "short", day: "numeric", year: "numeric" });
+  const date = new Date(iso).toLocaleDateString("en-CA", { timeZone: tz("America/Vancouver", iso), month: "short", day: "numeric", year: "numeric" });
   return `${date}, ${clockTime(iso, "America/Vancouver")}`;
 }
 

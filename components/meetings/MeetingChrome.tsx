@@ -1,5 +1,6 @@
 "use client";
 
+import { tz } from "@/lib/time-zone";
 import { useEffect, useState } from "react";
 import { MemberAvatar } from "@/components/MemberAvatar";
 import { inMeeting, type PresenceEvent, type Presenting } from "@/lib/meetings/live";
@@ -40,7 +41,7 @@ export function MeetingUser({ name, avatarUrl }: { name: string; avatarUrl: stri
   );
 }
 
-const clock = (iso: string) => new Date(iso).toLocaleTimeString("en-CA", { hour: "numeric", minute: "2-digit" });
+const clock = (iso: string) => new Date(iso).toLocaleTimeString("en-CA", { timeZone: tz("America/Vancouver", iso), hour: "numeric", minute: "2-digit" });
 
 /**
  * The right-hand column: the meeting's video, who's in the meeting, and

@@ -1,3 +1,4 @@
+import { tz } from "../time-zone.ts";
 import { COMPANY_LEGAL_NAME } from "../company.ts";
 
 /**
@@ -87,7 +88,7 @@ export function formatSeconds(total: number): string {
 export function formatWhen(iso: string | null | undefined): string {
   if (!iso) return "—";
   return new Date(iso).toLocaleString("en-CA", {
-    timeZone: "America/Vancouver",
+    timeZone: tz("America/Vancouver", iso),
     month: "short",
     day: "numeric",
     year: "numeric",

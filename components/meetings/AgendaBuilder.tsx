@@ -1,5 +1,6 @@
 "use client";
 
+import { tz } from "@/lib/time-zone";
 import { useDemoRestricted } from "@/components/DemoContext";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -48,7 +49,7 @@ const RATIFICATION = "Ratification";
  * discussion's background, the vote, and its record as an attachment.
  */
 function ratificationItem(c: RatificationCandidate, agenda: AgendaItem[]): AgendaItem {
-  const closedOn = new Date(c.closedAt).toLocaleDateString("en-CA", { timeZone: "America/Vancouver" });
+  const closedOn = new Date(c.closedAt).toLocaleDateString("en-CA", { timeZone: tz("America/Vancouver", c.closedAt) });
   const existing = agenda.find((i) => i.cat === RATIFICATION);
   return makeItem(`Ratify council vote: ${c.title}`.slice(0, 300), RATIFICATION, {
     catId: existing?.catId ?? newCategoryId(),
@@ -107,7 +108,7 @@ export function AgendaBuilder({
   // The demo's restrictions, lifted in a Super Admin's sandbox (lib/demo-sandbox.ts).
   const demoRestricted = useDemoRestricted();
   // The demo's agenda is written for the visitor: only one item is theirs to edit.
-  const locked = (it: AgendaItem) => demoRestricted && it.id !== DEMO_EDITABLE_ITEM_ID;
+  // The demo's agenda is the visitor's own to change (2026-11-05); only uploads stay off there.
   const router = useRouter();
   const [agenda, setAgenda] = useState<AgendaItem[]>(initialAgenda);
   const [notes, setNotes] = useState(initialNotes);
@@ -378,17 +379,16 @@ export function AgendaBuilder({
       {demoRestricted && (
         <p className="sync-note" role="note" style={{ marginBottom: "1rem" }} data-testid="demo-agenda-note">
           <span>
-            Your agenda is written and ready. Open <strong>Roof Repairs</strong> under New Business to make it your own: change
-            the details, write a motion or have Stratasphere&trade; draft one. Then save the agenda and launch the meeting from the Meetings tab.
+            Your agenda is written and ready, and it&rsquo;s yours to change: edit any item, add or remove items, or reorder them. A good
+            place to start is <strong>Roof Repairs</strong> under New Business, which has no motion yet: write one, or have Stratasphere&trade;
+            draft it. Then save the agenda and launch the meeting.
           </span>
         </p>
       )}
       <div className="agenda-builder__bar">
-        {!demoRestricted && (
-          <button type="button" className="button button-secondary button-small" onClick={addCategory} data-testid="agenda-add-category">
-            Add category
-          </button>
-        )}
+        <button type="button" className="button button-secondary button-small" onClick={addCategory} data-testid="agenda-add-category">
+          Add category
+        </button>
         <span className="agenda-builder__state" role="status">
           {pending ? "Saving…" : dirty ? "Unsaved changes" : status}
         </span>
@@ -426,9 +426,8 @@ export function AgendaBuilder({
               onChange={(e) => renameCategory(cat.id, e.target.value)}
               aria-label="Category name"
               maxLength={120}
-              readOnly={demoRestricted}
             />
-            {!demoRestricted && (
+            {(
               <div className="agenda-row__tools">
                 <button type="button" className="icon-button" onClick={() => moveCategory(cat.id, -1)} disabled={!canMoveCat(ci, -1)} aria-label={`Move ${cat.name} up`}>
                   <Arrow up />
@@ -447,7 +446,7 @@ export function AgendaBuilder({
           <ol className="agenda-items">
             {cat.items.map((it) => {
               const idx = agenda.findIndex((a) => a.id === it.id);
-              const open = () => (locked(it) ? showDemoLimit("locked agenda item") : setEditing(it));
+              const open = () => setEditing(it);
               return (
                 <li className="agenda-item" key={it.id} data-testid={`agenda-item-${it.num}`}>
                   <span className="agenda-item__num">{it.num}.</span>
@@ -463,9 +462,9 @@ export function AgendaBuilder({
                       No motion yet
                     </span>
                   )}
-                  {demoRestricted && !locked(it) && <span className="pill">Yours to edit</span>}
+                  {demoRestricted && it.id === DEMO_EDITABLE_ITEM_ID && <span className="pill">Start here</span>}
                   <div className="agenda-row__tools">
-                    {!demoRestricted && (
+                    {(
                       <>
                         <button type="button" className="icon-button" onClick={() => moveItem(it.id, -1)} disabled={!canMove(idx, -1)} aria-label={`Move ${it.text} up`}>
                           <Arrow up />
@@ -475,10 +474,10 @@ export function AgendaBuilder({
                         </button>
                       </>
                     )}
-                    <button type="button" className="link-button" onClick={open} data-testid={demoRestricted && !locked(it) ? "demo-edit-item" : undefined}>
+                    <button type="button" className="link-button" onClick={open} data-testid={demoRestricted && it.id === DEMO_EDITABLE_ITEM_ID ? "demo-edit-item" : undefined}>
                       Edit
                     </button>
-                    {!demoRestricted && !isCallToOrder(it) && !isAdjournment(it) && (
+                    {!isCallToOrder(it) && !isAdjournment(it) && (
                       <button type="button" className="link-button agenda-danger" onClick={() => deleteItem(it.id)} aria-label={`Delete ${it.text}`}>
                         Delete
                       </button>

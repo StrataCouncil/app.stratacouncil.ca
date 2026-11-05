@@ -1,3 +1,4 @@
+import { tz } from "@/lib/time-zone";
 import Link from "next/link";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { redirect } from "next/navigation";
@@ -186,7 +187,7 @@ export default async function StrataSetupPage({
                     <div>
                       <span className="roster-invites__email">{request.label}</span>
                       <span className="card__meta">
-                        Requested {new Date(request.requestedAt).toLocaleDateString("en-CA")}
+                        Requested {new Date(request.requestedAt).toLocaleDateString("en-CA", { timeZone: tz("America/Vancouver", request.requestedAt) })}
                       </span>
                     </div>
                     <div className="setup-requests__status">

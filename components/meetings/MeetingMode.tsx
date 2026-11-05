@@ -1,8 +1,10 @@
 "use client";
 
+import { tz } from "@/lib/time-zone";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useDemoRestricted } from "@/components/DemoContext";
 import {
   decisionTypeLabels,
   electChairMotion,
@@ -621,8 +623,8 @@ export function MeetingMode(props: {
           In the meeting
         </button>
         <MeetingUser name={props.me.name} avatarUrl={props.me.avatarUrl} />
-        <button type="button" className="button button-secondary button-small" onClick={() => setExitOpen(true)} data-testid="mm-exit">
-          Exit
+        <button type="button" className="button button-secondary button-small" onClick={() => setExitOpen(true)} data-testid="mm-hand-over">
+          Hand over
         </button>
       </header>
 
@@ -928,13 +930,6 @@ export function MeetingMode(props: {
           candidates={(props.runnerCandidates ?? []).filter((c) => inMeeting(live?.presence ?? []).some((p) => p.userId === c.userId))}
           onSave={saveNow}
           onHandedOver={() => router.replace(`/strata/${corpId}/meetings/${meetingId}/live`)}
-          onAdjourn={() => {
-            setExitOpen(false);
-            const adj = agenda.find(isAdjournment);
-            if (!called) adjournWithoutQuorum();
-            else if (adj && !adj.done) setCurrent(adj.id);
-            else startAdjournment(agenda);
-          }}
           onStay={() => setExitOpen(false)}
         />
       )}
@@ -1066,7 +1061,7 @@ function statusLabel(s: AttendanceStatus) {
 }
 
 function clockAt(iso: string, timeZone: string) {
-  return new Date(iso).toLocaleTimeString("en-CA", { hour: "numeric", minute: "2-digit", timeZone });
+  return new Date(iso).toLocaleTimeString("en-CA", { hour: "numeric", minute: "2-digit", timeZone: tz(timeZone, iso) });
 }
 
 function QuorumBar({ q, general }: { q: ReturnType<typeof quorum>; general: boolean }) {
@@ -1756,11 +1751,11 @@ function ExitDialog(props: {
   candidates: Array<{ userId: string; name: string }>;
   onSave: () => Promise<boolean>;
   onHandedOver: () => void;
-  onAdjourn: () => void;
   onStay: () => void;
 }) {
   const [to, setTo] = useState("");
   const [busy, setBusy] = useState(false);
+  const demoRestricted = useDemoRestricted();
   const [error, setError] = useState<string | null>(null);
   const stay = useRef(props.onStay);
   stay.current = props.onStay;
@@ -1789,10 +1784,17 @@ function ExitDialog(props: {
   return (
     <div className="modal-backdrop" onClick={props.onStay}>
       <div className="modal" role="dialog" aria-modal="true" aria-labelledby="mm-exit-title" onClick={(e) => e.stopPropagation()} data-testid="mm-exit-dialog">
-        <h2 id="mm-exit-title">You&rsquo;re running this meeting</h2>
-        <p>A meeting that has been launched can&rsquo;t be left without someone running it. Hand it to someone in the meeting, or adjourn it.</p>
-        <h3>Hand over the meeting</h3>
-        {props.candidates.length ? (
+        <h2 id="mm-exit-title">Hand over the meeting</h2>
+        <p>
+          Pass the running of this meeting to someone in it who can run meetings. The meeting carries on; it ends only when it&rsquo;s adjourned
+          at the Adjournment item. If your connection drops, someone who can run meetings can take it over after 2 minutes.
+        </p>
+        {demoRestricted ? (
+          <p className="card__meta" data-testid="mm-exit-demo">
+            In the demo, the other council members are fictional, so there&rsquo;s no one to hand the meeting to. With your real council, anyone in
+            the meeting who can run meetings can take it from here.
+          </p>
+        ) : props.candidates.length ? (
           <>
             <label className="field">
               <span>Who takes over</span>
@@ -1823,10 +1825,7 @@ function ExitDialog(props: {
         )}
         <div className="modal__actions">
           <button type="button" className="button button-secondary" onClick={props.onStay} disabled={busy} data-testid="mm-exit-stay">
-            Stay
-          </button>
-          <button type="button" className="button button-danger" onClick={props.onAdjourn} disabled={busy} data-testid="mm-exit-adjourn">
-            Adjourn the meeting
+            Cancel
           </button>
         </div>
       </div>

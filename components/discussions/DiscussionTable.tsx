@@ -1,5 +1,6 @@
 "use client";
 
+import { tz } from "@/lib/time-zone";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import type { DiscussionSummary } from "@/lib/data/discussions";
@@ -7,7 +8,7 @@ import { resultLabel, STATUS_LABELS, VOTE_LABELS } from "@/lib/discussions/tally
 
 const PAGE = 10;
 
-const date = (iso: string) => new Date(iso).toLocaleDateString("en-CA", { timeZone: "America/Vancouver", year: "numeric", month: "short", day: "numeric" });
+const date = (iso: string) => new Date(iso).toLocaleDateString("en-CA", { timeZone: tz("America/Vancouver", iso), year: "numeric", month: "short", day: "numeric" });
 
 /** The Discussions list (0081): one row each, newest first, with search and pages. */
 export function DiscussionTable(props: { corpId: string; discussions: DiscussionSummary[] }) {

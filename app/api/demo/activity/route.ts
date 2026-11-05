@@ -8,7 +8,7 @@ import { demoVisitorId, logDemoActivity, type DemoEvent } from "@/lib/demo-usage
  * these kinds are accepted; what visitors ask the Stratasphere and what
  * they make is logged on the server, where it happens.
  */
-const BROWSER_KINDS = new Set(["view", "leave", "click", "alert", "limit", "error"]);
+const BROWSER_KINDS = new Set(["view", "leave", "click", "field", "choice", "alert", "limit", "error"]);
 
 export async function POST(request: NextRequest) {
   if (!IS_DEMO) return new NextResponse(null, { status: 404 });

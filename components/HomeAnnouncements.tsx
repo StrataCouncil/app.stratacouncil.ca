@@ -1,5 +1,6 @@
 "use client";
 
+import { tz } from "@/lib/time-zone";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { announcementCategories } from "@/lib/announcement-categories";
@@ -42,7 +43,7 @@ export function HomeAnnouncements({ announcements, heading }: { announcements: A
         <article key={a.id} className="home-news__item">
           <div>
             <span className="home-news__kicker">
-              {announcementCategories[a.category]} &middot; {new Date(a.publishedAt).toLocaleDateString("en-CA", { month: "short", day: "numeric", year: "numeric" })}
+              {announcementCategories[a.category]} &middot; {new Date(a.publishedAt).toLocaleDateString("en-CA", { timeZone: tz("America/Vancouver", a.publishedAt), month: "short", day: "numeric", year: "numeric" })}
             </span>
             <h3>{a.title}</h3>
             <p>{a.body}</p>

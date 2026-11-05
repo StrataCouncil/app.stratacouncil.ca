@@ -1,3 +1,4 @@
+import { tz } from "@/lib/time-zone";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { StrataSphereNav } from "@/components/StrataSphereNav";
@@ -12,8 +13,8 @@ import { majorityNote, RESULT_LABELS, STATUS_LABELS, tallyLine, VOTE_LABELS } fr
  * the motion and their own vote, not the others' or the comments.
  */
 const TZ = "America/Vancouver";
-const when = (iso: string) => new Date(iso).toLocaleString("en-CA", { timeZone: TZ, month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
-const day = (iso: string) => new Date(`${iso.slice(0, 10)}T12:00:00Z`).toLocaleDateString("en-CA", { timeZone: TZ, month: "long", day: "numeric", year: "numeric" });
+const when = (iso: string) => new Date(iso).toLocaleString("en-CA", { timeZone: tz(TZ, iso), month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
+const day = (iso: string) => new Date(`${iso.slice(0, 10)}T12:00:00Z`).toLocaleDateString("en-CA", { timeZone: tz(TZ, `${iso.slice(0, 10)}T12:00:00Z`), month: "long", day: "numeric", year: "numeric" });
 
 export default async function DiscussionPage({ params }: { params: Promise<{ corpId: string; discussionId: string }> }) {
   const { corpId, discussionId } = await params;

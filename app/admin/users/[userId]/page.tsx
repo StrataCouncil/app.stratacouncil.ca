@@ -1,3 +1,4 @@
+import { tz } from "@/lib/time-zone";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AdminTabs } from "@/components/AdminTabs";
@@ -15,9 +16,9 @@ import { corporationRoleLabels, isCorporationRole } from "@/lib/strata";
  */
 
 const TZ = "America/Vancouver";
-const date = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString("en-CA", { timeZone: TZ }) : "Never");
-const day = (iso: string) => new Date(iso).toLocaleDateString("en-CA", { timeZone: TZ, weekday: "long", year: "numeric", month: "long", day: "numeric" });
-const clock = (iso: string) => new Date(iso).toLocaleTimeString("en-CA", { timeZone: TZ, hour: "numeric", minute: "2-digit" });
+const date = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString("en-CA", { timeZone: tz(TZ, iso) }) : "Never");
+const day = (iso: string) => new Date(iso).toLocaleDateString("en-CA", { timeZone: tz(TZ, iso), weekday: "long", year: "numeric", month: "long", day: "numeric" });
+const clock = (iso: string) => new Date(iso).toLocaleTimeString("en-CA", { timeZone: tz(TZ, iso), hour: "numeric", minute: "2-digit" });
 
 const LIBRARY_KIND: Record<string, string> = {
   guide_opened: "Opened guide",

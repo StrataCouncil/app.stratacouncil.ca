@@ -1,15 +1,16 @@
 "use client";
 
+import { tz } from "@/lib/time-zone";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createSandbox, deleteSandbox, renewSandbox } from "@/app/admin/demo-actions";
 import type { SandboxList } from "@/lib/data/demo-visitors";
 
-const PACIFIC = "America/Los_Angeles";
+const PACIFIC = "America/Vancouver";
 const day = (iso: string) =>
-  new Date(new Date(iso).getTime() - 60_000).toLocaleDateString("en-CA", { timeZone: PACIFIC, weekday: "long", month: "long", day: "numeric" });
+  new Date(new Date(iso).getTime() - 60_000).toLocaleDateString("en-CA", { timeZone: tz(PACIFIC, iso), weekday: "long", month: "long", day: "numeric" });
 const time = (iso: string) =>
-  new Date(iso).toLocaleString("en-CA", { timeZone: PACIFIC, month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  new Date(iso).toLocaleString("en-CA", { timeZone: tz(PACIFIC, iso), month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
 /**
  * Super Admin console: sandboxes on the demo site (lib/demo.ts, SANDBOX_*).

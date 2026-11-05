@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { DEMO_EDITABLE_ITEM_ID, demoDayLabel, demoLink, demoLinkEnds, demoOpenModule, endOfDemoDay, isDemoToken, lockDemoAgenda, newDemoToken } from "../lib/demo.ts";
+import { DEMO_EDITABLE_ITEM_ID, demoDayLabel, demoLink, demoLinkEnds, demoOpenModule, endOfDemoDay, isDemoToken, newDemoToken } from "../lib/demo.ts";
 
 const end = (iso: string) => endOfDemoDay(new Date(iso)).toISOString();
 
@@ -11,12 +11,15 @@ test("a demo link works until midnight Pacific on the day it was made", () => {
   assert.equal(end("2026-10-08T06:59:00Z"), "2026-10-08T07:00:00.000Z");
   // At midnight a new day starts.
   assert.equal(end("2026-10-08T07:00:00Z"), "2026-10-09T07:00:00.000Z");
-  // Winter (PST, UTC-8): midnight is 08:00 UTC, and the month rolls over.
-  assert.equal(end("2026-12-01T06:00:00Z"), "2026-12-01T08:00:00.000Z");
-  assert.equal(end("2026-12-31T20:00:00Z"), "2027-01-01T08:00:00.000Z");
+  // Winter before BC stayed on UTC-7 (PST, UTC-8): midnight is 08:00 UTC.
+  assert.equal(end("2025-12-01T06:00:00Z"), "2025-12-01T08:00:00.000Z");
+  // From November 2026 BC stays on UTC-7 all year: midnight is 07:00 UTC, and the month rolls over.
+  assert.equal(end("2026-12-01T06:00:00Z"), "2026-12-01T07:00:00.000Z");
+  assert.equal(end("2026-12-31T20:00:00Z"), "2027-01-01T07:00:00.000Z");
   // The days the clocks change.
   assert.equal(end("2026-03-08T12:00:00Z"), "2026-03-09T07:00:00.000Z");
-  assert.equal(end("2026-11-01T12:00:00Z"), "2026-11-02T08:00:00.000Z");
+  // Nov 1, 2026: the clocks didn't go back.
+  assert.equal(end("2026-11-01T12:00:00Z"), "2026-11-02T07:00:00.000Z");
 });
 
 test("a demo link works for three days after the day it was made", () => {
@@ -26,8 +29,10 @@ test("a demo link works for three days after the day it was made", () => {
   assert.equal(demoDayLabel(new Date(ends("2026-10-07T22:00:00Z"))), "Saturday, October 10");
   // Made a minute before midnight: still counted from that day.
   assert.equal(ends("2026-10-08T06:59:00Z"), "2026-10-11T07:00:00.000Z");
-  // Across the end of daylight saving (Nov 1): midnight moves to 08:00 UTC.
-  assert.equal(ends("2026-10-30T20:00:00Z"), "2026-11-03T08:00:00.000Z");
+  // Across Nov 1, 2026: BC stays on UTC-7, so midnight stays at 07:00 UTC.
+  assert.equal(ends("2026-10-30T20:00:00Z"), "2026-11-03T07:00:00.000Z");
+  // A year earlier the clocks went back and midnight moved to 08:00 UTC.
+  assert.equal(ends("2025-10-30T20:00:00Z"), "2025-11-03T08:00:00.000Z");
   // Across the start of daylight saving (Mar 8).
   assert.equal(ends("2026-03-06T20:00:00Z"), "2026-03-10T07:00:00.000Z");
 });
@@ -61,27 +66,10 @@ test("demo visitors get the first published module, in learning order", () => {
   assert.equal(demoOpenModule(tracks, [m("b1", "basics", 1, 0)]), null);
 });
 
-test("the demo's agenda: only the editable item can change", () => {
-  const item = (id: string, text: string, cat = "Business") => ({ id, catId: `c_${cat}`, cat, num: 0, text });
-  const saved = [item("a", "Call to Order", "Opening"), item("b", "Approve Agenda"), item(DEMO_EDITABLE_ITEM_ID, "Roof Repairs", "New Business"), item("z", "Adjournment")];
-  const incoming = [
-    item("a", "Renamed"),
-    item(DEMO_EDITABLE_ITEM_ID, "Roof Repairs: temporary patch", "Moved elsewhere"),
-    item("new", "Something added"),
-    item("z", "Adjournment"),
-  ];
-  const out = lockDemoAgenda(saved, incoming);
-  assert.deepEqual(out.map((i) => i.id), ["a", "b", DEMO_EDITABLE_ITEM_ID, "z"], "same items, same order");
-  assert.equal(out[0].text, "Call to Order");
-  assert.equal(out[2].text, "Roof Repairs: temporary patch");
-  assert.equal(out[2].cat, "New Business", "it stays in its category");
-  assert.deepEqual(lockDemoAgenda(saved, []), saved, "leaving it out changes nothing");
-});
-
 test("a sandbox lasts 7 days after the day it's made, to midnight Pacific", async () => {
   const { sandboxEnds, demoLinkEnds } = await import("../lib/demo.ts");
   const made = new Date("2026-11-04T19:00:00Z"); // Wednesday, 11 a.m. PST
-  assert.equal(sandboxEnds(made).toISOString(), "2026-11-12T08:00:00.000Z");
+  assert.equal(sandboxEnds(made).toISOString(), "2026-11-12T07:00:00.000Z");
   assert.ok(sandboxEnds(made) > demoLinkEnds(made));
 });
 

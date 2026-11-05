@@ -263,7 +263,7 @@ export function ItemEditor({
           </label>
           <label className="field">
             <span>Category</span>
-            <input value={draft.cat} onChange={(e) => set("cat", e.target.value)} list="agenda-categories" maxLength={120} readOnly={demoRestricted} />
+            <input value={draft.cat} onChange={(e) => set("cat", e.target.value)} list="agenda-categories" maxLength={120} />
             <datalist id="agenda-categories">
               {categories.map((c) => (
                 <option key={c} value={c} />

@@ -1,3 +1,4 @@
+import { tz } from "@/lib/time-zone";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AdminCorporationSearch } from "@/components/AdminCorporationSearch";
@@ -69,7 +70,7 @@ export default async function AdminStratasPage({ searchParams }: { searchParams:
                       {r.requesterName}
                       <div className="roster-table__meta">{r.requesterEmail}</div>
                     </td>
-                    <td>{new Date(r.requestedAt).toLocaleDateString("en-CA")}</td>
+                    <td>{new Date(r.requestedAt).toLocaleDateString("en-CA", { timeZone: tz("America/Vancouver", r.requestedAt) })}</td>
                   </tr>
                 ))}
               </tbody>

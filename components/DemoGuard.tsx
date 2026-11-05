@@ -29,6 +29,15 @@ function describe(el: Element): Record<string, unknown> {
   return out;
 }
 
+/** A form field's name: its label's own text (not the options of a select inside it), or its aria-label. */
+function fieldName(field: Element): string {
+  const label = field.closest("label");
+  const own = label?.querySelector(":scope > span")?.textContent ?? label?.childNodes[0]?.textContent ?? "";
+  return (field.getAttribute("aria-label") || own || field.getAttribute("placeholder") || field.getAttribute("name") || "a field").replace(/\s+/g, " ").trim().slice(0, 80);
+}
+
+const TEXT_FIELDS = "textarea, select, input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=button]):not([type=submit])";
+
 export function DemoGuard() {
   const pathname = usePathname();
   const [reason, setReason] = useState<string | null>(null);
@@ -79,7 +88,13 @@ export function DemoGuard() {
     if (prev && prev.path !== pathname) record("leave", { seconds: Math.round((Date.now() - prev.since) / 1000) }, prev.path);
     if (!prev || prev.path !== pathname) {
       page.current = { path: pathname, since: Date.now() };
-      record("view", document.referrer && !prev ? { from: document.referrer.slice(0, 300) } : undefined, pathname);
+      const detail: Record<string, unknown> = document.referrer && !prev ? { from: document.referrer.slice(0, 300) } : {};
+      record("view", detail, pathname);
+      // The page's own heading (an article's title, a meeting's name), once it has drawn. Demo data only.
+      window.setTimeout(() => {
+        const h = document.querySelector("main h1, main h2, h1")?.textContent?.replace(/\s+/g, " ").trim();
+        if (h) detail.heading = h.slice(0, 120);
+      }, 600);
     }
   }, [pathname]);
 
@@ -95,9 +110,35 @@ export function DemoGuard() {
         setReason("upload");
         return;
       }
-      const el = target.closest("a, button, [role=button], summary, select, label, input[type=checkbox], input[type=radio]");
-      if (el && !el.closest("[data-demo-guard]")) record("click", describe(el));
+      if (target.closest("[data-demo-guard]")) return;
+      // Clicking into a field (or its label) isn't a click on anything: note the field once a page, never what's in it.
+      const label = target.closest("label");
+      const field = target.closest(TEXT_FIELDS) ?? (label && !target.closest("a, button") ? label.querySelector(TEXT_FIELDS) : null);
+      if (field) {
+        const name = fieldName(field);
+        const key = `${window.location.pathname}|${name}`;
+        if (!fieldsSeen.has(key)) {
+          fieldsSeen.add(key);
+          record("field", { label: name });
+        }
+        return;
+      }
+      const el = target.closest("a, button, [role=button], summary, input[type=checkbox], input[type=radio]");
+      if (!el) return;
+      const detail = describe(el);
+      // Something that opens and closes: say which it did.
+      const expanded = el.getAttribute("aria-expanded") ?? (el.tagName === "SUMMARY" ? String(Boolean(el.parentElement?.hasAttribute("open"))) : null);
+      if (expanded !== null) detail.toggled = expanded === "true" ? "closed" : "opened";
+      record("click", detail);
     };
+    // A choice from a list (a select): which option, by its label. Never typed text.
+    const onChange = (e: Event) => {
+      const t = e.target;
+      if (t instanceof HTMLSelectElement && !t.closest("[data-demo-guard]")) {
+        record("choice", { label: fieldName(t), value: (t.selectedOptions[0]?.textContent ?? "").trim().slice(0, 80) });
+      }
+    };
+    const fieldsSeen = new Set<string>();
     const seen = new WeakMap<Element, string>();
     const checkAlerts = () => {
       document.querySelectorAll("[role=alert]").forEach((el) => {
@@ -114,12 +155,14 @@ export function DemoGuard() {
     const onRejection = (e: PromiseRejectionEvent) => record("error", { message: String(e.reason?.message ?? e.reason).slice(0, 300) });
     const onLimit = (e: Event) => setReason(((e as CustomEvent).detail?.reason as string) || "limit");
     document.addEventListener("click", onClick, true);
+    document.addEventListener("change", onChange, true);
     window.addEventListener("error", onError);
     window.addEventListener("unhandledrejection", onRejection);
     window.addEventListener("demo-limit", onLimit as EventListener);
     return () => {
       observer.disconnect();
       document.removeEventListener("click", onClick, true);
+      document.removeEventListener("change", onChange, true);
       window.removeEventListener("error", onError);
       window.removeEventListener("unhandledrejection", onRejection);
       window.removeEventListener("demo-limit", onLimit as EventListener);

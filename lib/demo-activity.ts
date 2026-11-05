@@ -31,7 +31,14 @@ export function demoPageName(path: string | null): string {
     [/^\/strata\/meetings/, "Meetings"],
     [/^\/strata\/minutes/, "Minutes"],
     [/^\/strata\/documents/, "Documents"],
+    [/^\/strata\/guides\/.+/, "Library article"],
     [/^\/strata\/guides/, "Library"],
+    [/^\/strata\/discussions\/new/, "New discussion"],
+    [/^\/strata\/discussions\/[^/]+\/vote/, "Confirm a vote"],
+    [/^\/strata\/discussions\/.+/, "Discussion"],
+    [/^\/strata\/discussions/, "Discussions"],
+    [/^\/strata\/billing/, "Billing"],
+    [/^\/strata\/meetings\/[^/]+\/live/, "Meeting (member view)"],
     [/^\/strata\/council/, "Council"],
     [/^\/strata\/lots/, "Owners"],
     [/^\/strata\/management/, "Management"],
@@ -47,11 +54,18 @@ export function describeDemoEvent(e: DemoActivityEvent): { line: string; more?: 
   const d = e.detail ?? {};
   switch (e.kind) {
     case "view":
-      return { line: `Opened ${demoPageName(e.path)}${d.returned ? " (came back to the tab)" : ""}` };
+      return {
+        line: `Opened ${demoPageName(e.path)}${str(d.heading) && /article|Discussion$|agenda|minutes/.test(demoPageName(e.path)) ? `: ${str(d.heading)}` : ""}${d.returned ? " (came back to the tab)" : ""}`,
+      };
     case "leave":
       return { line: `Left ${demoPageName(e.path)} after ${duration(Number(d.seconds) || 0)}` };
     case "click":
+      if (d.toggled) return { line: `${d.toggled === "opened" ? "Opened" : "Closed"} "${str(d.label)}"` };
       return { line: `Clicked ${str(d.label) ? `"${str(d.label)}"` : str(d.tag)}${d.href ? ` (${str(d.href)})` : ""}` };
+    case "field":
+      return { line: `Went to the "${str(d.label)}" field` };
+    case "choice":
+      return { line: `Chose "${str(d.value)}" for "${str(d.label)}"` };
     case "alert":
       return { line: `Saw a message: "${str(d.text)}"`, important: true };
     case "limit":

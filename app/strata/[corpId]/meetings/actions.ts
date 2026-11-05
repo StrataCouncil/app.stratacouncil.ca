@@ -37,7 +37,7 @@ import { askClaudeJson, ClaudeRefusalError } from "@/lib/ai/claude";
 import { draftMotionText } from "@/lib/ai/draft-motion";
 import { isGeneralMeeting } from "@/lib/meetings/rules";
 import { queueDocumentIndexing } from "@/lib/kb/queue";
-import { DEMO_EDITABLE_ITEM_ID, IS_DEMO, demoLimitFail, lockDemoAgenda, type DemoLimitFail } from "@/lib/demo";
+import { DEMO_EDITABLE_ITEM_ID, IS_DEMO, demoLimitFail, type DemoLimitFail } from "@/lib/demo";
 import { demoRestricted } from "@/lib/demo-sandbox";
 import { demoMeetingAgenda } from "@/lib/demo-kit/agenda";
 import { logDemoActivity, refundDemoAllowance, takeDemoAllowance } from "@/lib/demo-usage";
@@ -239,11 +239,6 @@ export async function saveAgenda(
     console.error("[saveAgenda] attachments", err instanceof Error ? err.message : err);
     return { ok: false, error: "Couldn't save the agenda." };
   }
-  if (await demoRestricted()) {
-    const locked = await demoLockedAgenda(supabase, corpId, meetingId, next);
-    if (!locked) return { ok: false, error: "Couldn't save the agenda." };
-    next = locked;
-  }
   const { data, error } = await supabase
     .from("meetings")
     .update({ agenda: ensureBookends(next) })
@@ -268,22 +263,6 @@ export async function saveAgenda(
   }
   refresh(corpId, meetingId);
   return { ok: true, version: agendaVersion(data[0].agenda) };
-}
-
-/**
- * The demo's agenda: only the one editable item (DEMO_EDITABLE_ITEM_ID)
- * takes what the browser sent; everything else stays as it was saved, in
- * the same order and category.
- */
-async function demoLockedAgenda(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  corpId: string,
-  meetingId: string,
-  incoming: AgendaItem[]
-): Promise<AgendaItem[] | null> {
-  const { data } = await supabase.from("meetings").select("agenda").eq("id", meetingId).eq("corporation_id", corpId).maybeSingle();
-  if (!data) return null;
-  return lockDemoAgenda(normalizeAgenda(data.agenda), incoming);
 }
 
 export async function deleteMeeting(corpId: string, meetingId: string): Promise<Ok | Fail> {

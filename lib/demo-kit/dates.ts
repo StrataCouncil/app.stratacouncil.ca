@@ -4,6 +4,8 @@
  * already held (with minutes), and the next one coming up. Pure.
  */
 
+import { tz } from "../time-zone.ts";
+
 const DAY = 86_400_000;
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
@@ -11,7 +13,7 @@ const MONTHS = ["January", "February", "March", "April", "May", "June", "July", 
 export type IsoDate = string;
 
 function bcToday(now: Date): Date {
-  const [y, m, d] = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Vancouver" }).format(now).split("-").map(Number);
+  const [y, m, d] = new Intl.DateTimeFormat("en-CA", { timeZone: tz("America/Vancouver", now) }).format(now).split("-").map(Number);
   return new Date(Date.UTC(y, m - 1, d));
 }
 

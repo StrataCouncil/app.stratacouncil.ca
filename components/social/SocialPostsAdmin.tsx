@@ -1,5 +1,6 @@
 "use client";
 
+import { tz } from "@/lib/time-zone";
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -7,9 +8,9 @@ import { createSocialPost, deleteSocialPost } from "@/app/admin/social/actions";
 import type { SocialPostSummary } from "@/lib/data/social";
 import { AUDIENCE_LABELS, AUDIENCES, DESTINATIONS, TEMPLATE_LABELS, TEMPLATES, type Audience, type Destination, type Template } from "@/lib/social/post";
 
-const PACIFIC = "America/Los_Angeles";
+const PACIFIC = "America/Vancouver";
 const time = (iso: string) =>
-  new Date(iso).toLocaleString("en-CA", { timeZone: PACIFIC, month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  new Date(iso).toLocaleString("en-CA", { timeZone: tz(PACIFIC, iso), month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
 /** The Social tab's list: start a post from a topic (the AI drafts it), open one, or delete one for good. */
 export function SocialPostsAdmin({ posts }: { posts: SocialPostSummary[] }) {

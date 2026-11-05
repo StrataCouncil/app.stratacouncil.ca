@@ -1,3 +1,4 @@
+import { tz } from "../time-zone.ts";
 import {
   groupByCategory,
   isAdjournment,
@@ -180,7 +181,7 @@ export function buildMinutes(input: {
 /** "7:02 p.m. PT" in the meeting's own time zone (never PDT or PST). */
 export function clockTime(iso: string | null, timezone: string) {
   if (!iso) return "—";
-  const time = new Date(iso).toLocaleTimeString("en-CA", { hour: "numeric", minute: "2-digit", timeZone: timezone });
+  const time = new Date(iso).toLocaleTimeString("en-CA", { hour: "numeric", minute: "2-digit", timeZone: tz(timezone, iso) });
   return `${time} ${zoneLabel(timezone)}`;
 }
 
