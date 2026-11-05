@@ -6,6 +6,15 @@ yet. Test in a sandbox on the demo site (docs/demo-site.md). Read this before st
 
 ## Decisions so far
 
+- **Laptops and desktops first** (2026-11-05). Phones come later: audio
+  only, as few taps as possible from the launch email; sign-in on a phone
+  (email links, authenticator) is the hard part. Until then the members'
+  page stays behind the "Desktop required" notice on phones.
+- **Testing on the free Zoom plan** (2026-11-05); paid plan with the first
+  paying customer or investment. Setup steps: `docs/zoom-setup.md`.
+- **Demo site:** no Zoom. Video tiles with each person's initials and name,
+  and "Video appears here".
+
 - Zoom is the video only. The agenda, attendance, motions, votes, decisions
   and minutes live in Stratasphere.
 - **We own the Zoom account.** Meetings are created on our account and
@@ -161,8 +170,7 @@ current to 2026-10-20); both are in the Knowledge Base.
   `chat-on-message`, among others.
 - The SDK "does not support bots or AI notetakers"; that's Realtime Media
   Streams (paid Developer Pack credits). We don't use AI Companion summaries
-  (decided 2026-11-04). AI Companion summaries from the
-  host account are a different thing and are what we use.
+  (decided 2026-11-04), and AI Companion is off on the host account.
 
 ### REST API and webhooks
 
