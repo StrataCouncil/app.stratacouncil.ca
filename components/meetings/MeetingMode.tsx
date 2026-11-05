@@ -47,6 +47,7 @@ import { openInNewTab } from "@/lib/open-in-tab";
 import { ItemEditor } from "@/components/meetings/ItemEditor";
 import { videoPeople } from "@/lib/meetings/live";
 import { VideoPanel } from "@/components/meetings/VideoPanel";
+import { checkInAsRunner, fetchLiveState } from "@/lib/meetings/live-client";
 import { MeetingSide, MeetingUser, SharedViewer, TypedConfirm, useLeaveWarning } from "@/components/meetings/MeetingChrome";
 import { DEMO_LIMITS, DEMO_LIMIT_MESSAGE, SIGNUP_URL } from "@/lib/demo";
 import { isDemoLimit, showDemoLimit } from "@/lib/demo-client";
@@ -56,14 +57,12 @@ import {
   cancelVote,
   closeVote,
   declareConflict,
-  getLiveState,
   handOverMeeting,
   joinMeeting,
   markJoined,
   markLeft,
   openVote,
   recordAllInFavour,
-  runnerCheckIn,
   recordVote,
   showToEveryone,
   withdrawConflict,
@@ -192,8 +191,15 @@ export function MeetingMode(props: {
   // keeps them rather than writing over them.
   const presenceSeen = useRef((props.initialLive?.presence ?? []).reduce((n, p) => Math.max(n, p.id), 0));
   const startedRef = useRef<string | null>(props.actualStartAt);
+  // Refreshes run alongside clicks (lib/meetings/live-client.ts); an answer
+  // to an older request never replaces a newer one.
+  const liveAsked = useRef(0);
+  const liveShown = useRef(0);
   const refreshLive = useCallback(async () => {
-    const s = await getLiveState(meetingId).catch(() => null);
+    const mine = ++liveAsked.current;
+    const s = await fetchLiveState(meetingId);
+    if (mine < liveShown.current) return;
+    liveShown.current = mine;
     if (s) {
       setLive(s);
       const r = applyPresence(latest.current.attendance, s.presence, presenceSeen.current, startedRef.current);
@@ -210,8 +216,8 @@ export function MeetingMode(props: {
   // The Runner's screen checks in every 20 seconds; after 2 minutes of quiet
   // the meeting is paused for everyone and can be taken over (0079).
   useEffect(() => {
-    void runnerCheckIn(meetingId).catch(() => {});
-    const t = setInterval(() => void runnerCheckIn(meetingId).catch(() => {}), 20000);
+    void checkInAsRunner(meetingId);
+    const t = setInterval(() => void checkInAsRunner(meetingId), 20000);
     return () => clearInterval(t);
   }, [meetingId]);
   // Someone else runs it now (handed over, or taken over while this screen was away).

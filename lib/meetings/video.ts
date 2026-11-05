@@ -31,7 +31,10 @@ async function freeStaleHosts(cfg: ZoomConfig) {
   }
 }
 
-export type EnsureResult = { ok: true; row: ZoomRow } | { ok: false; busy?: boolean; error: string };
+/** `reason` is Zoom's own message, shown only to Super Admins (never about people). */
+export type EnsureResult = { ok: true; row: ZoomRow } | { ok: false; busy?: boolean; error: string; reason?: string };
+
+const zoomReason = (err: unknown) => (err instanceof ZoomError ? `${err.message}${err.code ? ` (${err.code})` : ""}` : err instanceof Error ? err.message : String(err));
 
 /**
  * The meeting's Zoom meeting, created on a free host licence if there
@@ -59,8 +62,8 @@ export async function ensureZoomMeeting(cfg: ZoomConfig, input: { meetingId: str
   try {
     created = await createZoomMeeting(cfg, host, { topic: input.topic, timezone: input.timezone, passcode: newPasscode() });
   } catch (err) {
-    console.error("[ensureZoomMeeting] create", err instanceof ZoomError ? `${err.message} (${err.code ?? "-"})` : err instanceof Error ? err.message : err);
-    return { ok: false, error: "Couldn't start the video. Try again; the meeting itself carries on." };
+    console.error("[ensureZoomMeeting] create", zoomReason(err));
+    return { ok: false, error: "Couldn't start the video. Try again; the meeting itself carries on.", reason: zoomReason(err) };
   }
   const { data: row, error } = await admin
     .from("meeting_zoom")
@@ -76,12 +79,12 @@ export async function ensureZoomMeeting(cfg: ZoomConfig, input: { meetingId: str
   return { ok: true, row: row as ZoomRow };
 }
 
-export async function zakFor(cfg: ZoomConfig, host: string): Promise<string | null> {
+export async function zakFor(cfg: ZoomConfig, host: string): Promise<{ zak: string | null; reason?: string }> {
   try {
-    return await hostZak(cfg, host);
+    return { zak: await hostZak(cfg, host) };
   } catch (err) {
-    console.error("[zakFor]", err instanceof Error ? err.message : err);
-    return null;
+    console.error("[zakFor]", zoomReason(err));
+    return { zak: null, reason: zoomReason(err) };
   }
 }
 

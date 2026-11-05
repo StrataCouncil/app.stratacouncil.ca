@@ -1,9 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getVideoJoin, type VideoJoin } from "@/app/strata/[corpId]/meetings/[meetingId]/live/actions";
+import type { VideoJoin } from "@/app/strata/[corpId]/meetings/[meetingId]/live/actions";
+import { fetchVideoJoin } from "@/lib/meetings/live-client";
 
-type FrameState = "loading" | "connecting" | "joined" | "reconnecting" | "ended" | "failed";
+/** `hostAway`: Zoom says the meeting hasn't started; the Runner's screen hasn't opened the video yet. */
+type FrameState = "loading" | "connecting" | "joined" | "reconnecting" | "ended" | "failed" | "hostAway";
 
 /**
  * The meeting's Zoom video (0080), at the top of the right-hand column in
@@ -15,7 +17,9 @@ type FrameState = "loading" | "connecting" | "joined" | "reconnecting" | "ended"
 export function VideoPanel(props: { meetingId: string; isRunner: boolean; people: Array<{ key: string; name: string; lot: string | null }> }) {
   const { meetingId, isRunner } = props;
   const [join, setJoin] = useState<VideoJoin | null>(null);
-  const [frame, setFrame] = useState<{ state: FrameState; detail?: string }>({ state: "loading" });
+  const [frame, setFrame] = useState<{ state: FrameState; detail?: string; code?: string }>({ state: "loading" });
+  const [large, setLarge] = useState(false);
+  const [awaitingHost, setAwaitingHost] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [busy, setBusy] = useState(false);
   const box = useRef<HTMLDivElement>(null);
@@ -24,7 +28,7 @@ export function VideoPanel(props: { meetingId: string; isRunner: boolean; people
   const load = useCallback(
     async (restart = false) => {
       setBusy(true);
-      const j = await getVideoJoin(meetingId, { restart }).catch(
+      const j = await fetchVideoJoin(meetingId, restart).catch(
         () => ({ kind: "message", tone: "error", message: "Couldn't reach the server for the video. Try again.", canRestart: true }) as VideoJoin
       );
       setBusy(false);
@@ -38,12 +42,37 @@ export function VideoPanel(props: { meetingId: string; isRunner: boolean; people
     void load();
   }, [load]);
 
-  // Members wait for the Runner's screen to start the video.
+  // Members wait for the Runner's screen to start the video, then join on their own.
+  const hostAway = join?.kind === "waiting" || (join?.kind === "join" && frame.state === "hostAway");
   useEffect(() => {
-    if (join?.kind !== "waiting") return;
-    const t = setInterval(() => void load(), 10000);
+    if (hostAway) setAwaitingHost(true);
+    else if (frame.state === "joined" || frame.state === "failed" || frame.state === "ended") setAwaitingHost(false);
+  }, [hostAway, frame.state]);
+  useEffect(() => {
+    if (!hostAway) return;
+    const t = setInterval(() => void load(), 8000);
     return () => clearInterval(t);
-  }, [join, load]);
+  }, [hostAway, load]);
+
+  // Zoom draws the video at a fixed size: tell it whenever the box changes (larger video, window resized).
+  useEffect(() => {
+    const el = box.current;
+    if (join?.kind !== "join" || !el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => {
+      const r = el.getBoundingClientRect();
+      iframe.current?.contentWindow?.postMessage({ source: "sc-page", type: "resize", size: { width: r.width, height: r.height } }, window.location.origin);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [join, attempt]);
+
+  // Escape returns the larger video to the column.
+  useEffect(() => {
+    if (!large) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setLarge(false);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [large]);
 
   // The frame says it's ready; it gets the join details, and reports back.
   useEffect(() => {
@@ -58,7 +87,11 @@ export function VideoPanel(props: { meetingId: string; isRunner: boolean; people
           window.location.origin
         );
       } else if (e.data.type === "state") {
-        setFrame({ state: e.data.state as FrameState, detail: typeof e.data.detail === "string" ? e.data.detail : undefined });
+        setFrame({
+          state: e.data.state as FrameState,
+          detail: typeof e.data.detail === "string" ? e.data.detail : undefined,
+          code: typeof e.data.code === "string" ? e.data.code : undefined,
+        });
       }
     };
     window.addEventListener("message", onMessage);
@@ -92,8 +125,9 @@ export function VideoPanel(props: { meetingId: string; isRunner: boolean; people
     return (
       <section className="mm-video mm-video--message" aria-label="Meeting video" data-testid="video-message">
         <p className={join.kind === "message" && join.tone === "error" ? "mm-video__msg mm-video__msg--error" : "mm-video__msg"} role="status">
-          {join.kind === "waiting" ? "The video starts when the person running the meeting opens it." : join.message}
+          {join.kind === "waiting" ? "Waiting for the person running the meeting to start the video. It joins on its own." : join.message}
         </p>
+        {join.kind === "message" && join.reason && <p className="mm-video__reason">Zoom says: {join.reason}</p>}
         {join.kind === "message" && join.canRestart && (
           <button type="button" className="button button-secondary button-small" onClick={() => void load()} disabled={busy} data-testid="video-retry">
             Try again
@@ -104,8 +138,12 @@ export function VideoPanel(props: { meetingId: string; isRunner: boolean; people
   }
 
   const over = frame.state === "ended" || frame.state === "failed";
+  // Between retries while the host is away, keep saying so rather than flashing "Connecting".
+  const waitingForHost = frame.state === "hostAway" || (awaitingHost && (frame.state === "loading" || frame.state === "connecting"));
+  const reason = join.showReasons && frame.state === "failed" && (frame.detail || frame.code) ? `${frame.detail ?? ""}${frame.code ? ` (${frame.code})` : ""}`.trim() : null;
   return (
-    <section className="mm-video" aria-label="Meeting video" data-testid="video-panel" data-state={frame.state}>
+    <section className={large ? "mm-video mm-video--large" : "mm-video"} aria-label="Meeting video" data-testid="video-panel" data-state={frame.state}>
+      {large && <div className="mm-video__scrim" onClick={() => setLarge(false)} aria-hidden="true" />}
       <div ref={box} className="mm-video__frame">
         {!over && (
           <iframe
@@ -118,7 +156,9 @@ export function VideoPanel(props: { meetingId: string; isRunner: boolean; people
         )}
         {frame.state !== "joined" && (
           <div className="mm-video__overlay" role="status">
-            {frame.state === "loading" || frame.state === "connecting"
+            {waitingForHost
+              ? "Waiting for the person running the meeting to start the video. It joins on its own."
+              : frame.state === "loading" || frame.state === "connecting"
               ? "Connecting the video…"
               : frame.state === "reconnecting"
                 ? "Reconnecting the video…"
@@ -127,6 +167,7 @@ export function VideoPanel(props: { meetingId: string; isRunner: boolean; people
                     ? "The video ended. Zoom's free plan stops meetings after 40 minutes; restart it to carry on. The meeting itself isn't affected."
                     : "The video ended. Rejoin once the person running the meeting restarts it."
                   : videoFailure(frame.detail)}
+            {reason && <span className="mm-video__reason">Zoom says: {reason}</span>}
             {over && (
               <button
                 type="button"
@@ -140,6 +181,11 @@ export function VideoPanel(props: { meetingId: string; isRunner: boolean; people
             )}
           </div>
         )}
+      </div>
+      <div className="mm-video__bar">
+        <button type="button" className="mm-video__size" onClick={() => setLarge((l) => !l)} aria-pressed={large} data-testid="video-size">
+          {large ? "Smaller video" : "Larger video"}
+        </button>
       </div>
     </section>
   );
