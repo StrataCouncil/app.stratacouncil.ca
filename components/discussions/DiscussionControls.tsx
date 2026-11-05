@@ -10,7 +10,18 @@ import { ChoiceIcon } from "@/components/meetings/LiveVote";
 import Link from "next/link";
 
 /** Your vote: For, Against, Abstain, or a declared conflict of interest (s. 32), which needs a reason. */
-export function VotePanel({ corpId, discussionId, current }: { corpId: string; discussionId: string; current: DiscussionVote | null }) {
+export function VotePanel({
+  corpId,
+  discussionId,
+  current,
+  noVote = false,
+}: {
+  corpId: string;
+  discussionId: string;
+  current: DiscussionVote | null;
+  /** A discussion without a vote (0081): only a conflict of interest to declare. */
+  noVote?: boolean;
+}) {
   const router = useRouter();
   const [choice, setChoice] = useState<DiscussionVote | null>(current);
   const [reason, setReason] = useState("");
@@ -27,9 +38,10 @@ export function VotePanel({ corpId, discussionId, current }: { corpId: string; d
 
   return (
     <section className="card discussion-vote" data-testid="discussion-vote">
-      <h3>Your vote</h3>
-      <div className="discussion-vote__choices" role="group" aria-label="Your vote">
-        {(["for", "against", "abstain"] as const).map((v) => (
+      <h3>{noVote ? "Conflict of interest" : "Your vote"}</h3>
+      {noVote && <p className="card__meta">This discussion has no vote. If you have a conflict of interest, declare it and step out.</p>}
+      <div className="discussion-vote__choices" role="group" aria-label={noVote ? "Conflict of interest" : "Your vote"}>
+        {(noVote ? ([] as const) : (["for", "against", "abstain"] as const)).map((v) => (
           <button
             key={v}
             type="button"
@@ -100,12 +112,14 @@ export function AuthorPanel({
   editable,
   initial,
   majority,
+  noVote = false,
 }: {
   corpId: string;
   discussionId: string;
   editable: boolean;
   initial: DiscussionInput;
   majority: string | null;
+  noVote?: boolean;
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
@@ -124,7 +138,9 @@ export function AuthorPanel({
   return (
     <section className="card discussion-author" data-testid="discussion-author">
       <h3>You started this discussion</h3>
-      {majority ? (
+      {noVote ? (
+        <p className="card__meta">This discussion has no vote. Close it when council has finished; council is emailed that it&rsquo;s closed.</p>
+      ) : majority ? (
         <p className="discussion-ready" role="status" data-testid="discussion-majority-reached">
           <strong>{majority}</strong> You can close the discussion now. Council is emailed the result and the vote record is filed in
           Meetings &amp; Records.{" "}
@@ -140,7 +156,7 @@ export function AuthorPanel({
       <div className="role-editor__actions" style={{ justifyContent: "flex-start" }}>
         {editable && (
           <button type="button" className="button button-secondary" onClick={() => setEditing(true)} data-testid="discussion-edit">
-            Change the motion
+            {noVote ? "Change the discussion" : "Change the motion"}
           </button>
         )}
         {confirming ? (
@@ -160,7 +176,7 @@ export function AuthorPanel({
               }
               data-testid="discussion-close-confirm"
             >
-              {pending ? "Closing…" : "Yes, close the vote"}
+              {pending ? "Closing…" : noVote ? "Yes, close the discussion" : "Yes, close the vote"}
             </button>
             <button type="button" className="button button-secondary" onClick={() => setConfirming(false)} disabled={pending}>
               Keep it open
@@ -168,7 +184,7 @@ export function AuthorPanel({
           </>
         ) : (
           <button type="button" className="button button-primary" onClick={() => setConfirming(true)} data-testid="discussion-close">
-            Close the vote
+            {noVote ? "Close the discussion" : "Close the vote"}
           </button>
         )}
       </div>

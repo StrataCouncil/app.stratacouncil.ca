@@ -300,31 +300,124 @@ export function documentExportEmail(params: { name: string; strataName: string; 
   return { subject: `Your download link: ${params.strataName} documents`, html, text };
 }
 
+/** Vote buttons for a council discussion (0081). Each opens a confirm page in the app, signed in as the person. */
+export interface DiscussionVoteLinks {
+  for: string;
+  against: string;
+  abstain: string;
+}
+
+function voteButtons(links: DiscussionVoteLinks) {
+  const one = (href: string, label: string, bg: string) =>
+    `<td style="padding:0 8px 0 0;"><a href="${escapeHtml(href)}" style="display:inline-block;padding:10px 18px;border-radius:999px;background:${bg};color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;">${label}</a></td>`;
+  return `
+    <p style="margin:20px 0 8px;font-size:16px;font-weight:600;color:${INK};">Cast your vote</p>
+    <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 8px;"><tr>
+      ${one(links.for, "In favour", "#2f7d4f")}${one(links.against, "Against", "#a6342a")}${one(links.abstain, "Abstain", MUTED)}
+    </tr></table>
+    <p style="margin:0 0 16px;font-size:13px;color:${MUTED};">Each button opens StrataCouncil.ca to confirm your vote, signed in as you. To declare a conflict of interest, open the discussion.</p>`;
+}
+
+function motionBlock(motion: string) {
+  return motion.trim()
+    ? `<p style="margin:0 0 4px;font-size:13px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;color:${MUTED};">Motion</p>
+    <p style="margin:0 0 16px;font-size:15px;color:${INK};white-space:pre-wrap;">${escapeHtml(motion)}</p>`
+    : "";
+}
+
+function voteText(links: DiscussionVoteLinks | null) {
+  return links
+    ? `\n\nCast your vote (each link opens StrataCouncil.ca to confirm, signed in as you):\nIn favour: ${links.for}\nAgainst: ${links.against}\nAbstain: ${links.abstain}\nTo declare a conflict of interest, open the discussion.`
+    : "";
+}
+
 /**
- * To council when a member opens a discussion (0070). Only the title and a
- * link: the motion and its background stay behind sign-in, where the
- * database limits them to council.
+ * To council when a discussion opens (0070; 0081). Council reads the
+ * motion and votes from the email, like the tools they're used to: the
+ * buttons open a confirm page behind sign-in, so a vote is always the
+ * signed-in person's own.
  */
-export function discussionOpenedEmail(params: { corporationName: string; authorName: string; title: string; openUrl: string }) {
+export function discussionOpenedEmail(params: {
+  corporationName: string;
+  authorName: string;
+  title: string;
+  motion: string;
+  voteLinks: DiscussionVoteLinks | null;
+  openUrl: string;
+}) {
+  const who = params.authorName || "A council member";
+  const kind = params.voteLinks ? "a council discussion and vote" : "a council discussion (no vote)";
+  const after = params.voteLinks
+    ? "A motion that passes goes to the next council meeting to be ratified."
+    : "This discussion has no vote: share your views in the comments.";
   const html = wrap(`
-    <p style="margin:0 0 16px;font-size:16px;color:${INK};">${escapeHtml(params.authorName || "A council member")} opened a council discussion for <strong>${escapeHtml(params.corporationName)}</strong>:</p>
-    <p style="margin:0 0 8px;font-size:16px;font-weight:600;color:${INK};">${escapeHtml(params.title)}</p>
-    <p style="margin:0 0 8px;font-size:14px;color:${MUTED};">Read the motion, vote, and add your comments. A motion that passes goes to the next council meeting to be ratified.</p>
+    <p style="margin:0 0 16px;font-size:16px;color:${INK};">${escapeHtml(who)} opened ${kind} for <strong>${escapeHtml(params.corporationName)}</strong>:</p>
+    <p style="margin:0 0 12px;font-size:17px;font-weight:600;color:${INK};">${escapeHtml(params.title)}</p>
+    ${motionBlock(params.motion)}
+    ${params.voteLinks ? voteButtons(params.voteLinks) : ""}
+    <p style="margin:0 0 8px;font-size:14px;color:${MUTED};">${after}</p>
     ${button(params.openUrl, "Open the discussion")}
   `);
-  const text = `${params.authorName || "A council member"} opened a council discussion for ${params.corporationName}:\n\n${params.title}\n\nRead the motion, vote, and add your comments. A motion that passes goes to the next council meeting to be ratified:\n\n${params.openUrl}`;
+  const text = `${who} opened ${kind} for ${params.corporationName}:\n\n${params.title}${params.motion.trim() ? `\n\nMotion: ${params.motion}` : ""}${voteText(params.voteLinks)}\n\n${after}\n\n${params.openUrl}`;
   return { subject: `Council discussion: ${params.title}`, html, text };
 }
 
+/**
+ * To council on every comment (0081): the motion, the count so far, and
+ * the whole thread, newest first, with the vote buttons while it's open.
+ * Never to anyone recused, who can't see the comments.
+ */
+export function discussionCommentEmail(params: {
+  corporationName: string;
+  title: string;
+  motion: string;
+  tally: string | null;
+  comments: Array<{ name: string; body: string; when: string }>;
+  voteLinks: DiscussionVoteLinks | null;
+  openUrl: string;
+}) {
+  const latest = params.comments[0];
+  const thread = params.comments
+    .map(
+      (c, i) => `<div style="margin:0 0 12px;padding:12px 14px;border-radius:10px;background:${i === 0 ? PAPER : "#ffffff"};border:1px solid #e3dfd5;">
+      <p style="margin:0 0 4px;font-size:13px;color:${MUTED};"><strong style="color:${INK};">${escapeHtml(c.name || "A council member")}</strong> &middot; ${escapeHtml(c.when)}</p>
+      <p style="margin:0;font-size:15px;color:${INK};white-space:pre-wrap;">${escapeHtml(c.body)}</p>
+    </div>`
+    )
+    .join("");
+  const html = wrap(`
+    <p style="margin:0 0 16px;font-size:16px;color:${INK};">${escapeHtml(latest?.name || "A council member")} commented on a council discussion for <strong>${escapeHtml(params.corporationName)}</strong>:</p>
+    <p style="margin:0 0 12px;font-size:17px;font-weight:600;color:${INK};">${escapeHtml(params.title)}</p>
+    ${motionBlock(params.motion)}
+    ${params.tally ? `<p style="margin:0 0 16px;font-size:14px;color:${INK};"><strong>Votes so far:</strong> ${escapeHtml(params.tally)}</p>` : ""}
+    ${params.voteLinks ? voteButtons(params.voteLinks) : ""}
+    <p style="margin:20px 0 8px;font-size:16px;font-weight:600;color:${INK};">Comments</p>
+    ${thread}
+    ${button(params.openUrl, "Reply in StrataCouncil.ca")}
+  `);
+  const text = `${latest?.name || "A council member"} commented on a council discussion for ${params.corporationName}:\n\n${params.title}${params.motion.trim() ? `\n\nMotion: ${params.motion}` : ""}${params.tally ? `\n\nVotes so far: ${params.tally}` : ""}${voteText(params.voteLinks)}\n\nComments:\n${params.comments.map((c) => `\n${c.name || "A council member"}, ${c.when}:\n${c.body}`).join("\n")}\n\nReply: ${params.openUrl}`;
+  return { subject: `New comment: ${params.title}`, html, text };
+}
+
 /** To council when the author closes a discussion (0070), with the result. */
-export function discussionClosedEmail(params: { corporationName: string; title: string; result: string; tally: string; passed: boolean; openUrl: string }) {
+export function discussionClosedEmail(params: { corporationName: string; title: string; result: string | null; tally: string | null; passed: boolean; openUrl: string }) {
+  if (params.result === null) {
+    const html = wrap(`
+    <p style="margin:0 0 16px;font-size:16px;color:${INK};">A council discussion for <strong>${escapeHtml(params.corporationName)}</strong> has been closed:</p>
+    <p style="margin:0 0 8px;font-size:16px;font-weight:600;color:${INK};">${escapeHtml(params.title)}</p>
+    <p style="margin:0 0 8px;font-size:14px;color:${MUTED};">It had no vote, so there's nothing to ratify. The comments stay in the discussion.</p>
+    ${button(params.openUrl, "Open the discussion")}
+  `);
+    const text = `A council discussion for ${params.corporationName} has been closed:\n\n${params.title}\n\nIt had no vote, so there's nothing to ratify. The comments stay in the discussion:\n\n${params.openUrl}`;
+    return { subject: `Discussion closed: ${params.title}`, html, text };
+  }
   const next = params.passed
     ? "It now awaits ratification at the next council meeting."
     : "It didn't pass, so it won't go to a meeting for ratification.";
   const html = wrap(`
     <p style="margin:0 0 16px;font-size:16px;color:${INK};">A council discussion for <strong>${escapeHtml(params.corporationName)}</strong> has been closed:</p>
     <p style="margin:0 0 8px;font-size:16px;font-weight:600;color:${INK};">${escapeHtml(params.title)}</p>
-    <p style="margin:0 0 4px;font-size:15px;color:${INK};">${escapeHtml(params.result)} (${escapeHtml(params.tally)}).</p>
+    <p style="margin:0 0 4px;font-size:15px;color:${INK};">${escapeHtml(params.result)} (${escapeHtml(params.tally ?? "")}).</p>
     <p style="margin:0 0 8px;font-size:14px;color:${MUTED};">${next} The vote record is in Documents, under Meetings &amp; Records.</p>
     ${button(params.openUrl, "Open the discussion")}
   `);

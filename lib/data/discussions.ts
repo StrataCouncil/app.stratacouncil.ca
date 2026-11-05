@@ -28,6 +28,10 @@ export interface DiscussionSummary {
   voters: number;
   /** Your own vote: undefined when you aren't a voter on it, null when you haven't voted yet. */
   myVote?: DiscussionVote | null;
+  /** False for a council conversation with nothing to vote on (0081). */
+  voteRequired: boolean;
+  /** The latest vote, comment, close or ratification. */
+  lastActivityAt: string;
 }
 
 export interface DiscussionVoter {
@@ -77,7 +81,12 @@ export interface DiscussionDetail extends DiscussionSummary {
 }
 
 const COLUMNS =
-  "id, corporation_id, title, background, financial, risks, motion, created_by, author_name, created_at, closed_at, status, result, votes_for, votes_against, votes_abstain, votes_recused, votes_missing, record_document_id, ratified_meeting_id, ratified_at";
+  "id, corporation_id, title, background, financial, risks, motion, vote_required, created_by, author_name, created_at, closed_at, status, result, votes_for, votes_against, votes_abstain, votes_recused, votes_missing, record_document_id, ratified_meeting_id, ratified_at";
+
+/** The latest of the given times (ISO strings), or the fallback. */
+function latest(fallback: string, ...times: Array<string | null | undefined>): string {
+  return times.reduce<string>((a, t) => (t && Date.parse(t) > Date.parse(a) ? t : a), fallback);
+}
 
 /** Ids of discussions on the agenda of a meeting that hasn't adjourned, with that meeting. */
 export async function discussionsOnPendingAgendas(corpId: string, client?: Client): Promise<Map<string, { id: string; date: string }>> {
@@ -96,9 +105,11 @@ export async function discussionsOnPendingAgendas(corpId: string, client?: Clien
 
 export async function listDiscussions(corpId: string): Promise<DiscussionSummary[]> {
   const supabase = await createClient();
-  const [{ data, error }, { data: voters }, { data: auth }] = await Promise.all([
+  const [{ data, error }, { data: voters }, { data: comments }, { data: auth }] = await Promise.all([
     supabase.from("discussions").select(COLUMNS).eq("corporation_id", corpId).order("created_at", { ascending: false }),
-    supabase.from("discussion_voters").select("discussion_id, user_id, vote"),
+    supabase.from("discussion_voters").select("discussion_id, user_id, vote, voted_at"),
+    // Only what the reader may see (RLS): no comments for anyone recused.
+    supabase.from("discussion_comments").select("discussion_id, created_at"),
     supabase.auth.getUser(),
   ]);
   const me = auth.user?.id ?? null;
@@ -119,6 +130,14 @@ export async function listDiscussions(corpId: string): Promise<DiscussionSummary
       voters: mine.length,
       // Your own vote: undefined when you aren't a voter, null when you haven't voted.
       myVote: me && mine.some((v) => v.user_id === me) ? ((mine.find((v) => v.user_id === me)?.vote as DiscussionVote | null) ?? null) : undefined,
+      voteRequired: d.vote_required !== false,
+      lastActivityAt: latest(
+        d.created_at,
+        d.closed_at,
+        d.ratified_at,
+        ...mine.map((v) => v.voted_at as string | null),
+        ...(comments ?? []).filter((c) => c.discussion_id === d.id).map((c) => c.created_at as string)
+      ),
     };
   });
 }
@@ -168,6 +187,8 @@ export async function getDiscussion(corpId: string, id: string): Promise<Discuss
     ratifiedAt: d.ratified_at,
     voted: voterList.filter((v) => v.vote).length,
     voters: voterList.length,
+    voteRequired: d.vote_required !== false,
+    lastActivityAt: latest(d.created_at, d.closed_at, d.ratified_at, ...voterList.map((v) => v.votedAt), ...(comments ?? []).map((c) => c.created_at as string)),
     voterList,
     mine,
     recused,

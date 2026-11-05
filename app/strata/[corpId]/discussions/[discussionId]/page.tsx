@@ -55,8 +55,16 @@ export default async function DiscussionPage({ params }: { params: Promise<{ cor
       <div className="discussion-layout">
         <div>
           <section className="card discussion-motion" data-testid="discussion-motion">
-            <p className="discussion-label">Motion</p>
-            <p className="discussion-motion__text">{d.motion}</p>
+            {d.motion ? (
+              <>
+                <p className="discussion-label">Motion</p>
+                <p className="discussion-motion__text">{d.motion}</p>
+              </>
+            ) : (
+              <p className="discussion-label" data-testid="discussion-no-vote">
+                Council discussion &middot; no vote
+              </p>
+            )}
             {(
               [
                 ["Background and rationale", d.background],
@@ -118,7 +126,7 @@ export default async function DiscussionPage({ params }: { params: Promise<{ cor
         </div>
 
         <aside className="discussion-side">
-          {open && d.mine && <VotePanel corpId={corpId} discussionId={d.id} current={d.mine.vote} />}
+          {open && d.mine && <VotePanel corpId={corpId} discussionId={d.id} current={d.mine.vote} noVote={!d.voteRequired} />}
           {open && !d.mine && (
             <p className="card discussion-note">
               {access.isCouncil
@@ -127,6 +135,20 @@ export default async function DiscussionPage({ params }: { params: Promise<{ cor
             </p>
           )}
 
+          {!d.voteRequired ? (
+            <section className="card discussion-tally" data-testid="discussion-taking-part">
+              <h3>Taking part</h3>
+              <ul className="discussion-voters">
+                {d.voterList.map((v, i) => (
+                  <li key={v.userId ?? i} data-vote={v.vote === "recused" ? "recused" : "none"}>
+                    <span>{v.name || "Council member"}</span>
+                    <span>{v.vote === "recused" ? "Stepped out (conflict)" : ""}</span>
+                  </li>
+                ))}
+              </ul>
+              {!open && <p className="card__meta">This discussion had no vote, so nothing goes to a meeting.</p>}
+            </section>
+          ) : (
           <section className="card discussion-tally" data-testid="discussion-tally">
             <h3>{open ? "Votes so far" : "Result"}</h3>
             {d.recused ? (
@@ -166,14 +188,16 @@ export default async function DiscussionPage({ params }: { params: Promise<{ cor
               </p>
             )}
           </section>
+          )}
 
           {open && isAuthor && (
             <AuthorPanel
               corpId={corpId}
               discussionId={d.id}
               editable={!anyVotes}
-              initial={{ title: d.title, background: d.background, financial: d.financial, risks: d.risks, motion: d.motion }}
-              majority={d.tally ? majorityNote(d.tally) : null}
+              initial={{ title: d.title, background: d.background, financial: d.financial, risks: d.risks, motion: d.motion, voteRequired: d.voteRequired }}
+              majority={d.tally && d.voteRequired ? majorityNote(d.tally) : null}
+              noVote={!d.voteRequired}
             />
           )}
         </aside>

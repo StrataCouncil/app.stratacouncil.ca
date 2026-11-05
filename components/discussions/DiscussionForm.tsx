@@ -24,7 +24,9 @@ export function DiscussionForm({
   onDone?: () => void;
 }) {
   const router = useRouter();
-  const [fields, setFields] = useState<DiscussionInput>(initial ?? { title: "", background: "", financial: "", risks: "", motion: "" });
+  const [fields, setFields] = useState<DiscussionInput>(initial ?? { title: "", background: "", financial: "", risks: "", motion: "", voteRequired: true });
+  // Set when it opens (0081): a discussion with nothing to vote on has no motion.
+  const voting = fields.voteRequired !== false;
   const [files, setFiles] = useState<File[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
@@ -73,6 +75,24 @@ export function DiscussionForm({
           <span>Title</span>
           <input value={fields.title} onChange={set("title")} maxLength={200} required placeholder="Roof replacement quotes" data-testid="discussion-title" />
         </label>
+        {!discussionId && (
+          <label className="field field--wide checkbox-field" data-testid="discussion-vote-required-field">
+            <span>
+              <input
+                type="checkbox"
+                checked={voting}
+                onChange={(e) => setFields({ ...fields, voteRequired: e.target.checked })}
+                data-testid="discussion-vote-required"
+              />{" "}
+              Vote required
+            </span>
+            <span className="field__hint">
+              {voting
+                ? "Council votes on a motion. One that passes goes to the next council meeting to be ratified."
+                : "A council conversation with nothing to vote on, to share information or get views. It isn't ratified."}
+            </span>
+          </label>
+        )}
         <label className="field field--wide">
           <span>Background and rationale</span>
           <textarea rows={5} value={fields.background} onChange={set("background")} maxLength={10000} data-testid="discussion-background" />
@@ -85,6 +105,7 @@ export function DiscussionForm({
           <span>Risks and compliance</span>
           <textarea rows={3} value={fields.risks} onChange={set("risks")} maxLength={10000} data-testid="discussion-risks" />
         </label>
+        {voting && (
         <label className="field field--wide">
           <span>Motion</span>
           <textarea rows={3} value={fields.motion} onChange={set("motion")} maxLength={4000} required placeholder="THAT council obtain three quotes for roof replacement." data-testid="discussion-motion" />
@@ -103,6 +124,7 @@ export function DiscussionForm({
             </button>
           </span>
         </label>
+        )}
         <label className="field field--wide">
           <span>{discussionId ? "Add attachments" : "Attachments"}</span>
           <input type="file" multiple onChange={(e) => setFiles(Array.from(e.target.files ?? []))} data-testid="discussion-files" />
@@ -125,7 +147,11 @@ export function DiscussionForm({
           {pending ? "Saving…" : discussionId ? "Save changes" : "Open the discussion"}
         </button>
       </div>
-      {!discussionId && <p className="card__meta" style={{ marginTop: "0.75rem" }}>Council is emailed when it opens.</p>}
+      {!discussionId && (
+        <p className="card__meta" style={{ marginTop: "0.75rem" }}>
+          {voting ? "Council is emailed when it opens, with buttons to vote from the email." : "Council is emailed when it opens, and with each comment."}
+        </p>
+      )}
     </form>
   );
 }

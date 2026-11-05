@@ -89,6 +89,8 @@ export async function middleware(request: NextRequest) {
 
   if (!user && !publicPath) {
     const loginUrl = new URL("/login", request.url);
+    // Signing in brings them back here (an email's link, say).
+    if (pathname !== "/") loginUrl.searchParams.set("next", `${pathname}${request.nextUrl.search}`);
     return NextResponse.redirect(loginUrl);
   }
 

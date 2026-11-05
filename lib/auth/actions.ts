@@ -2,6 +2,7 @@
 
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { safeNext } from "@/lib/safe-next";
 import { createClient } from "@/lib/supabase/server";
 import { MFA_BACKUP_COOKIE_NAME } from "@/lib/auth/mfa-session";
 import type { SendOtpState } from "@/lib/auth/otp-state";
@@ -56,13 +57,16 @@ export async function sendOtp(
   }
 
   const origin = (await headers()).get("origin");
+  // Back to the page they were sent to sign in from (an email's vote button, say).
+  const next = safeNext(String(formData.get("next") ?? ""));
+  const confirm = `${origin}/auth/confirm${next !== "/" ? `?next=${encodeURIComponent(next)}` : ""}`;
   const supabase = await createClient();
 
   const { error } = await supabase.auth.signInWithOtp({
     email,
     options: {
       shouldCreateUser: signingUp,
-      emailRedirectTo: `${origin}/auth/confirm`,
+      emailRedirectTo: confirm,
       ...(signingUp
         ? { data: { full_name: fullName, marketing_opt_in: marketingOptIn, ...(campaign ? { campaign } : {}) } }
         : {}),
