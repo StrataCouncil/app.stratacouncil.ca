@@ -218,7 +218,7 @@ export async function takeOverMeeting(meetingId: string): Promise<Ok | Fail> {
 export type VideoJoin =
   | { kind: "none" }
   | { kind: "demo" }
-  | { kind: "message"; tone: "info" | "error"; message: string; canRestart?: boolean }
+  | { kind: "message"; tone: "info" | "error"; message: string; canRestart?: boolean; reason?: string }
   | { kind: "waiting" }
   | {
       kind: "join";
@@ -230,6 +230,8 @@ export type VideoJoin =
       customerKey: string;
       zak: string | null;
       host: boolean;
+      /** Super Admins (and so every sandbox) see Zoom's own reason when the video fails. */
+      showReasons: boolean;
     };
 
 /**
@@ -271,11 +273,22 @@ export async function getVideoJoin(meetingId: string, opts: { restart?: boolean 
       })
     : await openZoomMeeting(meetingId).then((r) => (r ? ({ ok: true, row: r } as const) : null));
   if (!row) return { kind: "waiting" };
-  if (!row.ok) return { kind: "message", tone: "error", message: row.error, canRestart: !row.busy };
+  const { data: profile } = await supabase.from("profiles").select("full_name, is_super_admin").eq("id", user.id).maybeSingle();
+  // Only sandboxes get this far on the demo site, and only Super Admins open those.
+  const showReasons = IS_DEMO || profile?.is_super_admin === true;
+  if (!row.ok) return { kind: "message", tone: "error", message: row.error, canRestart: !row.busy, reason: showReasons ? row.reason : undefined };
 
-  const { data: profile } = await supabase.from("profiles").select("full_name").eq("id", user.id).maybeSingle();
-  const zak = isRunner ? await zakFor(cfg, row.row.host_email) : null;
-  if (isRunner && !zak) return { kind: "message", tone: "error", message: "Couldn't start the video as host. Try again; the meeting itself carries on.", canRestart: true };
+  const host = isRunner ? await zakFor(cfg, row.row.host_email) : null;
+  const zak = host?.zak ?? null;
+  if (isRunner && !zak) {
+    return {
+      kind: "message",
+      tone: "error",
+      message: "Couldn't start the video as host. Try again; the meeting itself carries on.",
+      canRestart: true,
+      reason: showReasons ? host?.reason : undefined,
+    };
+  }
   return {
     kind: "join",
     sdkKey: cfg.sdkKey,
@@ -286,5 +299,6 @@ export async function getVideoJoin(meetingId: string, opts: { restart?: boolean 
     customerKey: user.id,
     zak,
     host: isRunner,
+    showReasons,
   };
 }

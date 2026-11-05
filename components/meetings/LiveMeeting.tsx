@@ -6,7 +6,8 @@ import { useRouter } from "next/navigation";
 import { groupByCategory, normalizeAgenda, resolutionTypeLabels, type AgendaItem } from "@/lib/meetings/agenda";
 import { choiceLabels, conflictedLots, inMeeting, runnerAway, takesConflicts, type Choice, type LiveState } from "@/lib/meetings/live";
 import { councilQuorum } from "@/lib/meetings/rules";
-import { castVote, declareConflict, getLiveState, joinMeeting, leaveMeeting, takeOverMeeting } from "@/app/strata/[corpId]/meetings/[meetingId]/live/actions";
+import { castVote, declareConflict, joinMeeting, leaveMeeting, takeOverMeeting } from "@/app/strata/[corpId]/meetings/[meetingId]/live/actions";
+import { fetchLiveState } from "@/lib/meetings/live-client";
 import { getDocumentDownloadUrl } from "@/app/strata/[corpId]/documents/actions";
 import { openInNewTab } from "@/lib/open-in-tab";
 import { MemberVote } from "@/components/meetings/LiveVote";
@@ -58,8 +59,15 @@ export function LiveMeeting(props: {
   const [leaving, setLeaving] = useState(false);
 
   const [now, setNow] = useState(() => Date.now());
+  // Refreshes run alongside clicks (lib/meetings/live-client.ts); an answer
+  // to an older request never replaces a newer one.
+  const asked = useRef(0);
+  const shown = useRef(0);
   const refresh = useCallback(async () => {
-    const s = await getLiveState(meetingId).catch(() => null);
+    const mine = ++asked.current;
+    const s = await fetchLiveState(meetingId);
+    if (mine < shown.current) return;
+    shown.current = mine;
     if (s) setState(s);
     setNow(Date.now());
   }, [meetingId]);

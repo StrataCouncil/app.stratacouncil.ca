@@ -27,22 +27,40 @@
   function tell(msg) { if (window.parent !== window) window.parent.postMessage(Object.assign({ source: "sc-zoom" }, msg), origin); }
   var client = null;
   var joined = false;
-  var admitted = {};
+  var sweep = null;
 
   // The Runner (host) lets members in from the waiting room as they arrive.
   // Waiting room stays on so a member with a conflict can be held there later.
+  // Zoom marks someone waiting as `isHold` in its list of people and as
+  // `bHold` in its join notices, so both are checked; and every few seconds
+  // the host's screen also checks the list, in case a notice was missed.
   function admitWaiting(list) {
     if (!client || !list) return;
+    if (!Array.isArray(list)) list = [list];
     for (var i = 0; i < list.length; i++) {
       var p = list[i];
-      if (p && p.isHold && !admitted[p.userId]) { admitted[p.userId] = true; try { client.admit(p.userId); } catch (e) {} }
+      if (p && (p.isHold || p.bHold) && p.userId != null) {
+        try { Promise.resolve(client.admit(p.userId)).catch(function () {}); } catch (e) {}
+      }
     }
+  }
+
+  // Video and toolbar together fill the box: Zoom draws the video at the size
+  // given here and its toolbar beneath it.
+  var TOOLBAR = 96;
+  function videoSize(size) {
+    var w = Math.max(240, Math.floor(size.width)), h = Math.max(135, Math.floor(size.height) - TOOLBAR);
+    return { default: { width: w, height: h }, ribbon: { width: w, height: h } };
+  }
+
+  // Zoom's "meeting has not started" (the host hasn't opened the video yet).
+  function notStarted(code, reason) {
+    return String(code) === "3008" || /not\s*(been\s*)?start/i.test(String(reason || ""));
   }
 
   function join(cfg, size) {
     if (!window.ZoomMtgEmbedded) return tell({ type: "state", state: "failed", detail: "Zoom didn't load. Check your connection, then try again." });
     client = window.ZoomMtgEmbedded.createClient();
-    var w = Math.max(240, Math.floor(size.width)), h = Math.max(135, Math.floor(size.height) - 60);
     client.init({
       zoomAppRoot: document.getElementById("zoom"),
       language: "en-US",
@@ -51,16 +69,26 @@
       maximumVideosInGalleryView: 9,
       customize: {
         meetingInfo: ["topic", "participant"],
-        video: { isResizable: false, popper: { disableDraggable: true }, viewSizes: { default: { width: w, height: h }, ribbon: { width: w, height: h } }, defaultViewType: "gallery" }
+        video: { isResizable: false, popper: { disableDraggable: true }, viewSizes: videoSize(size), defaultViewType: "gallery" }
       }
     }).then(function () {
       tell({ type: "state", state: "connecting" });
       client.on("connection-change", function (p) {
         var s = p && p.state;
-        if (s === "Connected") { joined = true; tell({ type: "state", state: "joined" }); if (cfg.host) admitWaiting(client.getAttendeeslist()); }
+        if (s === "Connected") {
+          joined = true;
+          tell({ type: "state", state: "joined" });
+          if (cfg.host) {
+            admitWaiting(client.getAttendeeslist());
+            if (!sweep) sweep = setInterval(function () { try { admitWaiting(client.getAttendeeslist()); } catch (e) {} }, 4000);
+          }
+        }
         else if (s === "Reconnecting") tell({ type: "state", state: "reconnecting" });
-        else if (s === "Closed") tell({ type: "state", state: "ended", detail: p.reason || "" });
-        else if (s === "Fail") tell({ type: "state", state: "failed", detail: p.reason || "" });
+        else if (s === "Closed") { if (sweep) { clearInterval(sweep); sweep = null; } tell({ type: "state", state: "ended", detail: p.reason || "" }); }
+        else if (s === "Fail") {
+          var fc = p && (p.errorCode != null ? p.errorCode : p.code);
+          tell({ type: "state", state: notStarted(fc, p.reason) ? "hostAway" : "failed", detail: p.reason || "", code: fc == null ? null : String(fc) });
+        }
       });
       if (cfg.host) {
         client.on("user-added", admitWaiting);
@@ -77,7 +105,7 @@
     }).catch(function (err) {
       var reason = (err && (err.reason || err.message || err.errorMessage)) || "";
       var code = err && (err.errorCode || err.type);
-      tell({ type: "state", state: "failed", detail: String(reason), code: code == null ? null : String(code) });
+      tell({ type: "state", state: notStarted(code, reason) ? "hostAway" : "failed", detail: String(reason), code: code == null ? null : String(code) });
     });
   }
 
@@ -85,6 +113,7 @@
     if (e.origin !== origin || e.source !== window.parent || !e.data || e.data.source !== "sc-page") return;
     if (e.data.type === "join" && !client) join(e.data.config, e.data.size || { width: 320, height: 240 });
     if (e.data.type === "leave" && client && joined) { try { client.leaveMeeting(); } catch (err) {} }
+    if (e.data.type === "resize" && client && e.data.size) { try { client.updateVideoOptions({ viewSizes: videoSize(e.data.size) }); } catch (err) {} }
   });
   tell({ type: "ready" });
 })();

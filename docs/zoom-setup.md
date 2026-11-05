@@ -79,7 +79,7 @@ available on the free plan.
    | `meeting:update:status:admin` | Update a meeting's status (end it) |
    | `meeting:delete:meeting:admin` | Delete a meeting |
    | `meeting:read:meeting:admin` | View a meeting |
-   | `user:read:zak:admin` | View a user's ZAK token (lets the Runner start the meeting as host) |
+   | `user:read:token:admin` | View a user's token (lets the Runner start the meeting as host; the app asks for `/users/{host}/token?type=zak`, which needs this one, not `user:read:zak:admin`) |
    | `user:read:user:admin` | View a user |
 
    Zoom renames scopes now and then; if one isn't listed, search for its
