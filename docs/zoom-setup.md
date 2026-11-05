@@ -111,9 +111,13 @@ available on the free plan.
 ## 5. Keys into Vercel
 
 Vercel, project **app-stratacouncil-ca**, Settings, Environment Variables.
-Add each one for **Production** and **Preview**. Don't add them to the
-**stratacouncil-demo** project: the demo site shows placeholder video
-instead of Zoom.
+Add each one for **Production** and **Preview**.
+
+Then add the same six to the **stratacouncil-demo** project too, so Zoom
+can be tested in a Super Admin sandbox without test data on the live site
+(docs/demo-site.md). Only sandboxes use them; ordinary demo visitors still
+see placeholder tiles. With one host licence, one meeting runs at a time
+across the live site and all sandboxes together.
 
 | Name | Value from |
 | --- | --- |
@@ -124,7 +128,7 @@ instead of Zoom.
 | `ZOOM_SDK_CLIENT_SECRET` | App 2, Basic Information, Client Secret |
 | `ZOOM_HOST_USERS` | The email of the Zoom user who hosts meetings. On the free plan that's the account owner. Later, with more licences, a comma-separated list. |
 
-Then **Redeploy** the latest production deployment so it picks them up.
+Then **Redeploy** the latest production deployment of each project so it picks them up.
 
 ## 6. Tell me
 

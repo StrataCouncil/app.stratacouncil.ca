@@ -23,8 +23,11 @@ yet. Test in a sandbox on the demo site (docs/demo-site.md). Read this before st
   SDK needs React 18. The Runner's screen admits people from the waiting
   room as they arrive. Conflicts holding a member in the waiting room come
   with step 3.
-- **Demo site:** no Zoom. Video tiles with each person's initials and name,
-  and "Video appears here".
+- **Demo site:** visitors get no Zoom: video tiles with each person's
+  initials and name, and "Video appears here". A Super Admin's sandbox gets
+  real Zoom (same keys on the demo project), so Zoom is tested without test
+  data on the live site. The live and demo databases each track their own
+  host use, so don't run a live meeting and a sandbox test at the same time.
 
 - Zoom is the video only. The agenda, attendance, motions, votes, decisions
   and minutes live in Stratasphere.
