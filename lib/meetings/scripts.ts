@@ -1,3 +1,4 @@
+import { tz } from "../time-zone.ts";
 import { isAdjournment, isNextMeeting, type AgendaItem, type MeetingType } from "./agenda.ts";
 import { isGeneralMeeting } from "./rules.ts";
 
@@ -7,12 +8,12 @@ import { isGeneralMeeting } from "./rules.ts";
  */
 
 function greeting(now: Date, timezone: string) {
-  const hour = Number(new Intl.DateTimeFormat("en-CA", { hour: "numeric", hourCycle: "h23", timeZone: timezone }).format(now));
+  const hour = Number(new Intl.DateTimeFormat("en-CA", { hour: "numeric", hourCycle: "h23", timeZone: tz(timezone, now) }).format(now));
   return hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening";
 }
 
 function clock(now: Date, timezone: string) {
-  return now.toLocaleTimeString("en-CA", { hour: "numeric", minute: "2-digit", timeZone: timezone });
+  return now.toLocaleTimeString("en-CA", { hour: "numeric", minute: "2-digit", timeZone: tz(timezone, now) });
 }
 
 export function callToOrderScript(opts: {
@@ -105,7 +106,7 @@ export function zonedInstant(date: string, time: string, timezone: string): Date
   const offsetAt = (ms: number) => {
     const parts = Object.fromEntries(
       new Intl.DateTimeFormat("en-US", {
-        timeZone: timezone,
+        timeZone: tz(timezone, ms),
         hourCycle: "h23",
         year: "numeric",
         month: "2-digit",

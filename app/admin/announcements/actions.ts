@@ -1,5 +1,6 @@
 "use server";
 
+import { tz } from "@/lib/time-zone";
 import { revalidatePath } from "next/cache";
 import { requireSuperAdmin } from "@/lib/data/admin";
 import { isAnnouncementCategory } from "@/lib/announcement-categories";
@@ -109,7 +110,7 @@ function endOfDayInBC(date: string): Date {
   const [y, m, d] = date.split("-").map(Number);
   for (const offsetHours of [7, 8]) {
     const candidate = new Date(Date.UTC(y, m - 1, d, 23 + offsetHours, 59, 59));
-    const hour = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Vancouver", hour: "2-digit", hourCycle: "h23" }).format(candidate);
+    const hour = new Intl.DateTimeFormat("en-CA", { timeZone: tz("America/Vancouver", candidate), hour: "2-digit", hourCycle: "h23" }).format(candidate);
     if (hour === "23") return candidate;
   }
   return new Date(Date.UTC(y, m - 1, d + 1, 7, 59, 59));

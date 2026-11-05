@@ -1,3 +1,4 @@
+import { tz } from "../time-zone.ts";
 import { PDFDocument, StandardFonts } from "pdf-lib";
 import { GREEN, INK, MUTED, RED, Writer } from "@/lib/exports/minutes-pdf";
 import { RESULT_LABELS, tallyLine, VOTE_LABELS, type DiscussionResult, type DiscussionVote } from "@/lib/discussions/tally";
@@ -28,9 +29,9 @@ export interface DiscussionRecord {
 
 const TZ = "America/Vancouver";
 const longDate = (ymd: string) =>
-  new Date(`${ymd.slice(0, 10)}T12:00:00Z`).toLocaleDateString("en-CA", { timeZone: TZ, year: "numeric", month: "long", day: "numeric" });
+  new Date(`${ymd.slice(0, 10)}T12:00:00Z`).toLocaleDateString("en-CA", { timeZone: tz(TZ, `${ymd.slice(0, 10)}T12:00:00Z`), year: "numeric", month: "long", day: "numeric" });
 const when = (iso: string) =>
-  new Date(iso).toLocaleString("en-CA", { timeZone: TZ, year: "numeric", month: "long", day: "numeric", hour: "numeric", minute: "2-digit" });
+  new Date(iso).toLocaleString("en-CA", { timeZone: tz(TZ, iso), year: "numeric", month: "long", day: "numeric", hour: "numeric", minute: "2-digit" });
 
 export async function discussionPdf(r: DiscussionRecord): Promise<Uint8Array> {
   const doc = await PDFDocument.create();

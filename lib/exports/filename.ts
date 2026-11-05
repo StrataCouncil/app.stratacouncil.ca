@@ -1,3 +1,4 @@
+import { tz } from "../time-zone.ts";
 import type { MeetingType } from "@/lib/meetings/agenda";
 
 /**
@@ -47,5 +48,5 @@ export function meetingDocumentName(type: MeetingType, document: "Agenda" | "Min
 
 /** Today's date in British Columbia, as YYYY-MM-DD. */
 export function todayInBC(now: Date = new Date()): string {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Vancouver", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
+  return new Intl.DateTimeFormat("en-CA", { timeZone: tz("America/Vancouver", now), year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
 }

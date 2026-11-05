@@ -1,3 +1,4 @@
+import { tz } from "@/lib/time-zone";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AdminTabs } from "@/components/AdminTabs";
@@ -42,7 +43,7 @@ export default async function CreationRequestPage({
           </h1>
           <p>
             Requested by {request.requesterName} ({request.requesterEmail}) on{" "}
-            {new Date(request.requestedAt).toLocaleDateString("en-CA")}
+            {new Date(request.requestedAt).toLocaleDateString("en-CA", { timeZone: tz("America/Vancouver", request.requestedAt) })}
           </p>
         </div>
 
@@ -79,7 +80,7 @@ export default async function CreationRequestPage({
             </p>
             <p className="card__meta">
               {request.attestation.confirmed && request.attestation.confirmedAt
-                ? `Confirmed ${new Date(request.attestation.confirmedAt).toLocaleString("en-CA")}`
+                ? `Confirmed ${new Date(request.attestation.confirmedAt).toLocaleString("en-CA", { timeZone: tz("America/Vancouver", request.attestation.confirmedAt) })}`
                 : "Not confirmed"}
             </p>
           </div>
@@ -97,7 +98,7 @@ export default async function CreationRequestPage({
         ) : (
           <p className="roster-notice">
             {statusLabels[request.status]}
-            {request.resolvedAt && ` on ${new Date(request.resolvedAt).toLocaleDateString("en-CA")}`}.
+            {request.resolvedAt && ` on ${new Date(request.resolvedAt).toLocaleDateString("en-CA", { timeZone: tz("America/Vancouver", request.resolvedAt) })}`}.
             {request.status === "approved" && (
               <>
                 {" "}

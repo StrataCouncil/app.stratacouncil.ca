@@ -1,5 +1,6 @@
 "use client";
 
+import { tz } from "@/lib/time-zone";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { STAGE_LABELS, STAGES, type Stage } from "@/lib/admin-users";
@@ -15,7 +16,7 @@ const SORTS: Array<{ key: SortKey; label: string }> = [
   { key: "questions", label: "Most Stratasphere questions" },
 ];
 
-const date = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString("en-CA", { timeZone: "America/Vancouver" }) : "Never");
+const date = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString("en-CA", { timeZone: tz("America/Vancouver", iso) }) : "Never");
 
 /**
  * The Users tab's table: search by name, email or strata; filter by the

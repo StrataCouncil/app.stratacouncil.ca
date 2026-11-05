@@ -12,6 +12,8 @@
  *
  * Pure (no server-only imports), so middleware can use it too.
  */
+
+import { tz } from "./time-zone.ts";
 export const IS_DEMO = process.env.DEMO_MODE === "true";
 
 /** Where a demo link opens: the visitor's strata, or Council Training. */
@@ -31,7 +33,7 @@ export const SIGNUP_URL = "https://app.stratacouncil.ca/signup";
 /** Where demo links point. Read on the live site, which makes them. */
 const DEMO_URL = (process.env.DEMO_APP_URL || "https://demo.stratacouncil.ca").replace(/\/+$/, "");
 
-const DEMO_TIME_ZONE = "America/Los_Angeles";
+const DEMO_TIME_ZONE = "America/Vancouver";
 
 /** The visitor's sign-in link. */
 export function demoLink(token: string) {
@@ -50,7 +52,7 @@ export function isDemoToken(value: string) {
 
 function pacificParts(at: Date) {
   const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: DEMO_TIME_ZONE,
+    timeZone: tz(DEMO_TIME_ZONE, at),
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -67,9 +69,9 @@ const DEMO_LINK_DAYS = 3;
 
 /**
  * Midnight at the end of `now`'s day in British Columbia, `extraDays`
- * later, as an instant. Midnight Pacific is 07:00 UTC in summer (PDT) and
- * 08:00 UTC in winter (PST); daylight saving changes at 2 a.m., so
- * midnight is never skipped or doubled.
+ * later, as an instant. Midnight in BC is 07:00 UTC (summer time, and all
+ * year from November 2026) or 08:00 UTC (winter time before that); the
+ * clocks changed at 2 a.m., so midnight is never skipped or doubled.
  */
 export function endOfDemoDay(now: Date = new Date(), extraDays = 0): Date {
   const today = pacificParts(now);
@@ -125,7 +127,7 @@ export function sandboxPersonaEmail(sandboxId: string, persona: string) {
 export function demoDayLabel(expiresAt: Date) {
   // The day that ends at expiresAt: a minute before it.
   return new Date(expiresAt.getTime() - 60_000).toLocaleDateString("en-CA", {
-    timeZone: DEMO_TIME_ZONE,
+    timeZone: tz(DEMO_TIME_ZONE, expiresAt.getTime() - 60_000),
     weekday: "long",
     month: "long",
     day: "numeric",
@@ -169,15 +171,6 @@ export type DemoLimit = keyof typeof DEMO_LIMITS;
 export type DemoLimitFail = { ok: false; error: string; demoLimit: true };
 export const demoLimitFail = (): DemoLimitFail => ({ ok: false, error: DEMO_LIMIT_MESSAGE, demoLimit: true });
 
-/** The one agenda item a visitor may edit in the meeting they create (lib/demo-kit/agenda.ts). */
+/** The agenda item the demo suggests a visitor starts with: Roof Repairs, which has no motion yet (lib/demo-kit/agenda.ts). */
 export const DEMO_EDITABLE_ITEM_ID = "i_demo_roof_repairs";
 
-/**
- * Saving the demo's agenda: only the editable item takes what the browser
- * sent. Every other item stays exactly as saved, in the same order; items
- * added in the browser are dropped, and removed ones come back.
- */
-export function lockDemoAgenda<T extends { id: string; catId: string; cat: string; num: number }>(saved: T[], incoming: T[]): T[] {
-  const edited = incoming.find((i) => i.id === DEMO_EDITABLE_ITEM_ID);
-  return saved.map((i) => (i.id === DEMO_EDITABLE_ITEM_ID && edited ? { ...edited, id: i.id, catId: i.catId, cat: i.cat, num: i.num } : i));
-}

@@ -1,3 +1,4 @@
+import { tz } from "@/lib/time-zone";
 import { SubscribeCta } from "@/components/SubscribeCta";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
@@ -63,7 +64,7 @@ async function LibraryItemPage({ item, corpId, subscribed }: { item: PublishedLi
     .sort((a, b) => b.score - a.score)
     .slice(0, 4)
     .map((x) => x.r);
-  const updated = new Date(item.publishedAt).toLocaleDateString("en-CA", { year: "numeric", month: "long", day: "numeric" });
+  const updated = new Date(item.publishedAt).toLocaleDateString("en-CA", { timeZone: tz("America/Vancouver", item.publishedAt), year: "numeric", month: "long", day: "numeric" });
 
   return (
     <>

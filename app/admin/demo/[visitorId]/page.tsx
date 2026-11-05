@@ -1,3 +1,4 @@
+import { tz } from "@/lib/time-zone";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AdminTabs } from "@/components/AdminTabs";
@@ -7,9 +8,9 @@ import { DEMO_LANDINGS, DEMO_LIMITS, demoDayLabel } from "@/lib/demo";
 import { demoPageName, describeDemoEvent, duration, summarizeDemoActivity } from "@/lib/demo-activity";
 import { getCurrentProfile } from "@/lib/data/profile";
 
-const PACIFIC = "America/Los_Angeles";
-const clock = (iso: string) => new Date(iso).toLocaleTimeString("en-CA", { timeZone: PACIFIC, hour: "numeric", minute: "2-digit", second: "2-digit" });
-const day = (iso: string) => new Date(iso).toLocaleDateString("en-CA", { timeZone: PACIFIC, weekday: "long", month: "long", day: "numeric" });
+const PACIFIC = "America/Vancouver";
+const clock = (iso: string) => new Date(iso).toLocaleTimeString("en-CA", { timeZone: tz(PACIFIC, iso), hour: "numeric", minute: "2-digit", second: "2-digit" });
+const day = (iso: string) => new Date(iso).toLocaleDateString("en-CA", { timeZone: tz(PACIFIC, iso), weekday: "long", month: "long", day: "numeric" });
 
 const MEETING_PROGRESS = {
   none: "Didn't create one",

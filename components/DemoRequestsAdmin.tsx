@@ -1,5 +1,6 @@
 "use client";
 
+import { tz } from "@/lib/time-zone";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { dismissDemoRequest, sendDemoRequestLink } from "@/app/admin/demo-actions";
@@ -7,9 +8,9 @@ import { DEMO_LANDINGS, type DemoLanding } from "@/lib/demo";
 import { DEMO_REQUEST_SOURCES, campaignLine } from "@/lib/demo-requests";
 import type { DemoRequest } from "@/lib/demo-requests-server";
 
-const PACIFIC = "America/Los_Angeles";
+const PACIFIC = "America/Vancouver";
 const time = (iso: string) =>
-  new Date(iso).toLocaleString("en-CA", { timeZone: PACIFIC, month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  new Date(iso).toLocaleString("en-CA", { timeZone: tz(PACIFIC, iso), month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
 /**
  * Super Admin console: demo requests from stratacouncil.ca (0067). Send

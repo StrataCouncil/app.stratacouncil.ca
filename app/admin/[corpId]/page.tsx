@@ -1,3 +1,4 @@
+import { tz } from "@/lib/time-zone";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AdminTabs } from "@/components/AdminTabs";
@@ -278,5 +279,5 @@ function Stat({ title, main, children }: { title: string; main: string; children
   );
 }
 
-const day = (iso: string) => new Date(iso).toLocaleDateString("en-CA", { year: "numeric", month: "short", day: "numeric" });
+const day = (iso: string) => new Date(iso).toLocaleDateString("en-CA", { timeZone: tz("America/Vancouver", iso), year: "numeric", month: "short", day: "numeric" });
 const usd = (n: number) => n.toLocaleString("en-CA", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });

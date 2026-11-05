@@ -1,5 +1,6 @@
 "use client";
 
+import { tz } from "@/lib/time-zone";
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -7,9 +8,9 @@ import { copyContentToDemo, createDemoLink, deleteDemoLink, endDemoLink, resendD
 import type { DemoVisitor, DemoVisitorList } from "@/lib/data/demo-visitors";
 import { DEMO_LANDINGS, type DemoLanding } from "@/lib/demo";
 
-const PACIFIC = "America/Los_Angeles";
+const PACIFIC = "America/Vancouver";
 const time = (iso: string) =>
-  new Date(iso).toLocaleString("en-CA", { timeZone: PACIFIC, month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  new Date(iso).toLocaleString("en-CA", { timeZone: tz(PACIFIC, iso), month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
 /**
  * Super Admin console: personal links to the demo site

@@ -1,3 +1,4 @@
+import { tz } from "@/lib/time-zone";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -80,7 +81,7 @@ async function loadStatements(mode: StripeMode, customerId: string, period: stri
       .filter((inv) => inv.status !== "draft")
       .map((inv) => ({
         id: inv.id ?? inv.number ?? String(inv.created),
-        date: new Date(inv.created * 1000).toLocaleDateString("en-CA"),
+        date: new Date(inv.created * 1000).toLocaleDateString("en-CA", { timeZone: tz("America/Vancouver", inv.created * 1000) }),
         description: inv.lines.data[0]?.description ?? "Stratasphere™ subscription",
         amount: (inv.status === "paid" ? inv.amount_paid : inv.amount_due) / 100,
         status: inv.status ?? "open",
@@ -241,7 +242,7 @@ export default async function BillingPage({
   const fmt = (n: number) => n.toLocaleString("en-CA", { style: "currency", currency: "CAD" });
   const fmtDate = (iso: string | null) =>
     iso
-      ? new Date(iso).toLocaleDateString("en-CA", { year: "numeric", month: "long", day: "numeric" })
+      ? new Date(iso).toLocaleDateString("en-CA", { timeZone: tz("America/Vancouver", iso), year: "numeric", month: "long", day: "numeric" })
       : null;
 
   const subsByCorp = new Map((subs ?? []).map((s) => [s.corporation_id as string, s]));

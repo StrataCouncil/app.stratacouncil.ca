@@ -1,3 +1,4 @@
+import { tz } from "@/lib/time-zone";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AdminTabs } from "@/components/AdminTabs";
@@ -15,7 +16,7 @@ import { knowledgeResourceKindLabels } from "@/lib/library/catalogue";
 export default async function LibraryAdminPage() {
   const items = await listLibraryDrafts();
   if (!items) notFound();
-  const fmt = (iso: string) => new Date(iso).toLocaleDateString("en-CA", { month: "short", day: "numeric", year: "numeric" });
+  const fmt = (iso: string) => new Date(iso).toLocaleDateString("en-CA", { timeZone: tz("America/Vancouver", iso), month: "short", day: "numeric", year: "numeric" });
 
   return (
     <AppShell active="admin">

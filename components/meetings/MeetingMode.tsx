@@ -1,8 +1,10 @@
 "use client";
 
+import { tz } from "@/lib/time-zone";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useDemoRestricted } from "@/components/DemoContext";
 import {
   decisionTypeLabels,
   electChairMotion,
@@ -218,6 +220,8 @@ export function MeetingMode(props: {
     if (handedAway) router.replace(`/strata/${corpId}/meetings/${meetingId}/live`);
   }, [handedAway, router, corpId, meetingId]);
   const [exitOpen, setExitOpen] = useState(false);
+  // Shown on the Adjournment item after Exit takes the Runner there.
+  const [adjournHint, setAdjournHint] = useState(false);
   useEffect(() => {
     void refreshLive();
     // Faster while a vote is open, so ballots appear as they're cast.
@@ -658,6 +662,16 @@ export function MeetingMode(props: {
         </div>
       )}
 
+      {adjournHint && item && isAdjournment(item) && !item.done && (
+        <div className="mm__alert mm__alert--info" role="status" data-testid="mm-adjourn-hint">
+          <strong>To adjourn:</strong> record who moved and seconded the motion to adjourn below, then open the vote (or use All in favour).
+          When it carries, the meeting ends, the minutes are drafted and anything not dealt with is deferred to the next meeting.{" "}
+          <button type="button" className="link-button" onClick={() => setAdjournHint(false)}>
+            Got it
+          </button>
+        </div>
+      )}
+
       <div className="mm__body" data-panel={panel}>
         <nav className="mm__nav" aria-label="Agenda">
           <div className="mm-nav__chair mm-nav__chair--top card__meta">
@@ -928,12 +942,15 @@ export function MeetingMode(props: {
           candidates={(props.runnerCandidates ?? []).filter((c) => inMeeting(live?.presence ?? []).some((p) => p.userId === c.userId))}
           onSave={saveNow}
           onHandedOver={() => router.replace(`/strata/${corpId}/meetings/${meetingId}/live`)}
+          called={called}
           onAdjourn={() => {
             setExitOpen(false);
             const adj = agenda.find(isAdjournment);
             if (!called) adjournWithoutQuorum();
-            else if (adj && !adj.done) setCurrent(adj.id);
-            else startAdjournment(agenda);
+            else if (adj && !adj.done) {
+              setCurrent(adj.id);
+              setAdjournHint(true);
+            } else startAdjournment(agenda);
           }}
           onStay={() => setExitOpen(false)}
         />
@@ -1066,7 +1083,7 @@ function statusLabel(s: AttendanceStatus) {
 }
 
 function clockAt(iso: string, timeZone: string) {
-  return new Date(iso).toLocaleTimeString("en-CA", { hour: "numeric", minute: "2-digit", timeZone });
+  return new Date(iso).toLocaleTimeString("en-CA", { hour: "numeric", minute: "2-digit", timeZone: tz(timeZone, iso) });
 }
 
 function QuorumBar({ q, general }: { q: ReturnType<typeof quorum>; general: boolean }) {
@@ -1758,9 +1775,12 @@ function ExitDialog(props: {
   onHandedOver: () => void;
   onAdjourn: () => void;
   onStay: () => void;
+  /** Called to order: adjourning then takes a motion (the Adjournment item). */
+  called: boolean;
 }) {
   const [to, setTo] = useState("");
   const [busy, setBusy] = useState(false);
+  const demoRestricted = useDemoRestricted();
   const [error, setError] = useState<string | null>(null);
   const stay = useRef(props.onStay);
   stay.current = props.onStay;
@@ -1790,9 +1810,33 @@ function ExitDialog(props: {
     <div className="modal-backdrop" onClick={props.onStay}>
       <div className="modal" role="dialog" aria-modal="true" aria-labelledby="mm-exit-title" onClick={(e) => e.stopPropagation()} data-testid="mm-exit-dialog">
         <h2 id="mm-exit-title">You&rsquo;re running this meeting</h2>
-        <p>A meeting that has been launched can&rsquo;t be left without someone running it. Hand it to someone in the meeting, or adjourn it.</p>
+        <p>A meeting that has been launched can&rsquo;t be left without someone running it. Adjourn it, or hand it to someone in the meeting who can run meetings.</p>
+        <h3>Adjourn the meeting</h3>
+        {props.called ? (
+          <>
+            <p className="card__meta">
+              A meeting that has been called to order ends with a motion to adjourn, recorded in the minutes. Anything not dealt with is deferred to
+              the next meeting.
+            </p>
+            <button type="button" className="button button-primary" onClick={props.onAdjourn} disabled={busy} data-testid="mm-exit-adjourn">
+              Go to the motion to adjourn
+            </button>
+          </>
+        ) : (
+          <>
+            <p className="card__meta">The meeting hasn&rsquo;t been called to order, so it can end now, with no business conducted.</p>
+            <button type="button" className="button button-danger" onClick={props.onAdjourn} disabled={busy} data-testid="mm-exit-adjourn">
+              Adjourn without business
+            </button>
+          </>
+        )}
         <h3>Hand over the meeting</h3>
-        {props.candidates.length ? (
+        {demoRestricted ? (
+          <p className="card__meta" data-testid="mm-exit-demo">
+            In the demo, the other council members are fictional, so there&rsquo;s no one to hand the meeting to. With your real council, anyone in
+            the meeting who can run meetings can take it from here.
+          </p>
+        ) : props.candidates.length ? (
           <>
             <label className="field">
               <span>Who takes over</span>
@@ -1823,10 +1867,7 @@ function ExitDialog(props: {
         )}
         <div className="modal__actions">
           <button type="button" className="button button-secondary" onClick={props.onStay} disabled={busy} data-testid="mm-exit-stay">
-            Stay
-          </button>
-          <button type="button" className="button button-danger" onClick={props.onAdjourn} disabled={busy} data-testid="mm-exit-adjourn">
-            Adjourn the meeting
+            Stay in the meeting
           </button>
         </div>
       </div>
