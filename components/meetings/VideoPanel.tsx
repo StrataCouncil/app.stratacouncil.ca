@@ -189,7 +189,7 @@ export function VideoPanel(props: {
             await stream.startVideo();
             setCameraOn(true);
           } catch (err) {
-            setProblem({ message: blockedOr(err, "Couldn't start your camera. Turn it on with the camera button."), reason: describe(err) });
+            setProblem({ message: await deviceProblem(err, "camera", "Couldn't start your camera. Turn it on with the camera button."), reason: describe(err) });
           }
           refreshPeople();
           refreshDevices();
@@ -251,7 +251,7 @@ export function VideoPanel(props: {
       }
       setProblem(null);
     } catch (err) {
-      setProblem({ message: blockedOr(err, "Couldn't change the microphone. Try again."), reason: describe(err) });
+      setProblem({ message: await deviceProblem(err, "microphone", "Couldn't change the microphone. Try again."), reason: describe(err) });
     } finally {
       setBusy(null);
       refreshPeople();
@@ -296,7 +296,7 @@ export function VideoPanel(props: {
       }
       setProblem(null);
     } catch (err) {
-      setProblem({ message: blockedOr(err, "Couldn't change the camera. Try again."), reason: describe(err) });
+      setProblem({ message: await deviceProblem(err, "camera", "Couldn't change the camera. Try again."), reason: describe(err) });
     } finally {
       setBusy(null);
       refreshPeople();
@@ -471,11 +471,25 @@ function describe(err: unknown): string | undefined {
 }
 
 /** The browser said no to the camera or microphone: say how to allow it. */
-function blockedOr(err: unknown, otherwise: string): string {
+/**
+ * What to tell someone whose camera or microphone didn't start. Zoom reports
+ * "permission denied" (6100) or "capture failed" (6010) both when the browser
+ * blocks the device and when another app or tab already has it; the browser's
+ * own permission state tells the two apart.
+ */
+async function deviceProblem(err: unknown, kind: "camera" | "microphone", otherwise: string): Promise<string> {
   const text = describe(err) ?? "";
-  return /permission|denied|notallowed/i.test(text)
-    ? "The browser blocked the camera or microphone. Allow them for this site (the icon in the address bar), then try again."
-    : otherwise;
+  if (!/permission|denied|notallowed|notreadable|capture_failed|6100|6010|in use/i.test(text)) return otherwise;
+  let state: string | null = null;
+  try {
+    state = (await navigator.permissions.query({ name: kind as PermissionName })).state;
+  } catch {
+    // Some browsers can't say; fall through to the general advice.
+  }
+  if (state === "granted") {
+    return `Your ${kind} is in use by another app or browser tab (Zoom, FaceTime, or another meeting window). Close it there, then try again.`;
+  }
+  return `The browser blocked the ${kind}. Allow it for this site (the icon in the address bar), then try again.`;
 }
 
 function initials(name: string) {
