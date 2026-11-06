@@ -9531,8 +9531,13 @@ a.kb-card:hover {
    camera drawn into its slot by the Video SDK. No backgrounds on the SDK's
    own elements: an opaque one can paint over the video. */
 .mm-video__grid {
-  position: absolute;
-  inset: 0;
+  /* Zoom's element sizes itself unless told otherwise: pinned to fill the box,
+     so the tiles' rows have a height to share. */
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  box-sizing: border-box;
   display: grid !important;
   gap: 4px;
   padding: 4px;
@@ -9540,6 +9545,7 @@ a.kb-card:hover {
 .mm-video__person {
   position: relative;
   min-height: 0;
+  min-width: 0;
   height: 100%;
   border-radius: 6px;
   overflow: hidden;

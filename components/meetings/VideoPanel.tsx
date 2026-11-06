@@ -342,7 +342,8 @@ export function VideoPanel(props: {
   }
 
   const over = phase === "ended" || phase === "failed";
-  const { cols, rows } = bestGrid(people.length, box.w, box.h);
+  // Before the box is measured, lay out for the column's usual 4:3 box.
+  const { cols, rows } = bestGrid(people.length, box.w || 400, box.h || 300);
   return (
     <section className={large ? "mm-video mm-video--large" : "mm-video"} aria-label="Meeting video" data-testid="video-panel" data-phase={phase}>
       {large && <div className="mm-video__scrim" onClick={() => setLarge(false)} aria-hidden="true" />}
