@@ -9194,6 +9194,10 @@ a.kb-card:hover {
 .mm-side__assistant[data-open] {
   flex: 0 1 65%;
 }
+/* Members' screens have no attendance list: Stratasphere takes the column. */
+.mm-side__assistant[data-fill] {
+  flex: 1 1 auto;
+}
 .mm-side__toggle {
   display: flex;
   align-items: center;
@@ -9532,12 +9536,11 @@ a.kb-card:hover {
   display: grid !important;
   gap: 4px;
   padding: 4px;
-  align-content: center;
 }
 .mm-video__person {
   position: relative;
-  aspect-ratio: 16 / 10;
   min-height: 0;
+  height: 100%;
   border-radius: 6px;
   overflow: hidden;
   background: #2a2a2a;
@@ -9585,9 +9588,13 @@ a.kb-card:hover {
 }
 .mm-video__bar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.4rem;
   margin-top: 0.4rem;
+}
+.mm-video__bar button {
+  white-space: nowrap;
 }
 .mm-video__ctl {
   display: inline-flex;

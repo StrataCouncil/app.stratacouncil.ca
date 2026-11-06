@@ -106,7 +106,8 @@ export async function createMeeting(corpId: string, input: MeetingDetailsInput):
       start_time: input.startTime || null,
       timezone: input.timezone,
       format: input.format,
-      location: input.location.trim() || null,
+      // Electronic meetings have no location: they happen in Meeting Mode.
+      location: input.format === "virtual" ? null : input.location.trim() || null,
       chair_name: chair,
       created_by: access.userId,
       // The demo's agenda, already written: locked in a visitor's demo,
@@ -148,7 +149,8 @@ export async function updateMeetingDetails(
       start_time: input.startTime || null,
       timezone: input.timezone,
       format: input.format,
-      location: input.location.trim() || null,
+      // Electronic meetings have no location: they happen in Meeting Mode.
+      location: input.format === "virtual" ? null : input.location.trim() || null,
       chair_name: input.chairName.trim() || null,
     })
     .eq("id", meetingId)

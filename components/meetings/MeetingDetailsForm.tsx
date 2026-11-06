@@ -19,7 +19,7 @@ import { isDemoLimit, showDemoLimit } from "@/lib/demo-client";
 const ELECT = "__elect";
 const OTHER = "__other";
 
-/** Type, date, time, time zone, format, location, chair label. Create or edit. */
+/** Type, date, time, time zone, format, location (not for electronic meetings), chair label. Create or edit. */
 export function MeetingDetailsForm({
   corpId,
   meetingId,
@@ -140,16 +140,19 @@ export function MeetingDetailsForm({
             ))}
           </select>
         </label>
-        <label className="field field--wide">
-          <span>Location or meeting link</span>
-          <input
-            value={form.location}
-            onChange={set("location")}
-            placeholder="e.g. Amenity room, or a Zoom link"
-            maxLength={500}
-            data-testid="meeting-location"
-          />
-        </label>
+        {/* Electronic meetings happen in Meeting Mode, video included: nowhere to type in. */}
+        {form.format !== "virtual" && (
+          <label className="field field--wide">
+            <span>Location</span>
+            <input
+              value={form.location}
+              onChange={set("location")}
+              placeholder="e.g. Amenity room"
+              maxLength={500}
+              data-testid="meeting-location"
+            />
+          </label>
+        )}
         <label className="field field--wide">
           <span>Chair</span>
           <select value={chairChoice} onChange={(e) => chooseChair(e.target.value)} data-testid="meeting-chair">
