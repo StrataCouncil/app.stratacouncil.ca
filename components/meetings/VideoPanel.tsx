@@ -8,6 +8,7 @@ type Phase = "loading" | "joining" | "joined" | "reconnecting" | "ended" | "fail
 
 /** One person in the video session, as the tiles need them. */
 type Person = { userId: number; name: string; video: boolean; muted: boolean; reconnecting: boolean };
+type Device = { id: string; label: string };
 
 /* The SDK is browser-only and large: loaded when a meeting's video opens, never on the server. */
 type Sdk = typeof import("@zoom/videosdk");
@@ -22,7 +23,9 @@ type Stream = ReturnType<Client["getMediaStream"]>;
  * its features (chat, recording, sharing) is used.
  *
  * Everyone joins as soon as their page opens; nobody waits for anyone. People
- * join with the microphone off and the camera on. A dropped connection
+ * join with the camera on; sound starts with a click on "Turn on sound"
+ * (browsers require one), microphone still off until they unmute. "Devices"
+ * picks the camera and microphone. A dropped connection
  * reconnects by itself. At adjournment (`ended`) the person running the
  * meeting ends the session for everyone, and every screen leaves it.
  *
@@ -46,6 +49,8 @@ export function VideoPanel(props: {
   const [audioReady, setAudioReady] = useState(false);
   const [busy, setBusy] = useState<"mic" | "camera" | null>(null);
   const [large, setLarge] = useState(false);
+  const [showDevices, setShowDevices] = useState(false);
+  const [devices, setDevices] = useState<{ cameras: Device[]; mics: Device[]; camera: string; mic: string }>({ cameras: [], mics: [], camera: "", mic: "" });
   const [attempt, setAttempt] = useState(0);
 
   const sdk = useRef<{ mod: Sdk; client: Client; stream: Stream } | null>(null);
@@ -77,6 +82,22 @@ export function VideoPanel(props: {
         reconnecting: Boolean(u.isInFailover),
       }))
     );
+  }, []);
+
+  // Cameras and microphones to choose from (a laptop's own camera, an external one, a virtual one).
+  const refreshDevices = useCallback(() => {
+    const s = sdk.current;
+    if (!s) return;
+    try {
+      setDevices({
+        cameras: s.stream.getCameraList().map((d) => ({ id: d.deviceId, label: d.label || "Camera" })),
+        mics: s.stream.getMicList().map((d) => ({ id: d.deviceId, label: d.label || "Microphone" })),
+        camera: s.stream.getActiveCamera() ?? "",
+        mic: s.stream.getActiveMicrophone() ?? "",
+      });
+    } catch {
+      // Lists aren't ready until the browser has granted access.
+    }
   }, []);
 
   // A person's camera, drawn into their tile.
@@ -144,13 +165,14 @@ export function VideoPanel(props: {
           setPhase("joined");
           refreshPeople();
 
-          // Microphone joined but off; camera on (the browser asks permission once).
-          try {
-            await stream.startAudio({ mute: true });
-            setAudioReady(true);
-          } catch (err) {
-            setProblem({ message: "Click the microphone button to turn on sound.", reason: describe(err) });
-          }
+          client.on("auto-play-audio-failed", () => {
+            setProblem({ message: "Click anywhere on this page to hear the meeting." });
+          });
+          client.on("device-change", () => refreshDevices());
+
+          // Camera on (the browser asks permission once). Sound waits for a
+          // click on "Turn on sound": browsers block audio started without one
+          // (Zoom's guide; it timed out in the first sandbox test).
           try {
             await stream.startVideo();
             setCameraOn(true);
@@ -158,6 +180,7 @@ export function VideoPanel(props: {
             setProblem({ message: blockedOr(err, "Couldn't start your camera. Turn it on with the camera button."), reason: describe(err) });
           }
           refreshPeople();
+          refreshDevices();
         } catch (err) {
           if (!cancelled) fail("The video couldn't connect. Check your connection, then try again. The meeting itself isn't affected.", err);
         }
@@ -173,7 +196,7 @@ export function VideoPanel(props: {
           .finally(() => s.mod.default.destroyClient());
       }
     };
-  }, [meetingId, attempt, attach, detach, refreshPeople, fail]);
+  }, [meetingId, attempt, attach, detach, refreshPeople, refreshDevices, fail]);
 
   // Cameras already on when we joined, and ours once it starts: drawn as their tiles appear.
   useEffect(() => {
@@ -202,9 +225,11 @@ export function VideoPanel(props: {
     setBusy("mic");
     try {
       if (!audioReady) {
-        await s.stream.startAudio();
+        // Sound on, microphone still off: people unmute when they speak.
+        await s.stream.startAudio({ mute: true });
         setAudioReady(true);
-        setMicOn(true);
+        setMicOn(false);
+        refreshDevices();
       } else if (micOn) {
         await s.stream.muteAudio();
         setMicOn(false);
@@ -219,6 +244,18 @@ export function VideoPanel(props: {
       setBusy(null);
       refreshPeople();
     }
+  }
+
+  async function chooseDevice(kind: "camera" | "mic", id: string) {
+    const s = sdk.current;
+    if (!s || !id) return;
+    try {
+      await (kind === "camera" ? s.stream.switchCamera(id) : s.stream.switchMicrophone(id));
+      setProblem(null);
+    } catch (err) {
+      setProblem({ message: `Couldn't switch the ${kind === "camera" ? "camera" : "microphone"}. Try another, or check it isn't in use by another app.`, reason: describe(err) });
+    }
+    refreshDevices();
   }
 
   async function toggleCamera() {
@@ -340,12 +377,13 @@ export function VideoPanel(props: {
           type="button"
           className="mm-video__ctl"
           data-on={micOn || undefined}
+          data-call={(!audioReady && phase === "joined") || undefined}
           onClick={() => void toggleMic()}
           disabled={phase !== "joined" || busy !== null}
           aria-pressed={micOn}
           data-testid="video-mic"
         >
-          {micOn ? <MicIcon /> : <MicOffIcon />} {micOn ? "Mute" : "Unmute"}
+          {micOn ? <MicIcon /> : <MicOffIcon />} {!audioReady ? "Turn on sound" : micOn ? "Mute" : "Unmute"}
         </button>
         <button
           type="button"
@@ -358,10 +396,43 @@ export function VideoPanel(props: {
         >
           <CameraIcon /> {cameraOn ? "Stop camera" : "Start camera"}
         </button>
+        <button type="button" className="mm-video__size mm-video__push" onClick={() => setShowDevices((d) => !d)} aria-expanded={showDevices} disabled={phase !== "joined"} data-testid="video-devices">
+          Devices
+        </button>
         <button type="button" className="mm-video__size" onClick={() => setLarge((l) => !l)} aria-pressed={large} data-testid="video-size">
           {large ? "Smaller video" : "Larger video"}
         </button>
       </div>
+      {phase === "joined" && !audioReady && !problem && (
+        <p className="mm-video__hint">Turn on sound to hear the meeting. Your microphone stays off until you unmute.</p>
+      )}
+      {showDevices && phase === "joined" && (
+        <div className="mm-video__devices">
+          <label>
+            <span>Camera</span>
+            <select value={devices.camera} onChange={(e) => void chooseDevice("camera", e.target.value)} data-testid="video-camera-choice">
+              {devices.cameras.length === 0 && <option value="">No camera found</option>}
+              {devices.cameras.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>Microphone</span>
+            <select value={devices.mic} onChange={(e) => void chooseDevice("mic", e.target.value)} disabled={!audioReady} data-testid="video-mic-choice">
+              {!audioReady && <option value="">Turn on sound first</option>}
+              {audioReady && devices.mics.length === 0 && <option value="">No microphone found</option>}
+              {devices.mics.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      )}
     </section>
   );
 }

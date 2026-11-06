@@ -9605,11 +9605,39 @@ a.kb-card:hover {
 .mm-video__ctl[data-on] {
   border-color: var(--ink, #1b2a41);
 }
+.mm-video__ctl[data-call] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.mm-video__hint {
+  margin: 0.35rem 0 0;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+.mm-video__devices {
+  display: grid;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+}
+.mm-video__devices label {
+  display: grid;
+  grid-template-columns: 6rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+}
+.mm-video__devices select {
+  min-width: 0;
+  font: inherit;
+  font-size: 0.8rem;
+  padding: 0.25rem;
+}
 .mm-video__ctl:disabled {
   opacity: 0.5;
   cursor: default;
 }
-.mm-video__bar .mm-video__size {
+.mm-video__bar .mm-video__push {
   margin-left: auto;
 }
 .mm-video__size {
