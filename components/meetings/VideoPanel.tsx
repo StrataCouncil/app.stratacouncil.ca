@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { VideoJoin } from "@/app/strata/[corpId]/meetings/[meetingId]/live/actions";
 import { fetchVideoJoin } from "@/lib/meetings/live-client";
+import { bestGrid } from "@/lib/meetings/video-grid";
 
 type Phase = "loading" | "joining" | "joined" | "reconnecting" | "ended" | "failed";
 
@@ -54,6 +55,16 @@ export function VideoPanel(props: {
   const [attempt, setAttempt] = useState(0);
 
   const chosenCamera = useRef<string | null>(null);
+  // The video box's size, so the tiles can fill it (lib/meetings/video-grid.ts).
+  const frameRef = useRef<HTMLDivElement>(null);
+  const [box, setBox] = useState({ w: 0, h: 0 });
+  useEffect(() => {
+    const el = frameRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(([e]) => e && setBox({ w: e.contentRect.width, h: e.contentRect.height }));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [join]);
   const sdk = useRef<{ mod: Sdk; client: Client; stream: Stream } | null>(null);
   const slots = useRef(new Map<number, HTMLDivElement>());
   const showReasons = join?.kind === "join" && join.showReasons;
@@ -331,12 +342,15 @@ export function VideoPanel(props: {
   }
 
   const over = phase === "ended" || phase === "failed";
-  const cols = people.length <= 1 ? 1 : people.length <= 4 ? 2 : 3;
+  const { cols, rows } = bestGrid(people.length, box.w, box.h);
   return (
     <section className={large ? "mm-video mm-video--large" : "mm-video"} aria-label="Meeting video" data-testid="video-panel" data-phase={phase}>
       {large && <div className="mm-video__scrim" onClick={() => setLarge(false)} aria-hidden="true" />}
-      <div className="mm-video__frame">
-        <video-player-container className="mm-video__grid" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
+      <div className="mm-video__frame" ref={frameRef}>
+        <video-player-container
+          className="mm-video__grid"
+          style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))` }}
+        >
           {people.map((p) => (
             <div key={p.userId} className="mm-video__person" data-video={p.video || undefined} data-testid="video-person">
               <span className="mm-video__initials" aria-hidden="true">

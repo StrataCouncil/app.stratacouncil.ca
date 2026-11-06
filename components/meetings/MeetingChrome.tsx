@@ -52,14 +52,21 @@ export function MeetingSide(props: {
   names: Record<string, string>;
   /** The assistant, rendered only while it's open. */
   assistant: React.ReactNode;
-  /** The meeting's video (0080), above who's in the meeting. */
+  /** The meeting's video, above who's in the meeting. */
   video?: React.ReactNode;
+  /**
+   * Who's in the meeting: for the person running it. Members' screens leave
+   * it out, and Stratasphere opens in its place.
+   */
+  showHere?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const showHere = props.showHere ?? true;
+  const [open, setOpen] = useState(!showHere);
   const here = inMeeting(props.presence);
   return (
     <aside className="mm-side" aria-label="In the meeting and Stratasphere">
       {props.video}
+      {showHere && (
       <div className="mm-side__here" data-testid="meeting-here">
         <h3 className="mm-subhead">In the meeting ({here.length})</h3>
         {here.length === 0 ? (
@@ -78,7 +85,8 @@ export function MeetingSide(props: {
           </ul>
         )}
       </div>
-      <div className="mm-side__assistant" data-open={open || undefined}>
+      )}
+      <div className="mm-side__assistant" data-open={open || undefined} data-fill={(!showHere && open) || undefined}>
         <button type="button" className="mm-side__toggle" onClick={() => setOpen((o) => !o)} aria-expanded={open} data-testid="assistant-toggle">
           <span aria-hidden="true">{open ? "−" : "+"}</span> Stratasphere&trade;
         </button>
