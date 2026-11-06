@@ -53,6 +53,7 @@ export function VideoPanel(props: {
   const [devices, setDevices] = useState<{ cameras: Device[]; mics: Device[]; camera: string; mic: string }>({ cameras: [], mics: [], camera: "", mic: "" });
   const [attempt, setAttempt] = useState(0);
 
+  const chosenCamera = useRef<string | null>(null);
   const sdk = useRef<{ mod: Sdk; client: Client; stream: Stream } | null>(null);
   const slots = useRef(new Map<number, HTMLDivElement>());
   const showReasons = join?.kind === "join" && join.showReasons;
@@ -250,12 +251,23 @@ export function VideoPanel(props: {
     const s = sdk.current;
     if (!s || !id) return;
     try {
-      await (kind === "camera" ? s.stream.switchCamera(id) : s.stream.switchMicrophone(id));
+      if (kind === "camera") {
+        chosenCamera.current = id;
+        // Switching needs a running camera; with it off, start it on the one chosen.
+        if (s.stream.isCapturingVideo()) await s.stream.switchCamera(id);
+        else {
+          await s.stream.startVideo({ cameraId: id });
+          setCameraOn(true);
+        }
+      } else {
+        await s.stream.switchMicrophone(id);
+      }
       setProblem(null);
     } catch (err) {
       setProblem({ message: `Couldn't switch the ${kind === "camera" ? "camera" : "microphone"}. Try another, or check it isn't in use by another app.`, reason: describe(err) });
     }
     refreshDevices();
+    refreshPeople();
   }
 
   async function toggleCamera() {
@@ -268,7 +280,7 @@ export function VideoPanel(props: {
         if (me != null) await detach(me);
         setCameraOn(false);
       } else {
-        await s.stream.startVideo();
+        await s.stream.startVideo(chosenCamera.current ? { cameraId: chosenCamera.current } : undefined);
         setCameraOn(true);
       }
       setProblem(null);
