@@ -900,7 +900,7 @@ export function MeetingMode(props: {
         <MeetingSide
           presence={live?.presence ?? []}
           names={names}
-          video={<VideoPanel meetingId={meetingId} isRunner={true} people={videoPeople(live?.presence ?? [], names)} />}
+          video={<VideoPanel meetingId={meetingId} isRunner={true} ended={live?.status === "ADJOURNED"} people={videoPeople(live?.presence ?? [], names)} />}
           assistant={
             <Assistant
               key={item?.id ?? "none"}

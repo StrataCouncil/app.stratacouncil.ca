@@ -18,6 +18,7 @@
     "@stripe/stripe-js": "^5.10.0",
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.47.0",
+    "@zoom/videosdk": "2.6.0",
     "docx": "^9.8.1",
     "html-to-image": "1.11.13",
     "inngest": "^4.21.0",

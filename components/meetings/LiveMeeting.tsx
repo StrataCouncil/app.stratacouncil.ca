@@ -331,7 +331,7 @@ export function LiveMeeting(props: {
         <MeetingSide
           presence={state.presence}
           names={props.names}
-          video={<VideoPanel meetingId={meetingId} isRunner={false} people={videoPeople(state.presence, props.names)} />}
+          video={<VideoPanel meetingId={meetingId} isRunner={false} ended={adjourned} people={videoPeople(state.presence, props.names)} />}
           assistant={
             <Assistant
               key={item?.id ?? "none"}

@@ -1,5 +1,9 @@
 # Zoom setup (for the account owner)
 
+> **Superseded (2026-11-06):** meeting video now uses the Zoom Video SDK,
+> with our own interface. See `docs/zoom-video-sdk.md`. This Meeting SDK
+> setup is kept until the new panel is confirmed, then removed.
+
 What to set up in Zoom before the Zoom PR can be tested. About 20 minutes.
 Design and decisions: `docs/zoom-council-meetings.md`.
 
