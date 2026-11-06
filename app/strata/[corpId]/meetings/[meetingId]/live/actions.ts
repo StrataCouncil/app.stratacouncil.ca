@@ -5,9 +5,8 @@ import { motionCounts, parseLiveState, parsePresenting, type Choice, type LiveSt
 import { logDemoActivity } from "@/lib/demo-usage";
 import { IS_DEMO } from "@/lib/demo";
 import { demoRestricted } from "@/lib/demo-sandbox";
-import { zoomConfig } from "@/lib/zoom/api";
-import { meetingSdkSignature, zoomDisplayName } from "@/lib/zoom/signature";
-import { ensureZoomMeeting, openZoomMeeting, zakFor } from "@/lib/meetings/video";
+import { sessionTopic, videoSdkConfig, videoSdkToken } from "@/lib/zoom/video-sdk";
+import { zoomDisplayName } from "@/lib/zoom/signature";
 
 /**
  * Live voting (0073). Every rule (who runs the meeting, who may vote, one
@@ -214,91 +213,58 @@ export async function takeOverMeeting(meetingId: string): Promise<Ok | Fail> {
   return error ? failFrom(error, "Couldn't take over the meeting. Try again.") : { ok: true };
 }
 
-/** What the video panel needs (0080): join details for Zoom, or why there's no video. */
+/** What the video panel needs: details to join the meeting's video session, or why there's no video. */
 export type VideoJoin =
   | { kind: "none" }
   | { kind: "demo" }
-  | { kind: "message"; tone: "info" | "error"; message: string; canRestart?: boolean; reason?: string }
-  | { kind: "waiting" }
+  | { kind: "message"; tone: "info" | "error"; message: string }
   | {
       kind: "join";
-      sdkKey: string;
-      signature: string;
-      meetingNumber: string;
-      passcode: string;
+      /** The session (one per meeting) and this person's token for it (lib/zoom/video-sdk.ts). */
+      topic: string;
+      token: string;
+      /** "Jane Doe, SL012": what the other tiles show. */
       userName: string;
-      customerKey: string;
-      zak: string | null;
+      /** Whoever runs the meeting; their screen ends the session at adjournment. */
       host: boolean;
       /** Super Admins (and so every sandbox) see Zoom's own reason when the video fails. */
       showReasons: boolean;
     };
 
 /**
- * Join details for the meeting's Zoom video, for someone who may follow it.
- * The Runner's screen creates the Zoom meeting (on a free host licence) the
- * first time it asks, and joins as host; everyone else joins once it exists.
- * `restart` (Runner only) replaces a Zoom meeting that has ended, such as one
- * cut off by the free plan's 40 minutes.
+ * Join details for the meeting's video (Zoom Video SDK), for someone who may
+ * follow it. Nothing is created on Zoom's side first: the session starts when
+ * the first person joins, so members needn't wait for the Runner. Only a
+ * launched electronic or hybrid meeting that hasn't adjourned has video.
  */
-export async function getVideoJoin(meetingId: string, opts: { restart?: boolean } = {}): Promise<VideoJoin> {
+export async function getVideoJoin(meetingId: string): Promise<VideoJoin> {
   if (!UUID.test(meetingId)) return { kind: "none" };
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { kind: "none" };
-  const { data: m } = await supabase
-    .from("meetings")
-    .select("corporation_id, type, format, timezone, launched_by, status")
-    .eq("id", meetingId)
-    .maybeSingle();
+  const { data: m } = await supabase.from("meetings").select("format, launched_by, status").eq("id", meetingId).maybeSingle();
   if (!m || m.format === "in_person" || !m.launched_by || m.status === "ADJOURNED") return { kind: "none" };
-  // Demo visitors get tiles; a Super Admin's sandbox gets real Zoom, for testing off the live site.
+  // Demo visitors get tiles; a Super Admin's sandbox gets real video, for testing off the live site.
   if (await demoRestricted()) return { kind: "demo" };
   // Only someone who may follow the meeting (council, manager, runners) gets past here.
   const live = await getLiveState(meetingId);
   if (!live) return { kind: "none" };
 
-  const cfg = zoomConfig();
-  if (!cfg) return { kind: "message", tone: "info", message: "Video isn't set up for StrataCouncil yet. The meeting works without it." };
+  const config = videoSdkConfig();
+  if (!config) return { kind: "message", tone: "info", message: "Video isn't set up for StrataCouncil yet. The meeting works without it." };
 
-  const isRunner = m.launched_by === user.id;
-  const row = isRunner
-    ? await ensureZoomMeeting(cfg, {
-        meetingId,
-        topic: IS_DEMO ? `Sandbox test meeting, ${m.corporation_id}` : `Council meeting, ${m.corporation_id}`,
-        timezone: (m.timezone as string) || "America/Vancouver",
-        restart: Boolean(opts.restart),
-      })
-    : await openZoomMeeting(meetingId).then((r) => (r ? ({ ok: true, row: r } as const) : null));
-  if (!row) return { kind: "waiting" };
   const { data: profile } = await supabase.from("profiles").select("full_name, is_super_admin").eq("id", user.id).maybeSingle();
-  // Only sandboxes get this far on the demo site, and only Super Admins open those.
-  const showReasons = IS_DEMO || profile?.is_super_admin === true;
-  if (!row.ok) return { kind: "message", tone: "error", message: row.error, canRestart: !row.busy, reason: showReasons ? row.reason : undefined };
-
-  const host = isRunner ? await zakFor(cfg, row.row.host_email) : null;
-  const zak = host?.zak ?? null;
-  if (isRunner && !zak) {
-    return {
-      kind: "message",
-      tone: "error",
-      message: "Couldn't start the video as host. Try again; the meeting itself carries on.",
-      canRestart: true,
-      reason: showReasons ? host?.reason : undefined,
-    };
-  }
+  const host = m.launched_by === user.id;
+  const topic = sessionTopic(meetingId, IS_DEMO);
   return {
     kind: "join",
-    sdkKey: cfg.sdkKey,
-    signature: meetingSdkSignature({ sdkKey: cfg.sdkKey, sdkSecret: cfg.sdkSecret, meetingNumber: row.row.zoom_meeting_id, role: isRunner ? 1 : 0 }),
-    meetingNumber: row.row.zoom_meeting_id,
-    passcode: row.row.passcode,
+    topic,
+    token: videoSdkToken({ config, topic, role: host ? 1 : 0, userKey: user.id }),
     userName: zoomDisplayName((profile?.full_name as string) ?? "", live.myLot),
-    customerKey: user.id,
-    zak,
-    host: isRunner,
-    showReasons,
+    host,
+    // Only sandboxes get this far on the demo site, and only Super Admins open those.
+    showReasons: IS_DEMO || profile?.is_super_admin === true,
   };
 }

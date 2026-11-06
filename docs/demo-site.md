@@ -132,7 +132,7 @@ live site. In the live console's **Demo** tab, **New sandbox** makes one:
 | | `DEMO_MODE` | `true` |
 | | `ANTHROPIC_API_KEY`, `VOYAGE_API_KEY` | as live |
 | | `MAILTRAP_API_TOKEN`, `MAILTRAP_SENDER_EMAIL` | as live: only sandboxes send, and only to the Super Admin who made them |
-| | `ZOOM_ACCOUNT_ID`, `ZOOM_CLIENT_ID`, `ZOOM_CLIENT_SECRET`, `ZOOM_SDK_CLIENT_ID`, `ZOOM_SDK_CLIENT_SECRET`, `ZOOM_HOST_USERS` | as live (docs/zoom-setup.md): only sandboxes get real Zoom; visitors see placeholder tiles |
+| | `ZOOM_VIDEO_SDK_KEY`, `ZOOM_VIDEO_SDK_SECRET` | as live (docs/zoom-video-sdk.md): only sandboxes get real video; visitors see placeholder tiles. The older Meeting SDK `ZOOM_*` variables are unused and can go once the new video is confirmed. |
 | | `CRON_SECRET` | any long random string (Vercel sends it to the clean-up) |
 | | Inngest keys | from the Inngest integration (tick the demo project there) |
 | Vercel, `app-stratacouncil-ca` | `DEMO_SUPABASE_URL`, `DEMO_SUPABASE_SERVICE_ROLE_KEY` | the demo Supabase project |

@@ -19,8 +19,8 @@ export async function checkInAsRunner(meetingId: string): Promise<void> {
   await fetch(`/api/meetings/${encodeURIComponent(meetingId)}/live`, { method: "POST" }).catch(() => undefined);
 }
 
-export async function fetchVideoJoin(meetingId: string, restart = false): Promise<VideoJoin> {
-  const res = await fetch(`/api/meetings/${encodeURIComponent(meetingId)}/video${restart ? "?restart=1" : ""}`, { method: "POST" });
+export async function fetchVideoJoin(meetingId: string): Promise<VideoJoin> {
+  const res = await fetch(`/api/meetings/${encodeURIComponent(meetingId)}/video`, { method: "POST" });
   if (!res.ok) throw new Error(`video ${res.status}`);
   return (await res.json()) as VideoJoin;
 }
