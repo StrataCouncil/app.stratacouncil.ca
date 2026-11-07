@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { detectBrowser, deviceHelp, troubleFrom, type DeviceHelp } from "@/lib/meetings/device-help";
+import { helpFor, type DeviceHelp, type DeviceTrouble } from "@/lib/meetings/device-help";
 
 type Device = { id: string; label: string };
 
@@ -17,6 +17,7 @@ export function VideoCheck() {
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [busy, setBusy] = useState(false);
   const [help, setHelp] = useState<DeviceHelp | null>(null);
+  const [trouble, setTrouble] = useState<DeviceTrouble | null>(null);
   const [cameras, setCameras] = useState<Device[]>([]);
   const [mics, setMics] = useState<Device[]>([]);
   const [camera, setCamera] = useState("");
@@ -55,9 +56,10 @@ export function VideoCheck() {
         setCamera(media.getVideoTracks()[0]?.getSettings().deviceId ?? "");
         setMic(media.getAudioTracks()[0]?.getSettings().deviceId ?? "");
       } catch (err) {
-        const { browser, platform } = detectBrowser(navigator.userAgent, navigator.maxTouchPoints);
-        setHelp(deviceHelp(troubleFrom(err), browser, platform));
-        watchPermission();
+        const found = await helpFor(err, true);
+        setTrouble(found.trouble);
+        setHelp(found.help);
+        if (found.trouble !== "reload") watchPermission();
       } finally {
         setBusy(false);
       }
@@ -159,7 +161,13 @@ export function VideoCheck() {
           ) : (
             <p>Your browser will ask to use your camera and microphone. Choose Allow. You only need to do this once in this browser.</p>
           )}
-          <button type="button" className="button button-primary" onClick={() => void start()} disabled={busy} data-testid="video-check-start">
+          <button
+            type="button"
+            className="button button-primary"
+            onClick={() => (trouble === "reload" ? window.location.reload() : void start())}
+            disabled={busy}
+            data-testid="video-check-start"
+          >
             {help ? "Try again" : "Turn on my camera and microphone"}
           </button>
         </section>

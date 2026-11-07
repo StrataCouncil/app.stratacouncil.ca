@@ -5,7 +5,7 @@ import type { VideoJoin } from "@/app/strata/[corpId]/meetings/[meetingId]/live/
 import { fetchVideoJoin } from "@/lib/meetings/live-client";
 import { bestGrid } from "@/lib/meetings/video-grid";
 import { STEPPED_OUT_VIDEO } from "@/lib/meetings/live";
-import { detectBrowser, deviceHelp, troubleFrom, type DeviceHelp } from "@/lib/meetings/device-help";
+import { helpFor, type DeviceHelp, type DeviceTrouble } from "@/lib/meetings/device-help";
 import { videoIdentity } from "@/lib/zoom/video-identity";
 
 type Phase = "loading" | "ready" | "joining" | "joined" | "reconnecting" | "ended" | "failed" | "out";
@@ -60,6 +60,7 @@ export function VideoPanel(props: {
   // Joined by a click (with or without the camera); kept so stepping back in rejoins by itself.
   const [want, setWant] = useState<{ camera: boolean } | null>(null);
   const [help, setHelp] = useState<DeviceHelp | null>(null);
+  const [trouble, setTrouble] = useState<DeviceTrouble | null>(null);
   const [preparing, setPreparing] = useState(false);
   const [join, setJoin] = useState<VideoJoin | null>(null);
   const [phase, setPhase] = useState<Phase>("loading");
@@ -288,9 +289,10 @@ export function VideoPanel(props: {
       setWant({ camera });
       setAttempt((a) => a + 1);
     } catch (err) {
-      const { browser, platform } = detectBrowser(navigator.userAgent, navigator.maxTouchPoints);
-      setHelp(deviceHelp(troubleFrom(err), browser, platform));
-      watchPermission(camera);
+      const found = await helpFor(err, camera);
+      setTrouble(found.trouble);
+      setHelp(found.help);
+      if (found.trouble !== "reload") watchPermission(camera);
     } finally {
       setPreparing(false);
     }
@@ -457,7 +459,7 @@ export function VideoPanel(props: {
           <p className="mm-video__msg">The meeting has video. Your microphone stays off until you unmute.</p>
         )}
         <div className="mm-video__join">
-          <button type="button" className="button button-primary button-small" onClick={() => void start(true)} disabled={preparing} data-testid="video-join">
+          <button type="button" className="button button-primary button-small" onClick={() => (trouble === "reload" ? window.location.reload() : void start(true))} disabled={preparing} data-testid="video-join">
             {help ? "Try again" : "Join with camera and microphone"}
           </button>
           <button type="button" className="link-button" onClick={() => void start(false)} disabled={preparing} data-testid="video-join-sound">

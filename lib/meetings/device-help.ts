@@ -6,7 +6,7 @@
 
 export type Browser = "chrome" | "edge" | "safari" | "firefox" | "other";
 export type Platform = "mac" | "windows" | "ipad" | "iphone" | "android" | "other";
-export type DeviceTrouble = "blocked" | "in-use" | "missing" | "other";
+export type DeviceTrouble = "blocked" | "system" | "reload" | "in-use" | "missing" | "other";
 
 export interface DeviceHelp {
   title: string;
@@ -40,13 +40,21 @@ export function detectBrowser(userAgent: string, touchPoints = 0): { browser: Br
 }
 
 /**
- * What went wrong, from the browser's error: blocked (permission refused),
- * in use (another app or tab has it), or missing (no camera or microphone).
+ * What went wrong, from the browser's error: blocked by the browser, blocked
+ * by the computer's own settings (a Mac's Privacy & Security), refused
+ * although the site is allowed (the page needs a reload), in use (another
+ * app or tab has it), or missing (no camera or microphone). `allowed` is the
+ * browser's own permission state for the site, where it can say.
  */
-export function troubleFrom(err: unknown): DeviceTrouble {
+export function troubleFrom(err: unknown, allowed: boolean | null = null): DeviceTrouble {
   const e = err as { name?: string; message?: string } | undefined;
   const name = e?.name ?? "";
-  if (name === "NotAllowedError" || name === "SecurityError" || /permission|denied/i.test(e?.message ?? "")) return "blocked";
+  const message = e?.message ?? "";
+  if (name === "NotAllowedError" || name === "SecurityError" || /permission|denied/i.test(message)) {
+    if (/by system|system denied/i.test(message)) return "system";
+    if (allowed === true) return "reload";
+    return "blocked";
+  }
   if (name === "NotReadableError" || name === "AbortError" || /in use|could not start/i.test(e?.message ?? "")) return "in-use";
   if (name === "NotFoundError" || name === "OverconstrainedError") return "missing";
   return "other";
@@ -75,6 +83,25 @@ export function deviceHelp(trouble: DeviceTrouble, browser: Browser, platform: P
         "On a laptop, check the camera isn't covered or turned off with a key or switch.",
         "Then press Try again here. You can still join with sound only.",
       ],
+    };
+  }
+  if (trouble === "reload") {
+    return {
+      title: "Reload this page",
+      steps: ["The camera and microphone are allowed for this site, but this page was opened before that.", "Reload the page (or press Try again, which reloads it)."],
+    };
+  }
+  if (trouble === "system") {
+    return {
+      title: `Allow ${b} to use the camera and microphone`,
+      steps:
+        platform === "windows"
+          ? [`Open Start, then Settings, then Privacy & security.`, `Under Camera, and again under Microphone, turn on access for apps and for ${b}.`, "Then press Try again here."]
+          : [
+              "Open the Apple menu, then System Settings, then Privacy & Security.",
+              `Under Camera, and again under Microphone, turn on ${b}.`,
+              `Quit ${b} and open it again, then come back to this page and press Try again.`,
+            ],
     };
   }
   if (trouble === "other") {
@@ -118,4 +145,22 @@ export function deviceHelp(trouble: DeviceTrouble, browser: Browser, platform: P
   }
   steps.push("Then press Try again here.");
   return { title: "Allow the camera and microphone", steps };
+}
+
+/**
+ * In the browser: what went wrong and how to fix it here, from the error
+ * and the site's permission state (asked of the browser where it can say).
+ */
+export async function helpFor(err: unknown, camera: boolean): Promise<{ trouble: DeviceTrouble; help: DeviceHelp }> {
+  let allowed: boolean | null = null;
+  try {
+    const names = (camera ? ["camera", "microphone"] : ["microphone"]) as PermissionName[];
+    const states = await Promise.all(names.map((n) => navigator.permissions.query({ name: n }).then((st) => st.state)));
+    allowed = states.every((st) => st === "granted");
+  } catch {
+    // Some browsers can't say.
+  }
+  const trouble = troubleFrom(err, allowed);
+  const { browser, platform } = detectBrowser(navigator.userAgent, navigator.maxTouchPoints);
+  return { trouble, help: deviceHelp(trouble, browser, platform) };
 }

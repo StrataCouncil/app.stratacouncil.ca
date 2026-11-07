@@ -23,7 +23,7 @@ const nextConfig = {
     // minutes), Meetings and a meeting's agenda page (agenda upload), and the
     // background indexer keep them. A new page under /strata keeps them too
     // until it's added here; that costs space, never breaks anything.
-    "/strata/\\[corpId\\]/{assistant,billing,calendar,council,decisions,discussions,documents/export,guides,lots,management,meetings/new,meetings/\\[meetingId\\]/,minutes}": [
+    "/strata/\\[corpId\\]/{assistant,billing,calendar,council,decisions,discussions,documents/export,guides,lots,management,meetings/new,meetings/video-test,meetings/\\[meetingId\\]/,minutes}": [
       "lib/kb/tessdata/**",
       "node_modules/tesseract.js-core/**",
       "node_modules/tesseract.js/**",
@@ -46,8 +46,12 @@ const nextConfig = {
   // Browser security settings for every page (2026-10 audit): no other site
   // may show the app inside a frame (clickjacking), files are never
   // second-guessed into another type, other sites see only our address, not
-  // the page, and the camera, microphone and location are never used,
-  // except for meeting video (below).
+  // the page, and location is never used. The camera and microphone may be
+  // used by this site's own pages only (meeting video, and Test video and
+  // audio), never by another site's frame. That has to hold on every page:
+  // the app moves between pages without reloading, and the browser keeps
+  // the policy of the page it first loaded, so allowing it on the meeting
+  // pages alone blocked the camera until a reload.
   async headers() {
     return [
       {
@@ -57,15 +61,8 @@ const nextConfig = {
           { key: "Content-Security-Policy", value: "frame-ancestors 'none'" },
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+          { key: "Permissions-Policy", value: "camera=(self), microphone=(self), display-capture=(self), geolocation=()" },
         ],
-      },
-      // Meeting video (0080): Meeting Mode and the members' meeting page may
-      // use the camera and microphone, and pass them to the Zoom frame (this
-      // site's own page). These come after the rule above, so they win.
-      {
-        source: "/strata/:corpId/meetings/:meetingId/:page(run|live)",
-        headers: [{ key: "Permissions-Policy", value: "camera=(self), microphone=(self), display-capture=(self), geolocation=()" }],
       },
       // The Zoom frame itself: shown only inside our own pages.
       {

@@ -34,3 +34,27 @@ test("help is written for the browser and computer in front of them", () => {
   assert.match(deviceHelp("in-use", "chrome", "mac").steps.join(" "), /Zoom, Teams, FaceTime/);
   for (const h of [macChrome, deviceHelp("missing", "chrome", "windows")]) assert.match(h.steps.at(-1)!, /Try again/);
 });
+
+test("a refusal is told apart: the browser, the computer, or a page opened before it was allowed", () => {
+  assert.equal(troubleFrom({ name: "NotAllowedError", message: "Permission denied" }, false), "blocked");
+  assert.equal(troubleFrom({ name: "NotAllowedError", message: "Permission denied by system" }, true), "system");
+  assert.equal(troubleFrom({ name: "NotAllowedError", message: "Permission denied" }, true), "reload");
+  assert.match(deviceHelp("system", "chrome", "mac").steps.join(" "), /Privacy & Security/);
+  assert.equal(deviceHelp("reload", "chrome", "mac").title, "Reload this page");
+});
+
+test("every page may use the camera and microphone (this site only): the app moves between pages without reloading", async () => {
+  type Rule = { source: string; headers: { key: string; value: string }[] };
+  const { default: config } = (await import("../next.config.mjs")) as { default: { headers: () => Promise<Rule[]> } };
+  const rules = await config.headers();
+  const site = rules.find((r) => r.source === "/:path*");
+  assert.ok(site);
+  const policy = site.headers.find((h) => h.key === "Permissions-Policy")?.value ?? "";
+  assert.match(policy, /camera=\(self\)/);
+  assert.match(policy, /microphone=\(self\)/);
+  assert.match(policy, /geolocation=\(\)/);
+  // No page narrows it again.
+  for (const r of rules) {
+    for (const h of r.headers) if (h.key === "Permissions-Policy") assert.match(h.value, /camera=\(self\)/, r.source);
+  }
+});
