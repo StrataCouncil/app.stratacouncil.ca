@@ -133,11 +133,11 @@ export interface AgendaItem {
    */
   discussionId?: string;
   /**
-   * Council lots that declared a conflict of interest on this item (SPA
-   * s.32), copied from the meeting's live record (0073) at adjournment for
-   * the minutes.
+   * Conflicts of interest declared on this item (SPA s.32), copied from the
+   * meeting's live record (0073, 0082) at adjournment for the minutes: the
+   * lot, the nature of the interest, and whether they stepped out.
    */
-  conflicts?: string[];
+  conflicts?: { lot: string; note: string; left: boolean }[];
 }
 
 function rid(prefix: string) {
@@ -448,9 +448,7 @@ export function normalizeAgenda(raw: unknown): AgendaItem[] {
         addedDuringMeeting: Boolean(r.addedDuringMeeting) || undefined,
         nominee: typeof r.nominee === "string" && r.nominee.trim() ? r.nominee.slice(0, 200) : undefined,
         discussionId: typeof r.discussionId === "string" && /^[0-9a-f-]{36}$/i.test(r.discussionId) ? r.discussionId : undefined,
-        conflicts: Array.isArray(r.conflicts)
-          ? [...new Set((r.conflicts as unknown[]).filter((l): l is string => typeof l === "string" && /^SL\s?-?\d{1,4}$/.test(l)))].sort()
-          : undefined,
+        conflicts: Array.isArray(r.conflicts) ? normalizeConflicts(r.conflicts as unknown[]) : undefined,
       };
     });
 }
@@ -525,4 +523,18 @@ export function attachmentUses(
 /** Decision items with no motion written yet ("11. Roof Repairs"): flagged in the builder, warned about at launch. */
 export function missingMotions(agenda: AgendaItem[]): string[] {
   return agenda.filter((it) => NEEDS_MOTION.includes(it.type) && !it.motion?.text?.trim()).map((it) => `${it.num}. ${it.text}`);
+}
+
+/** Declared conflicts on an item; an older agenda kept the lot numbers only (they always stepped out). */
+function normalizeConflicts(raw: unknown[]): { lot: string; note: string; left: boolean }[] {
+  const lot = (l: unknown): l is string => typeof l === "string" && /^SL\s?-?\d{1,4}$/.test(l);
+  const out = new Map<string, { lot: string; note: string; left: boolean }>();
+  for (const c of raw) {
+    if (lot(c)) out.set(c, { lot: c, note: "", left: true });
+    else if (c && typeof c === "object" && lot((c as { lot?: unknown }).lot)) {
+      const o = c as { lot: string; note?: unknown; left?: unknown };
+      out.set(o.lot, { lot: o.lot, note: typeof o.note === "string" ? o.note.slice(0, 500) : "", left: o.left !== false });
+    }
+  }
+  return [...out.values()].sort((a, b) => a.lot.localeCompare(b.lot));
 }

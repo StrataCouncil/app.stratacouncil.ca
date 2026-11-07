@@ -20,6 +20,7 @@ test("Video SDK token: HS256, the fields Zoom requires, signed with the secret",
   // Zoom: at least 30 minutes, at most 48 hours.
   assert.equal(payload.exp - payload.iat, 4 * 3600);
   assert.equal(payload.user_key, "6f1c2a9e-0000-4000-8000-000000000001");
+  assert.equal(payload.user_identity, "6f1c2a9e000040008000000000000001");
   assert.equal(payload.geo_regions, "CA");
   assert.equal(payload.video_webrtc_mode, 1);
   assert.equal(payload.audio_webrtc_mode, 1);

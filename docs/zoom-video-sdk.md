@@ -59,6 +59,21 @@ and **SDK Secret** (not the API key and secret). In both Vercel projects
 | `ZOOM_VIDEO_SDK_SECRET` | SDK Secret |
 | `ZOOM_VIDEO_SDK_GEO_REGIONS` | optional; default `CA` |
 
+## Joining, and stepping out
+
+Nobody joins until they press **Join with camera and microphone** (or
+**sound only**): the browser asks for both at that moment. If it can't have
+them, the panel shows steps for that browser and computer
+(`lib/meetings/device-help.ts`) and starts by itself once they're allowed.
+**Test video and audio** on the Meetings tab runs the same check before a
+meeting, without joining anything.
+
+A council member whose conflict of interest has been acknowledged (0082)
+leaves the session for that item and rejoins by themselves when the meeting
+moves on. The server won't sign them a token meanwhile, and the Runner's
+screen removes them if they're still in. It finds them by the token's
+`user_identity` (the user id without dashes).
+
 ## The Meeting SDK setup
 
 Kept until the Video SDK panel is confirmed in a sandbox, then removed: the

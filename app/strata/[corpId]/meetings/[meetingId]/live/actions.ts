@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { motionCounts, parseLiveState, parsePresenting, type Choice, type LiveState, type Presenting } from "@/lib/meetings/live";
+import { conflictedLots, motionCounts, parseLiveState, parsePresenting, STEPPED_OUT_VIDEO, type Choice, type LiveState, type Presenting } from "@/lib/meetings/live";
 import { logDemoActivity } from "@/lib/demo-usage";
 import { IS_DEMO } from "@/lib/demo";
 import { demoRestricted } from "@/lib/demo-sandbox";
@@ -122,6 +122,14 @@ export async function declareConflict(meetingId: string, itemId: string, lot: st
     p_note: String(note ?? "").slice(0, 500),
   });
   return error ? failFrom(error, "Couldn't record the conflict. Try again.") : { ok: true };
+}
+
+/** The runner acknowledges a member's declaration (0082): they step out for the item. */
+export async function acknowledgeConflict(meetingId: string, itemId: string, lot: string): Promise<Ok | Fail> {
+  if (!UUID.test(meetingId) || !itemId || itemId.length > 100 || !LOT.test(lot)) return { ok: false, error: "That item isn't available." };
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("acknowledge_meeting_conflict", { p_meeting_id: meetingId, p_item_id: itemId, p_lot: lot });
+  return error ? failFrom(error, "Couldn't acknowledge the conflict. Try again.") : { ok: true };
 }
 
 export async function withdrawConflict(meetingId: string, itemId: string, lot: string): Promise<Ok | Fail> {
@@ -251,6 +259,11 @@ export async function getVideoJoin(meetingId: string): Promise<VideoJoin> {
   // Only someone who may follow the meeting (council, manager, runners) gets past here.
   const live = await getLiveState(meetingId);
   if (!live) return { kind: "none" };
+  // Stepped out for the item the meeting is on (a conflict of interest, SPA
+  // s.32): no way into the video until the meeting moves on.
+  if (live.myLot && live.currentItemId && conflictedLots(live.conflicts, live.currentItemId).includes(live.myLot)) {
+    return { kind: "message", tone: "info", message: STEPPED_OUT_VIDEO };
+  }
 
   const config = videoSdkConfig();
   if (!config) return { kind: "message", tone: "info", message: "Video isn't set up for StrataCouncil yet. The meeting works without it." };

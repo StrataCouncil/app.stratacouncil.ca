@@ -79,6 +79,7 @@ select pg_temp.expect('closes with quorum: 2 for, 1 against, 3 counted',
 
 -- A conflicted member who arrives mid-vote isn't added to it
 select declare_meeting_conflict('75000000-0000-0000-0000-0000000000aa', 'i4', 'SL002', 'Brother-in-law owns the roofing company');
+select pg_temp.expect('a conflict the runner records is acknowledged at once', (select acknowledged_at is not null from meeting_conflicts where meeting_id = '75000000-0000-0000-0000-0000000000aa' and lot_number = 'SL002'));
 select open_meeting_vote('75000000-0000-0000-0000-0000000000aa', 'i4', 'THAT the roof quote be accepted', 'MAJORITY');
 select mark_joined_meeting('75000000-0000-0000-0000-0000000000aa', 'SL002');
 select pg_temp.expect('a conflicted member who arrives isn''t added to the vote', (select not ('SL002' = any (eligible_lots)) from meeting_votes where meeting_id = '75000000-0000-0000-0000-0000000000aa' and status = 'open'));

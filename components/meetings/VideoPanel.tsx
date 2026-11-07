@@ -4,11 +4,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { VideoJoin } from "@/app/strata/[corpId]/meetings/[meetingId]/live/actions";
 import { fetchVideoJoin } from "@/lib/meetings/live-client";
 import { bestGrid } from "@/lib/meetings/video-grid";
+import { STEPPED_OUT_VIDEO } from "@/lib/meetings/live";
+import { detectBrowser, deviceHelp, troubleFrom, type DeviceHelp } from "@/lib/meetings/device-help";
+import { videoIdentity } from "@/lib/zoom/video-identity";
 
-type Phase = "loading" | "joining" | "joined" | "reconnecting" | "ended" | "failed";
+type Phase = "loading" | "ready" | "joining" | "joined" | "reconnecting" | "ended" | "failed" | "out";
 
 /** One person in the video session, as the tiles need them. */
-type Person = { userId: number; name: string; video: boolean; muted: boolean; reconnecting: boolean };
+type Person = { userId: number; identity: string; name: string; video: boolean; muted: boolean; reconnecting: boolean };
 type Device = { id: string; label: string };
 
 /* The SDK is browser-only and large: loaded when a meeting's video opens, never on the server. */
@@ -23,12 +26,21 @@ type Stream = ReturnType<Client["getMediaStream"]>;
  * button, and a larger view. None of Zoom's interface appears, and none of
  * its features (chat, recording, sharing) is used.
  *
- * Everyone joins as soon as their page opens; nobody waits for anyone. People
- * join with the camera on; sound starts with a click on "Turn on sound"
- * (browsers require one), microphone still off until they unmute. "Devices"
- * picks the camera and microphone. A dropped connection
- * reconnects by itself. At adjournment (`ended`) the person running the
- * meeting ends the session for everyone, and every screen leaves it.
+ * Everyone joins with one click on "Join with camera and microphone" (or
+ * "sound only"): the browser asks for both at once, at that moment, and if it
+ * can't have them the panel says exactly how to allow them in this browser
+ * on this computer (lib/meetings/device-help.ts), then starts by itself once
+ * they're allowed, with no reload. Sound comes on with the join, microphone
+ * off until they unmute. "Devices" picks the camera and microphone. A dropped
+ * connection reconnects by itself. At adjournment (`ended`) the person
+ * running the meeting ends the session for everyone, and every screen
+ * leaves it.
+ *
+ * A member who has stepped out for a conflict of interest (`steppedOut`)
+ * leaves the session (camera and microphone off, nobody seen or heard) and
+ * rejoins by themselves when the meeting moves on; the server won't let them
+ * back in meanwhile. The Runner's screen also removes anyone in
+ * `removeUsers` who is still in the session.
  *
  * In-person meetings show nothing; the demo site shows tiles in place of video.
  */
@@ -38,8 +50,17 @@ export function VideoPanel(props: {
   /** The meeting has adjourned: leave (and, for the Runner, end) the session. */
   ended?: boolean;
   people: Array<{ key: string; name: string; lot: string | null }>;
+  /** This member has stepped out for the item the meeting is on (a conflict of interest). */
+  steppedOut?: boolean;
+  /** The Runner's screen: our user ids to remove from the session (stepped out). */
+  removeUsers?: string[];
 }) {
   const { meetingId } = props;
+  const steppedOut = Boolean(props.steppedOut);
+  // Joined by a click (with or without the camera); kept so stepping back in rejoins by itself.
+  const [want, setWant] = useState<{ camera: boolean } | null>(null);
+  const [help, setHelp] = useState<DeviceHelp | null>(null);
+  const [preparing, setPreparing] = useState(false);
   const [join, setJoin] = useState<VideoJoin | null>(null);
   const [phase, setPhase] = useState<Phase>("loading");
   const [problem, setProblem] = useState<{ message: string; reason?: string } | null>(null);
@@ -88,6 +109,7 @@ export function VideoPanel(props: {
     setPeople(
       all.map((u) => ({
         userId: u.userId,
+        identity: (u as { userIdentity?: string }).userIdentity ?? "",
         name: u.displayName,
         video: Boolean(u.bVideoOn),
         muted: u.audio === "" || Boolean(u.muted),
@@ -130,6 +152,11 @@ export function VideoPanel(props: {
   // Join details from our server, then into the session.
   useEffect(() => {
     let cancelled = false;
+    if (steppedOut) {
+      setPhase("out");
+      setPeople([]);
+      return;
+    }
     setPhase("loading");
     setProblem(null);
     void fetchVideoJoin(meetingId)
@@ -138,6 +165,11 @@ export function VideoPanel(props: {
         if (cancelled) return;
         setJoin(j);
         if (j.kind !== "join") return;
+        // Nothing starts until they choose to join (one click, and the browser asks then).
+        if (!want) {
+          setPhase("ready");
+          return;
+        }
         setPhase("joining");
         try {
           const mod = await import("@zoom/videosdk");
@@ -182,14 +214,25 @@ export function VideoPanel(props: {
           });
           client.on("device-change", () => refreshDevices());
 
-          // Camera on (the browser asks permission once). Sound waits for a
-          // click on "Turn on sound": browsers block audio started without one
-          // (Zoom's guide; it timed out in the first sandbox test).
+          // The camera, if they chose it (the browser already allowed it).
+          if (want.camera) {
+            try {
+              await stream.startVideo(chosenCamera.current ? { cameraId: chosenCamera.current } : undefined);
+              setCameraOn(true);
+            } catch (err) {
+              setProblem({ message: await deviceProblem(err, "camera", "Couldn't start your camera. Turn it on with the camera button."), reason: describe(err) });
+            }
+          }
+          // Sound, microphone off. Browsers can refuse sound that didn't come
+          // straight from a click; then "Turn on sound" does it.
           try {
-            await stream.startVideo();
-            setCameraOn(true);
-          } catch (err) {
-            setProblem({ message: await deviceProblem(err, "camera", "Couldn't start your camera. Turn it on with the camera button."), reason: describe(err) });
+            await stream.startAudio({ mute: true });
+            if (!cancelled) {
+              setAudioReady(true);
+              setMicOn(false);
+            }
+          } catch {
+            // "Turn on sound" stays.
           }
           refreshPeople();
           refreshDevices();
@@ -208,7 +251,67 @@ export function VideoPanel(props: {
           .finally(() => s.mod.default.destroyClient());
       }
     };
-  }, [meetingId, attempt, attach, detach, refreshPeople, refreshDevices, fail]);
+  }, [meetingId, attempt, want, steppedOut, attach, detach, refreshPeople, refreshDevices, fail]);
+
+  // Leaving the session (stepping out, or a new join) resets what was on.
+  useEffect(() => {
+    if (phase === "out" || phase === "loading") {
+      setAudioReady(false);
+      setMicOn(false);
+      setCameraOn(false);
+    }
+  }, [phase]);
+
+  // The Runner removes anyone who has stepped out and is still in the session.
+  const removeKey = (props.removeUsers ?? []).join(",");
+  useEffect(() => {
+    const s = sdk.current;
+    if (!props.isRunner || !s || phase !== "joined" || !removeKey) return;
+    const out = new Set(removeKey.split(",").map(videoIdentity));
+    for (const p of people) {
+      if (p.userId !== me && p.identity && out.has(p.identity)) void s.client.removeUser(p.userId).catch(() => undefined);
+    }
+  }, [props.isRunner, removeKey, people, phase, me]);
+
+  /**
+   * Join: the browser asks for the camera and microphone now, together. If
+   * it can't have them, say how to allow them here, and try again by itself
+   * once they're allowed.
+   */
+  async function start(camera: boolean) {
+    setPreparing(true);
+    setHelp(null);
+    setProblem(null);
+    try {
+      const media = await navigator.mediaDevices.getUserMedia({ audio: true, video: camera });
+      for (const t of media.getTracks()) t.stop();
+      setWant({ camera });
+      setAttempt((a) => a + 1);
+    } catch (err) {
+      const { browser, platform } = detectBrowser(navigator.userAgent, navigator.maxTouchPoints);
+      setHelp(deviceHelp(troubleFrom(err), browser, platform));
+      watchPermission(camera);
+    } finally {
+      setPreparing(false);
+    }
+  }
+  const watching = useRef(false);
+  function watchPermission(camera: boolean) {
+    if (watching.current || !navigator.permissions?.query) return;
+    watching.current = true;
+    const names = (camera ? ["camera", "microphone"] : ["microphone"]) as PermissionName[];
+    void Promise.all(names.map((n) => navigator.permissions.query({ name: n }).catch(() => null))).then((statuses) => {
+      for (const st of statuses) {
+        if (!st) continue;
+        st.onchange = () => {
+          if (statuses.every((x) => !x || x.state === "granted")) {
+            watching.current = false;
+            void start(camera);
+          }
+        };
+      }
+    });
+  }
 
   // Cameras already on when we joined, and ours once it starts: drawn as their tiles appear.
   useEffect(() => {
@@ -303,6 +406,17 @@ export function VideoPanel(props: {
     }
   }
 
+
+  if (phase === "out" || (join?.kind === "message" && join.message === STEPPED_OUT_VIDEO)) {
+    return (
+      <section className="mm-video mm-video--message" aria-label="Meeting video" data-testid="video-stepped-out">
+        <p className="mm-video__msg" role="status">
+          {STEPPED_OUT_VIDEO}
+        </p>
+      </section>
+    );
+  }
+
   if (!join || join.kind === "none") return null;
 
   if (join.kind === "demo") {
@@ -322,6 +436,34 @@ export function VideoPanel(props: {
         <p className="mm-video__note">
           <CameraIcon /> Video appears here
         </p>
+      </section>
+    );
+  }
+
+  if (join.kind === "join" && phase === "ready") {
+    if (props.ended) return null;
+    return (
+      <section className="mm-video mm-video--message" aria-label="Meeting video" data-testid="video-ready">
+        {help ? (
+          <div className="mm-video__help" role="alert" data-testid="video-help">
+            <strong>{help.title}</strong>
+            <ol>
+              {help.steps.map((st) => (
+                <li key={st}>{st}</li>
+              ))}
+            </ol>
+          </div>
+        ) : (
+          <p className="mm-video__msg">The meeting has video. Your microphone stays off until you unmute.</p>
+        )}
+        <div className="mm-video__join">
+          <button type="button" className="button button-primary button-small" onClick={() => void start(true)} disabled={preparing} data-testid="video-join">
+            {help ? "Try again" : "Join with camera and microphone"}
+          </button>
+          <button type="button" className="link-button" onClick={() => void start(false)} disabled={preparing} data-testid="video-join-sound">
+            Join with sound only
+          </button>
+        </div>
       </section>
     );
   }

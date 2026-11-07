@@ -71,22 +71,29 @@ export default async function MeetingsPage({ params }: { params: Promise<{ corpI
           <h2>Meetings</h2>
           <p className="card__meta">
             {access.subscribed
-              ? "Council meetings, AGMs, SGMs and committee meetings."
+              ? "Council meetings, AGMs, SGMs, and committee meetings."
               : trialAvailable
                 ? "Your first meeting is free: the full product, no card needed."
                 : "Your free meeting has been used. Everything from it stays here."}
           </p>
         </div>
-        {access.canRunMeetings &&
-          (demoMeetingUsed ? (
-            <DemoLimitButton reason="second meeting" className="button button-primary" testId="start-meeting">
-              New meeting
-            </DemoLimitButton>
-          ) : (
-            <Link href={`/strata/${corpId}/meetings/new`} className="button button-primary" data-testid="start-meeting">
-              New meeting
+        <div className="meetings-actions">
+          {(access.isCouncil || access.canRunMeetings || access.roles.includes("manager")) && (
+            <Link href={`/strata/${corpId}/meetings/video-test`} className="button button-secondary" data-testid="video-test">
+              Test video and audio
             </Link>
-          ))}
+          )}
+          {access.canRunMeetings &&
+            (demoMeetingUsed ? (
+              <DemoLimitButton reason="second meeting" className="button button-primary" testId="start-meeting">
+                New meeting
+              </DemoLimitButton>
+            ) : (
+              <Link href={`/strata/${corpId}/meetings/new`} className="button button-primary" data-testid="start-meeting">
+                New meeting
+              </Link>
+            ))}
+        </div>
       </div>
 
       {!access.subscribed && trialAvailable && !checklistDone && (

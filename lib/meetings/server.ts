@@ -16,7 +16,7 @@ const COUNCIL_ROLES = ["president", "vice_president", "treasurer", "secretary", 
 export async function emailMeetingStarted(corpId: string, meetingId: string, launcherId: string) {
   const admin = createAdminClient();
   const [{ data: meeting }, { data: corp }, { data: roles }, { data: launcher }] = await Promise.all([
-    admin.from("meetings").select("type, location").eq("id", meetingId).maybeSingle(),
+    admin.from("meetings").select("type, location, format").eq("id", meetingId).maybeSingle(),
     admin.from("strata_corporations").select("legal_name, building_name").eq("strata_plan_number", corpId).maybeSingle(),
     admin.from("corporation_role_assignments").select("user_id, role").eq("corporation_id", corpId).in("role", COUNCIL_ROLES),
     admin.from("profiles").select("full_name").eq("id", launcherId).maybeSingle(),
@@ -37,6 +37,8 @@ export async function emailMeetingStarted(corpId: string, meetingId: string, lau
     joinUrl: `${APP_URL}/strata/${encodeURIComponent(corpId)}/meetings/${meetingId}/live`,
     agendaUrl: `${APP_URL}/strata/${encodeURIComponent(corpId)}/meetings/${meetingId}`,
     location: (meeting.location as string | null) ?? null,
+    // Electronic and hybrid meetings have video: a check first, if they haven't done one.
+    videoTestUrl: meeting.format === "in_person" ? null : `${APP_URL}/strata/${encodeURIComponent(corpId)}/meetings/video-test`,
   });
   await Promise.all((active ?? []).map((m) => notifyUser(m.user_id as string, message)));
 }

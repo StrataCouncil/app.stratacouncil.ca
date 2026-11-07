@@ -435,6 +435,8 @@ export function meetingStartedEmail(params: {
   agendaUrl: string;
   /** The meeting's location or link, if one was set. */
   location: string | null;
+  /** Test video and audio, for a meeting with video. */
+  videoTestUrl?: string | null;
 }) {
   const loc = params.location?.trim() || null;
   const locIsLink = Boolean(loc && /^https?:\/\//i.test(loc));
@@ -449,9 +451,16 @@ export function meetingStartedEmail(params: {
     <p style="margin:0 0 8px;font-size:14px;color:${MUTED};">Join to follow the agenda and vote. Joining records your attendance.</p>
     ${button(params.joinUrl, "Join the meeting")}
     <p style="margin:16px 0 0;font-size:14px;color:${MUTED};"><a href="${escapeHtml(params.agendaUrl)}" style="color:${INK};">View the agenda</a></p>
+    ${
+      params.videoTestUrl
+        ? `<p style="margin:8px 0 0;font-size:14px;color:${MUTED};">First time with video in this browser? <a href="${escapeHtml(params.videoTestUrl)}" style="color:${INK};">Test your video and audio</a> (one minute).</p>`
+        : ""
+    }
   `);
   const text = `The ${params.meetingLabel.toLowerCase()} for ${params.corporationName} has started${params.runnerName ? `, run by ${params.runnerName}` : ""}.${
     loc ? `\n\n${locIsLink ? "Meeting link" : "Where"}: ${loc}` : ""
-  }\n\nJoin to follow the agenda and vote. Joining records your attendance:\n\n${params.joinUrl}\n\nView the agenda:\n\n${params.agendaUrl}`;
+  }\n\nJoin to follow the agenda and vote. Joining records your attendance:\n\n${params.joinUrl}\n\nView the agenda:\n\n${params.agendaUrl}${
+    params.videoTestUrl ? `\n\nFirst time with video in this browser? Test your video and audio (one minute):\n\n${params.videoTestUrl}` : ""
+  }`;
   return { subject: `${params.meetingLabel} has started: ${params.corporationName}`, html, text };
 }

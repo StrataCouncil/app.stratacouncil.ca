@@ -118,7 +118,10 @@ set test.uid = '00000000-0000-0000-0000-00000000000c';
 select pg_temp.expect_error($q$select declare_meeting_conflict('73000000-0000-0000-0000-0000000000aa', 'i5', 'SL003', '')$q$, 'Declare a conflict for yourself');
 set test.uid = '00000000-0000-0000-0000-00000000000f';
 select declare_meeting_conflict('73000000-0000-0000-0000-0000000000aa', 'i5', 'SL003', 'My brother runs the landscaping company');
+-- A member's declaration waits for the runner (0082)
+select pg_temp.expect_error($q$select acknowledge_meeting_conflict('73000000-0000-0000-0000-0000000000aa', 'i5', 'SL003')$q$, 'Only the person running');
 set test.uid = '00000000-0000-0000-0000-00000000000b';
+select acknowledge_meeting_conflict('73000000-0000-0000-0000-0000000000aa', 'i5', 'SL003');
 insert into ids select 'v2', open_meeting_vote('73000000-0000-0000-0000-0000000000aa', 'i5', 'THAT the landscaping contract be renewed', 'MAJORITY');
 select pg_temp.expect('a conflicted member isn''t counted as present for the vote', (select eligible_lots = array['SL001','SL002'] from meeting_votes where id = (select id from ids where name = 'v2')));
 set test.uid = '00000000-0000-0000-0000-00000000000f';
@@ -127,12 +130,23 @@ set test.uid = '00000000-0000-0000-0000-00000000000c';
 select cast_meeting_vote((select id from ids where name = 'v2'), 'for');
 select declare_meeting_conflict('73000000-0000-0000-0000-0000000000aa', 'i5', 'SL002', 'Cousin is the contractor');
 reset role;
+select pg_temp.expect('a member''s declaration waits: they stay in the vote until the runner acknowledges it',
+  (select eligible_lots = array['SL001','SL002'] from meeting_votes where id = (select id from ids where name = 'v2'))
+  and exists (select 1 from meeting_ballots where vote_id = (select id from ids where name = 'v2') and lot_number = 'SL002')
+  and (select acknowledged_at is null from meeting_conflicts where item_id = 'i5' and lot_number = 'SL002'));
+set role authenticated;
+set test.uid = '00000000-0000-0000-0000-00000000000b';
+select acknowledge_meeting_conflict('73000000-0000-0000-0000-0000000000aa', 'i5', 'SL002');
+reset role;
 select pg_temp.expect('declaring during an open vote takes them out of it',
   (select eligible_lots = array['SL001'] from meeting_votes where id = (select id from ids where name = 'v2'))
   and not exists (select 1 from meeting_ballots where vote_id = (select id from ids where name = 'v2') and lot_number = 'SL002'));
 set role authenticated;
 set test.uid = '00000000-0000-0000-0000-00000000000c';
 select pg_temp.expect('followers see the conflicts', jsonb_array_length(live_meeting_state('73000000-0000-0000-0000-0000000000aa') -> 'conflicts') = 2);
+select pg_temp.expect('followers see each conflict acknowledged', (select bool_and((c ->> 'acknowledged')::boolean) from jsonb_array_elements(live_meeting_state('73000000-0000-0000-0000-0000000000aa') -> 'conflicts') c));
+select pg_temp.expect('acknowledging is for signed-in people only', not has_function_privilege('anon', 'public.acknowledge_meeting_conflict(uuid, text, text)', 'execute')
+  and has_function_privilege('authenticated', 'public.acknowledge_meeting_conflict(uuid, text, text)', 'execute'));
 select pg_temp.expect_error($q$select withdraw_meeting_conflict('73000000-0000-0000-0000-0000000000aa', 'i5', 'SL002')$q$, 'Only the person running');
 set test.uid = '00000000-0000-0000-0000-00000000000b';
 select withdraw_meeting_conflict('73000000-0000-0000-0000-0000000000aa', 'i5', 'SL002');

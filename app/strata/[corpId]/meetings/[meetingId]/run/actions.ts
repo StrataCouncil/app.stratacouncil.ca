@@ -184,14 +184,18 @@ export async function adjournMeeting(
   // Live votes and declared conflicts (0073) are taken from the database,
   // not the screen: a motion decided by a live vote keeps the counts the
   // vote recorded, and each item carries the conflicts declared on it.
-  const [{ data: closedVotes }, { data: conflictRows }, { data: presenceRows }, { data: handoverRows }] = await Promise.all([
+  const [{ data: closedVotes }, { data: conflictRows, error: conflictsError }, { data: presenceRows }, { data: handoverRows }] = await Promise.all([
     supabase.from("meeting_votes").select("id, votes_for, votes_against, votes_abstain, votes_missing").eq("meeting_id", meetingId).eq("status", "closed"),
-    supabase.from("meeting_conflicts").select("item_id, lot_number").eq("meeting_id", meetingId),
+    // Read with the service key: the minutes must carry every declaration
+    // (SPA s.32), whatever the reader's own access. The meeting itself was
+    // read above with theirs, and only its runner can adjourn it.
+    createAdminClient().from("meeting_conflicts").select("item_id, lot_number, note, acknowledged_at").eq("meeting_id", meetingId),
     // Late arrivals and departures, for the minutes (0074).
     supabase.from("meeting_presence").select("id, user_id, lot_number, event, at").eq("meeting_id", meetingId).order("id"),
     // Changes of who ran the meeting (0079).
     supabase.from("meeting_handovers").select("from_name, to_name, kind, at").eq("meeting_id", meetingId).order("id"),
   ]);
+  if (conflictsError) console.error("[adjournMeeting] conflicts", conflictsError.code, conflictsError.message);
   const votesById = new Map((closedVotes ?? []).map((v) => [v.id as string, v]));
   const agenda: AgendaItem[] = deferUnresolved(normalizeAgenda(rawAgenda)).map((raw) => {
     let it = raw;
@@ -199,8 +203,10 @@ export async function adjournMeeting(
     if (it.motion && v) {
       it = { ...it, motion: { ...it.motion, ...motionCounts({ for: v.votes_for ?? 0, against: v.votes_against ?? 0, abstain: v.votes_abstain ?? 0, missing: v.votes_missing ?? 0 }) } };
     }
-    const lots = (conflictRows ?? []).filter((c) => c.item_id === it.id).map((c) => c.lot_number as string);
-    if (lots.length) it = { ...it, conflicts: [...new Set(lots)].sort() };
+    const declared = (conflictRows ?? [])
+      .filter((c) => c.item_id === it.id)
+      .map((c) => ({ lot: c.lot_number as string, note: (c.note as string) ?? "", left: c.acknowledged_at != null }));
+    if (declared.length) it = { ...it, conflicts: declared.sort((a, b) => a.lot.localeCompare(b.lot)) };
     return it.deferred && !it.done && !it.minutesSummary ? { ...it, minutesSummary: minutesSummary(it) } : it;
   });
   const clean = cleanAttendance(attendance);

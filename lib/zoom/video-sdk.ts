@@ -1,4 +1,7 @@
 import { createHmac } from "node:crypto";
+import { videoIdentity } from "./video-identity.ts";
+
+export { videoIdentity };
 
 /**
  * Zoom Video SDK (docs/zoom-video-sdk.md): the meeting's video, drawn by our
@@ -68,6 +71,10 @@ export function videoSdkToken(input: {
     iat,
     exp,
     user_key: input.userKey.slice(0, 36),
+    // Who this is in the session (Zoom allows 35 characters): the user id
+    // without its dashes. Lets the Runner's screen find someone who has
+    // stepped out for a conflict of interest and remove them.
+    user_identity: videoIdentity(input.userKey),
     video_webrtc_mode: 1,
     audio_webrtc_mode: 1,
   };

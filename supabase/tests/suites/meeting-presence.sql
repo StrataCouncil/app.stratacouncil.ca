@@ -121,6 +121,7 @@ select pg_temp.expect_error($q$select open_meeting_vote('74000000-0000-0000-0000
 set test.uid = '00000000-0000-0000-0000-00000000000f';
 select join_meeting('74000000-0000-0000-0000-0000000000aa');
 set test.uid = '00000000-0000-0000-0000-00000000000b';
+select acknowledge_meeting_conflict('74000000-0000-0000-0000-0000000000aa', 'i4', 'SL002');
 select open_meeting_vote('74000000-0000-0000-0000-0000000000aa', 'i4', 'THAT the roof be replaced', 'MAJORITY');
 select pg_temp.expect('with quorum back, the vote opens (the conflicted member left out)',
   (select eligible_lots = array['SL003'] from meeting_votes where meeting_id = '74000000-0000-0000-0000-0000000000aa' and status = 'open'));

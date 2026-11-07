@@ -76,6 +76,9 @@ export interface MinutesContent {
  * is reduced to its standing note instead of repeating them; anything the
  * chair wrote is kept as written.
  */
+/** A vote was held on the item (a decided motion, not consensus). */
+const voteHeld = (it: AgendaItem) => Boolean(it.motion && it.done && !it.consensus && it.motion.for + it.motion.against + it.motion.abstain > 0);
+
 function summaryFor(it: AgendaItem): string {
   const written = it.minutesSummary.trim();
   const n = it.nextMeeting;
@@ -127,7 +130,7 @@ export function buildMinutes(input: {
         num: it.num,
         title: it.text,
         // A declared conflict (SPA s.32) is part of the record of the item.
-        summary: [conflictLine(it.conflicts ?? []), summaryFor(it)].filter(Boolean).join(" "),
+        summary: [conflictLine(it.conflicts ?? [], voteHeld(it)), summaryFor(it)].filter(Boolean).join(" "),
         deferred: it.deferred && !it.done,
         motion:
           it.motion && (it.motion.text || it.done)
