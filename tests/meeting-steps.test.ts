@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { makeItem, newMotion } from "../lib/meetings/agenda.ts";
-import { currentStep, itemSteps, usesLiveVoting } from "../lib/meetings/steps.ts";
+import { currentStep, decidedDuringVote, itemSteps, usesLiveVoting } from "../lib/meetings/steps.ts";
 
 const council = (vote: { open?: boolean; closed?: boolean } = {}) => ({
   general: false,
@@ -47,29 +47,32 @@ test("procedural items ask for no conflicts; adjournment skips introduction and 
   assert.deepEqual(ids(itemSteps(adjourn, council())), ["motion", "vote", "close"]);
 });
 
-test("electing a chair, and general meetings, count the vote by hand", () => {
+test("council elects a chair by live vote; general meetings count the vote by hand", () => {
   const chair = makeItem("Elect Chairperson", "Opening", { type: "FOR_DECISION", motion: newMotion("MAJORITY", "THAT X chair") });
-  assert.equal(usesLiveVoting(chair, false), false);
-  assert.ok(ids(itemSteps(chair, council())).includes("count"));
+  assert.equal(usesLiveVoting(chair, false), true);
+  assert.equal(usesLiveVoting(chair, true), false);
+  assert.ok(!ids(itemSteps(chair, council())).includes("count"));
   const levy = makeItem("Special levy", "New Business", { type: "FOR_DECISION", motion: newMotion("THREE_QUARTER", "BE IT RESOLVED") });
   const steps = itemSteps(levy, { general: true, voteOpen: false, voteClosed: false });
   assert.deepEqual(ids(steps), ["introduce", "motion", "discuss", "count", "confirm"]);
   assert.match(steps.find((s) => s.id === "count")!.hint, /3\/4|Three/i);
 });
 
-test("electing a chair: is one needed, a nomination, a count, the result (no background, no discussion)", () => {
+test("electing a chair: is one needed, a nomination, the vote, the result (no background, no discussion)", () => {
   const chair = makeItem("Elect Chairperson (if necessary)", "Chair", { type: "FOR_APPROVAL", motion: newMotion("MAJORITY", "THAT [name] be elected to chair this meeting.") });
   const steps = itemSteps(chair, council());
-  assert.deepEqual(ids(steps), ["needed", "motion", "count", "confirm"]);
+  assert.deepEqual(ids(steps), ["needed", "motion", "vote", "close"]);
   assert.match(steps[0]!.hint, /president/i);
-  assert.match(steps.find((s) => s.id === "count")!.hint, /majority of council members present/);
+  assert.match(steps.find((s) => s.id === "vote")!.hint, /majority of council members present/);
   // A nomination needs the nominee, as well as who nominated and seconded.
   const named = { ...chair, nominee: "Adaeze Okafor", motion: { ...chair.motion!, mover: "SL019", sec: "SL012" } };
   assert.equal(itemSteps(named, council()).find((s) => s.id === "motion")!.done, true);
   assert.equal(itemSteps({ ...named, nominee: "" }, council()).find((s) => s.id === "motion")!.done, false);
-  assert.match(itemSteps(named, council()).find((s) => s.id === "confirm")!.say!, /Adaeze Okafor is elected/);
+  assert.match(itemSteps(named, council()).find((s) => s.id === "close")!.say!, /Adaeze Okafor is elected/);
+  assert.equal(itemSteps(named, { general: false, voteOpen: true, voteClosed: false }).find((s) => s.id === "vote")!.done, true);
   // At a general meeting, the eligible voters elect (Standard Bylaw 25).
   const general = itemSteps(chair, { general: true, voteOpen: false, voteClosed: false });
+  assert.deepEqual(ids(general), ["needed", "motion", "count", "confirm"]);
   assert.match(general.find((s) => s.id === "count")!.hint, /eligible voters present in person or by proxy/);
 });
 
@@ -78,4 +81,18 @@ test("information and discussion items", () => {
   const d = itemSteps(makeItem("Dog policy", "New Business", { type: "FOR_DISCUSSION" }), council());
   assert.deepEqual(ids(d), ["introduce", "discuss", "direction"]);
   assert.ok(itemSteps({ ...makeItem("Dog policy", "New Business", { type: "FOR_DISCUSSION" }), done: true }, council()).every((st) => st.done));
+});
+
+test("nothing else is decided while a vote is open", () => {
+  const a = makeItem("Approve Agenda", "Administrative", { type: "FOR_APPROVAL", motion: newMotion("MAJORITY", "THAT") });
+  const b = makeItem("Elect Chairperson", "Chair", { type: "FOR_APPROVAL", motion: newMotion("MAJORITY", "THAT") });
+  const c = makeItem("Treasurer's report", "Reports");
+  const before = [a, b, c];
+  // The item being voted on may be decided (its vote closes first).
+  assert.deepEqual(decidedDuringVote(before, [{ ...a, done: true }, b, c], a.id), []);
+  // Another item decided, deferred, or received is caught.
+  assert.deepEqual(decidedDuringVote(before, [a, { ...b, done: true }, c], a.id).map((i) => i.id), [b.id]);
+  assert.deepEqual(decidedDuringVote(before, [a, b, { ...c, deferred: true }], a.id).map((i) => i.id), [c.id]);
+  // Items already decided before the vote opened are left alone.
+  assert.deepEqual(decidedDuringVote([a, { ...b, done: true }, c], [a, { ...b, done: true }, c], a.id), []);
 });

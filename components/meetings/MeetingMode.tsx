@@ -81,6 +81,7 @@ type Turn = { role: "user" | "assistant"; content: string; error?: boolean };
 type Confirm = { title: string; body: React.ReactNode; confirmLabel: string; danger?: boolean; onConfirm: () => void } | null;
 
 const ATTENDANCE_VIEW = "__attendance__";
+const voteElsewhereMessage = (n: number) => `A vote is open on item ${n}. Close it before deciding anything else.`;
 
 export function MeetingMode(props: {
   corpId: string;
@@ -251,6 +252,16 @@ export function MeetingMode(props: {
   const q = quorum(type, { lotCount: props.lots.length, councilCount: roll.length, attendance });
   const present = roll.filter((l) => attendance[l] === "present");
   const voters = present.length + (general ? q.proxies : 0);
+  // Who can be nominated to chair: anyone in attendance, the strata manager included (no vote either way).
+  const chairNominees = useMemo(() => {
+    const out = new Map<string, string>();
+    for (const l of present) if (names[l]) out.set(names[l], peopleRoles[`lot:${l}`] ?? "Council member");
+    for (const p of inMeeting(live?.presence ?? [])) {
+      if (p.lot || !p.name || out.has(p.name)) continue;
+      out.set(p.name, (p.userId ? peopleRoles[`user:${p.userId}`] : undefined) ?? "No vote");
+    }
+    return [...out].map(([name, role]) => ({ name, role }));
+  }, [present, names, live?.presence, peopleRoles]);
   // Who the thresholds count: members present (council), votes cast or every lot's vote (general).
   const voteCtx: VoteContext = { type, present: voters, eligible: props.lots.length, lotCount: props.lots.length };
   // Council: anyone with a declared conflict on an item isn't present for its votes (SPA s.32).
@@ -338,11 +349,26 @@ export function MeetingMode(props: {
     setActionError({ itemId: it.id, message });
   }
 
+  /** The number of the item a vote is open on, when it's another item. Nothing else is decided until it closes. */
+  function voteElsewhere(it: AgendaItem): number | null {
+    const open = live?.openVote;
+    if (!open || open.itemId === it.id) return null;
+    return agenda.find((i) => i.id === open.itemId)?.num ?? 0;
+  }
+  /** Blocks a decision on this item while a vote is open on another; true when blocked. */
+  function blockedByOtherVote(it: AgendaItem): boolean {
+    const n = voteElsewhere(it);
+    if (n === null) return false;
+    blockAction(it, voteElsewhereMessage(n));
+    return true;
+  }
+
   function confirmDecision(it: AgendaItem) {
     const m = it.motion!;
     const voters = votersFor(it);
     const voteCtx = ctxFor(it);
     if (live?.openVote?.itemId === it.id) return blockAction(it, "Close the vote first.");
+    if (blockedByOtherVote(it)) return;
     // People leave: no decision is made once quorum is lost.
     if (!q.met) return blockAction(it, `No quorum: ${q.counted} present, ${q.required} needed. No decisions can be made until quorum is restored.`);
     if (isElectChair(it) && !it.nominee?.trim()) return blockAction(it, "Enter the nominee first.");
@@ -405,6 +431,7 @@ export function MeetingMode(props: {
   }
 
   function defer(it: AgendaItem) {
+    if (blockedByOtherVote(it)) return;
     setConfirm({
       title: "Defer this item?",
       confirmLabel: "Defer",
@@ -419,6 +446,7 @@ export function MeetingMode(props: {
   }
 
   function consensus(it: AgendaItem) {
+    if (blockedByOtherVote(it)) return;
     setConfirm({
       title: "Accept by consensus?",
       confirmLabel: "Accept",
@@ -439,6 +467,7 @@ export function MeetingMode(props: {
   }
 
   function markReceived(it: AgendaItem) {
+    if (blockedByOtherVote(it)) return;
     const next = renumber(
       agenda.map((i) => (i.id === it.id ? { ...i, done: true, deferred: false, minutesSummary: i.minutesSummary || minutesSummary({ ...i, done: true }) } : i))
     );
@@ -636,7 +665,7 @@ export function MeetingMode(props: {
           Agenda
         </button>
         <button type="button" className="button button-secondary button-small mm__toggle" onClick={() => setPanel(panel === "assistant" ? "none" : "assistant")} aria-expanded={panel === "assistant"}>
-          In the meeting
+          In attendance
         </button>
         <MeetingUser name={props.me.name} avatarUrl={props.me.avatarUrl} />
         <button type="button" className="button button-secondary button-small" onClick={() => setExitOpen(true)} data-testid="mm-hand-over">
@@ -861,6 +890,8 @@ export function MeetingMode(props: {
               present={general ? present : presentForItem(present, conflicts, item.id)}
               voters={votersFor(item)}
               voteCtx={ctxFor(item)}
+              voteElsewhere={voteElsewhere(item)}
+              chairNominees={chairNominees}
               quorumMet={q.met}
               presenting={live?.presenting ?? null}
               onShow={(attId) => void show(attId ? item : null, attId)}
@@ -1193,6 +1224,10 @@ function ItemPanel(props: {
   /** Everyone who can vote: those present, plus proxies at a general meeting. */
   voters: number;
   voteCtx: VoteContext;
+  /** A vote open on another item: its number. Nothing here can be decided until it closes. */
+  voteElsewhere: number | null;
+  /** Suggestions for the chair nominee: everyone in attendance, with their role. */
+  chairNominees: { name: string; role: string }[];
   quorumMet: boolean;
   /** What's being shown to everyone (0076). */
   presenting: Presenting | null;
@@ -1244,16 +1279,21 @@ function ItemPanel(props: {
   // What has to happen first; buttons stay off until it has.
   const openBlocked = !m
     ? null
-    : !m.text.trim()
+    : isElectChair(it) && !it.nominee?.trim()
+      ? "Enter the nominee first."
+      : !m.text.trim()
       ? "Write the motion first."
       : !m.mover || !m.sec
         ? "Record who moved and seconded the motion first."
         : !props.quorumMet
           ? "No quorum: no vote can open."
           : null;
+  const elsewhere = props.voteElsewhere !== null ? voteElsewhereMessage(props.voteElsewhere) : null;
   const confirmBlocked = !m
     ? null
-    : !props.quorumMet
+    : elsewhere
+      ? elsewhere
+      : !props.quorumMet
       ? "No quorum: no decisions can be made."
       : live?.vote
         ? "Close the vote first."
@@ -1264,6 +1304,8 @@ function ItemPanel(props: {
             : !liveVoting && m.for + m.against + m.abstain === 0
               ? "Count the vote first."
               : null;
+  // Why this item can't be decided yet. A live vote's own panel says when a vote is open elsewhere.
+  const whyBlocked = elsewhere && (!m || !liveVoting || it.type === "FOR_DIRECTION") ? elsewhere : m && !liveVoting ? confirmBlocked : null;
   const locked = it.done || !props.called;
   // While a live vote is open, or once one counted this motion, the counts aren't typed by hand.
   const countsLocked = locked || Boolean(live?.vote) || Boolean(m?.voteId);
@@ -1319,12 +1361,9 @@ function ItemPanel(props: {
             data-testid="mm-chair-nominee"
           />
           <datalist id="mm-chair-nominees">
-            {props.present
-              .map((l) => props.names[l])
-              .filter(Boolean)
-              .map((n) => (
-                <option key={n} value={n} />
-              ))}
+            {props.chairNominees.map((n) => (
+              <option key={n.name} value={n.name} label={`${n.name} (${n.role})`} />
+            ))}
           </datalist>
           <span className="field__hint">Once the motion carries, this person chairs the meeting and is named in the minutes.</span>
         </label>
@@ -1531,9 +1570,9 @@ function ItemPanel(props: {
         </div>
       )}
 
-      {!it.done && props.called && m && !liveVoting && confirmBlocked && !props.actionError && (
+      {!it.done && props.called && whyBlocked && !props.actionError && (
         <p className="card__meta mm-actions__why" data-testid="mm-confirm-why">
-          {confirmBlocked}
+          {whyBlocked}
         </p>
       )}
       {!it.done && props.called && props.actionError && (
@@ -1546,13 +1585,13 @@ function ItemPanel(props: {
           {m ? (
             <>
               {it.type === "FOR_DIRECTION" && !live?.vote && (
-                <button type="button" className="button button-secondary" onClick={props.onConsensus}>
+                <button type="button" className="button button-secondary" onClick={props.onConsensus} disabled={Boolean(elsewhere)}>
                   Consensus
                 </button>
               )}
               {!liveVoting && (
                 <>
-                  <button type="button" className="button button-secondary" onClick={props.onDefer} data-testid="mm-defer">
+                  <button type="button" className="button button-secondary" onClick={props.onDefer} disabled={Boolean(elsewhere)} data-testid="mm-defer">
                     Defer
                   </button>
                   <button
@@ -1571,11 +1610,11 @@ function ItemPanel(props: {
           ) : (
             <>
               {!isNextMeeting(it) && (
-                <button type="button" className="button button-secondary" onClick={props.onDefer} data-testid="mm-defer">
+                <button type="button" className="button button-secondary" onClick={props.onDefer} disabled={Boolean(elsewhere)} data-testid="mm-defer">
                   Defer
                 </button>
               )}
-              <button type="button" className="button button-primary" onClick={props.onReceived} data-testid="mm-next">
+              <button type="button" className="button button-primary" onClick={props.onReceived} disabled={Boolean(elsewhere)} data-testid="mm-next">
                 {it.type === "FOR_INFORMATION" ? "Received" : it.type === "FOR_DISCUSSION" ? "Discussed" : "Done, next item"}
               </button>
             </>
@@ -1597,14 +1636,14 @@ function ItemPanel(props: {
       )}
 
       <details className="mm-private" open>
-        <summary>Private notes</summary>
+        <summary>Meeting Runner Notes</summary>
         <textarea
           rows={3}
           value={note}
           onChange={(e) => setNote(e.target.value)}
           onBlur={() => note !== props.note && props.onNote(note)}
           placeholder="Only you see this. Not in the minutes, never sent to Stratasphere, deleted when the minutes are finalized."
-          aria-label="Private notes"
+          aria-label="Meeting Runner Notes"
           data-testid="mm-private-note"
         />
       </details>

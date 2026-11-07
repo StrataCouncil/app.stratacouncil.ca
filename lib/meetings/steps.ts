@@ -40,8 +40,21 @@ export interface StepState {
   voteClosed: boolean;
 }
 
-/** Council meetings vote on screens, except electing a chair (counted by hand). */
-export const usesLiveVoting = (it: AgendaItem, general: boolean) => !general && !isElectChair(it);
+/** Council meetings vote on screens (electing a chair too); general meetings count by hand. */
+export const usesLiveVoting = (_it: AgendaItem, general: boolean) => !general;
+
+/**
+ * Items whose decision (done or deferred) this save would record while a
+ * vote is open on another item: none may be decided until that vote closes.
+ */
+export function decidedDuringVote(before: AgendaItem[], after: AgendaItem[], openItemId: string): AgendaItem[] {
+  const was = new Map(before.map((i) => [i.id, i] as [string, AgendaItem]));
+  return after.filter((i) => {
+    if (i.id === openItemId) return false;
+    const old = was.get(i.id);
+    return (i.done && !old?.done) || (i.deferred && !old?.deferred);
+  });
+}
 
 export function itemSteps(it: AgendaItem, s: StepState): Step[] {
   const m = it.motion;
@@ -89,22 +102,39 @@ export function itemSteps(it: AgendaItem, s: StepState): Step[] {
         nominated,
         '"Are there any nominations for chair? … Nominated by …, seconded by …"'
       ),
-      auto(
-        "count",
-        "Count the vote",
-        s.general
-          ? `Count the votes of eligible voters present in person or by proxy, in favour, opposed, and abstaining (${decisionTypeLabels[m.dt]}).`
-          : "Count council members in favour, opposed, and abstaining. A majority of council members present elects the chair.",
-        counted,
-        '"Those in favour? … Opposed? … Abstaining?"'
-      ),
-      auto(
-        "confirm",
-        "Confirm the result",
-        "It goes in the minutes. If carried, the new chair takes over. If defeated, take the next nomination.",
-        it.done,
-        `"${it.nominee?.trim() || "[Name]"} is elected to chair this meeting."`
-      )
+      ...(usesLiveVoting(it, s.general)
+        ? [
+            auto(
+              "vote",
+              "Open the vote",
+              "Council members vote on their own screens. Enter votes for anyone on the phone or in the room. A majority of council members present elects the chair.",
+              s.voteOpen || s.voteClosed,
+              '"The vote is open."'
+            ),
+            auto(
+              "close",
+              "Close the vote and confirm the result",
+              "It goes in the minutes. If carried, the new chair takes over. If defeated, take the next nomination.",
+              s.voteClosed || it.done,
+              `"${it.nominee?.trim() || "[Name]"} is elected to chair this meeting."`
+            ),
+          ]
+        : [
+            auto(
+              "count",
+              "Count the vote",
+              `Count the votes of eligible voters present in person or by proxy, in favour, opposed, and abstaining (${decisionTypeLabels[m.dt]}).`,
+              counted,
+              '"Those in favour? … Opposed? … Abstaining?"'
+            ),
+            auto(
+              "confirm",
+              "Confirm the result",
+              "It goes in the minutes. If carried, the new chair takes over. If defeated, take the next nomination.",
+              it.done,
+              `"${it.nominee?.trim() || "[Name]"} is elected to chair this meeting."`
+            ),
+          ])
     );
   } else if (m) {
     const counted = m.for + m.against + m.abstain > 0;
