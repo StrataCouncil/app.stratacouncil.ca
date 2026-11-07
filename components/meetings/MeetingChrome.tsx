@@ -63,16 +63,27 @@ export function MeetingSide(props: {
   roles?: Record<string, string>;
 }) {
   const showHere = props.showHere ?? true;
-  const [open, setOpen] = useState(!showHere);
-  const [hereOpen, setHereOpen] = useState(true);
+  // One panel open at a time: opening either closes the other.
+  const [open, setOpenRaw] = useState(!showHere);
+  const [hereOpen, setHereOpenRaw] = useState(showHere);
+  const setOpen = (f: (o: boolean) => boolean) => {
+    const next = f(open);
+    setOpenRaw(next);
+    if (next) setHereOpenRaw(false);
+  };
+  const setHereOpen = (f: (o: boolean) => boolean) => {
+    const next = f(hereOpen);
+    setHereOpenRaw(next);
+    if (next) setOpenRaw(false);
+  };
   const here = inMeeting(props.presence);
   return (
-    <aside className="mm-side" aria-label="In the meeting and Stratasphere">
+    <aside className="mm-side" aria-label="In attendance and Stratasphere">
       {props.video}
       {showHere && (
       <div className="mm-side__here" data-testid="meeting-here" data-open={hereOpen || undefined}>
         <button type="button" className="mm-side__toggle mm-side__toggle--here" onClick={() => setHereOpen((o) => !o)} aria-expanded={hereOpen} data-testid="here-toggle">
-          <span aria-hidden="true">{hereOpen ? "−" : "+"}</span> In the meeting ({here.length})
+          <span aria-hidden="true">{hereOpen ? "−" : "+"}</span> In attendance ({here.length})
         </button>
         {hereOpen &&
           (here.length === 0 ? (

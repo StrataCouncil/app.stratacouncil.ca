@@ -178,7 +178,7 @@ export function MinutesView({
         <div className="modal-backdrop" onClick={() => !pending && setConfirming(false)}>
           <div className="modal" role="alertdialog" aria-modal="true" aria-labelledby="finalize-title" onClick={(e) => e.stopPropagation()}>
             <h2 id="finalize-title">Finalize these minutes?</h2>
-            <p>Once finalized, the minutes are locked and can&rsquo;t be edited. The meeting&rsquo;s private notes are deleted for good.</p>
+            <p>Once finalized, the minutes are locked and can&rsquo;t be edited. The Meeting Runner Notes are deleted for good.</p>
             <p className="card__meta">The final PDF is saved to your strata&rsquo;s records.</p>
             <div className="role-editor__actions">
               <button type="button" className="button button-secondary" onClick={() => setConfirming(false)} disabled={pending}>

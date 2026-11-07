@@ -3616,7 +3616,9 @@ li[data-done="true"] .checklist__mark {
   white-space: pre-wrap;
 }
 .mm-subhead {
+  font-family: inherit;
   font-size: 0.85rem;
+  font-weight: 600;
   margin: 0;
 }
 .mm-vote {

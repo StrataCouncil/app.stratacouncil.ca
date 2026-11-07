@@ -13,6 +13,7 @@ import { logDemoActivity, refundDemoAllowance, takeDemoAllowance } from "@/lib/d
 import { fileDiscussionRecord } from "@/lib/discussions/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { motionCounts, movementLines } from "@/lib/meetings/live";
+import { decidedDuringVote } from "@/lib/meetings/steps";
 import { endMeetingVideo } from "@/lib/meetings/video";
 
 /**
@@ -52,6 +53,23 @@ export async function saveMeetingState(
   } catch (err) {
     console.error("[saveMeetingState] attachments", err instanceof Error ? err.message : err);
     return { ok: false, error: "Couldn't save. Check your connection; your changes are kept on this screen." };
+  }
+  // While a vote is open, nothing else is decided: no other item may be
+  // newly marked done or deferred until that vote closes.
+  const { data: openVote } = await supabase
+    .from("meeting_votes")
+    .select("item_id")
+    .eq("meeting_id", meetingId)
+    .eq("status", "open")
+    .maybeSingle();
+  if (openVote) {
+    const { data: stored } = await supabase.from("meetings").select("agenda").eq("id", meetingId).eq("corporation_id", corpId).maybeSingle();
+    const before = normalizeAgenda(stored?.agenda ?? []);
+    const early = decidedDuringVote(before, agenda, openVote.item_id as string);
+    if (early.length) {
+      const num = before.find((i) => i.id === openVote.item_id)?.num;
+      return { ok: false, error: `A vote is open${num ? ` on item ${num}` : ""}. Close it before deciding anything else.` };
+    }
   }
   // A chair elected at the meeting becomes the meeting's chair (agenda,
   // scripts and minutes).

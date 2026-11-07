@@ -100,13 +100,13 @@ export function LaunchMeetingButton({
             </p>
           ) : subscribed ? (
             <p>
-              You&rsquo;ll run this meeting from here on. While it&rsquo;s launched, only you can change it or see its private notes.
+              You&rsquo;ll run this meeting from here on. While it&rsquo;s launched, only you can change the agenda or see the Meeting Runner Notes.
             </p>
           ) : (
             <p>
               This uses your strata&rsquo;s <strong>one free meeting</strong>. It&rsquo;s the full product, with Stratasphere&trade;
               AI and every document you&rsquo;ve uploaded. You can set up as many draft meetings as you like, but only one can be
-              launched before subscribing. While it&rsquo;s launched, only you can change it or see its private notes.
+              launched before subscribing. While it&rsquo;s launched, only you can change the agenda or see the Meeting Runner Notes.
             </p>
           )}
           {!blocked && missingMotions.length > 0 && (

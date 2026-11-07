@@ -343,12 +343,12 @@ export function ItemEditor({
             </>
           )}
           <label className="field field--wide">
-            <span>Private notes</span>
+            <span>Meeting Runner Notes</span>
             <textarea
               rows={2}
               value={noteDraft}
               onChange={(e) => setNoteDraft(e.target.value)}
-              placeholder="Only you (and whoever can edit this agenda) see this."
+              placeholder="Seen by people who can edit this agenda. Once launched, only the person running the meeting sees them."
               data-testid="item-note"
             />
             <span className="field__hint">
