@@ -10,6 +10,7 @@ import { takesConflicts } from "./live.ts";
  */
 
 export type StepId =
+  | "needed"
   | "introduce"
   | "conflicts"
   | "motion"
@@ -60,6 +61,51 @@ export function itemSteps(it: AgendaItem, s: StepState): Step[] {
       auto("date", "Agree on the next meeting", "Record the date, time and place.", Boolean(it.nextMeeting?.date), '"When would council like to meet next?"'),
       auto("received", "Move on", "Done, next item.", it.done)
     );
+  } else if (m && isElectChair(it)) {
+    // Electing a chair is an ordinary decision, with its own steps (no
+    // background to present, no discussion). Schedule of Standard Bylaws:
+    // they don't say who chairs a council meeting (by convention the
+    // president; the vice president has the president's powers while the
+    // president is absent or unable to act, 13(3)), and council decides by a
+    // majority of council members present, recorded in the minutes (18(1),
+    // 18(3)). At a general meeting the president chairs, then the vice
+    // president, and failing both the eligible voters present in person or by
+    // proxy elect a chair (25). A strata's own bylaws govern where they differ.
+    const counted = m.for + m.against + m.abstain > 0;
+    const nominated = Boolean(m.text.trim() && m.mover && m.sec && it.nominee?.trim());
+    steps.push(
+      manual(
+        "needed",
+        "Check a chair is needed",
+        s.general
+          ? "The president chairs; if the president is unwilling or unable, the vice president (Standard Bylaw 25). Elect a chair only if neither is chairing. If your bylaws say otherwise, they govern."
+          : "The president usually chairs, or the vice president when the president is absent or unable to act. Elect a chair only if neither is here and willing. If your bylaws say otherwise, they govern.",
+        `"Neither the president nor the vice president is able to chair, so ${s.general ? "the meeting" : "council"} needs to choose a chair."`
+      ),
+      auto(
+        "motion",
+        "Take a nomination",
+        "Record the nominee, who nominated them, and who seconded. If there's more than one nomination, vote on them one at a time, in the order nominated.",
+        nominated,
+        '"Are there any nominations for chair? … Nominated by …, seconded by …"'
+      ),
+      auto(
+        "count",
+        "Count the vote",
+        s.general
+          ? `Count the votes of eligible voters present in person or by proxy, in favour, opposed, and abstaining (${decisionTypeLabels[m.dt]}).`
+          : "Count council members in favour, opposed, and abstaining. A majority of council members present elects the chair.",
+        counted,
+        '"Those in favour? … Opposed? … Abstaining?"'
+      ),
+      auto(
+        "confirm",
+        "Confirm the result",
+        "It goes in the minutes. If carried, the new chair takes over. If defeated, take the next nomination.",
+        it.done,
+        `"${it.nominee?.trim() || "[Name]"} is elected to chair this meeting."`
+      )
+    );
   } else if (m) {
     const counted = m.for + m.against + m.abstain > 0;
     const motionReady = Boolean(m.text.trim() && m.mover && m.sec && (!isElectChair(it) || it.nominee?.trim()));
@@ -107,7 +153,7 @@ export function itemSteps(it: AgendaItem, s: StepState): Step[] {
         auto(
           "count",
           "Count the vote",
-          `Count those in favour, opposed and abstaining (${dt}).`,
+          `Count those in favour, opposed, and abstaining (${dt}).`,
           counted,
           '"Those in favour? … Those opposed? … Any abstentions?"'
         )
