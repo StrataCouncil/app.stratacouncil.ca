@@ -9185,6 +9185,27 @@ a.kb-card:hover {
   overflow-y: auto;
   padding: 0.9rem 1rem;
 }
+/* Collapsed, the list gives its room to Stratasphere. */
+.mm-side__here:not([data-open]) {
+  flex: 0 0 auto;
+}
+.mm-side__here .mm-side__toggle--here {
+  padding: 0 0 0.25rem;
+  font-family: var(--font-display, inherit);
+}
+.mm-here__who {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.mm-here__who > .card__meta {
+  font-size: 0.78rem;
+}
+.mm-here__note,
+.mm-here__empty {
+  margin: 0.5rem 0 0;
+  font-size: 0.78rem;
+}
 .mm-here {
   list-style: none;
   margin: 0.5rem 0 0;
