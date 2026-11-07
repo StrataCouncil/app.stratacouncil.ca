@@ -59,31 +59,46 @@ export function MeetingSide(props: {
    * it out, and Stratasphere opens in its place.
    */
   showHere?: boolean;
+  /** Roles under each name: "lot:SL005" or "user:<id>" to "President", "Manager". */
+  roles?: Record<string, string>;
 }) {
   const showHere = props.showHere ?? true;
   const [open, setOpen] = useState(!showHere);
+  const [hereOpen, setHereOpen] = useState(true);
   const here = inMeeting(props.presence);
   return (
     <aside className="mm-side" aria-label="In the meeting and Stratasphere">
       {props.video}
       {showHere && (
-      <div className="mm-side__here" data-testid="meeting-here">
-        <h3 className="mm-subhead">In the meeting ({here.length})</h3>
-        {here.length === 0 ? (
-          <p className="card__meta">Nobody has joined yet. Members join from the Meetings tab.</p>
-        ) : (
-          <ul className="mm-here">
-            {here.map((p) => (
-              <li key={p.userId ?? p.lot ?? p.id}>
-                <span>
-                  {p.lot ? `${p.lot} · ${props.names[p.lot] || p.name}` : `${p.name} (no vote)`}
-                  {p.event === "marked_joined" && <span className="card__meta"> (added by runner)</span>}
-                </span>
-                <span className="card__meta">since {clock(p.at)}</span>
-              </li>
-            ))}
-          </ul>
-        )}
+      <div className="mm-side__here" data-testid="meeting-here" data-open={hereOpen || undefined}>
+        <button type="button" className="mm-side__toggle mm-side__toggle--here" onClick={() => setHereOpen((o) => !o)} aria-expanded={hereOpen} data-testid="here-toggle">
+          <span aria-hidden="true">{hereOpen ? "−" : "+"}</span> In the meeting ({here.length})
+        </button>
+        {hereOpen &&
+          (here.length === 0 ? (
+            <p className="card__meta mm-here__empty">Nobody has joined yet. Members join from the Meetings tab.</p>
+          ) : (
+            <>
+              <ul className="mm-here">
+                {here.map((p) => {
+                  const role = (p.lot ? props.roles?.[`lot:${p.lot}`] : undefined) ?? (p.userId ? props.roles?.[`user:${p.userId}`] : undefined);
+                  return (
+                    <li key={p.userId ?? p.lot ?? p.id}>
+                      <span className="mm-here__who">
+                        <span>
+                          {p.lot ? `${p.lot} · ${props.names[p.lot] || p.name}` : p.name}
+                          {p.event === "marked_joined" && <span title="Marked present by the person running the meeting">*</span>}
+                        </span>
+                        <span className="card__meta">{role ?? (p.lot ? "Council member" : "No vote")}</span>
+                      </span>
+                      <span className="card__meta">{clock(p.at)}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+              {here.some((p) => p.event === "marked_joined") && <p className="card__meta mm-here__note">* Marked present by the person running the meeting</p>}
+            </>
+          ))}
       </div>
       )}
       <div className="mm-side__assistant" data-open={open || undefined} data-fill={(!showHere && open) || undefined}>

@@ -1,5 +1,6 @@
 "use client";
 
+import { corporationRoleLabels, type CorporationRole } from "@/lib/strata";
 import { tz } from "@/lib/time-zone";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
@@ -108,6 +109,8 @@ export function MeetingMode(props: {
   me: { name: string; avatarUrl: string | null };
   /** People who could take the meeting over from this Runner (0079); only those in the meeting are offered. */
   runnerCandidates?: Array<{ userId: string; name: string }>;
+  /** Each person's role on the strata, by user id (lib/meetings/server.ts meetingRoles). */
+  roleByUser?: Record<string, string>;
 }) {
   const { corpId, meetingId, type, timezone } = props;
   const [demoLeft, setDemoLeft] = useState(props.demoLeft ?? null);
@@ -238,6 +241,13 @@ export function MeetingMode(props: {
   const councilLots = props.lots.filter((l) => l.isCouncil).map((l) => l.lot);
   const roll = attendanceRoll(type, props.lots.map((l) => l.lot), councilLots);
   const names = useMemo(() => Object.fromEntries(props.lots.map((l) => [l.lot, l.name])), [props.lots]);
+  // Who's who in the right-hand list: a council lot's office, or a person's role on the strata.
+  const peopleRoles = useMemo(() => {
+    const out: Record<string, string> = {};
+    for (const [id, label] of Object.entries(props.roleByUser ?? {})) out[`user:${id}`] = label;
+    for (const l of props.lots) if (l.role && l.role in corporationRoleLabels) out[`lot:${l.lot}`] = corporationRoleLabels[l.role as CorporationRole];
+    return out;
+  }, [props.lots, props.roleByUser]);
   const q = quorum(type, { lotCount: props.lots.length, councilCount: roll.length, attendance });
   const present = roll.filter((l) => attendance[l] === "present");
   const voters = present.length + (general ? q.proxies : 0);
@@ -900,6 +910,7 @@ export function MeetingMode(props: {
         <MeetingSide
           presence={live?.presence ?? []}
           names={names}
+          roles={peopleRoles}
           video={<VideoPanel meetingId={meetingId} isRunner={true} ended={live?.status === "ADJOURNED"} people={videoPeople(live?.presence ?? [], names)} />}
           assistant={
             <Assistant
@@ -1658,8 +1669,7 @@ export function Assistant(props: {
       <div className="mm-ai__head">
         <strong>Stratasphere&trade;</strong>
         <span className="card__meta">
-          {props.item?.atts.length ? `${props.item.atts.length} attachment${props.item.atts.length === 1 ? "" : "s"} in context · ` : ""}
-          Names removed before sending
+          {props.item?.atts.length ? `${props.item.atts.length} attachment${props.item.atts.length === 1 ? "" : "s"} in context` : ""}
         </span>
       </div>
       <div className="mm-ai__log" ref={listRef} aria-live="polite">

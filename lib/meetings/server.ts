@@ -3,6 +3,7 @@ import { meetingTypeLabels, type MeetingType } from "@/lib/meetings/agenda";
 import { meetingStartedEmail } from "@/lib/email/templates";
 import { notifyUser } from "@/lib/email/notify";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { corporationRoleLabels, type CorporationRole } from "@/lib/strata";
 
 const COUNCIL_ROLES = ["president", "vice_president", "treasurer", "secretary", "member_at_large", "manager"];
 
@@ -56,4 +57,27 @@ export async function runnerCandidates(corpId: string, excludeUser: string): Pro
   if (!ids.length) return [];
   const { data: profiles } = await admin.from("profiles").select("id, full_name").in("id", ids);
   return (profiles ?? []).map((p) => ({ userId: p.id as string, name: (p.full_name as string) || "Someone" }));
+}
+
+/** Most telling first: an office, then council, then manager, then admin. */
+const ROLE_ORDER: CorporationRole[] = ["president", "vice_president", "treasurer", "secretary", "member_at_large", "manager", "admin"];
+
+/**
+ * Each person's role on this strata ("President", "Manager"), by user id,
+ * for Meeting Mode's list of who's in the meeting. Someone with several
+ * shows the most telling one. Read with the service role: the page has
+ * already checked that the caller runs this meeting.
+ */
+export async function meetingRoles(corpId: string): Promise<Record<string, string>> {
+  const admin = createAdminClient();
+  const { data } = await admin.from("corporation_role_assignments").select("user_id, role").eq("corporation_id", corpId);
+  const best = new Map<string, CorporationRole>();
+  for (const r of data ?? []) {
+    const role = r.role as CorporationRole;
+    const id = r.user_id as string;
+    if (!ROLE_ORDER.includes(role)) continue;
+    const cur = best.get(id);
+    if (!cur || ROLE_ORDER.indexOf(role) < ROLE_ORDER.indexOf(cur)) best.set(id, role);
+  }
+  return Object.fromEntries([...best].map(([id, role]) => [id, corporationRoleLabels[role]]));
 }
