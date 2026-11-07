@@ -1,19 +1,27 @@
 import type { Metadata } from "next";
-import { Fraunces, Work_Sans } from "next/font/google";
+import localFont from "next/font/local";
 import { IS_DEMO } from "@/lib/demo";
 import "./globals.css";
 
-const fraunces = Fraunces({
-  subsets: ["latin"],
+// The brand fonts, served from this site (app/fonts, SIL Open Font
+// License): builds never fetch them from Google, and visitors' browsers
+// never ask Google for them either.
+const fraunces = localFont({
+  src: "./fonts/fraunces-latin-wght.woff2",
   variable: "--font-fraunces",
-  weight: ["500", "600", "700"],
-  style: ["normal"],
+  weight: "100 900",
+  style: "normal",
+  display: "swap",
+  fallback: ["Georgia", "serif"],
 });
 
-const workSans = Work_Sans({
-  subsets: ["latin"],
+const workSans = localFont({
+  src: "./fonts/work-sans-latin-wght.woff2",
   variable: "--font-work-sans",
-  weight: ["400", "500", "600", "700"],
+  weight: "100 900",
+  style: "normal",
+  display: "swap",
+  fallback: ["system-ui", "sans-serif"],
 });
 
 export const metadata: Metadata = {
