@@ -30,13 +30,6 @@ import type { ConversationMessage, ConversationProject, ConversationSummary } fr
 
 type Msg = Omit<ConversationMessage, "createdAt"> & { pending?: boolean };
 
-const SUGGESTIONS = [
-  "What do our bylaws say about pets?",
-  "What has council decided about the roof in the last two years?",
-  "When is the AGM notice due under the Strata Property Act?",
-  "Summarize the most recent financial statements.",
-];
-
 function dateGroup(iso: string, now: Date): string {
   const d = new Date(iso);
   const day = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
@@ -674,16 +667,9 @@ export function StratasphereChat({
           <div className="chat-empty">
             <h3>Ask Stratasphere</h3>
             <p>
-              Questions about your bylaws, minutes, past decisions, finances and BC strata legislation. Every answer names
-              its sources.
+              Questions about your bylaws, minutes, past decisions, finances, and BC strata legislation. Every answer
+              names its sources.
             </p>
-            <div className="chat-suggestions">
-              {SUGGESTIONS.map((s) => (
-                <button type="button" key={s} className="chat-suggestion" onClick={() => send(s)} disabled={streaming}>
-                  {s}
-                </button>
-              ))}
-            </div>
           </div>
         )}
 
