@@ -1666,12 +1666,14 @@ export function Assistant(props: {
 
   return (
     <div className="mm-ai">
-      <div className="mm-ai__head">
-        <strong>Stratasphere&trade;</strong>
-        <span className="card__meta">
-          {props.item?.atts.length ? `${props.item.atts.length} attachment${props.item.atts.length === 1 ? "" : "s"} in context` : ""}
-        </span>
-      </div>
+      {/* The column's toggle already names Stratasphere; this only says what it can see. */}
+      {props.item?.atts.length ? (
+        <div className="mm-ai__head">
+          <span className="card__meta">
+            {props.item.atts.length} attachment{props.item.atts.length === 1 ? "" : "s"} in context
+          </span>
+        </div>
+      ) : null}
       <div className="mm-ai__log" ref={listRef} aria-live="polite">
         {log.length === 0 && (
           <p className="card__meta">
