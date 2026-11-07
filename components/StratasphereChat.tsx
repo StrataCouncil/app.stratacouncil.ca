@@ -487,6 +487,49 @@ export function StratasphereChat({
   );
 
   const activeTitle = conversations.find((c) => c.id === activeId)?.title;
+  // A new conversation is a clean start: one question and the box to type in, centred.
+  const empty = messages.length === 0 && !loading;
+  const composer = (left === 0 ? (
+      <div className="demo-limit-inline" data-testid="chat-demo-limit">
+        <p>{DEMO_LIMIT_MESSAGE}</p>
+        <a href={SIGNUP_URL} className="button button-primary button-small">
+          Create your free account
+        </a>
+      </div>
+    ) : (
+    <form
+      className="chat-composer"
+      onSubmit={(e) => {
+        e.preventDefault();
+        send();
+      }}
+      data-testid="chat-composer"
+    >
+      <textarea
+        ref={input}
+        rows={1}
+        placeholder="Ask Stratasphere a question"
+        value={draft}
+        maxLength={4000}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+            e.preventDefault();
+            send();
+          }
+        }}
+        data-testid="chat-input"
+      />
+      <button
+        type="submit"
+        className="button button-primary button-small"
+        disabled={streaming || !draft.trim()}
+        data-testid="chat-send"
+      >
+        {streaming ? "Answering" : "Send"}
+      </button>
+    </form>
+    ));
 
   return (
     <div className="chat-shell" data-list-open={listOpen} data-testid="stratasphere-chat">
@@ -624,6 +667,7 @@ export function StratasphereChat({
             New
           </button>
         </div>
+        {!empty && (
         <div className="chat-kb-banner" data-testid="kb-banner">
           {activeTitle ? <strong className="chat-kb-banner__title">{activeTitle}</strong> : null}
           <span>
@@ -632,6 +676,7 @@ export function StratasphereChat({
             and the decision ledger), BC strata legislation and anonymized precedent from other strata corporations.
           </span>
         </div>
+        )}
 
         {messages.length > 0 || loading ? (
           <div className="chat-transcript" ref={transcript} data-testid="chat-transcript">
@@ -665,11 +710,8 @@ export function StratasphereChat({
           </div>
         ) : (
           <div className="chat-empty">
-            <h3>Ask Stratasphere</h3>
-            <p>
-              Questions about your bylaws, minutes, past decisions, finances, and BC strata legislation. Every answer
-              names its sources.
-            </p>
+            <h2 className="chat-empty__title">What would you like to know?</h2>
+            {composer}
           </div>
         )}
 
@@ -679,47 +721,7 @@ export function StratasphereChat({
           </div>
         )}
 
-        {left === 0 ? (
-          <div className="demo-limit-inline" data-testid="chat-demo-limit">
-            <p>{DEMO_LIMIT_MESSAGE}</p>
-            <a href={SIGNUP_URL} className="button button-primary button-small">
-              Create your free account
-            </a>
-          </div>
-        ) : (
-        <form
-          className="chat-composer"
-          onSubmit={(e) => {
-            e.preventDefault();
-            send();
-          }}
-          data-testid="chat-composer"
-        >
-          <textarea
-            ref={input}
-            rows={1}
-            placeholder="Ask Stratasphere a question"
-            value={draft}
-            maxLength={4000}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-                e.preventDefault();
-                send();
-              }
-            }}
-            data-testid="chat-input"
-          />
-          <button
-            type="submit"
-            className="button button-primary button-small"
-            disabled={streaming || !draft.trim()}
-            data-testid="chat-send"
-          >
-            {streaming ? "Answering" : "Send"}
-          </button>
-        </form>
-        )}
+        {!empty && composer}
         {left != null && left > 0 && (
           <p className="chat-disclaimer" data-testid="chat-demo-left">
             The demo includes {DEMO_LIMITS.chat} questions. {left} left.
