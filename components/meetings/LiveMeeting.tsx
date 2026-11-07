@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { groupByCategory, normalizeAgenda, resolutionTypeLabels, type AgendaItem } from "@/lib/meetings/agenda";
-import { choiceLabels, conflictedLots, inMeeting, runnerAway, takesConflicts, type Choice, type LiveState } from "@/lib/meetings/live";
+import { choiceLabels, conflictedLots, inMeeting, pendingConflicts, runnerAway, takesConflicts, type Choice, type LiveState } from "@/lib/meetings/live";
 import { councilQuorum } from "@/lib/meetings/rules";
 import { castVote, declareConflict, joinMeeting, leaveMeeting, takeOverMeeting } from "@/app/strata/[corpId]/meetings/[meetingId]/live/actions";
 import { fetchLiveState } from "@/lib/meetings/live-client";
@@ -155,6 +155,8 @@ export function LiveMeeting(props: {
 
   const conflicted = item ? conflictedLots(state.conflicts, item.id) : [];
   const iAmConflicted = Boolean(item && state.myLot && conflicted.includes(state.myLot));
+  // Declared, and waiting for the person running the meeting to acknowledge it (0082).
+  const myPending = Boolean(item && state.myLot && pendingConflicts(state.conflicts, item.id).some((c) => c.lot === state.myLot));
   // Stepped out for the item the meeting is on: nothing shared reaches them meanwhile.
   const steppedOut = Boolean(followingId && state.myLot && conflictedLots(state.conflicts, followingId).includes(state.myLot));
   const openHere = item && state.openVote?.itemId === item.id ? state.openVote : null;
@@ -313,12 +315,18 @@ export function LiveMeeting(props: {
             </section>
           )}
 
-          {item && state.myLot && !item.done && !iAmConflicted && takesConflicts(item.text) && (
+          {myPending && (
+            <p className="live-info" data-testid="live-conflict-pending">
+              You declared a conflict of interest on this item. {runnerName ? `Once ${runnerName} acknowledges it` : "Once the person running the meeting acknowledges it"},
+              you step out of the meeting and the video for this item. You&rsquo;re back when the meeting moves on.
+            </p>
+          )}
+          {item && state.myLot && !item.done && !iAmConflicted && !myPending && takesConflicts(item.text) && (
             <p className="card__meta live__conflict">
               <button type="button" className="link-button" onClick={() => setDeclaring(true)} data-testid="live-declare">
                 I have a conflict of interest on this item
               </button>{" "}
-              · you&rsquo;ll step out of the meeting for this item and won&rsquo;t vote on it (SPA s.32)
+              · once it&rsquo;s acknowledged, you step out of the meeting for this item and don&rsquo;t vote on it (SPA s.32)
             </p>
           )}
                 </>
@@ -331,7 +339,7 @@ export function LiveMeeting(props: {
         <MeetingSide
           presence={state.presence}
           names={props.names}
-          video={<VideoPanel meetingId={meetingId} isRunner={false} ended={adjourned} people={videoPeople(state.presence, props.names)} />}
+          video={<VideoPanel meetingId={meetingId} isRunner={false} ended={adjourned} steppedOut={steppedOut} people={videoPeople(state.presence, props.names)} />}
           showHere={false}
           assistant={
             <Assistant

@@ -11,6 +11,12 @@ export interface LiveConflict {
   itemId: string;
   lot: string;
   note: string;
+  /**
+   * The person running the meeting has acknowledged it (0082): the member
+   * has stepped out. A member's own declaration waits for this; one the
+   * runner records is acknowledged at once.
+   */
+  acknowledged: boolean;
 }
 
 export interface LiveBallot {
@@ -141,7 +147,8 @@ export function parseLiveState(raw: unknown): LiveState | null {
     lastHandover: null,
     conflicts: arr(r.conflicts).map((c) => {
       const o = obj(c);
-      return { itemId: str(o.itemId), lot: str(o.lot), note: str(o.note) };
+      // Before 0082 every conflict took effect at once.
+      return { itemId: str(o.itemId), lot: str(o.lot), note: str(o.note), acknowledged: o.acknowledged !== false };
     }),
     presence: arr(r.presence)
       .map((p) => {
@@ -187,9 +194,27 @@ export function parseLiveState(raw: unknown): LiveState | null {
   };
 }
 
-/** Lots with a declared conflict on this item. */
+/** Lots that have stepped out for this item: their conflict is acknowledged. */
 export function conflictedLots(conflicts: LiveConflict[], itemId: string): string[] {
-  return [...new Set(conflicts.filter((c) => c.itemId === itemId).map((c) => c.lot))].sort();
+  return [...new Set(conflicts.filter((c) => c.itemId === itemId && c.acknowledged).map((c) => c.lot))].sort();
+}
+
+/** What the video shows someone who has stepped out for the item the meeting is on. */
+export const STEPPED_OUT_VIDEO = "You've stepped out for this item because of your conflict of interest. The video comes back when the meeting moves on.";
+
+/** Declarations on this item still waiting for the person running the meeting. */
+export function pendingConflicts(conflicts: LiveConflict[], itemId: string): LiveConflict[] {
+  return conflicts.filter((c) => c.itemId === itemId && !c.acknowledged);
+}
+
+/**
+ * People to keep out of the video while the meeting is on this item: the
+ * accounts of every lot that has stepped out for it (from the join log).
+ */
+export function steppedOutUsers(conflicts: LiveConflict[], itemId: string | null, presence: PresenceEvent[]): string[] {
+  if (!itemId) return [];
+  const lots = new Set(conflictedLots(conflicts, itemId));
+  return [...new Set(presence.filter((p) => p.lot && lots.has(p.lot) && p.userId).map((p) => p.userId as string))];
 }
 
 /**
@@ -219,13 +244,30 @@ export function votedLine(v: Pick<OpenVote, "votedCount" | "eligibleLots">) {
 
 export const choiceLabels: Record<Choice, string> = { for: "For", against: "Against", abstain: "Abstain" };
 
-/** The minutes line for an item's declared conflicts. */
-export function conflictLine(lots: string[]): string {
-  if (lots.length === 0) return "";
-  const list = lots.length === 1 ? lots[0] : `${lots.slice(0, -1).join(", ")} and ${lots[lots.length - 1]}`;
-  return lots.length === 1
-    ? `${list} declared a conflict of interest, left the meeting for this item and did not vote.`
-    : `${list} declared conflicts of interest, left the meeting for this item and did not vote.`;
+/** A declared conflict as the minutes record it. */
+export interface ConflictRecord {
+  lot: string;
+  /** Its nature, as declared (SPA s.32). */
+  note: string;
+  /** Acknowledged by the person running the meeting: they stepped out. */
+  left: boolean;
+}
+
+/**
+ * The minutes lines for an item's declared conflicts, one sentence each:
+ * the lot, the nature of the interest, and that they left for the item (and,
+ * where a vote was held, didn't vote). Lot numbers only: no names.
+ */
+export function conflictLine(conflicts: ConflictRecord[], voteHeld: boolean): string {
+  return [...conflicts]
+    .sort((a, b) => a.lot.localeCompare(b.lot))
+    .map((c) => {
+      const nature = c.note.trim().replace(/[.;:,\s]+$/, "");
+      const declared = `${c.lot} declared a conflict of interest${nature ? ` (${nature})` : ""}`;
+      if (!c.left) return `${declared}.`;
+      return voteHeld ? `${declared}, left the meeting for this item, and did not vote.` : `${declared} and left the meeting for this item.`;
+    })
+    .join(" ");
 }
 
 /** Who's in the meeting now: each person's latest event is a join. */

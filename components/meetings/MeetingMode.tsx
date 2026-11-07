@@ -53,8 +53,9 @@ import { MeetingSide, MeetingUser, SharedViewer, TypedConfirm, useLeaveWarning }
 import { DEMO_LIMITS, DEMO_LIMIT_MESSAGE, SIGNUP_URL } from "@/lib/demo";
 import { isDemoLimit, showDemoLimit } from "@/lib/demo-client";
 import { ConflictsPanel, RunnerVotePanel } from "@/components/meetings/LiveVote";
-import { applyPresence, inMeeting, isJoin, presentForItem, type Presenting, takesConflicts, type Choice, type ClosedVote, type LiveConflict, type LiveState, type OpenVote } from "@/lib/meetings/live";
+import { applyPresence, inMeeting, isJoin, presentForItem, steppedOutUsers, type Presenting, takesConflicts, type Choice, type ClosedVote, type LiveConflict, type LiveState, type OpenVote } from "@/lib/meetings/live";
 import {
+  acknowledgeConflict,
   cancelVote,
   closeVote,
   declareConflict,
@@ -237,6 +238,8 @@ export function MeetingMode(props: {
     return () => clearInterval(t);
   }, [refreshLive, voteOpen]);
   const conflicts: LiveConflict[] = live?.conflicts ?? [];
+  // Members' own declarations wait for the Runner to acknowledge them (0082).
+  const pendingDeclarations = conflicts.filter((c) => !c.acknowledged);
 
   // ── Roll, quorum ─────────────────────────────────────────────────────
   const councilLots = props.lots.filter((l) => l.isCouncil).map((l) => l.lot);
@@ -690,6 +693,28 @@ export function MeetingMode(props: {
         </div>
       )}
 
+      {pendingDeclarations.map((c) => {
+        const at = agenda.find((i) => i.id === c.itemId);
+        if (!at) return null;
+        return (
+          <div className="mm__alert mm__alert--conflict" role="alert" key={`${c.itemId}:${c.lot}`} data-testid={`mm-pending-conflict-${c.lot}`}>
+            <strong>Conflict of interest:</strong> {names[c.lot] ? `${names[c.lot]}, ${c.lot}` : c.lot} declared one on item {at.num}
+            {c.note ? ` (${c.note})` : ""}. Acknowledge it, and they step out of the meeting and the video for that item.{" "}
+            <button type="button" className="button button-primary button-small" disabled={liveBusy} onClick={() => void liveStep(() => acknowledgeConflict(meetingId, c.itemId, c.lot))} data-testid={`mm-acknowledge-${c.lot}`}>
+              Acknowledge
+            </button>
+            {item?.id !== at.id && (
+              <>
+                {" "}
+                <button type="button" className="link-button" onClick={() => setCurrent(at.id)}>
+                  Go to item {at.num}
+                </button>
+              </>
+            )}
+          </div>
+        );
+      })}
+
       {called && !q.met && (
         <div className="mm__alert mm__alert--quorum" role="alert" data-testid="mm-quorum-lost">
           <strong>Quorum lost:</strong> {q.counted} present, {q.required} needed. No decisions can be made until quorum is back. Wait for members to
@@ -916,6 +941,7 @@ export function MeetingMode(props: {
                       onCancel: () => live?.openVote && void liveStep(() => cancelVote(live.openVote!.id)),
                       onDeclare: (lot: string, note: string) => void liveStep(() => declareConflict(meetingId, item.id, lot, note)),
                       onWithdraw: (lot: string) => void liveStep(() => withdrawConflict(meetingId, item.id, lot)),
+                      onAcknowledge: (lot: string) => void liveStep(() => acknowledgeConflict(meetingId, item.id, lot)),
                     }
               }
               names={names}
@@ -942,7 +968,15 @@ export function MeetingMode(props: {
           presence={live?.presence ?? []}
           names={names}
           roles={peopleRoles}
-          video={<VideoPanel meetingId={meetingId} isRunner={true} ended={live?.status === "ADJOURNED"} people={videoPeople(live?.presence ?? [], names)} />}
+          video={
+            <VideoPanel
+              meetingId={meetingId}
+              isRunner={true}
+              ended={live?.status === "ADJOURNED"}
+              people={videoPeople(live?.presence ?? [], names)}
+              removeUsers={steppedOutUsers(conflicts, item?.id ?? null, live?.presence ?? [])}
+            />
+          }
           assistant={
             <Assistant
               key={item?.id ?? "none"}
@@ -1252,6 +1286,7 @@ function ItemPanel(props: {
     onCancel: () => void;
     onDeclare: (lot: string, note: string) => void;
     onWithdraw: (lot: string) => void;
+    onAcknowledge: (lot: string) => void;
   };
   names: Record<string, string>;
   note: string;
@@ -1413,6 +1448,7 @@ function ItemPanel(props: {
           busy={live.busy}
           onDeclare={live.onDeclare}
           onWithdraw={live.onWithdraw}
+          onAcknowledge={live.onAcknowledge}
         />
       )}
       {live && it.done && live.conflicts.length > 0 && (

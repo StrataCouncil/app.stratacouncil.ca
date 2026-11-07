@@ -214,6 +214,8 @@ export function ConflictsPanel(props: {
   busy: boolean;
   onDeclare: (lot: string, note: string) => void;
   onWithdraw: (lot: string) => void;
+  /** Acknowledge a member's own declaration: they step out (0082). */
+  onAcknowledge?: (lot: string) => void;
 }) {
   const [adding, setAdding] = useState(false);
   const [lot, setLot] = useState("");
@@ -229,7 +231,22 @@ export function ConflictsPanel(props: {
     <div className="mm-conflicts" data-testid="mm-conflicts">
       {props.conflicts.map((c) => (
         <p key={c.lot} className="mm-conflicts__row">
-          <strong>{who(c.lot)}</strong> declared a conflict of interest{c.note ? `: ${c.note}` : ""}. They take no part in this item and aren&rsquo;t counted for its votes.
+          <strong>{who(c.lot)}</strong> declared a conflict of interest{c.note ? `: ${c.note}` : ""}.{" "}
+          {c.acknowledged ? (
+            <>They&rsquo;ve stepped out: they take no part in this item and aren&rsquo;t counted for its votes.</>
+          ) : (
+            <>
+              Waiting for {props.canEdit ? "you" : "the person running the meeting"} to acknowledge it. Until then they&rsquo;re still in the meeting.
+              {props.canEdit && props.onAcknowledge && (
+                <>
+                  {" "}
+                  <button type="button" className="button button-primary button-small" onClick={() => props.onAcknowledge!(c.lot)} disabled={props.busy} data-testid={`mm-acknowledge-item-${c.lot}`}>
+                    Acknowledge
+                  </button>
+                </>
+              )}
+            </>
+          )}
           {props.canEdit &&
             (withdrawing === c.lot ? (
               <span className="mm-conflicts__confirm">
