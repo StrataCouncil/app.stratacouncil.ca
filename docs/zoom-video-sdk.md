@@ -1,6 +1,6 @@
 # Meeting video: Zoom Video SDK
 
-Replaces the Meeting SDK embed (docs/zoom-setup.md, docs/zoom-council-meetings.md).
+Replaced the earlier Meeting SDK embed, now removed (0083).
 The Meeting SDK on the web always shows Zoom's own interface (toolbar,
 participants panel, waiting room, notices), and its custom interface exists
 only in Zoom's native apps. The Video SDK has no Zoom interface: the panel is
@@ -74,9 +74,11 @@ moves on. The server won't sign them a token meanwhile, and the Runner's
 screen removes them if they're still in. It finds them by the token's
 `user_identity` (the user id without dashes).
 
-## The Meeting SDK setup
+## The Meeting SDK setup (removed)
 
-Kept until the Video SDK panel is confirmed in a sandbox, then removed: the
-two Zoom Marketplace apps, their six `ZOOM_*` variables, `lib/zoom/api.ts`,
-`lib/meetings/video.ts`, `public/zoom-frame.html`, and the `meeting_zoom`
-table (0080). Nothing calls them for video any more.
+The earlier Meeting SDK embed is gone: its code, its frame page, and the
+`meeting_zoom` table (dropped in 0083). In Vercel, remove its six variables
+(`ZOOM_ACCOUNT_ID`, `ZOOM_CLIENT_ID`, `ZOOM_CLIENT_SECRET`,
+`ZOOM_SDK_CLIENT_ID`, `ZOOM_SDK_CLIENT_SECRET`, `ZOOM_HOST_USERS`) from both
+projects, and delete its two apps (Server-to-Server OAuth, and the General
+app with Meeting SDK) in the Zoom App Marketplace. The Video SDK keys stay.

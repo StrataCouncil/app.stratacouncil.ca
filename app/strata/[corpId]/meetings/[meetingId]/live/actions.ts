@@ -5,8 +5,7 @@ import { conflictedLots, motionCounts, parseLiveState, parsePresenting, STEPPED_
 import { logDemoActivity } from "@/lib/demo-usage";
 import { IS_DEMO } from "@/lib/demo";
 import { demoRestricted } from "@/lib/demo-sandbox";
-import { sessionTopic, videoSdkConfig, videoSdkToken } from "@/lib/zoom/video-sdk";
-import { zoomDisplayName } from "@/lib/zoom/signature";
+import { sessionTopic, videoSdkConfig, videoSdkToken, zoomDisplayName } from "@/lib/zoom/video-sdk";
 
 /**
  * Live voting (0073). Every rule (who runs the meeting, who may vote, one

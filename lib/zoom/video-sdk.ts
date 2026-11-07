@@ -83,3 +83,9 @@ export function videoSdkToken(input: {
   const body = `${part(header)}.${part(payload)}`;
   return `${body}.${createHmac("sha256", input.config.secret).update(body).digest("base64url")}`;
 }
+
+/** How someone appears in the meeting's video: "Jane Doe, SL012", or just the name for someone without a council lot. */
+export function zoomDisplayName(name: string, lot: string | null): string {
+  const clean = (name || "Council member").replace(/\s+/g, " ").trim().slice(0, 50);
+  return lot ? `${clean}, ${lot}` : clean;
+}
