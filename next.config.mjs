@@ -64,15 +64,6 @@ const nextConfig = {
           { key: "Permissions-Policy", value: "camera=(self), microphone=(self), display-capture=(self), geolocation=()" },
         ],
       },
-      // The Zoom frame itself: shown only inside our own pages.
-      {
-        source: "/zoom-frame.html",
-        headers: [
-          { key: "X-Frame-Options", value: "SAMEORIGIN" },
-          { key: "Content-Security-Policy", value: "frame-ancestors 'self'" },
-          { key: "Permissions-Policy", value: "camera=(self), microphone=(self), display-capture=(self), geolocation=()" },
-        ],
-      },
     ];
   },
   poweredByHeader: false,
