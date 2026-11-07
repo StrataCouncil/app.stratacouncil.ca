@@ -3734,17 +3734,22 @@ li[data-done="true"] .checklist__mark {
   background: var(--danger-bg);
   color: var(--danger);
 }
+/* The question box across the column, Ask under it on the right. */
 .mm-ai__form {
   display: flex;
+  flex-direction: column;
   gap: 0.5rem;
-  padding: 0.75rem 1rem;
+  padding: 0.75rem 1rem 1rem;
   border-top: 1px solid var(--line);
-  align-items: flex-end;
+}
+.mm-ai__form button {
+  align-self: flex-end;
 }
 .mm-ai__form textarea {
-  flex: 1;
+  width: 100%;
+  box-sizing: border-box;
   font: inherit;
-  padding: 0.5rem;
+  padding: 0.55rem 0.65rem;
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   resize: none;

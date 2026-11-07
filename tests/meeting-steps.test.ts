@@ -57,6 +57,22 @@ test("electing a chair, and general meetings, count the vote by hand", () => {
   assert.match(steps.find((s) => s.id === "count")!.hint, /3\/4|Three/i);
 });
 
+test("electing a chair: is one needed, a nomination, a count, the result (no background, no discussion)", () => {
+  const chair = makeItem("Elect Chairperson (if necessary)", "Chair", { type: "FOR_APPROVAL", motion: newMotion("MAJORITY", "THAT [name] be elected to chair this meeting.") });
+  const steps = itemSteps(chair, council());
+  assert.deepEqual(ids(steps), ["needed", "motion", "count", "confirm"]);
+  assert.match(steps[0]!.hint, /president/i);
+  assert.match(steps.find((s) => s.id === "count")!.hint, /majority of council members present/);
+  // A nomination needs the nominee, as well as who nominated and seconded.
+  const named = { ...chair, nominee: "Adaeze Okafor", motion: { ...chair.motion!, mover: "SL019", sec: "SL012" } };
+  assert.equal(itemSteps(named, council()).find((s) => s.id === "motion")!.done, true);
+  assert.equal(itemSteps({ ...named, nominee: "" }, council()).find((s) => s.id === "motion")!.done, false);
+  assert.match(itemSteps(named, council()).find((s) => s.id === "confirm")!.say!, /Adaeze Okafor is elected/);
+  // At a general meeting, the eligible voters elect (Standard Bylaw 25).
+  const general = itemSteps(chair, { general: true, voteOpen: false, voteClosed: false });
+  assert.match(general.find((s) => s.id === "count")!.hint, /eligible voters present in person or by proxy/);
+});
+
 test("information and discussion items", () => {
   assert.deepEqual(ids(itemSteps(makeItem("Treasurer's report", "Reports"), council())), ["introduce", "questions", "received"]);
   const d = itemSteps(makeItem("Dog policy", "New Business", { type: "FOR_DISCUSSION" }), council());
