@@ -1784,11 +1784,36 @@ button {
   padding: 2rem;
 }
 
-.chat-empty p {
-  max-width: 420px;
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.9rem;
+/* A new conversation: one question and the box to type in, centred. */
+.chat-empty__title {
+  margin: 0 0 1.25rem;
+  font-size: 1.9rem;
+  font-weight: 400;
+  color: var(--ink);
+}
+
+.chat-empty .chat-composer {
+  width: 100%;
+  max-width: 680px;
+  padding: 0.5rem 0.5rem 0.5rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  box-shadow: 0 8px 28px rgba(27, 42, 65, 0.08);
+  align-items: center;
+}
+
+.chat-empty .chat-composer textarea {
+  border: 0;
+  background: transparent;
+  padding: 0.55em 0.4em;
+}
+
+.chat-empty .chat-composer textarea:focus {
+  outline: none;
+}
+
+.chat-empty .demo-limit-inline {
+  max-width: 680px;
 }
 
 .chat-composer {
@@ -1879,6 +1904,23 @@ button.chat-source:hover {
   color: var(--danger);
 }
 
+/* While an answer is still being written and the reader has scrolled away. */
+.chat-jump {
+  align-self: center;
+  margin: -2.75rem 0 0.75rem;
+  position: relative;
+  z-index: 1;
+  font: inherit;
+  font-size: 0.8rem;
+  padding: 0.35rem 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 4px 12px rgba(27, 42, 65, 0.12);
+  cursor: pointer;
+}
+
 .chat-loading {
   color: var(--muted);
   font-size: 0.85rem;
@@ -1897,31 +1939,6 @@ button.chat-source:hover {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.chat-suggestions {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.5rem;
-  max-width: 560px;
-  width: 100%;
-  margin-top: 1rem;
-}
-
-.chat-suggestion {
-  font: inherit;
-  font-size: 0.82rem;
-  text-align: left;
-  color: var(--ink);
-  background: var(--paper);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  padding: 0.7em 0.9em;
-  cursor: pointer;
-}
-
-.chat-suggestion:hover {
-  border-color: var(--accent);
 }
 
 .chat-error {

@@ -30,13 +30,6 @@ import type { ConversationMessage, ConversationProject, ConversationSummary } fr
 
 type Msg = Omit<ConversationMessage, "createdAt"> & { pending?: boolean };
 
-const SUGGESTIONS = [
-  "What do our bylaws say about pets?",
-  "What has council decided about the roof in the last two years?",
-  "When is the AGM notice due under the Strata Property Act?",
-  "Summarize the most recent financial statements.",
-];
-
 function dateGroup(iso: string, now: Date): string {
   const d = new Date(iso);
   const day = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
@@ -275,11 +268,25 @@ export function StratasphereChat({
   // on a desktop the list is always beside it and this does nothing).
   const [listOpen, setListOpen] = useState(false);
 
-  // Follow the answer as it streams, unless the reader has scrolled up.
+  // Follow the answer as it's written, until the reader clicks, scrolls, or
+  // touches the conversation: then it stays where they are, so they can start
+  // reading from the top. Following starts again with their next question.
+  const following = useRef(true);
+  const [stoppedFollowing, setStoppedFollowing] = useState(false);
+  function stopFollowing() {
+    if (!following.current) return;
+    following.current = false;
+    setStoppedFollowing(true);
+  }
+  function followAgain() {
+    following.current = true;
+    setStoppedFollowing(false);
+    const el = transcript.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }
   useEffect(() => {
     const el = transcript.current;
-    if (!el) return;
-    if (el.scrollHeight - el.scrollTop - el.clientHeight < 160) el.scrollTop = el.scrollHeight;
+    if (el && following.current) el.scrollTop = el.scrollHeight;
   }, [messages]);
 
   useEffect(() => {
@@ -293,6 +300,8 @@ export function StratasphereChat({
     setListOpen(false);
     if (streaming || id === activeId) return;
     const seq = ++selectSeq.current;
+    following.current = true;
+    setStoppedFollowing(false);
     setActiveId(id);
     setMessages([]);
     setError("");
@@ -379,6 +388,8 @@ export function StratasphereChat({
     setError("");
     setDraft("");
     setStreaming(true);
+    following.current = true;
+    setStoppedFollowing(false);
     const conversationId = activeId;
     setMessages((prev) => [
       ...prev,
@@ -494,6 +505,49 @@ export function StratasphereChat({
   );
 
   const activeTitle = conversations.find((c) => c.id === activeId)?.title;
+  // A new conversation is a clean start: one question and the box to type in, centred.
+  const empty = messages.length === 0 && !loading;
+  const composer = (left === 0 ? (
+      <div className="demo-limit-inline" data-testid="chat-demo-limit">
+        <p>{DEMO_LIMIT_MESSAGE}</p>
+        <a href={SIGNUP_URL} className="button button-primary button-small">
+          Create your free account
+        </a>
+      </div>
+    ) : (
+    <form
+      className="chat-composer"
+      onSubmit={(e) => {
+        e.preventDefault();
+        send();
+      }}
+      data-testid="chat-composer"
+    >
+      <textarea
+        ref={input}
+        rows={1}
+        placeholder="Ask Stratasphere a question"
+        value={draft}
+        maxLength={4000}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+            e.preventDefault();
+            send();
+          }
+        }}
+        data-testid="chat-input"
+      />
+      <button
+        type="submit"
+        className="button button-primary button-small"
+        disabled={streaming || !draft.trim()}
+        data-testid="chat-send"
+      >
+        {streaming ? "Answering" : "Send"}
+      </button>
+    </form>
+    ));
 
   return (
     <div className="chat-shell" data-list-open={listOpen} data-testid="stratasphere-chat">
@@ -631,6 +685,7 @@ export function StratasphereChat({
             New
           </button>
         </div>
+        {!empty && (
         <div className="chat-kb-banner" data-testid="kb-banner">
           {activeTitle ? <strong className="chat-kb-banner__title">{activeTitle}</strong> : null}
           <span>
@@ -639,9 +694,18 @@ export function StratasphereChat({
             and the decision ledger), BC strata legislation and anonymized precedent from other strata corporations.
           </span>
         </div>
+        )}
 
         {messages.length > 0 || loading ? (
-          <div className="chat-transcript" ref={transcript} data-testid="chat-transcript">
+          <div
+            className="chat-transcript"
+            ref={transcript}
+            data-testid="chat-transcript"
+            onWheel={stopFollowing}
+            onTouchStart={stopFollowing}
+            onMouseDown={stopFollowing}
+            onKeyDown={stopFollowing}
+          >
             {loading && <p className="chat-loading">Loading conversation&hellip;</p>}
             {messages.map((m) => (
               <div className="chat-message" data-role={m.role} key={m.id}>
@@ -672,19 +736,15 @@ export function StratasphereChat({
           </div>
         ) : (
           <div className="chat-empty">
-            <h3>Ask Stratasphere</h3>
-            <p>
-              Questions about your bylaws, minutes, past decisions, finances and BC strata legislation. Every answer names
-              its sources.
-            </p>
-            <div className="chat-suggestions">
-              {SUGGESTIONS.map((s) => (
-                <button type="button" key={s} className="chat-suggestion" onClick={() => send(s)} disabled={streaming}>
-                  {s}
-                </button>
-              ))}
-            </div>
+            <h2 className="chat-empty__title">What would you like to know?</h2>
+            {composer}
           </div>
+        )}
+
+        {streaming && stoppedFollowing && (
+          <button type="button" className="chat-jump" onClick={followAgain} data-testid="chat-jump">
+            Jump to the end
+          </button>
         )}
 
         {error && (
@@ -693,47 +753,7 @@ export function StratasphereChat({
           </div>
         )}
 
-        {left === 0 ? (
-          <div className="demo-limit-inline" data-testid="chat-demo-limit">
-            <p>{DEMO_LIMIT_MESSAGE}</p>
-            <a href={SIGNUP_URL} className="button button-primary button-small">
-              Create your free account
-            </a>
-          </div>
-        ) : (
-        <form
-          className="chat-composer"
-          onSubmit={(e) => {
-            e.preventDefault();
-            send();
-          }}
-          data-testid="chat-composer"
-        >
-          <textarea
-            ref={input}
-            rows={1}
-            placeholder="Ask Stratasphere a question"
-            value={draft}
-            maxLength={4000}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-                e.preventDefault();
-                send();
-              }
-            }}
-            data-testid="chat-input"
-          />
-          <button
-            type="submit"
-            className="button button-primary button-small"
-            disabled={streaming || !draft.trim()}
-            data-testid="chat-send"
-          >
-            {streaming ? "Answering" : "Send"}
-          </button>
-        </form>
-        )}
+        {!empty && composer}
         {left != null && left > 0 && (
           <p className="chat-disclaimer" data-testid="chat-demo-left">
             The demo includes {DEMO_LIMITS.chat} questions. {left} left.
