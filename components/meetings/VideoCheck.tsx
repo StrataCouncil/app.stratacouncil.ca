@@ -248,6 +248,11 @@ export function VideoCheck() {
                 </button>
               </div>
             )}
+            {sound === "yes" && (
+              <p className="video-check__result" data-ok role="status" data-testid="video-check-speakers-ok">
+                {cameraOk && heardYou ? "You’re all set." : "Your speakers work."}
+              </p>
+            )}
             {sound === "no" && (
               <p className="video-check__result">
                 Turn the volume up, check the sound isn&rsquo;t muted, and if you use headphones, check they&rsquo;re connected. Then play it again.
