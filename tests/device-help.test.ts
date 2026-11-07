@@ -44,10 +44,12 @@ test("a refusal is told apart: the browser, the computer, or a page opened befor
 });
 
 test("every page may use the camera and microphone (this site only): the app moves between pages without reloading", async () => {
-  const { default: config } = await import("../next.config.mjs");
+  type Rule = { source: string; headers: { key: string; value: string }[] };
+  const { default: config } = (await import("../next.config.mjs")) as { default: { headers: () => Promise<Rule[]> } };
   const rules = await config.headers();
-  const site = rules.find((r: { source: string }) => r.source === "/:path*");
-  const policy = site.headers.find((h: { key: string }) => h.key === "Permissions-Policy").value as string;
+  const site = rules.find((r) => r.source === "/:path*");
+  assert.ok(site);
+  const policy = site.headers.find((h) => h.key === "Permissions-Policy")?.value ?? "";
   assert.match(policy, /camera=\(self\)/);
   assert.match(policy, /microphone=\(self\)/);
   assert.match(policy, /geolocation=\(\)/);
