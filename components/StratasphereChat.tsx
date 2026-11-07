@@ -268,11 +268,25 @@ export function StratasphereChat({
   // on a desktop the list is always beside it and this does nothing).
   const [listOpen, setListOpen] = useState(false);
 
-  // Follow the answer as it streams, unless the reader has scrolled up.
+  // Follow the answer as it's written, until the reader clicks, scrolls, or
+  // touches the conversation: then it stays where they are, so they can start
+  // reading from the top. Following starts again with their next question.
+  const following = useRef(true);
+  const [stoppedFollowing, setStoppedFollowing] = useState(false);
+  function stopFollowing() {
+    if (!following.current) return;
+    following.current = false;
+    setStoppedFollowing(true);
+  }
+  function followAgain() {
+    following.current = true;
+    setStoppedFollowing(false);
+    const el = transcript.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }
   useEffect(() => {
     const el = transcript.current;
-    if (!el) return;
-    if (el.scrollHeight - el.scrollTop - el.clientHeight < 160) el.scrollTop = el.scrollHeight;
+    if (el && following.current) el.scrollTop = el.scrollHeight;
   }, [messages]);
 
   useEffect(() => {
@@ -286,6 +300,8 @@ export function StratasphereChat({
     setListOpen(false);
     if (streaming || id === activeId) return;
     const seq = ++selectSeq.current;
+    following.current = true;
+    setStoppedFollowing(false);
     setActiveId(id);
     setMessages([]);
     setError("");
@@ -372,6 +388,8 @@ export function StratasphereChat({
     setError("");
     setDraft("");
     setStreaming(true);
+    following.current = true;
+    setStoppedFollowing(false);
     const conversationId = activeId;
     setMessages((prev) => [
       ...prev,
@@ -679,7 +697,15 @@ export function StratasphereChat({
         )}
 
         {messages.length > 0 || loading ? (
-          <div className="chat-transcript" ref={transcript} data-testid="chat-transcript">
+          <div
+            className="chat-transcript"
+            ref={transcript}
+            data-testid="chat-transcript"
+            onWheel={stopFollowing}
+            onTouchStart={stopFollowing}
+            onMouseDown={stopFollowing}
+            onKeyDown={stopFollowing}
+          >
             {loading && <p className="chat-loading">Loading conversation&hellip;</p>}
             {messages.map((m) => (
               <div className="chat-message" data-role={m.role} key={m.id}>
@@ -713,6 +739,12 @@ export function StratasphereChat({
             <h2 className="chat-empty__title">What would you like to know?</h2>
             {composer}
           </div>
+        )}
+
+        {streaming && stoppedFollowing && (
+          <button type="button" className="chat-jump" onClick={followAgain} data-testid="chat-jump">
+            Jump to the end
+          </button>
         )}
 
         {error && (
