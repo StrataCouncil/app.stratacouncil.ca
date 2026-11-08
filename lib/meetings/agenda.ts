@@ -128,6 +128,12 @@ export interface AgendaItem {
   /** Elect Chairperson item only: who was nominated. */
   nominee?: string;
   /**
+   * An election of a chair for one item only (0084): the meeting's chair
+   * declared a conflict on that item, so council chooses someone else to
+   * chair it. The id of the item it's for.
+   */
+  forItemId?: string;
+  /**
    * Ratification of a council discussion (0070): the discussion it ratifies.
    * When the meeting adjourns, this item's outcome marks it ratified or not.
    */
@@ -138,6 +144,11 @@ export interface AgendaItem {
    * lot, the nature of the interest, and whether they stepped out.
    */
   conflicts?: { lot: string; note: string; left: boolean }[];
+  /**
+   * Who ran the meeting for this item because the Runner stepped out for a
+   * conflict (0084). Set at adjournment from the handover record, for the minutes.
+   */
+  standInRunner?: string;
 }
 
 function rid(prefix: string) {
@@ -354,14 +365,25 @@ const standardMotions: Array<[(t: string) => boolean, string]> = [
   [(t) => t.includes("adjourn"), "THAT the meeting be adjourned."],
 ];
 
-export const electChairMotion = (nominee: string) =>
-  `THAT ${nominee.trim() || "[name]"} be elected to chair this meeting.`;
+export const electChairMotion = (nominee: string, forItem?: Pick<AgendaItem, "text"> | null) =>
+  forItem
+    ? `THAT ${nominee.trim() || "[name]"} chair the meeting for the item "${forItem.text}", in place of the chair, who has declared a conflict of interest.`
+    : `THAT ${nominee.trim() || "[name]"} be elected to chair this meeting.`;
+
+/** Whoever council elected to chair one item, if it has (0084). */
+export function chairForItem(agenda: AgendaItem[], itemId: string): string | null {
+  let chair: string | null = null;
+  for (const it of agenda) {
+    if (it.forItemId === itemId && isElectChair(it) && it.done && it.motion?.outcome === "CARRIED" && it.nominee?.trim()) chair = it.nominee.trim();
+  }
+  return chair;
+}
 
 /** Whoever the meeting elected as chair, if it has. The last carried election wins. */
 export function electedChair(agenda: AgendaItem[]): string | null {
   let chair: string | null = null;
   for (const it of agenda) {
-    if (isElectChair(it) && it.done && it.motion?.outcome === "CARRIED" && it.nominee?.trim()) chair = it.nominee.trim();
+    if (!it.forItemId && isElectChair(it) && it.done && it.motion?.outcome === "CARRIED" && it.nominee?.trim()) chair = it.nominee.trim();
   }
   return chair;
 }
@@ -447,6 +469,7 @@ export function normalizeAgenda(raw: unknown): AgendaItem[] {
         nextMeeting: (r.nextMeeting as AgendaItem["nextMeeting"]) ?? undefined,
         addedDuringMeeting: Boolean(r.addedDuringMeeting) || undefined,
         nominee: typeof r.nominee === "string" && r.nominee.trim() ? r.nominee.slice(0, 200) : undefined,
+        forItemId: typeof r.forItemId === "string" && r.forItemId.length <= 100 ? r.forItemId : undefined,
         discussionId: typeof r.discussionId === "string" && /^[0-9a-f-]{36}$/i.test(r.discussionId) ? r.discussionId : undefined,
         conflicts: Array.isArray(r.conflicts) ? normalizeConflicts(r.conflicts as unknown[]) : undefined,
       };

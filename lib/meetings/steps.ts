@@ -86,21 +86,30 @@ export function itemSteps(it: AgendaItem, s: StepState): Step[] {
     // proxy elect a chair (25). A strata's own bylaws govern where they differ.
     const counted = m.for + m.against + m.abstain > 0;
     const nominated = Boolean(m.text.trim() && m.mover && m.sec && it.nominee?.trim());
+    // A chair for one item (0084): the chair declared a conflict on it and steps out for it.
+    const scoped = Boolean(it.forItemId);
+    const elected = scoped
+      ? `"${it.nominee?.trim() || "[Name]"} will chair the next item."`
+      : `"${it.nominee?.trim() || "[Name]"} is elected to chair this meeting."`;
     steps.push(
       manual(
         "needed",
-        "Check a chair is needed",
-        s.general
-          ? "The president chairs; if the president is unwilling or unable, the vice president (Standard Bylaw 25). Elect a chair only if neither is chairing. If your bylaws say otherwise, they govern."
-          : "The president usually chairs, or the vice president when the president is absent or unable to act. Elect a chair only if neither is here and willing. If your bylaws say otherwise, they govern.",
-        `"Neither the president nor the vice president is able to chair, so ${s.general ? "the meeting" : "council"} needs to choose a chair."`
+        scoped ? "Explain why" : "Check a chair is needed",
+        scoped
+          ? "The chair has declared a conflict of interest on the next item and leaves the meeting while it's discussed and voted on (Strata Property Act s.32). Council chooses who chairs that item; the chair returns after it."
+          : s.general
+            ? "The president chairs; if the president is unwilling or unable, the vice president (Standard Bylaw 25). Elect a chair only if neither is chairing. If your bylaws say otherwise, they govern."
+            : "The president usually chairs, or the vice president when the president is absent or unable to act. Elect a chair only if neither is here and willing. If your bylaws say otherwise, they govern.",
+        scoped
+          ? '"Our chair has a conflict of interest on the next item, so council needs to choose someone to chair it."'
+          : `"Neither the president nor the vice president is able to chair, so ${s.general ? "the meeting" : "council"} needs to choose a chair."`
       ),
       auto(
         "motion",
         "Take a nomination",
         "Record the nominee, who nominated them, and who seconded. If there's more than one nomination, vote on them one at a time, in the order nominated.",
         nominated,
-        '"Are there any nominations for chair? … Nominated by …, seconded by …"'
+        scoped ? '"Are there any nominations to chair the next item? … Nominated by …, seconded by …"' : '"Are there any nominations for chair? … Nominated by …, seconded by …"'
       ),
       ...(usesLiveVoting(it, s.general)
         ? [
@@ -114,9 +123,11 @@ export function itemSteps(it: AgendaItem, s: StepState): Step[] {
             auto(
               "close",
               "Close the vote and confirm the result",
-              "It goes in the minutes. If carried, the new chair takes over. If defeated, take the next nomination.",
+              scoped
+                ? "It goes in the minutes. If carried, they chair the next item. If defeated, take the next nomination."
+                : "It goes in the minutes. If carried, the new chair takes over. If defeated, take the next nomination.",
               s.voteClosed || it.done,
-              `"${it.nominee?.trim() || "[Name]"} is elected to chair this meeting."`
+              elected
             ),
           ]
         : [
@@ -130,9 +141,11 @@ export function itemSteps(it: AgendaItem, s: StepState): Step[] {
             auto(
               "confirm",
               "Confirm the result",
-              "It goes in the minutes. If carried, the new chair takes over. If defeated, take the next nomination.",
+              scoped
+                ? "It goes in the minutes. If carried, they chair the next item. If defeated, take the next nomination."
+                : "It goes in the minutes. If carried, the new chair takes over. If defeated, take the next nomination.",
               it.done,
-              `"${it.nominee?.trim() || "[Name]"} is elected to chair this meeting."`
+              elected
             ),
           ])
     );

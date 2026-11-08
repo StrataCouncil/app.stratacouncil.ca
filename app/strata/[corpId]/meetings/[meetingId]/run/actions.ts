@@ -192,7 +192,7 @@ export async function adjournMeeting(
     // Late arrivals and departures, for the minutes (0074).
     supabase.from("meeting_presence").select("id, user_id, lot_number, event, at").eq("meeting_id", meetingId).order("id"),
     // Changes of who ran the meeting (0079).
-    supabase.from("meeting_handovers").select("from_name, to_name, kind, at").eq("meeting_id", meetingId).order("id"),
+    supabase.from("meeting_handovers").select("from_name, to_name, kind, at, item_id, reason").eq("meeting_id", meetingId).order("id"),
   ]);
   if (conflictsError) console.error("[adjournMeeting] conflicts", conflictsError.code, conflictsError.message);
   const votesById = new Map((closedVotes ?? []).map((v) => [v.id as string, v]));
@@ -206,6 +206,9 @@ export async function adjournMeeting(
       .filter((c) => c.item_id === it.id)
       .map((c) => ({ lot: c.lot_number as string, note: (c.note as string) ?? "", left: c.acknowledged_at != null }));
     if (declared.length) it = { ...it, conflicts: declared.sort((a, b) => a.lot.localeCompare(b.lot)) };
+    // The Runner stepped out for this item and handed the meeting over (0084).
+    const standIn = (handoverRows ?? []).find((h) => h.item_id === it.id && h.reason === "conflict");
+    if (standIn) it = { ...it, standInRunner: (standIn.to_name as string) || "Someone else" };
     return it.deferred && !it.done && !it.minutesSummary ? { ...it, minutesSummary: minutesSummary(it) } : it;
   });
   const clean = cleanAttendance(attendance);

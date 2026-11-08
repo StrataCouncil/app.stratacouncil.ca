@@ -40,6 +40,7 @@ function reason(message: string, fallback: string) {
   const known = [
     "Only council",
     "Only council members and those who run meetings",
+    "or an Admin",
     "Only the person",
     "free_discussion_used",
     "motion_locked",
@@ -53,6 +54,24 @@ function reason(message: string, fallback: string) {
   ];
   if (!known.some((k) => message.includes(k))) return fallback;
   return message.replace(/^[a-z_]+: /, "");
+}
+
+/**
+ * As reason(), but a Super Admin also sees the database's own message when
+ * it isn't one written for people, so a failure can be diagnosed without
+ * the server logs. Everyone else gets the general message.
+ */
+async function explain(message: string, fallback: string): Promise<string> {
+  const shown = reason(message, fallback);
+  if (shown !== fallback || !message) return shown;
+  console.error("[discussions]", message);
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return shown;
+  const { data } = await supabase.from("profiles").select("is_super_admin").eq("id", user.id).maybeSingle();
+  return data?.is_super_admin ? `${fallback} (Super Admin detail: ${message.slice(0, 300)})` : shown;
 }
 
 function refresh(corpId: string, id?: string) {
@@ -92,8 +111,7 @@ export async function createDiscussion(corpId: string, input: DiscussionInput): 
     p_motion: fields.motion,
   });
   if (error || !data) {
-    console.error("[createDiscussion]", error?.message);
-    return { ok: false, error: reason(error?.message ?? "", "Couldn't start the discussion.") };
+    return { ok: false, error: await explain(error?.message ?? "", "Couldn't start the discussion.") };
   }
   await emailCouncil(data as string, "opened", user.id);
   refresh(corpId);
@@ -112,7 +130,7 @@ export async function updateDiscussion(corpId: string, id: string, input: Discus
     p_risks: fields.risks,
     p_motion: fields.motion,
   });
-  if (error) return { ok: false, error: reason(error.message, "Couldn't save the changes.") };
+  if (error) return { ok: false, error: await explain(error.message, "Couldn't save the changes.") };
   refresh(corpId, id);
   return { ok: true };
 }
@@ -123,7 +141,7 @@ export async function castVote(corpId: string, id: string, vote: string, recusal
     p_vote: vote,
     p_reason: recusalReason?.slice(0, 1000) ?? null,
   });
-  if (error) return { ok: false, error: reason(error.message, "Couldn't record your vote.") };
+  if (error) return { ok: false, error: await explain(error.message, "Couldn't record your vote.") };
   refresh(corpId, id);
   return { ok: true };
 }
@@ -137,7 +155,7 @@ export async function addComment(corpId: string, id: string, body: string): Prom
   } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "Please sign in again." };
   const { data, error } = await supabase.rpc("add_discussion_comment", { p_discussion_id: id, p_body: text });
-  if (error || !data) return { ok: false, error: reason(error?.message ?? "", "Couldn't post your comment.") };
+  if (error || !data) return { ok: false, error: await explain(error?.message ?? "", "Couldn't post your comment.") };
   // Council gets the thread by email (0081); a failed email is logged, the comment stands.
   await emailCouncil(id, "comment", user.id).catch((err) => console.error("[addComment] email", err instanceof Error ? err.message : err));
   refresh(corpId, id);
@@ -151,7 +169,7 @@ export async function closeDiscussion(corpId: string, id: string): Promise<Ok | 
   } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "Please sign in again." };
   const { error } = await supabase.rpc("close_discussion", { p_discussion_id: id });
-  if (error) return { ok: false, error: reason(error.message, "Couldn't close the discussion.") };
+  if (error) return { ok: false, error: await explain(error.message, "Couldn't close the discussion.") };
   // The vote is closed whatever happens next; a record or email that fails is logged, not undone.
   await fileDiscussionRecord(id);
   await emailCouncil(id, "closed", user.id);
