@@ -110,7 +110,17 @@ export interface LiveState {
   lastHandover: Handover | null;
 }
 
-export type Handover = { toUser: string; fromName: string; toName: string; kind: "handed_over" | "took_over"; at: string };
+export type Handover = {
+  toUser: string;
+  /** Who handed it over, and for which item if it was because of their conflict (0084). */
+  fromUser?: string | null;
+  itemId?: string | null;
+  conflict?: boolean;
+  fromName: string;
+  toName: string;
+  kind: "handed_over" | "took_over";
+  at: string;
+};
 
 /** The Runner's screen has gone quiet for 2 minutes: the meeting is paused and can be taken over (0079). */
 export function runnerAway(state: Pick<LiveState, "runnerSeenAt" | "status">, now: number): boolean {

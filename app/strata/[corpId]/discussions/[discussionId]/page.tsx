@@ -191,10 +191,11 @@ export default async function DiscussionPage({ params }: { params: Promise<{ cor
           </section>
           )}
 
-          {open && isAuthor && (
+          {open && (isAuthor || access.isAdmin) && (
             <AuthorPanel
               corpId={corpId}
               discussionId={d.id}
+              isAuthor={isAuthor}
               editable={!anyVotes}
               initial={{ title: d.title, background: d.background, financial: d.financial, risks: d.risks, motion: d.motion, voteRequired: d.voteRequired }}
               majority={d.tally && d.voteRequired ? majorityNote(d.tally) : null}

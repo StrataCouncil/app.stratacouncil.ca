@@ -130,7 +130,13 @@ export function buildMinutes(input: {
         num: it.num,
         title: it.text,
         // A declared conflict (SPA s.32) is part of the record of the item.
-        summary: [conflictLine(it.conflicts ?? [], voteHeld(it)), summaryFor(it)].filter(Boolean).join(" "),
+        summary: [
+          conflictLine(it.conflicts ?? [], voteHeld(it)),
+          it.standInRunner ? `${it.standInRunner} ran the meeting for this item.` : "",
+          summaryFor(it),
+        ]
+          .filter(Boolean)
+          .join(" "),
         deferred: it.deferred && !it.done,
         motion:
           it.motion && (it.motion.text || it.done)

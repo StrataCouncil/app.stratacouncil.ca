@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import { useDemoRestricted } from "@/components/DemoContext";
 import {
   decisionTypeLabels,
+  chairForItem,
   electChairMotion,
   groupByCategory,
   isAdjournment,
@@ -59,6 +60,7 @@ import {
   cancelVote,
   closeVote,
   declareConflict,
+  declareRunnerConflict,
   handOverMeeting,
   joinMeeting,
   markJoined,
@@ -67,6 +69,7 @@ import {
   recordAllInFavour,
   recordVote,
   showToEveryone,
+  stepOutDiscussionConflicts,
   withdrawConflict,
 } from "@/app/strata/[corpId]/meetings/[meetingId]/live/actions";
 
@@ -231,6 +234,8 @@ export function MeetingMode(props: {
     if (handedAway) router.replace(`/strata/${corpId}/meetings/${meetingId}/live`);
   }, [handedAway, router, corpId, meetingId]);
   const [exitOpen, setExitOpen] = useState(false);
+  // People in the meeting who could run it instead (0079, 0084).
+  const handoverCandidates = (props.runnerCandidates ?? []).filter((c) => inMeeting(live?.presence ?? []).some((p) => p.userId === c.userId));
   useEffect(() => {
     void refreshLive();
     // Faster while a vote is open, so ballots appear as they're cast.
@@ -282,6 +287,23 @@ export function MeetingMode(props: {
   );
 
   const item = agenda.find((i) => i.id === current) ?? null;
+  // A ratification item has come up (0084): anyone who declared a conflict on
+  // the discussion it ratifies steps out for it. Once per item; opening its
+  // vote does the same in the database, in case this didn't reach it.
+  const steppedOutFor = useRef(new Set<string>());
+  useEffect(() => {
+    if (general || !startedAt || !item?.discussionId || item.done || steppedOutFor.current.has(item.id)) return;
+    steppedOutFor.current.add(item.id);
+    const id = item.id;
+    void saveNow().then((saved) => (saved ? liveStep(() => stepOutDiscussionConflicts(meetingId, id)) : steppedOutFor.current.delete(id)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item?.id, item?.discussionId, item?.done, general, startedAt, meetingId]);
+  // This screen stood in for a Runner who stepped out for an item (0084):
+  // once that item is finished, offer to hand the meeting back.
+  const standIn = live?.lastHandover?.conflict && live.lastHandover.fromUser ? live.lastHandover : null;
+  const standInItem = standIn ? agenda.find((i) => i.id === standIn.itemId) : undefined;
+  const canHandBack =
+    standIn && (!standInItem || standInItem.done || standInItem.deferred) && inMeeting(live?.presence ?? []).some((p) => p.userId === standIn.fromUser);
 
   function goNext(fromId: string, list = agenda) {
     const idx = list.findIndex((i) => i.id === fromId);
@@ -348,6 +370,37 @@ export function MeetingMode(props: {
   }
 
   // ── Decisions ───────────────────────────────────────────────────────
+  // ── The chair's conflict (0084) ─────────────────────────────────────
+  // The chair declared a conflict on an item and stepped out: council
+  // elects someone to chair that item before it's decided.
+  const chairConflictMessage = "The chair has a conflict of interest on this item. Elect a chair for this item first.";
+  function chairConflicted(it: AgendaItem) {
+    const c = (chair ?? "").trim().toLowerCase();
+    return Boolean(c) && conflicts.some((x) => x.itemId === it.id && x.acknowledged && (names[x.lot] ?? "").trim().toLowerCase() === c);
+  }
+  function needsItemChair(it: AgendaItem) {
+    return !it.forItemId && chairConflicted(it) && !chairForItem(agenda, it.id);
+  }
+  /** Adds "Elect a chair for item N" just before the item, and goes to it. */
+  function electChairFor(it: AgendaItem) {
+    const existing = agenda.find((i) => i.forItemId === it.id && !i.done);
+    if (existing) return setCurrent(existing.id);
+    // Named by the item, not its number: adding this one renumbers the agenda.
+    const el = makeItem(`Elect a chair for: ${it.text}`, it.cat, {
+      catId: it.catId,
+      type: "FOR_APPROVAL",
+      motion: newMotion("MAJORITY", electChairMotion("", it)),
+      forItemId: it.id,
+      addedDuringMeeting: agendaApproved || undefined,
+    });
+    const at = agenda.findIndex((i) => i.id === it.id);
+    const next = [...agenda];
+    next.splice(at < 0 ? next.length : at, 0, el);
+    update(() => next);
+    setCurrent(el.id);
+    setPanel("none");
+  }
+
   function blockAction(it: AgendaItem, message: string) {
     setActionError({ itemId: it.id, message });
   }
@@ -375,6 +428,7 @@ export function MeetingMode(props: {
     // People leave: no decision is made once quorum is lost.
     if (!q.met) return blockAction(it, `No quorum: ${q.counted} present, ${q.required} needed. No decisions can be made until quorum is restored.`);
     if (isElectChair(it) && !it.nominee?.trim()) return blockAction(it, "Enter the nominee first.");
+    if (needsItemChair(it)) return blockAction(it, chairConflictMessage);
     if (!m.mover || !m.sec) return blockAction(it, "Choose a mover and a seconder first.");
     if (m.mover === m.sec) return blockAction(it, "The mover and seconder must be different lots.");
     const v = evaluateVote(m, voteCtx);
@@ -427,7 +481,7 @@ export function MeetingMode(props: {
     const next = renumber(agenda.map((i) => (i.id === it.id ? decided : i)));
     setAgenda(next);
     if (isApproveAgenda(it) && outcome === "CARRIED") setAgendaApproved(true);
-    if (isElectChair(it) && outcome === "CARRIED" && it.nominee?.trim()) setChair(it.nominee.trim());
+    if (isElectChair(it) && !it.forItemId && outcome === "CARRIED" && it.nominee?.trim()) setChair(it.nominee.trim());
     setConfirm(null);
     if (isAdjournment(it) && outcome === "CARRIED") return startAdjournment(next);
     goNext(it.id, next);
@@ -488,6 +542,39 @@ export function MeetingMode(props: {
     await refreshLive();
     return result.ok;
   }
+  /**
+   * The Runner's own conflict (0084): the meeting is saved, handed to the
+   * person chosen, and this screen becomes the member's view, stepped out.
+   */
+  async function declareOwnConflict(it: AgendaItem, note: string, toUser: string) {
+    setLiveBusy(true);
+    setLiveError(null);
+    if (!(await saveNow())) {
+      setLiveBusy(false);
+      return setLiveError("Couldn't save the meeting first. Check your connection and try again.");
+    }
+    const r = await declareRunnerConflict(meetingId, it.id, note, toUser).catch(() => ({ ok: false as const, error: "Couldn't reach the server. Try again." }));
+    if (!r.ok) {
+      setLiveBusy(false);
+      return setLiveError(r.error);
+    }
+    router.replace(`/strata/${corpId}/meetings/${meetingId}/live`);
+  }
+  /** Hands the meeting back to the Runner who stepped out for an item that's now finished. */
+  async function handBack(toUser: string) {
+    setLiveBusy(true);
+    setLiveError(null);
+    if (!(await saveNow())) {
+      setLiveBusy(false);
+      return setLiveError("Couldn't save the meeting first. Check your connection and try again.");
+    }
+    const r = await handOverMeeting(meetingId, toUser).catch(() => ({ ok: false as const, error: "Couldn't reach the server. Try again." }));
+    if (!r.ok) {
+      setLiveBusy(false);
+      return setLiveError(r.error);
+    }
+    router.replace(`/strata/${corpId}/meetings/${meetingId}/live`);
+  }
   async function show(it: AgendaItem | null, attId: string | null) {
     setLiveBusy(true);
     setLiveError(null);
@@ -505,6 +592,7 @@ export function MeetingMode(props: {
   async function startVote(it: AgendaItem) {
     const m = it.motion;
     if (!m?.text.trim()) return setLiveError("Write the motion before opening the vote.");
+    if (needsItemChair(it)) return setLiveError(chairConflictMessage);
     // A deferred item, or one voted on before: a fresh vote, with whoever is here now.
     if (it.deferred || m.voteId || m.for + m.against + m.abstain > 0) {
       patchItem(it.id, { deferred: false, motion: { ...m, for: 0, against: 0, abstain: 0, voteId: undefined, tieBreak: null } });
@@ -693,6 +781,15 @@ export function MeetingMode(props: {
         </div>
       )}
 
+      {canHandBack && standIn && (
+        <div className="mm__alert" role="status" data-testid="mm-hand-back">
+          You&rsquo;ve been running the meeting while {standIn.fromName} stepped out for item {standInItem?.num ?? ""}. That item is finished.{" "}
+          <button type="button" className="button button-primary button-small" disabled={liveBusy} onClick={() => void handBack(standIn.fromUser!)} data-testid="mm-hand-back-button">
+            Hand the meeting back to {standIn.fromName}
+          </button>
+        </div>
+      )}
+
       {pendingDeclarations.map((c) => {
         const at = agenda.find((i) => i.id === c.itemId);
         if (!at) return null;
@@ -733,8 +830,8 @@ export function MeetingMode(props: {
       <div className="mm__body" data-panel={panel}>
         <nav className="mm__nav" aria-label="Agenda">
           <div className="mm-nav__chair mm-nav__chair--top card__meta">
-            Chair: {chair || "not set"}
-            {!agenda.some((i) => isElectChair(i) && !i.done) && (
+            {item && chairForItem(agenda, item.id) ? <>Chair for this item: {chairForItem(agenda, item.id)}</> : <>Chair: {chair || "not set"}</>}
+            {!agenda.some((i) => isElectChair(i) && !i.forItemId && !i.done) && (
               <button type="button" className="link-button" onClick={electChair} data-testid="mm-elect-chair">
                 Elect a chair
               </button>
@@ -917,6 +1014,9 @@ export function MeetingMode(props: {
               voteCtx={ctxFor(item)}
               voteElsewhere={voteElsewhere(item)}
               chairNominees={chairNominees}
+              forItem={item.forItemId ? (agenda.find((i) => i.id === item.forItemId) ?? null) : null}
+              chairConflict={needsItemChair(item) ? { chair: chair ?? "", onElect: () => electChairFor(item) } : null}
+              itemChair={chairForItem(agenda, item.id)}
               quorumMet={q.met}
               presenting={live?.presenting ?? null}
               onShow={(attId) => void show(attId ? item : null, attId)}
@@ -942,6 +1042,8 @@ export function MeetingMode(props: {
                       onDeclare: (lot: string, note: string) => void liveStep(() => declareConflict(meetingId, item.id, lot, note)),
                       onWithdraw: (lot: string) => void liveStep(() => withdrawConflict(meetingId, item.id, lot)),
                       onAcknowledge: (lot: string) => void liveStep(() => acknowledgeConflict(meetingId, item.id, lot)),
+                      runnerCandidates: handoverCandidates,
+                      onDeclareOwn: (note: string, toUser: string) => void declareOwnConflict(item, note, toUser),
                     }
               }
               names={names}
@@ -1009,7 +1111,7 @@ export function MeetingMode(props: {
       {exitOpen && (
         <ExitDialog
           meetingId={meetingId}
-          candidates={(props.runnerCandidates ?? []).filter((c) => inMeeting(live?.presence ?? []).some((p) => p.userId === c.userId))}
+          candidates={handoverCandidates}
           onSave={saveNow}
           onHandedOver={() => router.replace(`/strata/${corpId}/meetings/${meetingId}/live`)}
           onStay={() => setExitOpen(false)}
@@ -1262,6 +1364,12 @@ function ItemPanel(props: {
   voteElsewhere: number | null;
   /** Suggestions for the chair nominee: everyone in attendance, with their role. */
   chairNominees: { name: string; role: string }[];
+  /** An election of a chair for one item (0084): the item it's for. */
+  forItem: AgendaItem | null;
+  /** The chair has a conflict on this item and no one has been elected to chair it yet (0084). */
+  chairConflict: { chair: string; onElect: () => void } | null;
+  /** Who council elected to chair this item, if anyone (0084). */
+  itemChair: string | null;
   quorumMet: boolean;
   /** What's being shown to everyone (0076). */
   presenting: Presenting | null;
@@ -1287,6 +1395,9 @@ function ItemPanel(props: {
     onDeclare: (lot: string, note: string) => void;
     onWithdraw: (lot: string) => void;
     onAcknowledge: (lot: string) => void;
+    /** Who could run the meeting for this item if the Runner has a conflict (0084). */
+    runnerCandidates: Array<{ userId: string; name: string }>;
+    onDeclareOwn: (note: string, toUser: string) => void;
   };
   names: Record<string, string>;
   note: string;
@@ -1314,6 +1425,8 @@ function ItemPanel(props: {
   // What has to happen first; buttons stay off until it has.
   const openBlocked = !m
     ? null
+    : props.chairConflict
+      ? "Elect a chair for this item first: the chair has a conflict of interest."
     : isElectChair(it) && !it.nominee?.trim()
       ? "Enter the nominee first."
       : !m.text.trim()
@@ -1388,7 +1501,7 @@ function ItemPanel(props: {
           <span>Nominee for chair</span>
           <input
             value={it.nominee ?? ""}
-            onChange={(e) => onPatch({ nominee: e.target.value, motion: { ...m, text: electChairMotion(e.target.value) } })}
+            onChange={(e) => onPatch({ nominee: e.target.value, motion: { ...m, text: electChairMotion(e.target.value, props.forItem) } })}
             disabled={it.done}
             maxLength={200}
             placeholder="Who has been nominated"
@@ -1449,7 +1562,24 @@ function ItemPanel(props: {
           onDeclare={live.onDeclare}
           onWithdraw={live.onWithdraw}
           onAcknowledge={live.onAcknowledge}
+          ownLot={live.ownLot}
+          runnerCandidates={live.runnerCandidates}
+          onDeclareOwn={live.onDeclareOwn}
         />
+      )}
+      {props.chairConflict && (
+        <div className="mm__alert mm__alert--conflict" role="alert" data-testid="mm-chair-conflict">
+          <strong>The chair has a conflict of interest.</strong> {props.chairConflict.chair} declared one on this item and has stepped out. Council
+          elects someone to chair this item before it&rsquo;s discussed or decided.{" "}
+          <button type="button" className="button button-primary button-small" onClick={props.chairConflict.onElect} data-testid="mm-elect-item-chair">
+            Elect a chair for this item
+          </button>
+        </div>
+      )}
+      {props.itemChair && !it.done && (
+        <p className="card__meta" data-testid="mm-item-chair">
+          {props.itemChair} chairs this item: council elected them because the chair has a conflict of interest.
+        </p>
       )}
       {live && it.done && live.conflicts.length > 0 && (
         <ConflictsPanel conflicts={live.conflicts} present={[]} names={props.names} canEdit={false} busy onDeclare={() => {}} onWithdraw={() => {}} />

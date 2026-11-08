@@ -216,10 +216,20 @@ export function ConflictsPanel(props: {
   onWithdraw: (lot: string) => void;
   /** Acknowledge a member's own declaration: they step out (0082). */
   onAcknowledge?: (lot: string) => void;
+  /**
+   * The Runner's own lot (0084). Their own conflict means handing the
+   * meeting to one of runnerCandidates first, through onDeclareOwn.
+   */
+  ownLot?: string | null;
+  runnerCandidates?: Array<{ userId: string; name: string }>;
+  onDeclareOwn?: (note: string, toUser: string) => void;
 }) {
   const [adding, setAdding] = useState(false);
   const [lot, setLot] = useState("");
   const [note, setNote] = useState("");
+  const [standIn, setStandIn] = useState("");
+  const own = Boolean(lot && props.ownLot && lot === props.ownLot && props.onDeclareOwn);
+  const standIns = props.runnerCandidates ?? [];
   // Withdrawing a declaration asks first: it takes it off the record, not the person out of the meeting.
   const [withdrawing, setWithdrawing] = useState<string | null>(null);
   const who = (l: string) => (props.names[l] ? `${props.names[l]}, ${l}` : l);
@@ -286,22 +296,43 @@ export function ConflictsPanel(props: {
               ))}
             </select>
             <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="The nature of the conflict (required; goes in the minutes)" maxLength={500} aria-label="The nature of the conflict" />
+            {own &&
+              (standIns.length ? (
+                <select value={standIn} onChange={(e) => setStandIn(e.target.value)} aria-label="Who runs the meeting for this item" data-testid="mm-own-conflict-stand-in">
+                  <option value="">Who runs the meeting for this item?</option>
+                  {standIns.map((c) => (
+                    <option key={c.userId} value={c.userId}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              ) : null)}
             <button
               type="button"
               className="button button-primary button-small"
-              disabled={!lot || note.trim().length < 3 || props.busy}
+              disabled={!lot || note.trim().length < 3 || props.busy || (own && !standIn)}
               onClick={() => {
-                props.onDeclare(lot, note.trim());
+                if (own) props.onDeclareOwn!(note.trim(), standIn);
+                else props.onDeclare(lot, note.trim());
                 setAdding(false);
                 setLot("");
                 setNote("");
+                setStandIn("");
               }}
+              data-testid="mm-conflict-record"
             >
-              Record
+              {own ? "Hand over and step out" : "Record"}
             </button>
             <button type="button" className="link-button" onClick={() => setAdding(false)}>
               Cancel
             </button>
+            {own && (
+              <p className="card__meta mm-conflicts__own" data-testid="mm-own-conflict-note">
+                {standIns.length
+                  ? "You can't step out and keep running the meeting. The person you choose runs it for this item; you can have it back when the item is finished."
+                  : "Nobody else here can run meetings, so you can't step out and keep the meeting going. Defer this item, adjourn before it, or have another council member given Runs meetings on the Owners page and join."}
+              </p>
+            )}
           </div>
         ) : (
           candidates.length > 0 && (

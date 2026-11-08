@@ -105,7 +105,10 @@ export function VotePanel({
   );
 }
 
-/** The author's tools: change the motion (until the first vote) and close the vote. */
+/**
+ * The author's tools: change the motion (until the first vote) and close
+ * the vote. An Admin who didn't start it gets the closing part only (0084).
+ */
 export function AuthorPanel({
   corpId,
   discussionId,
@@ -113,10 +116,12 @@ export function AuthorPanel({
   initial,
   majority,
   noVote = false,
+  isAuthor = true,
 }: {
   corpId: string;
   discussionId: string;
   editable: boolean;
+  isAuthor?: boolean;
   initial: DiscussionInput;
   majority: string | null;
   noVote?: boolean;
@@ -137,12 +142,12 @@ export function AuthorPanel({
   }
   return (
     <section className="card discussion-author" data-testid="discussion-author">
-      <h3>You started this discussion</h3>
+      <h3>{isAuthor ? "You started this discussion" : "As an Admin, you can close this discussion"}</h3>
       {noVote ? (
         <p className="card__meta">This discussion has no vote. Close it when council has finished; council is emailed that it&rsquo;s closed.</p>
       ) : majority ? (
         <p className="discussion-ready" role="status" data-testid="discussion-majority-reached">
-          <strong>{majority}</strong> You can close the discussion now. Council is emailed the result and the vote record is filed in
+          <strong>{majority}</strong> {isAuthor ? "You" : "The person who started it, or an Admin,"} can close the discussion now. Council is emailed the result and the vote record is filed in
           Meetings &amp; Records.{" "}
           {/ for: /.test(majority)
             ? "The motion then waits for ratification: it's set aside for the next council meeting, and offered when you build that agenda."
@@ -154,7 +159,7 @@ export function AuthorPanel({
         </p>
       )}
       <div className="role-editor__actions" style={{ justifyContent: "flex-start" }}>
-        {editable && (
+        {editable && isAuthor && (
           <button type="button" className="button button-secondary" onClick={() => setEditing(true)} data-testid="discussion-edit">
             {noVote ? "Change the discussion" : "Change the motion"}
           </button>
