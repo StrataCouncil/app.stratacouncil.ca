@@ -14,7 +14,7 @@ export default function DecisionsPage() {
       <div className="lock-panel">
         <h2>Your permanent decision record</h2>
         <p>
-          Every carried motion, with mover, seconder and vote count &mdash;
+          Every carried motion, with mover, seconder, and vote count &mdash;
           searchable and indexed for the Stratasphere&trade; assistant.
           Unlocks with a subscription.
         </p>

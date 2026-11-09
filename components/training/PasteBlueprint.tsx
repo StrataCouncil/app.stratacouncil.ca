@@ -71,7 +71,7 @@ export function PasteBlueprint({
       </div>
       <p className="card__meta">
         Paste a module outline written elsewhere. The AI sorts it into this module&rsquo;s title, summary, objectives (at most three),
-        blueprint and further reading, without adding anything. You see the result before anything changes.
+        blueprint, and further reading, without adding anything. You see the result before anything changes.
       </p>
       {error && (
         <p className="form-error" role="alert">
@@ -107,7 +107,7 @@ export function PasteBlueprint({
             value={text}
             maxLength={PASTE_MAX_CHARS}
             aria-label="The outline"
-            placeholder="Paste the whole outline: title, objectives, sections, wrap-up and knowledge check."
+            placeholder="Paste the whole outline: title, objectives, sections, wrap-up, and knowledge check."
             onChange={(e) => setText(e.target.value)}
             data-testid="paste-blueprint-text"
           />
@@ -176,7 +176,7 @@ export function PasteBlueprint({
           )}
 
           <p className="form-error">
-            Applying replaces the title, summary, length, objectives, blueprint and further reading
+            Applying replaces the title, summary, length, objectives, blueprint, and further reading
             {slideCount > 0 ? `, and deletes all ${slideCount} slides` : ""}.
           </p>
           <div className="be-row">

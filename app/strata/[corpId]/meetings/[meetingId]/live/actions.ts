@@ -82,7 +82,7 @@ export async function openVote(meetingId: string, itemId: string, motion: string
 
 /** A council member's own vote. */
 export async function castVote(voteId: string, choice: Choice): Promise<Ok | Fail> {
-  if (!UUID.test(voteId) || !CHOICES.includes(choice)) return { ok: false, error: "Choose For, Against or Abstain." };
+  if (!UUID.test(voteId) || !CHOICES.includes(choice)) return { ok: false, error: "Choose For, Against, or Abstain." };
   const supabase = await createClient();
   const { error } = await supabase.rpc("cast_meeting_vote", { p_vote_id: voteId, p_choice: choice });
   return error ? failFrom(error, "Your vote didn't go through. Try again.") : { ok: true };
@@ -90,7 +90,7 @@ export async function castVote(voteId: string, choice: Choice): Promise<Ok | Fai
 
 /** The runner enters a vote for a council member (or their own). */
 export async function recordVote(voteId: string, lot: string, choice: Choice): Promise<Ok | Fail> {
-  if (!UUID.test(voteId) || !LOT.test(lot) || !CHOICES.includes(choice)) return { ok: false, error: "Choose For, Against or Abstain." };
+  if (!UUID.test(voteId) || !LOT.test(lot) || !CHOICES.includes(choice)) return { ok: false, error: "Choose For, Against, or Abstain." };
   const supabase = await createClient();
   const { error } = await supabase.rpc("record_meeting_vote", { p_vote_id: voteId, p_lot: lot, p_choice: choice });
   return error ? failFrom(error, "That vote didn't go through. Try again.") : { ok: true };

@@ -17,10 +17,10 @@ Rules, never broken:
 - BC law only: the Strata Property Act, the Standard Bylaws, PIPA. Never PIPEDA. Don't invent section numbers; cite a section only if you are sure of it.
 - Security claims only in these words: our hosting provider is SOC 2 / ISO 27001 compliant; two-step verification is available; row-level security; bank-grade encryption; data stored in Canada; personal information is stripped before anything reaches Stratasphere. Never say StrataCouncil.ca itself is SOC 2 or ISO 27001 certified.
 - Don't mention any precedent pool or data shared between stratas.
-- No made-up statistics, testimonials or customer names.
+- No made-up statistics, testimonials, or customer names.
 - Write "Stratasphere" (without the TM mark) in slides and captions.
 
-Hashtags: include #stratasphere wherever the post touches the assistant, records, meetings or governance (most posts). Add a few relevant ones such as #bcstrata #stratacouncil #strataliving #condolife #propertymanagement; fewer on LinkedIn (3 to 5) and X (1 or 2), more on Instagram and TikTok (5 to 10). No # inside caption sentences.
+Hashtags: include #stratasphere wherever the post touches the assistant, records, meetings, or governance (most posts). Add a few relevant ones such as #bcstrata #stratacouncil #strataliving #condolife #propertymanagement; fewer on LinkedIn (3 to 5) and X (1 or 2), more on Instagram and TikTok (5 to 10). No # inside caption sentences.
 
 Captions, one per platform: Instagram and TikTok can't link, so end with a nudge to the link in the profile; Facebook and LinkedIn get a short paragraph (the link is added automatically after it); X must stay under 230 characters (a link is added after it). Don't put links or hashtags in caption text; they're added separately.`;
 
@@ -81,7 +81,7 @@ export function draftRequest(r: DraftRequest): string {
     r.template === "list"
       ? `A numbered list: a cover promising ${count - 2} items, then ${count - 2} point slides numbered 1 to ${count - 2}, then the call to action.`
       : r.template === "story"
-        ? "A story: a cover, then slides that move from the situation to the turning point to what changed (point, quote or photo slides), then the call to action. No numbers."
+        ? "A story: a cover, then slides that move from the situation to the turning point to what changed (point, quote, or photo slides), then the call to action. No numbers."
         : "Editorial tips: a cover, then point slides with a two-part title (a short kicker such as 'Know your' and a title such as 'Bylaws'), then the call to action. No numbers.";
   return [
     `Topic: ${r.topic}`,

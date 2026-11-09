@@ -17,7 +17,7 @@ export default async function AdminSocialPage() {
         <AdminTabs active="social" />
         <div className="page-header">
           <h1>Social</h1>
-          <p>Carousel posts for Instagram, Facebook, LinkedIn, TikTok and X, drafted by AI and edited here, exported as one ZIP with a folder per platform.</p>
+          <p>Carousel posts for Instagram, Facebook, LinkedIn, TikTok, and X, drafted by AI and edited here, exported as one ZIP with a folder per platform.</p>
         </div>
         <SocialPostsAdmin posts={posts} />
       </div>

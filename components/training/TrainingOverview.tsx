@@ -56,7 +56,7 @@ export function TrainingOverview({
           />
           <TrackGroup
             title="Specialty tracks"
-            note="For treasurers, secretaries and privacy officers, once you're Council Ready."
+            note="For treasurers, secretaries, and privacy officers, once you're Council Ready."
             tracks={specialty}
             all={tracks}
             hrefBase={hrefBase}

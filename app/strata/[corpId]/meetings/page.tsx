@@ -124,7 +124,7 @@ export default async function MeetingsPage({ params }: { params: Promise<{ corpI
           <h2>Run your next meeting with Stratasphere&trade;</h2>
           <p>
             You can keep setting up draft meetings and agendas. Launching one needs a subscription. Documents, finalized
-            minutes and everything from your free meeting stay fully accessible either way.
+            minutes, and everything from your free meeting stay fully accessible either way.
           </p>
           {access.pending ? (
             <SubscriptionPendingNote />

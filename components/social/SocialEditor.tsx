@@ -184,7 +184,7 @@ export function SocialEditor({ initial }: { initial: SocialPost }) {
   }
 
   async function remove() {
-    if (!window.confirm("Delete this post for good? Its slides, captions and uploaded pictures are removed and can't be recovered.")) return;
+    if (!window.confirm("Delete this post for good? Its slides, captions, and uploaded pictures are removed and can't be recovered.")) return;
     setBusy("delete");
     const r = await deleteSocialPost(post.id);
     setBusy(null);

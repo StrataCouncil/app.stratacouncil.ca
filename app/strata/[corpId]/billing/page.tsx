@@ -274,7 +274,7 @@ export default async function BillingPage({
       <div className="page-header" style={{ marginBottom: "1.75rem" }}>
         <h2 style={{ margin: 0 }}>Billing for {corp.building_name ?? corp.legal_name}</h2>
         <p className="card__meta" style={{ marginTop: "0.35rem" }}>
-          {corpId} &middot; Each strata has its own payment method, billing contacts and subscription &middot; The admin, and
+          {corpId} &middot; Each strata has its own payment method, billing contacts, and subscription &middot; The admin, and
           anyone the admin gives billing access to
         </p>
       </div>
@@ -543,7 +543,7 @@ export default async function BillingPage({
             </p>
           ) : (
             <p className="card__meta">
-              The document repository, guides and roster are free. A subscription unlocks Meeting
+              The document repository, guides, and roster are free. A subscription unlocks Meeting
               Mode and the Stratasphere&trade; assistant.
             </p>
           )}

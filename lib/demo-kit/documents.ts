@@ -35,9 +35,9 @@ export interface KitDoc {
 export const ROOF = {
   levy: 380_000,
   bids: [
-    { name: "Coastline Roofing Ltd.", price: 348_600, warranty: "10-year workmanship, 20-year manufacturer membrane warranty", start: "April", weeks: 9, notes: "Complete scope, including new flashings, scuppers, roof drains and two skylights." },
+    { name: "Coastline Roofing Ltd.", price: 348_600, warranty: "10-year workmanship, 20-year manufacturer membrane warranty", start: "April", weeks: 9, notes: "Complete scope, including new flashings, scuppers, roof drains, and two skylights." },
     { name: "Summit Peak Roofing Inc.", price: 372_900, warranty: "5-year workmanship, 20-year manufacturer membrane warranty", start: "June", weeks: 11, notes: "Complete scope. Adds a $9,500 allowance for deck repairs not in the specification." },
-    { name: "North Shore Membrane Co.", price: 319_800, warranty: "2-year workmanship, 15-year manufacturer membrane warranty", start: "April", weeks: 7, notes: "Excludes flashing replacement, the skylights and the building permit. Engineer estimates $36,000 to $42,000 to add them." },
+    { name: "North Shore Membrane Co.", price: 319_800, warranty: "2-year workmanship, 15-year manufacturer membrane warranty", start: "April", weeks: 7, notes: "Excludes flashing replacement, the skylights, and the building permit. Engineer estimates $36,000 to $42,000 to add them." },
   ],
   engineer: "Fraserview Building Science Ltd.",
   engineerFee: 9_800,
@@ -71,19 +71,19 @@ ${BUILDING.name}, ${BUILDING.address}
 
 Consolidated for convenience by ${MANAGEMENT.companyName}. These bylaws replace the Standard Bylaws, except where the Standard Bylaws are adopted by reference below. Amendments filed at the Land Title Office: 2014, 2019, and at the Annual General Meeting held ${longDate(d.agm)} (short-term accommodation).
 
-## Division 1: Duties of owners, tenants, occupants and visitors
+## Division 1: Duties of owners, tenants, occupants, and visitors
 
 1.1 Payment of strata fees. An owner must pay strata fees on or before the first day of the month to which they relate. A late payment fee of $50 applies to any strata fee more than 30 days overdue. Interest on overdue strata fees accrues at 10% per year, compounded annually.
 
 1.2 Repair and maintenance of property by owner. An owner must repair and maintain the owner's strata lot, except for repair and maintenance that is the responsibility of the strata corporation under these bylaws. An owner who has the use of limited common property, such as a balcony or patio, must repair and maintain it, except for repairs that ordinarily occur less often than once a year.
 
-1.3 Use of property. An owner, tenant, occupant or visitor must not use a strata lot, the common property or common assets in a way that causes a nuisance or hazard to another person, causes unreasonable noise, or unreasonably interferes with the rights of other persons to use and enjoy the common property, common assets or another strata lot.
+1.3 Use of property. An owner, tenant, occupant, or visitor must not use a strata lot, the common property or common assets in a way that causes a nuisance or hazard to another person, causes unreasonable noise, or unreasonably interferes with the rights of other persons to use and enjoy the common property, common assets, or another strata lot.
 
 1.4 Quiet hours are 10:00 p.m. to 7:00 a.m. daily.
 
-1.5 Inform strata corporation. Within two weeks of becoming an owner, an owner must inform the strata corporation of the owner's name, strata lot number and mailing address. An owner who rents a strata lot must give the tenant the current bylaws and rules and a Notice of Tenant's Responsibilities (Form K), and must give the strata corporation a copy of the signed Form K within two weeks of the tenancy starting.
+1.5 Inform strata corporation. Within two weeks of becoming an owner, an owner must inform the strata corporation of the owner's name, strata lot number, and mailing address. An owner who rents a strata lot must give the tenant the current bylaws and rules and a Notice of Tenant's Responsibilities (Form K), and must give the strata corporation a copy of the signed Form K within two weeks of the tenancy starting.
 
-1.6 Obtain approval before altering a strata lot. An owner must obtain the written approval of the strata corporation before making an alteration that involves the structure of the building, the exterior, chimneys, stairs, balconies or other things attached to the exterior, doors or windows on the exterior, fences or railings, common property located within the boundaries of a strata lot, or the plumbing, gas or electrical systems serving more than one strata lot.
+1.6 Obtain approval before altering a strata lot. An owner must obtain the written approval of the strata corporation before making an alteration that involves the structure of the building, the exterior, chimneys, stairs, balconies or other things attached to the exterior, doors or windows on the exterior, fences or railings, common property located within the boundaries of a strata lot, or the plumbing, gas, or electrical systems serving more than one strata lot.
 
 ## Division 2: Powers and duties of the strata corporation
 
@@ -97,9 +97,9 @@ Consolidated for convenience by ${MANAGEMENT.companyName}. These bylaws replace 
 
 3.2 Council members' terms. The term of office of a council member ends at the end of the annual general meeting at which the new council is elected. A council member may stand for re-election.
 
-3.3 Officers. At the first meeting of council held after each annual general meeting, council must elect from among its members a president, a vice president, a secretary and a treasurer. A person may not hold the offices of president and vice president at the same time.
+3.3 Officers. At the first meeting of council held after each annual general meeting, council must elect from among its members a president, a vice president, a secretary, and a treasurer. A person may not hold the offices of president and vice president at the same time.
 
-3.4 Calling council meetings. Any council member may call a council meeting by giving the other council members at least one week's notice of the date, time and place of the meeting and the matters to be discussed, unless all council members agree to a shorter notice period.
+3.4 Calling council meetings. Any council member may call a council meeting by giving the other council members at least one week's notice of the date, time, and place of the meeting and the matters to be discussed, unless all council members agree to a shorter notice period.
 
 3.5 Quorum of council. A quorum of the council is a majority of council members.
 
@@ -121,7 +121,7 @@ Consolidated for convenience by ${MANAGEMENT.companyName}. These bylaws replace 
 
 ## Division 5: Pets
 
-5.1 An owner, tenant or occupant may keep no more than two pets in a strata lot, of which no more than one may be a dog. Fish or other small aquarium animals, and small caged mammals or birds, are not counted.
+5.1 An owner, tenant, or occupant may keep no more than two pets in a strata lot, of which no more than one may be a dog. Fish or other small aquarium animals, and small caged mammals or birds, are not counted.
 
 5.2 A pet on common property must be leashed or otherwise secured and under the control of a responsible person.
 
@@ -131,13 +131,13 @@ Consolidated for convenience by ${MANAGEMENT.companyName}. These bylaws replace 
 
 6.1 Each strata lot has the use of one parking stall in the parkade, as limited common property shown on the strata plan or assigned by council.
 
-6.2 The four visitor stalls (V1 to V4) are for visitors only. A resident, tenant or occupant must not park in a visitor stall at any time.
+6.2 The four visitor stalls (V1 to V4) are for visitors only. A resident, tenant, or occupant must not park in a visitor stall at any time.
 
 6.3 A visitor vehicle may use a visitor stall for no more than 24 consecutive hours, and must display a visitor pass from the strata lot being visited.
 
 6.4 A vehicle parked in contravention of this division may be towed at the owner's expense after written notice, or immediately if it obstructs access or creates a hazard.
 
-6.5 No inoperative, unlicensed or uninsured vehicle may be stored on common property.
+6.5 No inoperative, unlicensed, or uninsured vehicle may be stored on common property.
 
 ## Division 7: Electric vehicle charging
 
@@ -157,11 +157,11 @@ Consolidated for convenience by ${MANAGEMENT.companyName}. These bylaws replace 
 
 ## Division 9: Insurance deductibles and chargebacks
 
-9.1 An owner must notify the strata manager immediately of any leak, flood or damage originating in or affecting the owner's strata lot.
+9.1 An owner must notify the strata manager immediately of any leak, flood, or damage originating in or affecting the owner's strata lot.
 
-9.2 If an owner is responsible for loss or damage to common property, common assets or another strata lot, the owner must pay the cost of repairing the damage up to the amount of the strata corporation's insurance deductible, and that amount may be charged back to the owner's strata lot.
+9.2 If an owner is responsible for loss or damage to common property, common assets, or another strata lot, the owner must pay the cost of repairing the damage up to the amount of the strata corporation's insurance deductible, and that amount may be charged back to the owner's strata lot.
 
-9.3 An owner is responsible for loss or damage under Bylaw 9.2 whether or not the owner was negligent, where the loss or damage originated in the owner's strata lot or from an appliance, fixture or plumbing serving only that strata lot.
+9.3 An owner is responsible for loss or damage under Bylaw 9.2 whether or not the owner was negligent, where the loss or damage originated in the owner's strata lot or from an appliance, fixture, or plumbing serving only that strata lot.
 
 9.4 Owners are encouraged to carry personal insurance that covers the strata corporation's deductibles, which are listed in the strata corporation's insurance summary available from the strata manager.
 
@@ -173,7 +173,7 @@ Consolidated for convenience by ${MANAGEMENT.companyName}. These bylaws replace 
 
 ## Division 11: Smoking
 
-11.1 Smoking or vaping tobacco or cannabis is prohibited on common property, on limited common property including balconies and patios, and within 6 metres of any entrance, window or air intake of the building.
+11.1 Smoking or vaping tobacco or cannabis is prohibited on common property, on limited common property including balconies and patios, and within 6 metres of any entrance, window, or air intake of the building.
 
 ## Division 12: Moving in and out
 
@@ -210,8 +210,8 @@ Made by council under section 125 of the Strata Property Act and ratified at the
 - One bike rack space per assigned lot. E-bike batteries must not be charged in the bike room.
 
 ## 4. Garbage and recycling
-- Garbage, mixed recycling, glass, soft plastics and organics go in their marked bins in the garbage room on P1.
-- Boxes must be flattened. Large items, furniture and renovation waste must be removed by the resident and may not be left in the garbage room.
+- Garbage, mixed recycling, glass, soft plastics, and organics go in their marked bins in the garbage room on P1.
+- Boxes must be flattened. Large items, furniture, and renovation waste must be removed by the resident and may not be left in the garbage room.
 - Collection days: garbage Tuesdays, recycling and organics Fridays.
 
 ## 5. Visitor parking
@@ -387,10 +387,10 @@ Moved by SL008, seconded by SL022: BE IT RESOLVED BY A 3/4 VOTE THAT the bylaws 
 VOTE: 14 in favour, 3 opposed. CARRIED. The amendment will be filed at the Land Title Office.
 
 ## 11. Ratification of rules
-Moved by SL022, seconded by SL012: THAT the rules made by council during the year (amenity room, bike room and e-bike charging) be ratified. CARRIED unanimously.
+Moved by SL022, seconded by SL012: THAT the rules made by council during the year (amenity room, bike room, and e-bike charging) be ratified. CARRIED unanimously.
 
 ## 12. Election of council
-Five owners were nominated for five positions and were elected by acclamation: Margaret Chen-Whitford (SL012), Tomasz Kowalczyk (SL005), Adaeze Okafor (SL019), Liam Fraser (SL008) and Ruth Gallagher (SL022). Council will elect its officers at its first meeting.
+Five owners were nominated for five positions and were elected by acclamation: Margaret Chen-Whitford (SL012), Tomasz Kowalczyk (SL005), Adaeze Okafor (SL019), Liam Fraser (SL008), and Ruth Gallagher (SL022). Council will elect its officers at its first meeting.
 
 ## 13. New business
 An owner asked about electric vehicle charging in the parkade. Council will report on options during the year; any owner may apply under Bylaw 7.
@@ -419,8 +419,8 @@ Visual review of the main roof (about 1,450 square metres), roof drains, scupper
 - The membrane is at the end of its service life. Patching will become less effective and more frequent.
 
 ## Recommendations
-1. Replace the roof assembly within 12 to 24 months: remove the membrane and wet insulation, install new tapered insulation, a 2-ply SBS membrane, new flashings, drains, scuppers and skylights.
-2. Budget $340,000 to $395,000 including GST, a 10% contingency and engineering field review.
+1. Replace the roof assembly within 12 to 24 months: remove the membrane and wet insulation, install new tapered insulation, a 2-ply SBS membrane, new flashings, drains, scuppers, and skylights.
+2. Budget $340,000 to $395,000 including GST, a 10% contingency, and engineering field review.
 3. Until replacement, carry out semi-annual inspections and repair the penthouse flashings now (about $3,500).
 4. Tender the work to at least three qualified contractors on a stipulated price contract (CCDC 2) with a performance bond.
 
@@ -438,7 +438,7 @@ Between ${legalName} and Cedar Clean Services Ltd. Renewal approved by council o
 
 - Term: two years from the first of the month after approval. Either party may end the agreement on 60 days' written notice.
 - Fee: $1,200 a month plus GST (unchanged from the previous term).
-- Service: two visits a week. Lobby, elevator and corridors vacuumed and dusted; entrance glass cleaned; garbage room swept and washed; gym and amenity room cleaned; parkade entrance and stairwells swept weekly.
+- Service: two visits a week. Lobby, elevator, and corridors vacuumed and dusted; entrance glass cleaned; garbage room swept and washed; gym and amenity room cleaned; parkade entrance and stairwells swept weekly.
 - Extras at hourly rates: carpet shampoo ($0.28 a square foot), move-related cleaning, graffiti removal.
 - Insurance: the contractor carries $5,000,000 liability insurance and WorkSafeBC coverage, with certificates on file with the strata manager.
 - Contact for issues: the strata manager, not the cleaners directly.
@@ -453,7 +453,7 @@ Between ${legalName} and Cedar Clean Services Ltd. Renewal approved by council o
       text: `# Elevator maintenance agreement: summary
 Between ${legalName} and Pacific Lift Services Inc.
 
-- Type: full maintenance, including parts and labour for covered components, monthly preventive maintenance and the annual safety test required by Technical Safety BC.
+- Type: full maintenance, including parts and labour for covered components, monthly preventive maintenance, and the annual safety test required by Technical Safety BC.
 - Fee: $400 a month plus GST, adjusted each year by the BC consumer price index.
 - Term: five years, ending ${longDate(isoPlusDays(d.fiscalEnd, 730))}. Automatic renewal unless either party gives 90 days' written notice before the end of the term.
 - Response times: entrapment calls 1 hour, 24 hours a day; other service calls next business day.
@@ -497,7 +497,7 @@ Re: Bylaws 6.2 and 6.3, visitor parking
 
 Council has received a complaint, with dated photographs, that a silver Honda Fit (licence plate ending 4KD) registered to the occupants of unit 302 has been parked in visitor stall V2 overnight on at least 14 nights in the past four weeks.
 
-Bylaw 6.2 says residents, tenants and occupants must not park in a visitor stall at any time. Unit 302 has the use of parking stall P1-14.
+Bylaw 6.2 says residents, tenants, and occupants must not park in a visitor stall at any time. Unit 302 has the use of parking stall P1-14.
 
 At its meeting on ${longDate(d.meeting1)}, council directed that this letter be sent as a warning. No fine is being imposed at this time. If the contravention continues, council may consider fines of up to $200 under Bylaw 4.1, which may be imposed every 7 days for a continuing contravention (Bylaw 4.2), and may have the vehicle towed under Bylaw 6.4.
 
@@ -540,8 +540,8 @@ Prepared by ${MANAGEMENT.manager.name}, ${MANAGEMENT.companyName}
 
 - Date of loss: ${longDate(d.leak)}, discovered at about 6:40 a.m.
 - Source: failed braided supply line to the dishwasher in unit 304 (SL016, owner ${sl016.name}). The line was original to the building.
-- Damage: kitchen and hallway flooring and lower cabinets in unit 304; ceiling drywall, insulation, kitchen cabinets and flooring in unit 204 (SL010, owner Kwame Mensah); corridor ceiling outside 204.
-- Response: the emergency restoration contractor (Tri-City Restoration) attended within 90 minutes, shut off the water, extracted water and installed drying equipment for five days.
+- Damage: kitchen and hallway flooring and lower cabinets in unit 304; ceiling drywall, insulation, kitchen cabinets, and flooring in unit 204 (SL010, owner Kwame Mensah); corridor ceiling outside 204.
+- Response: the emergency restoration contractor (Tri-City Restoration) attended within 90 minutes, shut off the water, extracted water, and installed drying equipment for five days.
 
 ## Costs
 - Emergency response and drying: $6,850
@@ -574,7 +574,7 @@ ${legalName}. Prepared by ${MANAGEMENT.assistant.name}, ${MANAGEMENT.companyName
 - Janitorial and landscaping: ${dollars(ytd.services)} (budget ${dollars(ytd.services)})
 - Repairs and maintenance: ${dollars(ytd.repairs)} (budget ${dollars(ytd.repairsBudget)}). Over budget because of the roof flashing repairs ($3,480) and the leak response.
 - Water leak, unit 304 to 204: ${dollars(LEAK.deductible)} deductible paid (not budgeted); recovery to be decided by council.
-- Management, elevator, fire safety, professional and other contracts: ${dollars(ytd.admin)} (budget ${dollars(ytd.admin)})
+- Management, elevator, fire safety, professional, and other contracts: ${dollars(ytd.admin)} (budget ${dollars(ytd.admin)})
 - Total expenses: ${dollars(ytd.expenses)}
 - Operating ${ytd.income >= ytd.expenses ? "surplus" : "deficit"} to date: ${dollars(Math.abs(ytd.income - ytd.expenses))}, mainly the leak deductible. If the deductible is charged back and paid, the operating fund returns to about budget.
 
@@ -617,7 +617,7 @@ ${ROOF.bids
   .join("\n\n")}
 
 ## Analysis
-North Shore Membrane Co. is lowest on price but excludes the flashings, skylights and permit, which are essential to the specification. Adding them would bring its price to about $356,000 to $362,000, above Coastline's, with a shorter workmanship warranty.
+North Shore Membrane Co. is lowest on price but excludes the flashings, skylights, and permit, which are essential to the specification. Adding them would bring its price to about $356,000 to $362,000, above Coastline's, with a shorter workmanship warranty.
 
 Summit Peak Roofing's tender is complete but ${dollars(ROOF.bids[1].price - coastline.price)} higher than Coastline's, with a shorter workmanship warranty and a later start.
 
@@ -649,7 +649,7 @@ Prepared for ${legalName}
 - Warranty: 10-year workmanship warranty; 20-year manufacturer membrane warranty on completion and inspection.
 - Bonds and insurance: 50% performance bond and 50% labour and material payment bond; $5,000,000 general liability; WorkSafeBC in good standing.
 - Holdback: 10% under the Builders Lien Act, released 55 days after substantial completion.
-- Residents: the contractor will post weekly notices, keep the fourth-floor corridor clear and provide temporary protection under the skylights.
+- Residents: the contractor will post weekly notices, keep the fourth-floor corridor clear, and provide temporary protection under the skylights.
 `,
     },
     {

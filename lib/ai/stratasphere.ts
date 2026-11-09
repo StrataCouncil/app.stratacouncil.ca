@@ -446,7 +446,7 @@ async function prepareStratasphere({
     : `You are Stratasphere, the AI governance assistant for Strata Plan ${corpId} (${corpName}). Answer in up to a short paragraph.`;
 
   const standing = [
-    block(`${corpName.toUpperCase()} ON STRATACOUNCIL.CA (live platform records: the roster, council, meetings, documents on file, management, announcements and the Library)`, profile),
+    block(`${corpName.toUpperCase()} ON STRATACOUNCIL.CA (live platform records: the roster, council, meetings, documents on file, management, announcements, and the Library)`, profile),
     block(`${corpName.toUpperCase()} BYLAWS (full text of the current bylaws, most recent first)`, bylaws.text),
     block("DECISION LEDGER (carried motions, newest first)", ledger),
   ]
@@ -475,7 +475,7 @@ async function prepareStratasphere({
     block(`${corpName.toUpperCase()} DOCUMENT EXCERPTS (most relevant to this question)`, hitsBlock(local)),
     block("CROSS-PLATFORM PRECEDENT (anonymized, from other strata corporations — never this corporation's own data)", hitsBlock(global)),
     block(
-      "LEGISLATION EXCERPTS (verbatim text from the Knowledge Base: BC Acts, regulations and official guidance. Cite the Act and section, or the guidance document's title)",
+      "LEGISLATION EXCERPTS (verbatim text from the Knowledge Base: BC Acts, regulations, and official guidance. Cite the Act and section, or the guidance document's title)",
       legislationBlock(legislation)
     ),
   ]

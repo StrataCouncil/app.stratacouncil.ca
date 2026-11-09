@@ -248,7 +248,7 @@ export async function createTrackCoverUpload(trackId: string, file: { type: stri
   if (!(await staff())) return { ok: false, error: "Only platform staff can change track pictures." };
   if (!/^[0-9a-f-]{36}$/i.test(trackId)) return { ok: false, error: "Track not found." };
   const ext = IMAGE_TYPES[file.type];
-  if (!ext) return { ok: false, error: "Use a JPEG, PNG or WebP picture." };
+  if (!ext) return { ok: false, error: "Use a JPEG, PNG, or WebP picture." };
   if (file.size > 20 * 1024 * 1024) return { ok: false, error: "Pictures can be up to 20 MB." };
   const path = `${trackId}/cover-${randomUUID().slice(0, 8)}.${ext}`;
   const { data, error } = await createAdminClient().storage.from(MEDIA_BUCKET).createSignedUploadUrl(path);
@@ -630,7 +630,7 @@ export async function createSlideUpload(
   if (!e.ok) return e;
   if (!(await slideBelongs(e.admin, moduleId, slideId))) return { ok: false, error: "That slide no longer exists." };
   const ext = MEDIA_TYPES[file.type];
-  if (!ext) return { ok: false, error: "Use a JPEG, PNG, WebP, GIF or SVG picture, an MP4, WebM or MOV video, or an MP3, M4A, WAV or OGG audio file." };
+  if (!ext) return { ok: false, error: "Use a JPEG, PNG, WebP, GIF, or SVG picture, an MP4, WebM, or MOV video, or an MP3, M4A, WAV, or OGG audio file." };
   const kind = file.type.split("/")[0];
   const limit = (kind === "video" ? 500 : kind === "audio" ? 100 : 20) * 1024 * 1024;
   if (file.size > limit)
@@ -900,7 +900,7 @@ export async function createMusicUpload(moduleId: string, token: string, file: {
   const e = await editing(moduleId, token);
   if (!e.ok) return e;
   const ext = MUSIC_TYPES[file.type];
-  if (!ext) return { ok: false, error: "Use an MP3, M4A, WAV or OGG file." };
+  if (!ext) return { ok: false, error: "Use an MP3, M4A, WAV, or OGG file." };
   if (file.size > 50 * 1024 * 1024) return { ok: false, error: "Music files can be up to 50 MB." };
   const path = `music/${randomUUID()}.${ext}`;
   const { data, error } = await e.admin.storage.from(MEDIA_BUCKET).createSignedUploadUrl(path);

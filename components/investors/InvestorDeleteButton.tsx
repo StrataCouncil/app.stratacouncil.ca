@@ -18,7 +18,7 @@ export function InvestorDeleteButton({ investorId, name, small = false }: { inve
         data-testid={`delete-investor-${investorId}`}
         onClick={() =>
           start(async () => {
-            if (!window.confirm(`Delete ${name}? Their sign-up, viewing record and notes are deleted for good.`)) return;
+            if (!window.confirm(`Delete ${name}? Their sign-up, viewing record, and notes are deleted for good.`)) return;
             const res = await deleteInvestor(investorId);
             if (!res.ok) return setError(res.error);
             router.push("/admin/investors");

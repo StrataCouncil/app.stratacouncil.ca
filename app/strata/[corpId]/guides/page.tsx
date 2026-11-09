@@ -47,7 +47,7 @@ export default async function GuidesPage({
       <h2 style={{ marginBottom: "0.3rem" }}>Library</h2>
       <p className="card__meta" style={{ marginBottom: "1.25rem" }}>
         A growing, free library of playbooks, operational guides,
-        financial insights, legislation updates and emergency playbooks
+        financial insights, legislation updates, and emergency playbooks
         for every connected member &mdash; plus downloadable, editable
         policy templates and forms with a Stratasphere&trade; subscription.
       </p>

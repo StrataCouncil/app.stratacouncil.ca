@@ -223,7 +223,7 @@ export function buildStrataProfile(d: StrataProfileData, strip: (s: string) => s
       d.announcements.length ? d.announcements.map((a) => `- ${a.publishedAt.slice(0, 10)} ${a.title}: ${a.body}`).join("\n") : "None current.",
     ],
     [
-      "STRATACOUNCIL.CA LIBRARY (general playbooks, guides and templates, not this strata's own documents)",
+      "STRATACOUNCIL.CA LIBRARY (general playbooks, guides, and templates, not this strata's own documents)",
       d.library.length ? d.library.map((l) => `- ${l.title} (${l.kind.replace(/_/g, " ")}): ${l.summary}`).join("\n") : "Nothing published.",
     ],
   ];

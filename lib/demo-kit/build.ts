@@ -453,7 +453,7 @@ function agmResolutions(d: KitDates) {
     {
       title: "Ratification of rules",
       category: "Rules",
-      motion_text: "THAT the rules made by council during the year (amenity room, bike room and e-bike charging) be ratified.",
+      motion_text: "THAT the rules made by council during the year (amenity room, bike room, and e-bike charging) be ratified.",
       mover: "SL022",
       seconder: "SL012",
       decision_type: "MAJORITY",

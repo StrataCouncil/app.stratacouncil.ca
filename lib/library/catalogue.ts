@@ -287,7 +287,7 @@ export const knowledgeResources: KnowledgeResource[] = [
     title: "Running a fair vendor RFP",
     summary: "A repeatable process for putting a major contract (landscaping, elevator, envelope work) out to bid.",
     body: [
-      "A repeatable RFP process protects council from both bad outcomes and the appearance of favoritism — the same structure every time, whether it's landscaping, elevator maintenance, or envelope work. Define scope and evaluation criteria before soliciting bids, not after seeing what comes in.",
+      "A repeatable RFP process protects council from both bad outcomes and the appearance of favouritism — the same structure every time, whether it's landscaping, elevator maintenance, or envelope work. Define scope and evaluation criteria before soliciting bids, not after seeing what comes in.",
       "Get at least three bids where practical, document why the winning bid was chosen — not just price, insurance, references, and timeline matter too — and keep that documentation on file. If a losing bidder or an owner ever questions the decision, having the criteria and reasoning already written down is the difference between a five-minute answer and a drawn-out dispute.",
     ],
     jurisdictionLevel: "universal",
@@ -403,7 +403,7 @@ export const knowledgeResources: KnowledgeResource[] = [
     title: "Privacy law and your strata's data (PIPA)",
     summary: "Council handles personal information about owners and tenants every day — what BC's Personal Information Protection Act actually requires.",
     body: [
-      "A BC strata corporation is an organization under BC's Personal Information Protection Act (PIPA), so the Act governs how it collects, uses, discloses and protects personal information about owners, tenants and anyone else it deals with. Council acts for the corporation, so in practice these are council's obligations.",
+      "A BC strata corporation is an organization under BC's Personal Information Protection Act (PIPA), so the Act governs how it collects, uses, discloses, and protects personal information about owners, tenants, and anyone else it deals with. Council acts for the corporation, so in practice these are council's obligations.",
       "In practice, this affects things council already handles routinely: owner contact information, parking/EV charging records, correspondence about a bylaw complaint, and anything uploaded to this platform. The core obligation is simple to state: collect only what you actually need, keep it reasonably secure, and don't use it for a purpose the owner wouldn't reasonably expect — a complaint file isn't a place to note unrelated opinions about a resident, for instance.",
     ],
     jurisdictionLevel: "provincial",

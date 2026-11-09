@@ -128,7 +128,7 @@ export function DiscussionForm({
         <label className="field field--wide">
           <span>{discussionId ? "Add attachments" : "Attachments"}</span>
           <input type="file" multiple onChange={(e) => setFiles(Array.from(e.target.files ?? []))} data-testid="discussion-files" />
-          <span className="field__hint">PDF, Word, Excel, images and other documents, up to 50 MB each. Only council and those who run meetings can open them.</span>
+          <span className="field__hint">PDF, Word, Excel, images, and other documents, up to 50 MB each. Only council and those who run meetings can open them.</span>
         </label>
       </div>
       {error && (

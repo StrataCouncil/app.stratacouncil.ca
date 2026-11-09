@@ -30,7 +30,7 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
         <div className="page-header">
           <h1>Users</h1>
           <p>
-            Everyone with an account: their stratas, training, Library use and Stratasphere&trade; question counts. Conversations
+            Everyone with an account: their stratas, training, Library use, and Stratasphere&trade; question counts. Conversations
             stay private; nothing here shows what anyone asked.
           </p>
         </div>

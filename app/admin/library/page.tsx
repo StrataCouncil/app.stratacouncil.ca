@@ -25,7 +25,7 @@ export default async function LibraryAdminPage() {
         <div className="page-header">
           <h1>Library</h1>
           <p>
-            Playbooks, guides and templates for every strata. Paste a draft and the AI puts it in the Library&rsquo;s format
+            Playbooks, guides, and templates for every strata. Paste a draft and the AI puts it in the Library&rsquo;s format
             and flags the legal statements to check against the Knowledge Base. Members see an item once it&rsquo;s
             published. Templates are for subscribers. Members see items in the order below; use the arrows to move them.
           </p>

@@ -53,7 +53,7 @@ export async function createLegislationUploads(
   if (!files.length || files.length > 20) return { ok: false, error: "Choose up to 20 files at a time." };
   for (const f of files) {
     if (!(LEGISLATION_EXTENSIONS as readonly string[]).includes(extensionOf(f.name))) {
-      return { ok: false, error: `${f.name}: only PDF, Word (.docx), HTML and text files can be indexed.` };
+      return { ok: false, error: `${f.name}: only PDF, Word (.docx), HTML, and text files can be indexed.` };
     }
     if (f.size > MAX_LEGISLATION_BYTES) return { ok: false, error: `${f.name} is over 50 MB.` };
   }

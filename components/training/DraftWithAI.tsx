@@ -227,7 +227,7 @@ export function DraftWithAI({
       {(step === "outline" || step === "writing") && (
         <div className="be-stack">
           <p className="card__meta">
-            <strong>Step 2 of 3: review the outline.</strong> The blueprint as a list of slides. Edit, reorder or remove them; nothing is
+            <strong>Step 2 of 3: review the outline.</strong> The blueprint as a list of slides. Edit, reorder, or remove them; nothing is
             created until you press Write.
           </p>
           <ol className="builder__outline-edit">

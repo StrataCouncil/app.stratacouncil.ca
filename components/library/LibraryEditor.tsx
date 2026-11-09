@@ -79,7 +79,7 @@ export function LibraryEditor({ initial }: { initial: LibraryDraft }) {
   }
 
   async function tidy() {
-    if (markup.trim() && !window.confirm("Replace the title, summary, tags and content with the AI's version of the pasted draft? Sources you've chosen stay.")) return;
+    if (markup.trim() && !window.confirm("Replace the title, summary, tags, and content with the AI's version of the pasted draft? Sources you've chosen stay.")) return;
     if (dirty && !(await save())) return;
     setBusy("Reading the draft… (this can take a minute or two)");
     setError(null);
@@ -194,7 +194,7 @@ export function LibraryEditor({ initial }: { initial: LibraryDraft }) {
       <details className="builder__block lib-editor__paste" open={!markup.trim()}>
         <summary className="builder__block-type">Paste a draft</summary>
         <p className="card__meta">
-          Paste a playbook, guide or template written elsewhere. The AI puts it in the Library&rsquo;s format, removes clutter,
+          Paste a playbook, guide, or template written elsewhere. The AI puts it in the Library&rsquo;s format, removes clutter,
           keeps it general, and lists the legal statements to check. It adds nothing of its own.
         </p>
         <textarea
@@ -332,7 +332,7 @@ Paragraph text. **Bold** words.
             void search();
           }}
         >
-          <input className="be-grow" value={query} maxLength={300} placeholder='Find a section: "98", "Standard Bylaw 7" or words' onChange={(e) => setQuery(e.target.value)} />
+          <input className="be-grow" value={query} maxLength={300} placeholder='Find a section: "98", "Standard Bylaw 7", or words' onChange={(e) => setQuery(e.target.value)} />
           <button className="button button-secondary button-small" disabled={!query.trim() || Boolean(busy)}>
             Search
           </button>
