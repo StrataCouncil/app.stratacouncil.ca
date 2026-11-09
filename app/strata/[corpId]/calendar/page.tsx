@@ -13,7 +13,7 @@ export default function CalendarPage() {
       <div className="lock-panel">
         <h2>Coming soon</h2>
         <p>
-          AGM dates, levy due dates, insurance renewals and depreciation
+          AGM dates, levy due dates, insurance renewals, and depreciation
           report cycles, all in one place. Not yet available.
         </p>
       </div>

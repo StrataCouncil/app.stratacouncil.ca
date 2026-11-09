@@ -53,7 +53,7 @@ export async function uploadAvatar(formData: FormData): Promise<{ ok: true } | {
   const file = formData.get("photo");
   if (!(file instanceof File) || file.size === 0) return { ok: false, error: "Choose a photo." };
   const ext = AVATAR_TYPES[file.type];
-  if (!ext) return { ok: false, error: "Use a JPEG, PNG or WebP image." };
+  if (!ext) return { ok: false, error: "Use a JPEG, PNG, or WebP image." };
   if (file.size > 5 * 1024 * 1024) return { ok: false, error: "That photo is over 5 MB." };
 
   const admin = createAdminClient();

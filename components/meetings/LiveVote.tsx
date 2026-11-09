@@ -376,7 +376,7 @@ export function MemberVote(props: {
       <p className="live-vote__note" role="status">
         {mine
           ? `You voted ${choiceLabels[mine]}. You can change it until ${props.runnerName ?? "the person running the meeting"} closes the vote. The result shows here when it closes.`
-          : "Choose For, Against or Abstain. You can change your vote until the vote closes."}
+          : "Choose For, Against, or Abstain. You can change your vote until the vote closes."}
       </p>
       {props.error && <p className="mm-action-error" role="alert">{props.error}</p>}
     </div>

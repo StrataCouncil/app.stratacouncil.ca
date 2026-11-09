@@ -95,7 +95,7 @@ export function AgendaView({ corpId, agenda }: { corpId: string; agenda: AgendaI
     <div className="agenda-builder" data-testid="agenda-view">
       {expandable.length > 0 && (
         <div className="agenda-view__tools">
-          <p className="card__meta">Open an item to read its background, motion and attachments before the meeting.</p>
+          <p className="card__meta">Open an item to read its background, motion, and attachments before the meeting.</p>
           <button
             type="button"
             className="button button-secondary button-small"

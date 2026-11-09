@@ -64,14 +64,14 @@ export function itemSteps(it: AgendaItem, s: StepState): Step[] {
   const introduce = manual(
     "introduce",
     "Introduce the item",
-    "Present the background, financial implications and risks. Use Share on screen to put an attachment on everyone's screen.",
+    "Present the background, financial implications, and risks. Use Share on screen to put an attachment on everyone's screen.",
     `"Next is ${it.text}."`
   );
   const steps: Step[] = [];
 
   if (isNextMeeting(it)) {
     steps.push(
-      auto("date", "Agree on the next meeting", "Record the date, time and place.", Boolean(it.nextMeeting?.date), '"When would council like to meet next?"'),
+      auto("date", "Agree on the next meeting", "Record the date, time, and place.", Boolean(it.nextMeeting?.date), '"When would council like to meet next?"'),
       auto("received", "Move on", "Done, next item.", it.done)
     );
   } else if (m && isElectChair(it)) {

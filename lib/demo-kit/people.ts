@@ -13,7 +13,7 @@ export const BUILDING = {
   address: "2150 Larchwood Crescent, Port Moody, BC V3H 0Z9",
   units: 24,
   built: 2009,
-  description: "a four-storey wood-frame building over a concrete parkade, with one elevator, 24 homes, an amenity room, a small gym and a bike room",
+  description: "a four-storey wood-frame building over a concrete parkade, with one elevator, 24 homes, an amenity room, a small gym, and a bike room",
 };
 
 export const MANAGEMENT = {

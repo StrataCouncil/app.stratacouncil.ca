@@ -368,7 +368,7 @@ function ModuleSettings({
           <span>Estimated time</span>
           <p className="card__meta">
             {module.estimatedMinutes ? `${module.estimatedMinutes} min. ` : ""}Worked out each time the module is published, from its narration,
-            reading and activities.
+            reading, and activities.
           </p>
         </div>
         <button className="button button-primary button-small" style={{ alignSelf: "flex-start" }} disabled={pending}>

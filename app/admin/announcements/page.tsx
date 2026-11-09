@@ -20,7 +20,7 @@ export default async function AnnouncementsPage() {
           <h1>Announcements</h1>
           <p>
             News for every StrataCouncil.ca customer, subscribed or not: new features, changes, new or updated
-            training, additions to the Library, legislation. Choose the Council Training page, every strata&rsquo;s Stratasphere&trade;
+            training, additions to the Library, and legislation. Choose the Council Training page, every strata&rsquo;s Stratasphere&trade;
             Overview, or both. Home shows the newest three; Overview the newest five. Keep them short.
           </p>
         </div>

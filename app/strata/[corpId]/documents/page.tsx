@@ -42,8 +42,8 @@ export default async function DocumentsPage({ params }: { params: Promise<{ corp
         <div>
           <h2>Documents</h2>
           <p className="card__meta">
-            Bylaws, minutes, financials and more. Uploading is free, and every
-            PDF, Word and text file is indexed so Stratasphere&trade; can use it.
+            Bylaws, minutes, financials, and more. Uploading is free, and every
+            PDF, Word, and text file is indexed so Stratasphere&trade; can use it.
           </p>
         </div>
         <div className="doc-header__actions">

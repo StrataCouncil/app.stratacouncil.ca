@@ -13,7 +13,7 @@ A short example of a Library policy template. Stratasphere subscribers get the f
 :::
 
 ## Purpose
-This policy sets out how pets are kept at [Strata Corporation name] so that owners, tenants and occupants can enjoy their homes and the common property.
+This policy sets out how pets are kept at [Strata Corporation name] so that owners, tenants, and occupants can enjoy their homes and the common property.
 
 ## Scope
 This policy applies to every owner, tenant, occupant and visitor, and to every pet kept in a strata lot or brought onto the common property.
@@ -27,7 +27,7 @@ All pets must:
 Owners are responsible for their tenants' and visitors' pets.
 
 ## Reporting a Concern
-Concerns should be made to council in writing, with the date, time and a description of what happened.
+Concerns should be made to council in writing, with the date, time, and a description of what happened.
 
 ## Council Authority
 Council will consider each concern and may respond as the bylaws allow.`;

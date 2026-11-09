@@ -36,7 +36,7 @@ export function SocialPostsAdmin({ posts }: { posts: SocialPostSummary[] }) {
   }
 
   async function remove(p: SocialPostSummary) {
-    if (!window.confirm(`Delete "${p.title}" for good? Its slides, captions and uploaded pictures are removed and can't be recovered.`)) return;
+    if (!window.confirm(`Delete "${p.title}" for good? Its slides, captions, and uploaded pictures are removed and can't be recovered.`)) return;
     setBusy(p.id);
     setError(null);
     const r = await deleteSocialPost(p.id);

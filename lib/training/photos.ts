@@ -14,11 +14,11 @@ export function wantsPhoto(slide: Pick<Slide, "element" | "layout">): boolean {
 
 export const PHOTO_SYSTEM = `You suggest stock photo searches for slides in a training course for volunteer strata council members in British Columbia, Canada.
 
-For each slide, write words to search Unsplash for one photo that fits the slide's subject: two to five plain words describing something a camera can capture, such as people at a meeting table, a condo building exterior, a leaking pipe or a calculator with invoices.
+For each slide, write words to search Unsplash for one photo that fits the slide's subject: two to five plain words describing something a camera can capture, such as people at a meeting table, a condo building exterior, a leaking pipe, or a calculator with invoices.
 
-- Concrete scenes, objects and people. No abstract ideas, no text, signs, documents up close, logos or screens.
+- Concrete scenes, objects, and people. No abstract ideas, no text, signs, documents up close, logos, or screens.
 - Everyday Canadian residential settings: apartment and townhouse buildings, lobbies, hallways, parkades, meeting rooms.
-- Nothing that suggests a particular real person, company or building.
+- Nothing that suggests a particular real person, company, or building.
 - Vary the searches across the module, so slides don't end up with the same photo.`;
 
 export const photoSearchSchema = {

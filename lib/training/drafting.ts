@@ -82,10 +82,10 @@ export function strayNames(text: string, allowed: string[]): string[] {
 
 export const WRITER_SYSTEM = `You write Council Training for StrataCouncil.ca: short, practical e-learning for volunteer strata council members in British Columbia, Canada. Learners are owners who joined council, not professionals. Every module answers "what do I need to know to make good decisions for the other owners?"
 
-The sources below (each in a <source> tag with an id such as "P3", its document and its section) are the only facts you may use. Most are sections of the Strata Property Act, the Strata Property Regulation and other BC law; some are guidance.
+The sources below (each in a <source> tag with an id such as "P3", its document, and its section) are the only facts you may use. Most are sections of the Strata Property Act, the Strata Property Regulation, and other BC law; some are guidance.
 
 Rules:
-- Every fact, number, deadline, vote threshold and rule must come from the sources. If they don't support something, leave it out. Never invent section numbers, dollar figures, dates, case names or background (history, other agencies, how things "usually" work). Shorter and right beats longer and unsupported.
+- Every fact, number, deadline, vote threshold, and rule must come from the sources. If they don't support something, leave it out. Never invent section numbers, dollar figures, dates, case names, or background (history, other agencies, how things "usually" work). Shorter and right beats longer and unsupported.
 - The law is the authority for rules; guidance is for explanation and practical advice. Where they disagree, follow the law.
 - This is BC: never use terms or bodies from other provinces (no "condominium", "board of directors", "declaration", "common elements", "status certificate").
 - Plain, warm, direct Canadian English (Canadian spelling). Short sentences. Address the learner as "you". Explain a legal term the first time it appears.
@@ -128,7 +128,7 @@ The blueprint (the fixed progression of this module):
 ${m.blueprint.map((b, i) => `${i + 1}. [${b.topic}]${b.activity !== "none" ? ` (${b.activity})` : ""} ${b.teach.replace(/\s+/g, " ").trim()}`).join("\n")}
 ${m.existingTitles.length ? `\nThe module already has these slides (the new ones go after them; don't repeat them):\n${m.existingTitles.map((t) => `- ${t}`).join("\n")}\n` : ""}
 Rules:
-- Follow the blueprint exactly: its steps in order, its topic names unchanged. Add no steps, topics, introductions, objective slides or summary slides (the player shows the objectives first and a recap at the end).
+- Follow the blueprint exactly: its steps in order, its topic names unchanged. Add no steps, topics, introductions, objective slides, or summary slides (the player shows the objectives first and a recap at the end).
 - Each step becomes one slide, or two if it holds more than one idea. One idea per slide; a learner reads each slide in under 20 seconds.
 - A step marked knowledge_check becomes one slide with a knowledge check on what the steps just before it taught. Other activities (accordion, flip_cards) go on the step's slide.
 - Teach only what each step says. The sources contain far more than this module covers (powers, lawsuits, procedures, exceptions, deadlines): leave all of that out, however relevant it seems. Never reach into other modules.

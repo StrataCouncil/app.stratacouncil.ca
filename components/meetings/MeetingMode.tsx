@@ -2029,7 +2029,7 @@ function ExitDialog(props: {
                   </option>
                 ))}
               </select>
-              <span className="field__hint">Votes, attendance and the agenda carry over. You stay in the meeting as a member.</span>
+              <span className="field__hint">Votes, attendance, and the agenda carry over. You stay in the meeting as a member.</span>
             </label>
             <button type="button" className="button button-primary" onClick={() => void handOver()} disabled={busy || !to} data-testid="mm-exit-hand-over">
               {busy ? "Handing over…" : "Hand over the meeting"}

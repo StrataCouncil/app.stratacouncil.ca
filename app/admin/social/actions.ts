@@ -181,7 +181,7 @@ const MAX_PICTURE = 20 * 1024 * 1024;
 export async function createSocialUpload(id: string, file: { type: string; size: number }): Promise<Result<{ path: string; token: string }>> {
   if (!(await staffId()) || !isId(id)) return NOT_ALLOWED;
   const ext = PICTURE_TYPES[file.type];
-  if (!ext) return { ok: false, error: "Use a PNG, JPEG or WebP picture." };
+  if (!ext) return { ok: false, error: "Use a PNG, JPEG, or WebP picture." };
   if (!(file.size > 0) || file.size > MAX_PICTURE) return { ok: false, error: "Pictures can be up to 20 MB." };
   const admin = createAdminClient();
   const { data: post } = await admin.from("social_posts").select("id").eq("id", id).maybeSingle();

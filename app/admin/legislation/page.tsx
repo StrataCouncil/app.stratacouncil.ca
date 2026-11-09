@@ -19,7 +19,7 @@ export default async function LegislationPage() {
         <div className="page-header">
           <h1>Knowledge Base</h1>
           <p>
-            BC Acts, regulations and official guidance that Stratasphere quotes and cites for every strata on the
+            BC Acts, regulations, and official guidance that Stratasphere quotes and cites for every strata on the
             platform. It explains the law only from what&rsquo;s here, never from memory, so keep each entry current:
             when BC Laws publishes a newer version, upload it and delete the old one.
           </p>

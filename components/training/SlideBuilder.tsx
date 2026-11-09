@@ -379,7 +379,7 @@ export function SlideBuilder({
 
   async function remove(slide: Slide) {
     if (!token) return;
-    if (!window.confirm(`Delete slide "${slide.title || "Untitled"}"? Its picture, video and narration are deleted too.`)) return;
+    if (!window.confirm(`Delete slide "${slide.title || "Untitled"}"? Its picture, video, and narration are deleted too.`)) return;
     pending.current.delete(slide.id);
     await flush();
     const r = await deleteSlide(initial.id, token, slide.id);

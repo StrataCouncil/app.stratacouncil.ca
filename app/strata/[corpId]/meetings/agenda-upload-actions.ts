@@ -88,7 +88,7 @@ export async function parseUploadedAgenda(corpId: string, formData: FormData): P
       system:
         "You turn a BC strata corporation's meeting agenda into structured items. Keep the agenda's own wording and order. " +
         "Placeholders like [REF-3] stand for names and other details; copy them exactly where they appear. " +
-        "Use FOR_APPROVAL, FOR_DECISION, FOR_RATIFICATION or FOR_DIRECTION only where the agenda shows something to be voted on; otherwise FOR_INFORMATION or FOR_DISCUSSION. " +
+        "Use FOR_APPROVAL, FOR_DECISION, FOR_RATIFICATION, or FOR_DIRECTION only where the agenda shows something to be voted on; otherwise FOR_INFORMATION or FOR_DISCUSSION. " +
         "Use empty strings for anything the agenda doesn't say.",
       messages: [{ role: "user", content: `Agenda:\n\n${p.text}` }],
       schema: AGENDA_SCHEMA,

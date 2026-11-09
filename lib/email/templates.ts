@@ -115,12 +115,12 @@ export function corporationInviteEmail(params: {
   const inviterName = escapeHtml(params.inviterName);
   const html = wrap(`
     <p style="margin:0 0 16px;font-size:16px;color:${INK};">${inviterName} invited you to join <strong>${corporationName}</strong> on StrataCouncil.ca.</p>
-    <p style="margin:0 0 16px;font-size:14px;color:${MUTED};">StrataCouncil.ca is where your strata council keeps its records and runs its meetings, with free council training. Stratasphere&trade;, its AI assistant, answers questions from your strata&rsquo;s own bylaws, minutes and BC strata law.</p>
+    <p style="margin:0 0 16px;font-size:14px;color:${MUTED};">StrataCouncil.ca is where your strata council keeps its records and runs its meetings, with free council training. Stratasphere&trade;, its AI assistant, answers questions from your strata&rsquo;s own bylaws, minutes, and BC strata law.</p>
     <p style="margin:0 0 8px;font-size:14px;color:${INK};">Click below to accept. If you don&rsquo;t have an account yet, this creates one &mdash; there&rsquo;s nothing else to fill in.</p>
     ${button(params.acceptUrl, "Accept invitation")}
     <p style="margin:16px 0 0;font-size:13px;color:${MUTED};">The invitation expires in 7 days, and this link can only be used once. If the link has expired but the invitation hasn&rsquo;t, sign in at app.stratacouncil.ca with this email address and it will be waiting for you. If you weren&rsquo;t expecting this, you can ignore it.</p>
   `);
-  const text = `${params.inviterName} invited you to join ${params.corporationName} on StrataCouncil.ca.\n\nStrataCouncil.ca is where your strata council keeps its records and runs its meetings, with free council training. Stratasphere, its AI assistant, answers questions from your strata's own bylaws, minutes and BC strata law.\n\nAccept the invitation:\n\n${params.acceptUrl}\n\nIf you don't have an account yet, this creates one. The invitation expires in 7 days, and the link can only be used once. If the link has expired but the invitation hasn't, sign in at app.stratacouncil.ca with this email address and it will be waiting for you.`;
+  const text = `${params.inviterName} invited you to join ${params.corporationName} on StrataCouncil.ca.\n\nStrataCouncil.ca is where your strata council keeps its records and runs its meetings, with free council training. Stratasphere, its AI assistant, answers questions from your strata's own bylaws, minutes, and BC strata law.\n\nAccept the invitation:\n\n${params.acceptUrl}\n\nIf you don't have an account yet, this creates one. The invitation expires in 7 days, and the link can only be used once. If the link has expired but the invitation hasn't, sign in at app.stratacouncil.ca with this email address and it will be waiting for you.`;
   return {
     subject: `You're invited to join ${params.corporationName} on StrataCouncil.ca`,
     html,
@@ -245,11 +245,11 @@ export function demoInviteEmail(params: { fullName: string; link: string; landin
   const day = escapeHtml(params.dayLabel);
   const training = params.landing === "training";
   const intro = training
-    ? "Here&rsquo;s your personal link to Council Training on StrataCouncil.ca: short, practical modules on what makes an effective strata council member. You can also look around your own fictional strata, as its admin, with its council, documents, meetings and the Stratasphere&trade; AI assistant."
-    : "Here&rsquo;s your personal link to the StrataCouncil.ca demo. You&rsquo;ll be the admin of your own fictional strata, with its council, documents, meetings, minutes and the Stratasphere&trade; AI assistant, to try however you like.";
+    ? "Here&rsquo;s your personal link to Council Training on StrataCouncil.ca: short, practical modules on what makes an effective strata council member. You can also look around your own fictional strata, as its admin, with its council, documents, meetings, and the Stratasphere&trade; AI assistant."
+    : "Here&rsquo;s your personal link to the StrataCouncil.ca demo. You&rsquo;ll be the admin of your own fictional strata, with its council, documents, meetings, minutes, and the Stratasphere&trade; AI assistant, to try however you like.";
   const introText = training
-    ? "Here's your personal link to Council Training on StrataCouncil.ca: short, practical modules on what makes an effective strata council member. You can also look around your own fictional strata, as its admin, with its council, documents, meetings and the Stratasphere AI assistant"
-    : "Here's your personal link to the StrataCouncil.ca demo. You'll be the admin of your own fictional strata, with its council, documents, meetings, minutes and the Stratasphere AI assistant, to try however you like";
+    ? "Here's your personal link to Council Training on StrataCouncil.ca: short, practical modules on what makes an effective strata council member. You can also look around your own fictional strata, as its admin, with its council, documents, meetings, and the Stratasphere AI assistant"
+    : "Here's your personal link to the StrataCouncil.ca demo. You'll be the admin of your own fictional strata, with its council, documents, meetings, minutes, and the Stratasphere AI assistant, to try however you like";
   const html = wrap(`
     <p style="margin:0 0 16px;font-size:16px;color:${INK};">Hi ${escapeHtml(first)},</p>
     <p style="margin:0 0 16px;font-size:16px;color:${INK};">${intro}</p>
