@@ -43,6 +43,7 @@ import {
   type SocialSlide,
   type Template,
   type Theme,
+  slideNumbersShown,
 } from "@/lib/social/post";
 
 const SOCIAL_BUCKET = "social-media";
@@ -86,6 +87,7 @@ export function SocialEditor({ initial }: { initial: SocialPost }) {
         destination: post.destination,
         slides: post.slides,
         captions: post.captions,
+        showSlideNumbers: post.showSlideNumbers,
       }).catch(() => ({ ok: false as const, error: "Couldn't reach the server. Your changes are kept on this screen." }));
       setSaveState(r.ok ? "saved" : "error");
       if (!r.ok) setError(r.error);
@@ -275,6 +277,18 @@ export function SocialEditor({ initial }: { initial: SocialPost }) {
               </option>
             ))}
           </select>
+        </label>
+        <label className="field checkbox-field">
+          <span>
+            <input
+              type="checkbox"
+              checked={slideNumbersShown(post)}
+              onChange={(e) => update((p) => ({ ...p, showSlideNumbers: e.target.checked }))}
+              data-testid="social-slide-numbers"
+            />{" "}
+            Slide numbers
+          </span>
+          <span className="field__hint">The &ldquo;01 / 05&rdquo; in the corner. Off by default for a single slide.</span>
         </label>
       </section>
 
