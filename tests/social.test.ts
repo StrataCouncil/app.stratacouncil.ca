@@ -16,6 +16,8 @@ import {
   readmeFile,
   slideLink,
   slidesFor,
+  slideNumbersShown,
+  toPost,
   utmLink,
   wordingProblems,
   xLength,
@@ -39,6 +41,7 @@ const post = (over: Partial<SocialPost> = {}): SocialPost => ({
     text: { instagram: "Ready for your first meeting?", facebook: "Read this first.", linkedin: "For councils.", tiktok: "First meeting?", x: "Your first council meeting, made easier." },
     hashtags: { instagram: ["#stratasphere", "#bcstrata"], x: ["#stratasphere"] },
   }),
+  showSlideNumbers: null,
   createdAt: "",
   updatedAt: "",
   ...over,
@@ -156,4 +159,16 @@ test("the draft request asks for the right shape", () => {
   assert.match(req, /numbered 1 to 5/);
   assert.match(req, /free training sign-up/);
   assert.deepEqual([...draftSchema.required], ["title", "campaign", "slides", "captions", "hashtags"]);
+});
+
+test("slide numbers: automatic hides them on a single slide; the post's choice wins either way", () => {
+  assert.equal(slideNumbersShown(post()), true);
+  const single = post({ slides: normalizeSlides([slide(1, "photo")], ID) });
+  assert.equal(slideNumbersShown(single), false);
+  assert.equal(slideNumbersShown({ ...single, showSlideNumbers: true }), true);
+  assert.equal(slideNumbersShown(post({ showSlideNumbers: false })), false);
+  assert.deepEqual(normalizePostPatch({ showSlideNumbers: false }, ID), { show_slide_numbers: false });
+  assert.deepEqual(normalizePostPatch({ showSlideNumbers: "yes" }, ID), { show_slide_numbers: null });
+  assert.equal(toPost({ id: ID, show_slide_numbers: true }).showSlideNumbers, true);
+  assert.equal(toPost({ id: ID }).showSlideNumbers, null);
 });

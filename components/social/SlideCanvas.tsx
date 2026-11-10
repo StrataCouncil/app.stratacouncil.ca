@@ -124,7 +124,7 @@ function Photo({ slide, style, frame = true }: { slide: SocialSlide; style: CSSP
 }
 
 export interface SlideCanvasProps {
-  post: Pick<SocialPost, "template" | "theme" | "destination">;
+  post: Pick<SocialPost, "template" | "theme" | "destination"> & Partial<Pick<SocialPost, "showSlideNumbers">>;
   slide: SocialSlide;
   index: number;
   total: number;
@@ -137,7 +137,7 @@ export function SlideCanvas({ post, slide, index, total, platform }: SlideCanvas
   const s = surfaceFor(post.template, post.theme, slide, index);
   // TikTok covers the bottom and right edge with its own buttons and caption.
   const pad = { top: tall ? 170 : 96, side: 96, right: tall ? 170 : 96, bottom: tall ? 380 : 96 };
-  const counter = `${String(index + 1).padStart(2, "0")} / ${String(total).padStart(2, "0")}`;
+  const counter = !(post.showSlideNumbers ?? total > 1) ? "" : `${String(index + 1).padStart(2, "0")} / ${String(total).padStart(2, "0")}`;
   const ctx: Ctx = { post, slide, index, total, s, pad, tall, width, height, handle, counter };
 
   return (
@@ -193,7 +193,7 @@ function Footer({ s, pad, handle, counter, center = false }: Pick<Ctx, "s" | "pa
       }}
     >
       <span>{handle}</span>
-      {!center && <span>{counter}</span>}
+      {!center && counter && <span>{counter}</span>}
     </div>
   );
 }
@@ -316,7 +316,7 @@ function StoryHeader({ c, color }: { c: Ctx; color: string }) {
       }}
     >
       <span>{slide.kicker || "StrataCouncil.ca"}</span>
-      <span>{c.counter}</span>
+      {c.counter && <span>{c.counter}</span>}
     </div>
   );
 }

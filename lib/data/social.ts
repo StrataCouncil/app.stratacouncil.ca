@@ -9,7 +9,7 @@ import { toPost, type SocialPost } from "@/lib/social/post";
  */
 
 export const SOCIAL_BUCKET = "social-media";
-export const SOCIAL_COLUMNS = "id, title, campaign, template, theme, destination, topic, audience, slides, captions, created_at, updated_at";
+export const SOCIAL_COLUMNS = "id, title, campaign, template, theme, destination, topic, audience, slides, captions, show_slide_numbers, created_at, updated_at";
 /** Signed links last long enough for an editing session; the editor asks again when it reloads. */
 const SIGNED_SECONDS = 6 * 60 * 60;
 

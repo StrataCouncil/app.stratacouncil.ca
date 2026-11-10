@@ -105,6 +105,8 @@ export interface SocialPost {
   audience: Audience;
   slides: SocialSlide[];
   captions: Captions;
+  /** null: automatic (shown with two or more slides). */
+  showSlideNumbers: boolean | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -228,7 +230,7 @@ export function normalizeCaptions(v: unknown): Captions {
 /** Fields a save may change, checked and trimmed to size. */
 export function normalizePostPatch(v: unknown, postId: string) {
   const p = (v && typeof v === "object" ? v : {}) as Record<string, unknown>;
-  const out: Partial<Pick<SocialPost, "title" | "campaign" | "template" | "theme" | "destination" | "slides" | "captions">> = {};
+  const out: Partial<Pick<SocialPost, "title" | "campaign" | "template" | "theme" | "destination" | "slides" | "captions">> & { show_slide_numbers?: boolean | null } = {};
   if ("title" in p) out.title = clip(p.title, LIMITS.title).trim();
   if ("campaign" in p) out.campaign = campaignSlug(String(p.campaign ?? ""));
   if ("template" in p) out.template = oneOf(TEMPLATES, p.template, "list");
@@ -236,7 +238,13 @@ export function normalizePostPatch(v: unknown, postId: string) {
   if ("destination" in p) out.destination = oneOf(Object.keys(DESTINATIONS) as Destination[], p.destination, "home");
   if ("slides" in p) out.slides = normalizeSlides(p.slides, postId);
   if ("captions" in p) out.captions = normalizeCaptions(p.captions);
+  if ("showSlideNumbers" in p) out.show_slide_numbers = typeof p.showSlideNumbers === "boolean" ? p.showSlideNumbers : null;
   return out;
+}
+
+/** Whether the slides show "01 / 05": the post's own choice, else only when there's more than one slide. */
+export function slideNumbersShown(post: Pick<SocialPost, "showSlideNumbers" | "slides">): boolean {
+  return post.showSlideNumbers ?? post.slides.length > 1;
 }
 
 export function toPost(r: Record<string, unknown>): SocialPost {
@@ -252,6 +260,7 @@ export function toPost(r: Record<string, unknown>): SocialPost {
     audience: oneOf(AUDIENCES, r.audience, "council"),
     slides: normalizeSlides(r.slides, id),
     captions: normalizeCaptions(r.captions),
+    showSlideNumbers: typeof r.show_slide_numbers === "boolean" ? r.show_slide_numbers : null,
     createdAt: String(r.created_at ?? ""),
     updatedAt: String(r.updated_at ?? ""),
   };
