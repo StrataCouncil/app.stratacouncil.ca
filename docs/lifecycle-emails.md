@@ -1,6 +1,6 @@
 # Lifecycle emails (design)
 
-Status: designed 2026-11-10, not built. Replaces
+Status: designed 2026-11-10, not built; on hold for a cycle (2026-11-10). Replaces
 `docs/training-reminders.md` (2026-10-30), whose mailing preferences and
 training reminders are folded in here. Build in four PRs, in the order
 below, after the owner's Go.
@@ -81,6 +81,32 @@ A **Lifecycle emails** page in the Super Admin console:
   preview, as designed on 2026-10-30.
 
 ## The journeys
+
+### 0. New sign-up (service), first, with the foundation
+
+Decided 2026-11-10; built first, in the foundation PR, with its copy
+reviewed before any code. For people who sign up on their own; people
+who arrive by invitation land in their strata and get the member welcome
+instead.
+
+A new person lands in Council Training after their sign-in link, and can
+connect a strata from there (add one, or ask to join one). So the flow
+has two goals: start training, and connect a strata.
+
+| When | Email | Sent only if | Purpose |
+|---|---|---|---|
+| About an hour after first sign-in | Welcome to StrataCouncil.ca | Always | What's free (Council Training, the Library), how to connect their strata; one button, Start Council Training |
+| Day 2 | Your first module takes about 15 minutes | Training not started | One recommended module and a Start button. If they started and stopped: "Pick up where you left off" |
+| Day 4 | Bring your strata onto StrataCouncil.ca | No strata connected, no join request waiting | What they need (the strata plan PDF, about 5 minutes), what's free, what a subscription adds; one button, Connect your strata |
+| Day 9 | Anything we can help with? | Still no training and no strata | A short last note with both links, then nothing more |
+
+- Each step stops as soon as its goal is met.
+- Connecting a strata moves them on: to Admin setup if they added it, or
+  to the member welcome if they joined one.
+- Footer link: "Stop setup tips". Wording matches the in-app Getting
+  Started checklist.
+- Folded into the same PR: the sign-up page's opt-in text says
+  "StrataSphere" with an em dash; it becomes "Stratasphere&trade;".
 
 ### 1. Foundation, invitation reminders, training reminders (service)
 
