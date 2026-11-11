@@ -1,3 +1,4 @@
+import { DeleteAccountCard } from "@/components/AdminDangerDelete";
 import { tz } from "@/lib/time-zone";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -301,6 +302,11 @@ export default async function AdminUserPage({ params }: { params: Promise<{ user
           })}
         </ol>
 
+        {!row.isSuperAdmin && (
+          <div style={{ marginTop: "2.5rem" }}>
+            <DeleteAccountCard email={row.email} />
+          </div>
+        )}
       </div>
     </AppShell>
   );
