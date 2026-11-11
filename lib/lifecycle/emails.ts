@@ -31,9 +31,9 @@ const link = (href: string, label: string) => `<a href="${href}" style="color:${
 
 /** The footer every setup tip carries. */
 export function setupFooter(unsubscribeUrl: string) {
-  const html = `<span style="display:block;margin-top:12px;">${escapeHtml(COMPANY_MAILING_ADDRESS)} &middot; stratacouncil.ca</span>
-                <span style="display:block;margin-top:6px;">You&rsquo;re receiving this because you created a StrataCouncil.ca account. <a href="${unsubscribeUrl}" style="color:${MUTED};">Stop setup tips</a></span>`;
-  const text = `--\nStrataCouncil.ca is a product of ${COMPANY_LEGAL_NAME}\n${COMPANY_MAILING_ADDRESS} · stratacouncil.ca\nYou're receiving this because you created a StrataCouncil.ca account. Stop setup tips: ${unsubscribeUrl}`;
+  const html = `You&rsquo;re receiving this because you created a StrataCouncil.ca account.<br />
+                <a href="${unsubscribeUrl}" style="color:${MUTED};text-decoration:underline;">Stop setup tips</a>`;
+  const text = `--\nStrataCouncil.ca is a product of ${COMPANY_LEGAL_NAME}\n${COMPANY_MAILING_ADDRESS}\nstratacouncil.ca\n\nYou're receiving this because you created a StrataCouncil.ca account.\nStop setup tips: ${unsubscribeUrl}`;
   return { html, text };
 }
 

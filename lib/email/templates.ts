@@ -6,6 +6,8 @@
  * tokens (doc05 §3) without pulling in the marketing site's CSS.
  */
 
+import { COMPANY_LEGAL_NAME, COMPANY_MAILING_ADDRESS } from "../company.ts";
+
 export const INK = "#1b2a41";
 export const MUTED = "#6b7280";
 const ACCENT = "#b4602f";
@@ -19,7 +21,7 @@ const ASSET_BASE = "https://app.stratacouncil.ca/email";
 // Mail apps cache images by address, so a changed image gets a new file
 // name: an old copy shown at the new size comes out stretched.
 
-/** The email frame. `footerHtml` goes under the company line (lifecycle emails put their address and unsubscribe link there). */
+/** The email frame. The footer, centred, names the company and its mailing address; `footerHtml` goes under it (lifecycle emails: why they got it, and the unsubscribe link). */
 export function wrap(bodyHtml: string, footerHtml = "") {
   return `<!doctype html>
 <html>
@@ -39,12 +41,22 @@ export function wrap(bodyHtml: string, footerHtml = "") {
               </td>
             </tr>
             <tr>
-              <td style="padding-top:20px;font-size:12px;color:${MUTED};">
-                StrataCouncil.ca &middot; British Columbia, Canada<br />
-                <span style="display:inline-block;margin-top:6px;">A product of
-                  <img src="${ASSET_BASE}/trickfilm.png" width="73" height="20" alt="Trickfilm Entertainment Inc." style="display:inline-block;vertical-align:middle;border:0;margin-left:4px;" /></span>${footerHtml}
+              <td align="center" style="padding:28px 16px 0;text-align:center;font-size:12px;line-height:18px;color:${MUTED};">
+                <img src="${ASSET_BASE}/trickfilm.png" width="73" height="20" alt="${COMPANY_LEGAL_NAME}" style="display:block;margin:0 auto 10px;border:0;" />
+                StrataCouncil.ca is a product of ${COMPANY_LEGAL_NAME}<br />
+                ${COMPANY_MAILING_ADDRESS}<br />
+                <a href="https://www.stratacouncil.ca" style="color:${MUTED};text-decoration:none;">stratacouncil.ca</a>
               </td>
-            </tr>
+            </tr>${
+              footerHtml
+                ? `
+            <tr>
+              <td align="center" style="padding:16px 16px 0;text-align:center;font-size:12px;line-height:18px;color:${MUTED};">
+                ${footerHtml}
+              </td>
+            </tr>`
+                : ""
+            }
           </table>
         </td>
       </tr>
