@@ -79,6 +79,7 @@ export function SocialEditor({ initial }: { initial: SocialPost }) {
   const [clipPicker, setClipPicker] = useState<string | null>(null);
   const clipResolve = useRef<((c: SocialClip | null) => void) | null>(null);
   const [templateOpen, setTemplateOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   // Each change bumps the version; a save confirms the version it sent. Unsaved
   // while they differ, so leaving mid-save or after a failed save still warns.
   const version = useRef(initial.slides.some((s) => !s.design) ? 1 : 0);
@@ -316,32 +317,41 @@ export function SocialEditor({ initial }: { initial: SocialPost }) {
   }
 
   const problems = useMemo(() => wordingProblems(postTexts(post)), [post]);
-  const info = PLATFORM_INFO[platform];
-  const previewScale = 520 / info.width;
 
   return (
     <div className={`social-editor ${socialFontClass}`} data-testid="social-editor">
-      <div className="social-editor__bar">
-        <Link href="/admin/marketing/socials" className="link-button">
-          All posts
+      <header className="se-top">
+        <Link href="/admin/marketing/socials" className="se-icon" title="All posts" aria-label="All posts">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
         </Link>
-        <span className="card__meta" data-testid="social-save-state">
+        <input
+          className="se-top__title"
+          value={post.title}
+          maxLength={LIMITS.title}
+          placeholder="Untitled post"
+          aria-label="Post title (for the list only)"
+          onChange={(e) => update((p) => ({ ...p, title: e.target.value }))}
+          data-testid="social-title"
+        />
+        <span className="se-top__state" data-state={saveState} data-testid="social-save-state">
           {saveState === "saving" ? "Saving…" : saveState === "error" ? "Not saved" : "Saved"}
         </span>
-        <span className="social-editor__bar-actions">
-          <button type="button" className="button button-secondary" onClick={remove} disabled={busy !== null || exporting !== null} data-testid="social-delete">
-            Delete post
+        <span className="se-top__actions">
+          <button type="button" className="button button-secondary button-small" aria-expanded={settingsOpen} onClick={() => setSettingsOpen((v) => !v)} data-testid="social-settings">
+            Post settings
           </button>
-          <button type="button" className="button button-secondary" onClick={() => setTemplateOpen(true)} disabled={post.slides.length === 0} data-testid="social-save-template">
+          <button type="button" className="button button-secondary button-small" onClick={() => setTemplateOpen(true)} disabled={post.slides.length === 0} data-testid="social-save-template">
             Save as template
           </button>
-          <button type="button" className="button button-primary" onClick={exportZip} disabled={exporting !== null || post.slides.length === 0} data-testid="social-export">
-            {exporting ? `Drawing ${exporting.done} of ${exporting.total}…` : "Export ZIP"}
+          <button type="button" className="button button-primary button-small" onClick={exportZip} disabled={exporting !== null || post.slides.length === 0} data-testid="social-export">
+            {exporting ? `Exporting ${exporting.done} of ${exporting.total}…` : "Export"}
           </button>
         </span>
-      </div>
+      </header>
       {exporting?.detail && (
-        <p className="card__meta" role="status" data-testid="social-export-detail">
+        <p className="se-hint" role="status" data-testid="social-export-detail">
           Making video: {exporting.detail}. Keep this tab open.
         </p>
       )}
@@ -362,137 +372,126 @@ export function SocialEditor({ initial }: { initial: SocialPost }) {
         </div>
       )}
 
-      <section className="card social-editor__settings">
-        <label className="field field--wide">
-          <span>Title (for this list only)</span>
-          <input value={post.title} maxLength={LIMITS.title} onChange={(e) => update((p) => ({ ...p, title: e.target.value }))} data-testid="social-title" />
-        </label>
-        <label className="field">
-          <span>Campaign (utm_campaign)</span>
-          <input
-            value={post.campaign}
-            maxLength={60}
-            onChange={(e) => update((p) => ({ ...p, campaign: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-").slice(0, 60) }))}
-            data-testid="social-campaign"
-          />
-        </label>
-        <label className="field">
-          <span>Look for new slides</span>
-          <select value={post.template} onChange={(e) => update((p) => ({ ...p, template: e.target.value as Template }))} data-testid="social-template">
-            {TEMPLATES.map((t) => (
-              <option key={t} value={t}>
-                {TEMPLATE_LABELS[t]}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="field">
-          <span>Colours for new slides</span>
-          <select value={post.theme} onChange={(e) => update((p) => ({ ...p, theme: e.target.value as Theme }))} data-testid="social-theme">
-            {THEMES.map((t) => (
-              <option key={t} value={t}>
-                {THEME_LABELS[t]}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="field">
-          <span>Links go to</span>
-          <select value={post.destination} onChange={(e) => update((p) => ({ ...p, destination: e.target.value as Destination }))}>
-            {(Object.keys(DESTINATIONS) as Destination[]).map((d) => (
-              <option key={d} value={d}>
-                {DESTINATIONS[d].label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="field checkbox-field">
-          <span>
-            <input
-              type="checkbox"
-              checked={slideNumbersShown(post)}
-              onChange={(e) => update((p) => ({ ...p, showSlideNumbers: e.target.checked }))}
-              data-testid="social-slide-numbers"
-            />{" "}
-            Slide numbers
-          </span>
-          <span className="field__hint">The &ldquo;01 / 05&rdquo; in the corner. Off by default for a single slide.</span>
-        </label>
-      </section>
-
-      <div className="social-editor__main">
-        <aside className="social-editor__slides" aria-label="Slides">
-          <ol>
-            {post.slides.map((s, i) => (
-              <li key={s.id} data-active={i === current}>
-                <button type="button" className="social-editor__thumb" onClick={() => setCurrent(i)} aria-label={`Slide ${i + 1}: ${s.title || SLIDE_KIND_LABELS[s.kind]}`}>
-                  <ScaledSlide scale={110 / 1080} width={1080} height={1350}>
-                    <SlideCanvas post={post} slide={s} index={i} total={post.slides.length} platform="instagram" />
-                  </ScaledSlide>
-                  <span>
-                    {i + 1}. {SLIDE_KIND_LABELS[s.kind]}
-                  </span>
-                </button>
-                <span className="social-editor__thumb-tools">
-                  <button type="button" className="icon-button" onClick={() => moveSlide(i, -1)} disabled={i === 0} aria-label={`Move slide ${i + 1} up`}>
-                    &uarr;
-                  </button>
-                  <button type="button" className="icon-button" onClick={() => moveSlide(i, 1)} disabled={i === post.slides.length - 1} aria-label={`Move slide ${i + 1} down`}>
-                    &darr;
-                  </button>
-                  <button type="button" className="icon-button" onClick={() => removeSlide(i)} aria-label={`Remove slide ${i + 1}`}>
-                    &times;
-                  </button>
-                </span>
-              </li>
-            ))}
-          </ol>
+      {settingsOpen && (
+        <section className="se-settings" aria-label="Post settings">
           <label className="field">
-            <span>Add a slide</span>
-            <select value="" onChange={(e) => e.target.value && addSlide(e.target.value as SlideKind)} data-testid="social-add-slide">
-              <option value="">Choose a kind…</option>
-              {SLIDE_KINDS.map((k) => (
-                <option key={k} value={k}>
-                  {SLIDE_KIND_LABELS[k]}
+            <span>Campaign (utm_campaign)</span>
+            <input
+              value={post.campaign}
+              maxLength={60}
+              onChange={(e) => update((p) => ({ ...p, campaign: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-").slice(0, 60) }))}
+              data-testid="social-campaign"
+            />
+          </label>
+          <label className="field">
+            <span>Links go to</span>
+            <select value={post.destination} onChange={(e) => update((p) => ({ ...p, destination: e.target.value as Destination }))}>
+              {(Object.keys(DESTINATIONS) as Destination[]).map((d) => (
+                <option key={d} value={d}>
+                  {DESTINATIONS[d].label}
                 </option>
               ))}
             </select>
           </label>
-        </aside>
+          <label className="field">
+            <span>Look for new slides</span>
+            <select value={post.template} onChange={(e) => update((p) => ({ ...p, template: e.target.value as Template }))} data-testid="social-template">
+              {TEMPLATES.map((t) => (
+                <option key={t} value={t}>
+                  {TEMPLATE_LABELS[t]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
+            <span>Colours for new slides</span>
+            <select value={post.theme} onChange={(e) => update((p) => ({ ...p, theme: e.target.value as Theme }))} data-testid="social-theme">
+              {THEMES.map((t) => (
+                <option key={t} value={t}>
+                  {THEME_LABELS[t]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="checkbox-field se-settings__check">
+            <input type="checkbox" checked={slideNumbersShown(post)} onChange={(e) => update((p) => ({ ...p, showSlideNumbers: e.target.checked }))} data-testid="social-slide-numbers" /> Slide numbers (01 / 05)
+          </label>
+          <button type="button" className="link-button agenda-danger se-settings__delete" onClick={remove} disabled={busy !== null || exporting !== null} data-testid="social-delete">
+            Delete post
+          </button>
+        </section>
+      )}
 
-        {slide?.design ? (
-          <div className="social-editor__design">
-            <DesignEditor
-              post={post}
-              index={current}
-              platform={platform}
-              onPlatform={setPlatform}
-              onChange={setDesign}
-              onError={setError}
-              findPhoto={findPhoto}
-              uploadPhoto={upload}
-              findClip={findClip}
-              uploadClip={uploadClip}
-            />
-            {platform === "x" && slidesFor("x", post.slides).every((x) => x.index !== current) && (
-              <p className="card__meta">X takes 4 pictures: this slide isn&rsquo;t one of them (the cover, the next two, and the call to action are).</p>
-            )}
-            <div className="social-editor__rewrite">
-              <label className="field">
-                <span>Rewrite this slide&rsquo;s words with AI</span>
-                <input value={instruction} maxLength={500} placeholder="Optional: what to change (shorter, more practical, mention minutes...)" onChange={(e) => setInstruction(e.target.value)} />
+      {slide?.design ? (
+        <DesignEditor
+          post={post}
+          index={current}
+          platform={platform}
+          onPlatform={setPlatform}
+          onChange={setDesign}
+          onError={setError}
+          findPhoto={findPhoto}
+          uploadPhoto={upload}
+          findClip={findClip}
+          uploadClip={uploadClip}
+          slides={
+            <>
+              <ol className="se-slides">
+                {post.slides.map((s, i) => (
+                  <li key={s.id} data-active={i === current}>
+                    <button type="button" className="se-slides__thumb" onClick={() => setCurrent(i)} aria-label={`Slide ${i + 1}: ${s.title || SLIDE_KIND_LABELS[s.kind]}`} aria-current={i === current}>
+                      <ScaledSlide scale={88 / 1080} width={1080} height={1350}>
+                        <SlideCanvas post={post} slide={s} index={i} total={post.slides.length} platform="instagram" />
+                      </ScaledSlide>
+                      <span className="se-slides__num">{i + 1}</span>
+                    </button>
+                    <span className="se-slides__tools">
+                      <button type="button" onClick={() => moveSlide(i, -1)} disabled={i === 0} aria-label={`Move slide ${i + 1} up`} title="Move up">
+                        &uarr;
+                      </button>
+                      <button type="button" onClick={() => moveSlide(i, 1)} disabled={i === post.slides.length - 1} aria-label={`Move slide ${i + 1} down`} title="Move down">
+                        &darr;
+                      </button>
+                      <button type="button" onClick={() => removeSlide(i)} aria-label={`Remove slide ${i + 1}`} title="Remove">
+                        &times;
+                      </button>
+                    </span>
+                  </li>
+                ))}
+              </ol>
+              <label className="se-slides__add" title="Add a slide">
+                <span aria-hidden>+</span>
+                <select value="" onChange={(e) => e.target.value && addSlide(e.target.value as SlideKind)} aria-label="Add a slide" data-testid="social-add-slide">
+                  <option value="">Add a slide…</option>
+                  {SLIDE_KINDS.map((k) => (
+                    <option key={k} value={k}>
+                      {SLIDE_KIND_LABELS[k]}
+                    </option>
+                  ))}
+                </select>
               </label>
+            </>
+          }
+          slidePanel={
+            <div className="field">
+              <span>Rewrite the words with AI</span>
+              <textarea rows={2} value={instruction} maxLength={500} placeholder="Optional: shorter, more practical, mention minutes…" onChange={(e) => setInstruction(e.target.value)} />
               <button type="button" className="button button-secondary button-small" onClick={rewrite} disabled={busy !== null} data-testid="social-rewrite">
-                {busy === "rewrite" ? "Rewriting…" : "Rewrite"}
+                {busy === "rewrite" ? "Rewriting…" : "Rewrite slide"}
               </button>
             </div>
-          </div>
-        ) : (
-          <p className="card__meta">No slides yet. Add one.</p>
-        )}
-      </div>
+          }
+          note={
+            platform === "x" && slidesFor("x", post.slides).every((x) => x.index !== current) ? (
+              <p className="se-note">X takes 4 pictures: this slide isn&rsquo;t one of them (the cover, the next two, and the call to action are).</p>
+            ) : null
+          }
+        />
+      ) : (
+        <p className="card__meta">No slides yet. Add one.</p>
+      )}
 
-      <section className="card social-editor__captions" aria-label="Captions">
+      <section className="se-captions" aria-label="Captions">
         <h2>Captions</h2>
         <div className="social-editor__platforms" role="tablist" aria-label="Caption for">
           {PLATFORMS.map((p) => (
