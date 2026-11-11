@@ -1,25 +1,47 @@
-# Marketing tab and Presentations (design)
+# Marketing tab (design)
 
-Status: designed 2026-11-05, not built. Replaces Supademo (trial ends
-2026-11-18; about $350 to $450 a month after). Build after the owner's Go.
+Status: the tab is built (2026-11-11), with Socials and Emails under it.
+Interactives, Newsletter, and the Socials editor are designed below or
+still to design; each is built after the owner's Go.
 
 ## The Marketing tab
 
-One Super Admin tab, **Marketing**, with sub-tabs:
+One Super Admin tab, **Marketing** (`/admin/marketing`), with sub-tabs:
 
-- **Presentations** (new, below).
-- **Social** (today's Social tab, moved).
-- **Newsletter** (new; doesn't exist yet. To design separately: who's on
-  the list, consent, unsubscribe, sending through Mailtrap).
+- **Socials** (the old Social tab, moved). To
+  become a basic Canva: see "Socials editor" below.
+- **Emails** (lifecycle emails, moved).
+- **Newsletter** (to build; decided below).
+- **Interactives** (to build; the Supademo replacement, below).
+- Later: **Presentations**, the real decks (investor deck, council
+  briefing, IRAP overview), stored and run from here. That's why the
+  product walkthroughs are called Interactives, not Presentations.
 
-Demo links and Investors stay where they are for now; Demo could move under
-Marketing later, since a presentation and a demo link do similar jobs.
+Sub-tabs appear only once built; no empty "coming soon" screens. Demo links
+and Investors stay where they are for now.
 
-## Presentations
+## Decisions, 2026-11-11
+
+- **Interactives:** not a copy of the current Supademo walkthrough ("just
+  okay"): something much better. The notes below are a starting point, to
+  be redesigned before building.
+- **Marketing site, meanwhile:** the Supademo embed is replaced by a still
+  of Meeting Mode, and Supademo comes off the privacy policy.
+- **Newsletter:** one mailing list, joined from a sign-up form on
+  stratacouncil.ca or the opt-in on the app's sign-up page (and the
+  Account page's Product news switch). Anyone can unsubscribe at any time
+  from any issue. Sent through a completely separate channel from the
+  app's sign-in, meeting, and setup emails (Mailtrap's bulk stream, its
+  own sending address), so newsletter complaints can't affect them.
+- **Socials:** the editor is too limited; it needs a basic version of
+  Canva. To design.
+
+## Interactives (first notes, from 2026-11-05)
 
 A presentation is a guided walk through the product: steps, each showing a
 real app screen with one spot highlighted, a short caption and a voiceover.
-Sent to a prospect as a personal link; we see what they watched.
+Sent to a prospect as a personal link; we see what they watched. (Written as
+"Presentations" on 2026-11-05; renamed Interactives.)
 
 ### Steps are captured HTML, not screenshots
 
@@ -80,8 +102,7 @@ Each step is a snapshot of a real app page, kept as HTML and CSS:
    recipients and their activity.
 4. Player page on the app (`/p/<slug>` and `/p/<token>`), embeddable from
    stratacouncil.ca only (a frame-ancestors exception for that domain).
-5. Marketing site: swap the Supademo embed for ours, remove Supademo and
-   its privacy-policy line.
+5. Marketing site: swap the Meeting Mode still for the interactive.
 
 ### Before the Supademo trial ends
 
