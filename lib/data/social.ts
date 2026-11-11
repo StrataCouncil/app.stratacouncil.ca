@@ -46,14 +46,23 @@ export async function getSocialPost(id: string): Promise<SocialPost | null> {
   return withSignedPhotos(toPost(data));
 }
 
-/** Fill in signed links for uploaded photos. */
+/** Fill in signed links for uploaded photos, on slides and in their layers. */
 export async function withSignedPhotos(post: SocialPost): Promise<SocialPost> {
-  const paths = post.slides.map((s) => s.photo?.path).filter((p): p is string => Boolean(p));
-  if (!paths.length) return post;
-  const { data } = await createAdminClient().storage.from(SOCIAL_BUCKET).createSignedUrls(paths, SIGNED_SECONDS);
+  const paths = new Set<string>();
+  for (const s of post.slides) {
+    if (s.photo?.path) paths.add(s.photo.path);
+    for (const l of s.design?.layers ?? []) if (l.type === "image" && l.photo?.path) paths.add(l.photo.path);
+  }
+  if (!paths.size) return post;
+  const { data } = await createAdminClient().storage.from(SOCIAL_BUCKET).createSignedUrls([...paths], SIGNED_SECONDS);
   const urls = new Map((data ?? []).filter((d) => d.signedUrl && d.path).map((d) => [d.path as string, d.signedUrl]));
+  const sign = <P extends { path: string | null; src: string }>(p: P | null): P | null => (p?.path ? { ...p, src: urls.get(p.path) ?? "" } : p);
   return {
     ...post,
-    slides: post.slides.map((s) => (s.photo?.path ? { ...s, photo: { ...s.photo, src: urls.get(s.photo.path) ?? "" } } : s)),
+    slides: post.slides.map((s) => ({
+      ...s,
+      photo: sign(s.photo),
+      design: s.design ? { ...s.design, layers: s.design.layers.map((l) => (l.type === "image" ? { ...l, photo: sign(l.photo) } : l)) } : null,
+    })),
   };
 }

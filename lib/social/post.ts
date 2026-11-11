@@ -7,7 +7,12 @@
  * and, for TikTok, at 9:16 instead of 4:5. Every link carries campaign
  * tags: utm_source is the platform, utm_medium "social", utm_campaign the
  * post's campaign, utm_content the slide or caption it belongs to.
+ *
+ * A slide's look is its design (lib/social/design.ts): a background and
+ * layers. The slide's own fields (kind, number, kicker, title, body,
+ * photo) are what the AI drafts and what a new design starts from.
  */
+import { designPhotos, designTexts, normalizeDesign, roleTexts, type SlideDesign } from "./design.ts";
 
 export const PLATFORMS = ["instagram", "facebook", "linkedin", "tiktok", "x"] as const;
 export type Platform = (typeof PLATFORMS)[number];
@@ -87,6 +92,8 @@ export interface SocialSlide {
   /** Words to search Unsplash with, suggested by the draft. */
   photoQuery: string;
   photo: SocialPhoto | null;
+  /** The slide's layers; null for a slide made before the editor had them (it gets one when opened). */
+  design: SlideDesign | null;
 }
 
 export interface Captions {
@@ -175,7 +182,7 @@ export function newSlideId() {
 }
 
 export function emptySlide(kind: SlideKind = "point"): SocialSlide {
-  return { id: newSlideId(), kind, number: "", kicker: "", title: "", body: "", photoQuery: "", photo: null };
+  return { id: newSlideId(), kind, number: "", kicker: "", title: "", body: "", photoQuery: "", photo: null, design: null };
 }
 
 export function normalizeSlides(v: unknown, postId: string): SocialSlide[] {
@@ -197,6 +204,7 @@ export function normalizeSlides(v: unknown, postId: string): SocialSlide[] {
         body: clip(s.body, LIMITS.body),
         photoQuery: clip(s.photoQuery, LIMITS.photoQuery),
         photo: normalizePhoto(s.photo, postId),
+        design: normalizeDesign(s.design, (p) => normalizePhoto(p, postId)),
       },
     ];
   });
@@ -348,7 +356,7 @@ export function wordingProblems(texts: string[]): string[] {
 export function postTexts(post: Pick<SocialPost, "title" | "slides" | "captions">): string[] {
   return [
     post.title,
-    ...post.slides.flatMap((s) => [s.number, s.kicker, s.title, s.body]),
+    ...post.slides.flatMap((s) => (s.design ? designTexts(s.design) : [s.number, s.kicker, s.title, s.body])),
     ...Object.values(post.captions.text).map((t) => t ?? ""),
     ...Object.values(post.captions.hashtags).flatMap((t) => t ?? []),
   ];
@@ -374,9 +382,11 @@ export function platformTextFile(post: SocialPost, platform: Platform): string {
   }
   lines.push("SLIDES (upload in this order)", "-----------------------------");
   for (const [n, { slide, index }] of chosen.entries()) {
-    lines.push(`${slideFileName(n)}  ${[slide.number, slide.title].filter(Boolean).join(" ") || SLIDE_KIND_LABELS[slide.kind]}`);
+    const words = slide.design ? roleTexts(slide.design) : slide;
+    lines.push(`${slideFileName(n)}  ${[words.number, words.title].filter(Boolean).join(" ").replace(/\s*\n\s*/g, " ") || SLIDE_KIND_LABELS[slide.kind]}`);
     lines.push(`  Link: ${slideLink(post, platform, index)}`);
-    if (slide.photo?.alt) lines.push(`  Alt text: ${slide.photo.alt}`);
+    const alts = slidePhotos(slide).map((p) => p.alt).filter(Boolean);
+    if (alts.length) lines.push(`  Alt text: ${alts.join(" / ")}`);
   }
   if (platform === "linkedin") lines.push("", "carousel.pdf: upload as a document post. Each page links to its slide's tracked link.");
   const credits = creditLines(post);
@@ -384,14 +394,21 @@ export function platformTextFile(post: SocialPost, platform: Platform): string {
   return lines.join("\n") + "\n";
 }
 
+/** The photos a slide shows: its design's, or (for a slide without one) its own. */
+export function slidePhotos(slide: Pick<SocialSlide, "photo" | "design">): SocialPhoto[] {
+  return slide.design ? designPhotos(slide.design) : slide.photo ? [slide.photo] : [];
+}
+
 export function creditLines(post: Pick<SocialPost, "slides">): string[] {
   const seen = new Set<string>();
-  return post.slides.flatMap((s) => {
-    const c = s.photo?.credit;
-    if (!c || seen.has(c.photoUrl)) return [];
-    seen.add(c.photoUrl);
-    return [`Photo by ${c.name} on Unsplash: ${c.photoUrl}`];
-  });
+  return post.slides.flatMap((s) =>
+    slidePhotos(s).flatMap((p) => {
+      const c = p.credit;
+      if (!c || seen.has(c.photoUrl)) return [];
+      seen.add(c.photoUrl);
+      return [`Photo by ${c.name} on Unsplash: ${c.photoUrl}`];
+    })
+  );
 }
 
 /** The ZIP's top-level README: the campaign and every link. */

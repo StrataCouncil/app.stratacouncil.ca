@@ -104,3 +104,27 @@ export function slideRewriteRequest(input: { topic: string; template: Template; 
     `Rewrite slide ${input.index + 1} only, keeping its kind and its place in the carousel.${input.instruction.trim() ? ` What to change: ${input.instruction.trim()}` : ""}`,
   ].join("\n");
 }
+
+/** One text box rewritten in the Socials editor ("Rewrite with AI"). */
+export const textRewriteSchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: { text: { type: "string", description: "The rewritten text only, about the same length unless asked otherwise." } },
+  required: ["text"],
+} as const;
+
+export function textRewriteRequest(input: { topic: string; slides: SocialSlide[]; index: number; text: string; instruction: string }) {
+  const outline = input.slides
+    .map((s, i) => `${i + 1}. [${s.kind}] ${[s.number, s.kicker, s.title].filter(Boolean).join(" ")}${s.body ? ` — ${s.body}` : ""}`)
+    .join("\n");
+  return [
+    `Topic: ${input.topic}`,
+    "The carousel so far:",
+    outline,
+    "",
+    `On slide ${input.index + 1}, rewrite this text box only:`,
+    input.text,
+    "",
+    input.instruction.trim() ? `What to change: ${input.instruction.trim()}` : "Make it clearer and tighter, in the same voice.",
+  ].join("\n");
+}

@@ -7,12 +7,14 @@ import { requireSuperAdmin } from "@/lib/data/admin";
 import { SOCIAL_BUCKET } from "@/lib/data/social";
 import { PhotoError, searchPhotos, trackPhotoUse, type StockPhoto } from "@/lib/media/unsplash";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { DRAFT_SYSTEM, draftRequest, draftSchema, slideRewriteRequest, slideRewriteSchema } from "@/lib/social/draft";
+import { DRAFT_SYSTEM, draftRequest, draftSchema, slideRewriteRequest, slideRewriteSchema, textRewriteRequest, textRewriteSchema } from "@/lib/social/draft";
+import { cloneDesign, normalizeDesign, type SlideDesign } from "@/lib/social/design";
 import {
   AUDIENCES,
   campaignSlug,
   DESTINATIONS,
   normalizeCaptions,
+  normalizePhoto,
   normalizePostPatch,
   normalizeSlides,
   TEMPLATES,
@@ -149,6 +151,79 @@ export async function redraftSocialSlide(id: string, slides: unknown, index: num
   } catch (err) {
     return aiError(err, "redraftSocialSlide");
   }
+}
+
+/** Rewrite one text box with the AI ("Rewrite with AI" in the editor). Nothing is saved until the editor saves. */
+export async function rewriteSocialText(id: string, slides: unknown, index: number, text: string, instruction: string): Promise<Result<{ text: string }>> {
+  if (!(await staffId()) || !isId(id)) return NOT_ALLOWED;
+  const words = String(text ?? "").slice(0, 600);
+  if (!words.trim()) return { ok: false, error: "There's no text to rewrite." };
+  const { data } = await createAdminClient().from("social_posts").select("topic").eq("id", id).maybeSingle();
+  if (!data) return { ok: false, error: "This post no longer exists." };
+  const list = normalizeSlides(slides, id);
+  try {
+    const raw = await askClaudeJson<{ text: unknown }>({
+      system: DRAFT_SYSTEM,
+      messages: [{ role: "user", content: textRewriteRequest({ topic: data.topic as string, slides: list, index, text: words, instruction: String(instruction ?? "").slice(0, 500) }) }],
+      schema: textRewriteSchema,
+      effort: "low",
+      maxTokens: 800,
+    });
+    const out = String(raw.text ?? "").replace(/\r\n?/g, "\n").trim().slice(0, 600);
+    if (!out) return { ok: false, error: "The AI didn't return any text. Try again." };
+    return { ok: true, text: out };
+  } catch (err) {
+    return aiError(err, "rewriteSocialText");
+  }
+}
+
+// ── Saved layouts (0087) ───────────────────────────────────────────────
+
+const NO_POST = "00000000-0000-0000-0000-000000000000";
+
+export interface SocialLayout {
+  id: string;
+  name: string;
+  design: SlideDesign;
+}
+
+/** Saved layouts, newest first. Uploaded photos aren't kept in a layout (they belong to one post). */
+export async function listSocialLayouts(): Promise<Result<{ layouts: SocialLayout[] }>> {
+  if (!(await staffId())) return NOT_ALLOWED;
+  const { data, error } = await createAdminClient().from("social_layouts").select("id, name, design").order("created_at", { ascending: false }).limit(100);
+  if (error) {
+    console.error("[listSocialLayouts]", error.message);
+    return { ok: false, error: "Couldn't load the saved layouts. Run migration 0087 if it hasn't been run." };
+  }
+  const layouts = (data ?? []).flatMap((r) => {
+    const design = normalizeDesign(r.design, () => null);
+    return design ? [{ id: r.id as string, name: r.name as string, design }] : [];
+  });
+  return { ok: true, layouts };
+}
+
+export async function saveSocialLayout(name: string, design: unknown): Promise<Result<{ layout: SocialLayout }>> {
+  const userId = await staffId();
+  if (!userId) return NOT_ALLOWED;
+  const clean = String(name ?? "").trim().slice(0, 60);
+  if (!clean) return { ok: false, error: "Give the layout a name." };
+  // Unsplash photos come along (they're links); uploads stay with their
+  // post (no post's folder matches the empty id, so they're dropped).
+  const checked = normalizeDesign(design, (p) => normalizePhoto(p, NO_POST));
+  if (!checked || checked.layers.length === 0) return { ok: false, error: "There's nothing on this slide to save." };
+  const { data, error } = await createAdminClient().from("social_layouts").insert({ name: clean, design: cloneDesign(checked), created_by: userId }).select("id").single();
+  if (error || !data) {
+    console.error("[saveSocialLayout]", error?.message);
+    return { ok: false, error: "Couldn't save the layout. Run migration 0087 if it hasn't been run." };
+  }
+  return { ok: true, layout: { id: data.id as string, name: clean, design: checked } };
+}
+
+export async function deleteSocialLayout(id: string): Promise<Result> {
+  if (!(await staffId()) || !isId(id)) return NOT_ALLOWED;
+  const { error } = await createAdminClient().from("social_layouts").delete().eq("id", id);
+  if (error) return { ok: false, error: "Couldn't delete the layout." };
+  return { ok: true };
 }
 
 export async function searchSocialPhotos(query: string, page: number): Promise<Result<{ photos: StockPhoto[]; totalPages: number }>> {
