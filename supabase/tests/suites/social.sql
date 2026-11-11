@@ -44,3 +44,21 @@ reset role;
 set role anon;
 select pg_temp.expect_error($q$select count(*) from social_layouts$q$, 'permission denied');
 reset role;
+
+-- 0088: post templates are server-only; the bucket takes video up to 200 MB.
+insert into social_templates (name, slides) values ('Tips carousel', '[]');
+select pg_temp.expect_error($q$insert into social_templates (name, slides) values ('', '[]')$q$, 'social_templates_name_check');
+select pg_temp.expect_error($q$insert into social_templates (name, slides) values ('x', '{}')$q$, 'social_templates_slides_check');
+select pg_temp.expect_error($q$insert into social_templates (name, slides, description) values ('x', '[]', repeat('a', 201))$q$, 'social_templates_description_check');
+select pg_temp.expect('the bucket takes 200 MB files', (select file_size_limit = 209715200 from storage.buckets where id = 'social-media'));
+select pg_temp.expect('the bucket takes MP4 and MOV', (select allowed_mime_types @> array['video/mp4', 'video/quicktime'] from storage.buckets where id = 'social-media'));
+select pg_temp.expect('the bucket still takes pictures', (select allowed_mime_types @> array['image/png', 'image/jpeg', 'image/webp'] from storage.buckets where id = 'social-media'));
+select pg_temp.expect('the bucket is still private', (select not public from storage.buckets where id = 'social-media'));
+set role authenticated;
+set test.uid = '00000000-0000-0000-0000-00000000000d';
+select pg_temp.expect_error($q$select count(*) from social_templates$q$, 'permission denied');
+select pg_temp.expect_error($q$insert into social_templates (name, slides) values ('x', '[]')$q$, 'permission denied');
+reset role;
+set role anon;
+select pg_temp.expect_error($q$select count(*) from social_templates$q$, 'permission denied');
+reset role;

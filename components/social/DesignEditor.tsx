@@ -11,6 +11,15 @@ import {
   boxFor,
   cloneDesign,
   designFromSlide,
+  DESIGN_LIMITS,
+  designMoves,
+  ENTRANCE_LABELS,
+  ENTRANCES,
+  lastEntranceEnd,
+  LAYOUT_KEYS,
+  LAYOUT_KINDS,
+  LAYOUT_LABELS,
+  layoutDesign,
   newLayer,
   newLayerId,
   roleTexts,
@@ -18,11 +27,12 @@ import {
   WEIGHTS,
   type Box,
   type BrandColor,
+  type Entrance,
   type Layer,
   type LayerType,
   type SlideDesign,
 } from "@/lib/social/design";
-import { PLATFORM_INFO, PLATFORMS, SLIDE_KIND_LABELS, SLIDE_KINDS, slidePhotos, type Platform, type SlideKind, type SocialPhoto, type SocialPost, type SocialSlide } from "@/lib/social/post";
+import { PLATFORM_INFO, PLATFORMS, SLIDE_KIND_LABELS, SLIDE_KINDS, slidePhotos, type Platform, type SlideKind, type SocialClip, type SocialPhoto, type SocialPost, type SocialSlide } from "@/lib/social/post";
 
 /**
  * The Socials editor's slide canvas (docs/marketing.md, "Socials editor"):
@@ -42,10 +52,11 @@ const SAFE_ZONES: Partial<Record<Platform, Array<Box & { label: string }>>> = {
   x: [{ x: 0, y: 88, w: 100, h: 12, label: "Can be cropped in the timeline" }],
 };
 
-const TYPE_LABELS: Record<LayerType, string> = { text: "Text", image: "Photo", shape: "Shape", logo: "Logo", dots: "Pattern", auto: "Fills itself" };
+const TYPE_LABELS: Record<LayerType, string> = { text: "Text", image: "Photo", shape: "Shape", logo: "Logo", dots: "Pattern", auto: "Fills itself", video: "Video" };
 const ADDABLE: Array<{ type: LayerType; label: string }> = [
   { type: "text", label: "Text" },
   { type: "image", label: "Photo" },
+  { type: "video", label: "Video" },
   { type: "shape", label: "Shape" },
   { type: "logo", label: "Logo" },
   { type: "dots", label: "Pattern" },
@@ -63,9 +74,12 @@ export interface DesignEditorProps {
   /** Open the photo picker, or upload a file, for this image layer; resolves with the photo, or null. */
   findPhoto: (query: string) => Promise<SocialPhoto | null>;
   uploadPhoto: (file: File) => Promise<SocialPhoto | null>;
+  /** The same for video: the Pixabay picker, or an upload (MP4 or MOV). */
+  findClip: (query: string) => Promise<SocialClip | null>;
+  uploadClip: (file: File) => Promise<SocialClip | null>;
 }
 
-export function DesignEditor({ post, index, platform, onPlatform, onChange, onError, findPhoto, uploadPhoto }: DesignEditorProps) {
+export function DesignEditor({ post, index, platform, onPlatform, onChange, onError, findPhoto, uploadPhoto, findClip, uploadClip }: DesignEditorProps) {
   const slide = post.slides[index];
   const design = slide.design!;
   const info = PLATFORM_INFO[platform];
@@ -93,6 +107,34 @@ export function DesignEditor({ post, index, platform, onPlatform, onChange, onEr
 
   useEffect(() => setSelected(null), [slide.id]);
   const layer = design.layers.find((l) => l.id === selected) ?? null;
+
+  // ── Play (the slide's entrances and clips, as the video export will have them) ──
+  const [time, setTime] = useState<number | null>(null);
+  const [playing, setPlaying] = useState(false);
+  const duration = design.duration;
+  useEffect(() => {
+    if (!playing) return;
+    const from = performance.now() - (time ?? 0) * 1000;
+    let raf = 0;
+    const tick = (now: number) => {
+      const t = (now - from) / 1000;
+      if (t >= duration) {
+        setPlaying(false);
+        setTime(null);
+        return;
+      }
+      setTime(t);
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+    // Starting from where the playhead is; `time` itself moves every frame.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playing, duration]);
+  useEffect(() => {
+    setPlaying(false);
+    setTime(null);
+  }, [slide.id]);
 
   // ── Changes and undo ────────────────────────────────────────────────
   const remember = useCallback(() => {
@@ -225,6 +267,7 @@ export function DesignEditor({ post, index, platform, onPlatform, onChange, onEr
     change({ ...design, layers: [...design.layers, l] });
     setSelected(l.id);
     if (type === "image") void choosePhoto(l.id, slide.photoQuery || slide.title);
+    if (type === "video") void chooseClip(l.id, slide.photoQuery || slide.title);
   }
   function removeLayer(id: string) {
     const { [id]: _gone, ...tallRest } = design.tall;
@@ -263,6 +306,21 @@ export function DesignEditor({ post, index, platform, onPlatform, onChange, onEr
     const photo = await uploadPhoto(file);
     setBusy(null);
     if (photo) setLayer(id, { photo, fit: photo.fit === "cutout" ? "contain" : "cover" } as Partial<Layer>);
+  }
+
+  async function chooseClip(id: string, query: string) {
+    const clip = await findClip(query);
+    if (clip) setClip(id, clip);
+  }
+  async function uploadClipTo(id: string, file: File) {
+    setBusy("upload");
+    const clip = await uploadClip(file);
+    setBusy(null);
+    if (clip) setClip(id, clip);
+  }
+  function setClip(id: string, clip: SocialClip) {
+    const trimEnd = Math.min(clip.duration, Math.max(1, duration));
+    setLayer(id, { clip, trimStart: 0, trimEnd } as Partial<Layer>);
   }
 
   async function rewrite(id: string, text: string, instruction: string) {
@@ -370,7 +428,9 @@ export function DesignEditor({ post, index, platform, onPlatform, onChange, onEr
               index={index}
               total={post.slides.length}
               showNumbers={post.showSlideNumbers ?? post.slides.length > 1}
-              interaction={{ selectedId: selected, scale, onPointerDown: onLayerDown }}
+              interaction={playing ? undefined : { selectedId: selected, scale, onPointerDown: onLayerDown }}
+              time={time ?? undefined}
+              playing={playing}
             />
           </ScaledSlide>
           {zones.map((z) => (
@@ -381,6 +441,30 @@ export function DesignEditor({ post, index, platform, onPlatform, onChange, onEr
           {guides.v && <div className="design-editor__guide design-editor__guide--v" />}
           {guides.h && <div className="design-editor__guide design-editor__guide--h" />}
         </div>
+        <Timeline
+          design={design}
+          selected={selected}
+          time={time}
+          playing={playing}
+          onSelect={setSelected}
+          onPlay={() => {
+            if (playing) {
+              setPlaying(false);
+              setTime(null);
+            } else {
+              setSelected(null);
+              setTime(0);
+              setPlaying(true);
+            }
+          }}
+          onScrub={(t) => {
+            setPlaying(false);
+            setTime(t);
+          }}
+          onDuration={(n) => change({ ...design, duration: n })}
+          onRemember={remember}
+          onTiming={(id, patch) => setLayer(id, patch as Partial<Layer>, false)}
+        />
       </div>
 
       <aside className="design-editor__right" aria-label="Settings">
@@ -395,8 +479,9 @@ export function DesignEditor({ post, index, platform, onPlatform, onChange, onEr
             onDelete={() => removeLayer(layer.id)}
             onDuplicate={() => duplicate(layer.id)}
             onResetTall={() => resetTall(layer.id)}
-            onFindPhoto={() => choosePhoto(layer.id, slide.photoQuery || slide.title)}
-            onUpload={(f) => uploadTo(layer.id, f)}
+            onFindPhoto={() => (layer.type === "video" ? chooseClip(layer.id, slide.photoQuery || slide.title) : choosePhoto(layer.id, slide.photoQuery || slide.title))}
+            onUpload={(f) => (layer.type === "video" ? uploadClipTo(layer.id, f) : uploadTo(layer.id, f))}
+            duration={duration}
             onRewrite={(text, instruction) => rewrite(layer.id, text, instruction)}
           />
         ) : (
@@ -442,6 +527,128 @@ export function DesignEditor({ post, index, platform, onPlatform, onChange, onEr
 }
 
 const round = (n: number) => Math.round(n * 100) / 100;
+const clamp = (n: number, min: number, max: number) => (Number.isFinite(n) ? Math.min(max, Math.max(min, Math.round(n * 100) / 100)) : min);
+
+/**
+ * The slide's timeline: its length, Play, a playhead you can drag, and a
+ * bar for each layer's entrance (drag to move it, drag its end to change
+ * how long it takes). Shown for every slide; a slide only becomes a video
+ * once something moves or plays.
+ */
+function Timeline({
+  design,
+  selected,
+  time,
+  playing,
+  onSelect,
+  onPlay,
+  onScrub,
+  onDuration,
+  onRemember,
+  onTiming,
+}: {
+  design: SlideDesign;
+  selected: string | null;
+  time: number | null;
+  playing: boolean;
+  onSelect: (id: string) => void;
+  onPlay: () => void;
+  onScrub: (t: number) => void;
+  onDuration: (n: number) => void;
+  onRemember: () => void;
+  onTiming: (id: string, patch: { enterAt?: number; enterFor?: number }) => void;
+}) {
+  const duration = design.duration;
+  const moves = designMoves(design);
+  const late = lastEntranceEnd(design) > duration + 0.01;
+  const track = useRef<HTMLDivElement>(null);
+  const drag = useRef<{ id: string; mode: "move" | "length"; x: number; at: number; length: number; w: number } | null>(null);
+  const shown = [...design.layers].reverse().filter((l) => !l.hidden);
+  const pct = (t: number) => `${Math.min(100, Math.max(0, (t / duration) * 100))}%`;
+
+  function down(e: ReactPointerEvent, id: string, mode: "move" | "length", at: number, length: number) {
+    e.stopPropagation();
+    const w = track.current?.getBoundingClientRect().width ?? 1;
+    drag.current = { id, mode, x: e.clientX, at, length, w };
+    onRemember();
+    onSelect(id);
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  }
+  function move(e: ReactPointerEvent) {
+    const d = drag.current;
+    if (!d) return;
+    const dt = ((e.clientX - d.x) / d.w) * duration;
+    const snap = (n: number) => Math.round(n * 20) / 20;
+    if (d.mode === "move") onTiming(d.id, { enterAt: snap(Math.min(duration - 0.1, Math.max(0, d.at + dt))) });
+    else onTiming(d.id, { enterFor: snap(Math.min(5, Math.max(0.1, d.length + dt))) });
+  }
+  function scrub(e: ReactPointerEvent) {
+    const r = track.current?.getBoundingClientRect();
+    if (!r) return;
+    onScrub(Math.min(duration, Math.max(0, ((e.clientX - r.left) / r.width) * duration)));
+  }
+
+  return (
+    <div className="design-timeline" data-testid="design-timeline">
+      <div className="design-timeline__bar">
+        <button type="button" className="button button-secondary button-small" onClick={onPlay} data-testid="design-play">
+          {playing ? "Stop" : "Play"}
+        </button>
+        <span className="card__meta design-timeline__clock">
+          {(time ?? duration).toFixed(1)} s of
+        </span>
+        <label className="design-timeline__length">
+          <input
+            type="number"
+            min={1}
+            max={DESIGN_LIMITS.duration}
+            step={0.5}
+            value={duration}
+            onChange={(e) => onDuration(clamp(Number(e.target.value), 1, DESIGN_LIMITS.duration))}
+            aria-label="Slide length in seconds"
+            data-testid="design-duration"
+          />{" "}
+          s
+        </label>
+        <span className="card__meta">{moves ? "Exports as an MP4 (no sound), plus a still picture." : "Nothing moves yet: exports as a picture. Give a layer an entrance, or add a video."}</span>
+      </div>
+      {late && <p className="form-error">An entrance finishes after the slide ends. Make the slide longer, or start the entrance sooner.</p>}
+      <div className="design-timeline__rows" onPointerMove={move} onPointerUp={() => (drag.current = null)} onPointerCancel={() => (drag.current = null)}>
+        <div className="design-timeline__ruler" ref={track} onPointerDown={scrub} title="Drag to see a moment">
+          {Array.from({ length: Math.floor(duration) + 1 }, (_, i) => (
+            <span key={i} style={{ left: pct(i) }}>
+              {i}
+            </span>
+          ))}
+          {time !== null && <i className="design-timeline__head" style={{ left: pct(time) }} />}
+        </div>
+        {shown.map((l) => (
+          <div key={l.id} className="design-timeline__row" data-active={l.id === selected}>
+            <button type="button" className="design-timeline__name" onClick={() => onSelect(l.id)}>
+              {l.name}
+            </button>
+            <div className="design-timeline__track">
+              {l.type === "video" && l.clip && <span className="design-timeline__clip" style={{ left: 0, width: "100%" }} title="The clip plays for the whole slide" />}
+              {l.enter === "none" ? (
+                l.type !== "video" && <span className="design-timeline__still" title="There from the start" />
+              ) : (
+                <span
+                  className="design-timeline__entrance"
+                  style={{ left: pct(l.enterAt), width: `calc(${pct(l.enterFor)} + 2px)` }}
+                  onPointerDown={(e) => down(e, l.id, "move", l.enterAt, l.enterFor)}
+                  title={`${ENTRANCE_LABELS[l.enter]}: from ${l.enterAt} s for ${l.enterFor} s`}
+                >
+                  {ENTRANCE_LABELS[l.enter].split(" ")[0]}
+                  <b onPointerDown={(e) => down(e, l.id, "length", l.enterAt, l.enterFor)} aria-hidden />
+                </span>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function Icon({ d }: { d: string }) {
   return (
@@ -505,6 +712,7 @@ function LayerSettings({
   onFindPhoto,
   onUpload,
   onRewrite,
+  duration,
 }: {
   layer: Layer;
   tallMoved: boolean;
@@ -517,6 +725,7 @@ function LayerSettings({
   onFindPhoto: () => void;
   onUpload: (f: File) => void;
   onRewrite: (text: string, instruction: string) => void;
+  duration: number;
 }) {
   const [instruction, setInstruction] = useState("");
   // One undo step per edit, however many keystrokes or slider moves it takes.
@@ -647,6 +856,61 @@ function LayerSettings({
         </>
       )}
 
+      {l.type === "video" && (
+        <>
+          {l.clip?.credit && (
+            <p className="card__meta">
+              Video by{" "}
+              <a href={l.clip.credit.pageUrl} target="_blank" rel="noreferrer">
+                {l.clip.credit.name}
+              </a>{" "}
+              on Pixabay
+            </p>
+          )}
+          <span className="design-editor__row">
+            <button type="button" className="button button-secondary button-small" onClick={onFindPhoto} data-testid="design-find-clip">
+              Find a clip
+            </button>
+            <label className="button button-secondary button-small">
+              {busy === "upload" ? "Uploading…" : "Upload"}
+              <input
+                type="file"
+                accept="video/mp4,video/quicktime"
+                hidden
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  e.target.value = "";
+                  if (f) onUpload(f);
+                }}
+              />
+            </label>
+          </span>
+          {l.clip && (
+            <>
+              <Range label="Starts at" value={l.trimStart} min={0} max={Math.max(0, l.clip.duration - 0.5)} step={0.1} suffix=" s" onStart={onRemember} onChange={(n) => onSet({ trimStart: n, trimEnd: Math.max(l.trimEnd, n + 0.5) } as Partial<Layer>, false)} />
+              <Range label="Ends at" value={l.trimEnd} min={Math.min(l.clip.duration, l.trimStart + 0.5)} max={l.clip.duration} step={0.1} suffix=" s" onStart={onRemember} onChange={(n) => onSet({ trimEnd: n } as Partial<Layer>, false)} />
+              <p className="card__meta">
+                Uses {round(l.trimEnd - l.trimStart)} s of the {round(l.clip.duration)} s clip
+                {l.trimEnd - l.trimStart < duration - 0.05 ? ", looped to fill the slide" : ""}. No sound.
+              </p>
+            </>
+          )}
+          <div className="field">
+            <span>Placement</span>
+            <span className="design-editor__seg">
+              <button type="button" aria-pressed={l.fit === "cover"} onClick={() => set({ fit: "cover" } as Partial<Layer>)}>
+                Fill
+              </button>
+              <button type="button" aria-pressed={l.fit === "contain"} onClick={() => set({ fit: "contain" } as Partial<Layer>)}>
+                Fit
+              </button>
+            </span>
+          </div>
+          <Range label="Corners" value={l.radius} min={0} max={20} step={0.2} onStart={onRemember} onChange={(n) => onSet({ radius: n } as Partial<Layer>, false)} />
+          <Range label="Brightness" value={l.brightness} min={30} max={160} suffix="%" onStart={onRemember} onChange={(n) => onSet({ brightness: n } as Partial<Layer>, false)} />
+        </>
+      )}
+
       {(l.type === "shape" || l.type === "logo" || l.type === "dots" || l.type === "auto") && (
         <Field label="Colour">
           <Swatches value={l.color} onPick={(c) => set({ color: c })} />
@@ -690,6 +954,28 @@ function LayerSettings({
         </>
       )}
       <Range label="Opacity" value={l.opacity} min={0} max={100} suffix="%" onStart={onRemember} onChange={(n) => onSet({ opacity: n }, false)} />
+      <label className="field">
+        <span>Entrance (video export)</span>
+        <select value={l.enter} onChange={(e) => set({ enter: e.target.value as Entrance })} data-testid="design-entrance">
+          {ENTRANCES.map((en) => (
+            <option key={en} value={en}>
+              {ENTRANCE_LABELS[en]}
+            </option>
+          ))}
+        </select>
+      </label>
+      {l.enter !== "none" && (
+        <div className="design-editor__row">
+          <label className="field">
+            <span>Starts (s)</span>
+            <input type="number" min={0} max={duration} step={0.1} value={l.enterAt} onChange={(e) => set({ enterAt: clamp(Number(e.target.value), 0, duration) })} />
+          </label>
+          <label className="field">
+            <span>Lasts (s)</span>
+            <input type="number" min={0.1} max={5} step={0.1} value={l.enterFor} onChange={(e) => set({ enterFor: clamp(Number(e.target.value), 0.1, 5) })} />
+          </label>
+        </div>
+      )}
       {tallMoved && (
         <button type="button" className="link-button" onClick={onResetTall}>
           Put back where the other platforms have it
@@ -747,6 +1033,11 @@ function LayoutsDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [slide.id]
   );
+  const more = useMemo(
+    () => LAYOUT_KEYS.map((key) => ({ key, design: layoutDesign(key, { ...words, photo }, slide.design?.bg ?? "cream") })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [slide.id]
+  );
 
   async function save() {
     setBusy(true);
@@ -774,6 +1065,15 @@ function LayoutsDialog({
             <button key={b.kind} type="button" className="design-layouts__item" onClick={() => onApply(cloneDesign(b.design), b.kind)}>
               {thumb(b.design)}
               <span>{SLIDE_KIND_LABELS[b.kind]}</span>
+            </button>
+          ))}
+        </div>
+        <h3>More layouts</h3>
+        <div className="design-layouts__grid" data-testid="design-more-layouts">
+          {more.map((m) => (
+            <button key={m.key} type="button" className="design-layouts__item" onClick={() => onApply(cloneDesign(m.design), LAYOUT_KINDS[m.key])}>
+              {thumb(m.design)}
+              <span>{LAYOUT_LABELS[m.key]}</span>
             </button>
           ))}
         </div>

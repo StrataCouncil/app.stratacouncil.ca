@@ -26,4 +26,4 @@ export default async function AdminSocialPostPage({ params }: { params: Promise<
 }
 
 // Rewriting a slide with the AI can take a little while.
-export const maxDuration = 60;
+export const maxDuration = 120;

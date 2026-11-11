@@ -110,13 +110,52 @@ stand-in; the editor uses the real logo files).
 - **Not in the first version:** keyframe animation beyond entrances,
   background removal, real-time co-editing, and other fonts or colours.
 
-### Build, in three PRs
+### Build
 
-1. The layer model, conversion of existing slides, and the new editor
-   (canvas, layers, text, photos, shapes, logo, brand kit, safe areas,
-   undo, saved layouts), with PNG export.
-2. Animation (timeline, entrances, Play) and MP4 export.
-3. Video layers: upload, Pixabay, trim, and video export.
+1. Built 2026-11-11 (0087): the layer model, conversion of existing
+   slides, and the new editor (canvas, layers, text, photos, shapes, logo,
+   brand kit, safe areas, undo, saved layouts), with PNG export.
+2. Built 2026-11-11 (0088), parts 2 and 3 together, plus the template
+   library and six more layouts:
+   - **Layouts:** Giant stat, Pull quote, Full-bleed photo, Checklist,
+     Side by side, and Big call to action, beside the five starting
+     layouts in the Layouts dialog (`layoutDesign` in
+     `lib/social/design.ts`).
+   - **Template library:** New post opens on "Start from a template":
+     four built-in posts (Tips carousel, Myth vs fact, Single stat,
+     Announcement; `lib/social/templates.ts`) and any post saved with
+     **Save as template** (`social_templates`, server-only). Starting
+     from one copies it with fresh ids; the template never changes.
+     Uploaded photos and clips aren't kept in a template.
+   - **Animation:** each layer's entrance (none, fade, rise, pop, wipe)
+     with a start and length; a slide length (5 s by default, up to 60);
+     a timeline under the canvas (drag an entrance to move it, its end to
+     lengthen it, the ruler to see a moment) and Play.
+   - **Video layers:** upload an MP4 or MOV (up to 200 MB), or a free
+     Pixabay clip; trim, fill or fit, corners, brightness; it loops if
+     the slide is longer. No sound in this version.
+   - **Export:** a slide with an entrance or a clip exports as
+     `slide-NN.mp4` plus a still `slide-NN.png` (the last frame), made in
+     the browser (`lib/social/video-export.ts`): still layers are drawn
+     once, moving layers and clips each frame, encoded with WebCodecs
+     (H.264, VP9 only where H.264 isn't available) at 30 frames a second.
+     LinkedIn's PDF uses the stills. X and TikTok can't mix pictures and
+     video in one post; their text file says so.
+
+### Pixabay (stock video)
+
+- `PIXABAY_API_KEY` in Vercel (free account; no "full API access"
+  needed: that's only for high-resolution images).
+- Searched from the server, so the key never reaches the browser;
+  results cached 24 hours, as Pixabay asks; well under 100 requests a
+  minute.
+- Choosing a clip asks Pixabay for it again by its id (the browser only
+  says which one), downloads the sharpest file under 120 MB, and copies
+  it into the post's folder of the social-media bucket. Pixabay doesn't
+  allow permanent hotlinking.
+- The picker says "Videos from Pixabay". No credit is required, but the
+  editor shows "Video by <name> on Pixabay" and the export's credits list
+  it.
 
 ## Newsletter (design, 2026-11-11)
 
