@@ -682,7 +682,10 @@ function LayerContent({ layer: l, width, boxH, handle, counter, time, playing }:
           src={l.photo.src}
           alt={l.photo.alt}
           crossOrigin="anonymous"
+          // The layer's box takes the pointer: a picture's own drag (to save it) would stop the editor moving it.
+          draggable={false}
           style={{
+            pointerEvents: "none",
             width: "100%",
             height: "100%",
             objectFit: l.fit,
@@ -759,7 +762,9 @@ function ClipView({ layer: l, radius, time, playing }: { layer: VideoLayer; radi
       playsInline
       preload="auto"
       crossOrigin="anonymous"
+      draggable={false}
       style={{
+        pointerEvents: "none",
         width: "100%",
         height: "100%",
         objectFit: l.fit,
