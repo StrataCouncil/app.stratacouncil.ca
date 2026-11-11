@@ -72,45 +72,72 @@ export function SocialEditor({ initial }: { initial: SocialPost }) {
   const [picker, setPicker] = useState(false);
   const [instruction, setInstruction] = useState("");
   const [exporting, setExporting] = useState<{ done: number; total: number } | null>(null);
-  const dirty = useRef(initial.slides.some((s) => !s.design));
+  // Each change bumps the version; a save confirms the version it sent. Unsaved
+  // while they differ, so leaving mid-save or after a failed save still warns.
+  const version = useRef(initial.slides.some((s) => !s.design) ? 1 : 0);
+  const savedVersion = useRef(0);
+  const unsaved = () => version.current !== savedVersion.current;
   const findResolve = useRef<((p: SocialPhoto | null) => void) | null>(null);
   const [pickerQuery, setPickerQuery] = useState("");
   const stageRef = useRef<HTMLDivElement>(null);
 
   // ── Saving ──────────────────────────────────────────────────────────
   const update = useCallback((fn: (p: SocialPost) => SocialPost) => {
-    dirty.current = true;
+    version.current += 1;
     setPost(fn);
   }, []);
 
-  useEffect(() => {
-    if (!dirty.current) return;
+  const latest = useRef(post);
+  latest.current = post;
+
+  /** Save what's on screen now. Safe to call when nothing has changed. */
+  const flush = useCallback(async () => {
+    if (!unsaved()) return;
+    const sent = version.current;
+    const p = latest.current;
     setSaveState("saving");
-    const t = setTimeout(async () => {
-      dirty.current = false;
-      const r = await saveSocialPost(post.id, {
-        title: post.title,
-        campaign: post.campaign,
-        template: post.template,
-        theme: post.theme,
-        destination: post.destination,
-        slides: post.slides,
-        captions: post.captions,
-        showSlideNumbers: post.showSlideNumbers,
-      }).catch(() => ({ ok: false as const, error: "Couldn't reach the server. Your changes are kept on this screen." }));
-      setSaveState(r.ok ? "saved" : "error");
-      if (!r.ok) setError(r.error);
-    }, 800);
+    const r = await saveSocialPost(p.id, {
+      title: p.title,
+      campaign: p.campaign,
+      template: p.template,
+      theme: p.theme,
+      destination: p.destination,
+      slides: p.slides,
+      captions: p.captions,
+      showSlideNumbers: p.showSlideNumbers,
+    }).catch(() => ({ ok: false as const, error: "Couldn't reach the server. Your changes are kept on this screen." }));
+    if (r.ok) {
+      savedVersion.current = Math.max(savedVersion.current, sent);
+      setError(null);
+    } else setError(r.error);
+    setSaveState(r.ok ? (version.current === savedVersion.current ? "saved" : "saving") : "error");
+  }, []);
+
+  useEffect(() => {
+    if (!unsaved()) return;
+    setSaveState("saving");
+    const t = setTimeout(flush, 800);
     return () => clearTimeout(t);
-  }, [post]);
+  }, [post, flush]);
+
+  // Leaving the editor inside the pause (All posts, another tab, Back) saves
+  // straight away instead of dropping the last change.
+  useEffect(() => () => void flush(), [flush]);
 
   useEffect(() => {
     const warn = (e: BeforeUnloadEvent) => {
-      if (dirty.current) e.preventDefault();
+      if (unsaved()) e.preventDefault();
+    };
+    const hidden = () => {
+      if (document.visibilityState === "hidden") void flush();
     };
     window.addEventListener("beforeunload", warn);
-    return () => window.removeEventListener("beforeunload", warn);
-  }, []);
+    document.addEventListener("visibilitychange", hidden);
+    return () => {
+      window.removeEventListener("beforeunload", warn);
+      document.removeEventListener("visibilitychange", hidden);
+    };
+  }, [flush]);
 
   const slide = post.slides[current] ?? null;
   const patchSlide = (patch: Partial<SocialSlide>) =>
@@ -223,7 +250,7 @@ export function SocialEditor({ initial }: { initial: SocialPost }) {
     const r = await deleteSocialPost(post.id);
     setBusy(null);
     if (!r.ok) return setError(r.error);
-    dirty.current = false;
+    savedVersion.current = version.current;
     router.push("/admin/marketing/socials");
   }
 
