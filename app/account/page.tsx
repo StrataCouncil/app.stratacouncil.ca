@@ -1,7 +1,9 @@
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { AccountSettings } from "@/components/AccountSettings";
+import { EmailPreferences } from "@/components/EmailPreferences";
 import { getCurrentProfile } from "@/lib/data/profile";
+import { createClient } from "@/lib/supabase/server";
 
 /**
  * Account — belongs to the user, not any corporation, same as Home and
@@ -16,6 +18,12 @@ import { getCurrentProfile } from "@/lib/data/profile";
 export default async function AccountPage() {
   const profile = await getCurrentProfile();
   if (!profile) redirect("/login");
+  // Read on their own, so the page still works if the columns aren't there yet.
+  const { data: prefs } = await (await createClient())
+    .from("profiles")
+    .select("setup_emails_off_at, marketing_opt_in")
+    .eq("id", profile.id)
+    .maybeSingle();
 
   return (
     <AppShell>
@@ -25,7 +33,10 @@ export default async function AccountPage() {
           <p>Your profile, sign-in details, and account settings.</p>
         </div>
 
-        <AccountSettings profile={profile} />
+        <AccountSettings
+          profile={profile}
+          emails={prefs ? <EmailPreferences initial={{ setupTips: !prefs.setup_emails_off_at, productNews: Boolean(prefs.marketing_opt_in) }} /> : null}
+        />
       </div>
     </AppShell>
   );

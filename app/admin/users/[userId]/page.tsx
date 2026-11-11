@@ -8,6 +8,7 @@ import { getAdminPerson } from "@/lib/data/admin-users";
 import { getCurrentProfile } from "@/lib/data/profile";
 import { meetingTypeLabels, type MeetingType } from "@/lib/meetings/agenda";
 import { corporationRoleLabels, isCorporationRole } from "@/lib/strata";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
  * Super Admin: one person. Account, stratas and roles, training by track,
@@ -34,6 +35,12 @@ export default async function AdminUserPage({ params }: { params: Promise<{ user
   if (!profile?.isSuperAdmin) notFound();
   const { userId } = await params;
   const person = await getAdminPerson(userId);
+  // Lifecycle emails (0086): journey, step, subject, when, and the first click. Never the body.
+  const { data: emails } = await createAdminClient()
+    .from("email_sends")
+    .select("id, journey, step, subject, sent_at, accepted, clicked_at")
+    .eq("user_id", userId)
+    .order("sent_at", { ascending: false });
   if (!person) notFound();
   const { row } = person;
   let lastDay = "";
@@ -247,6 +254,33 @@ export default async function AdminUserPage({ params }: { params: Promise<{ user
               </tbody>
             </table>
           </div>
+        )}
+
+        {emails && emails.length > 0 && (
+          <>
+            <h2 style={{ margin: "2rem 0 0.75rem" }}>Lifecycle emails</h2>
+            <table className="roster-table" data-testid="admin-user-emails">
+              <thead>
+                <tr>
+                  <th>Sent</th>
+                  <th>Email</th>
+                  <th>Clicked</th>
+                </tr>
+              </thead>
+              <tbody>
+                {emails.map((e) => (
+                  <tr key={e.id}>
+                    <td>{date(e.sent_at)} {clock(e.sent_at)}</td>
+                    <td>
+                      {e.subject || `${e.journey}: ${e.step}`}
+                      {!e.accepted && " (not accepted by the mail service)"}
+                    </td>
+                    <td>{e.clicked_at ? `${date(e.clicked_at)} ${clock(e.clicked_at)}` : "No"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
         )}
 
         <h2 style={{ margin: "2rem 0 0.75rem" }}>Timeline</h2>

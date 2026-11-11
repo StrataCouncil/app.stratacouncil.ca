@@ -69,6 +69,17 @@ export async function getTrainingTracks(): Promise<TrainingTrack[]> {
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  return loadTracks(supabase, user?.id ?? null);
+}
+
+/** The same for any person, read with the service role (lifecycle emails pick the module to suggest). Server only. */
+export async function getTrainingTracksFor(userId: string): Promise<TrainingTrack[]> {
+  const { createAdminClient } = await import("@/lib/supabase/admin");
+  return loadTracks(createAdminClient() as unknown as Awaited<ReturnType<typeof createClient>>, userId);
+}
+
+async function loadTracks(supabase: Awaited<ReturnType<typeof createClient>>, userId: string | null): Promise<TrainingTrack[]> {
+  const user = userId ? { id: userId } : null;
   const [{ data: tracks }, { data: modules }, { data: progress }, { data: credentials }] = await Promise.all([
     supabase.from("training_tracks").select("id, code, title, description, order_index, stage, requires_track_id, cover").order("order_index"),
     supabase

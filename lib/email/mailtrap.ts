@@ -56,6 +56,10 @@ export async function sendTransactionalEmail(params: {
   fromName?: string;
   /** The strata it's about, when the recipient may not have an account (an invitation). */
   corporationId?: string;
+  /** Extra headers, such as List-Unsubscribe on lifecycle emails. */
+  headers?: Record<string, string>;
+  /** Mailtrap's category, for its own reports. */
+  category?: string;
 }) {
   // The demo site (lib/demo.ts) never emails a visitor's fictional people.
   // A Super Admin's sandbox emails only the Super Admin who made it, saying
@@ -94,7 +98,8 @@ export async function sendTransactionalEmail(params: {
       subject: params.subject,
       html: params.html,
       text: params.text,
-      category: "transactional",
+      category: params.category ?? "transactional",
+      ...(params.headers ? { headers: params.headers } : {}),
     }),
   });
 
