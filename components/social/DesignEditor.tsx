@@ -42,7 +42,7 @@ const SAFE_ZONES: Partial<Record<Platform, Array<Box & { label: string }>>> = {
   x: [{ x: 0, y: 88, w: 100, h: 12, label: "Can be cropped in the timeline" }],
 };
 
-const TYPE_LABELS: Record<LayerType, string> = { text: "Text", image: "Photo", shape: "Shape", logo: "Logo", dots: "Pattern", auto: "Auto text" };
+const TYPE_LABELS: Record<LayerType, string> = { text: "Text", image: "Photo", shape: "Shape", logo: "Logo", dots: "Pattern", auto: "Fills itself" };
 const ADDABLE: Array<{ type: LayerType; label: string }> = [
   { type: "text", label: "Text" },
   { type: "image", label: "Photo" },
@@ -298,23 +298,23 @@ export function DesignEditor({ post, index, platform, onPlatform, onChange, onEr
           <h3>Layers</h3>
           <ul className="design-editor__layers" data-testid="design-layers">
             {[...design.layers].reverse().map((l) => (
-              <li key={l.id} data-active={l.id === selected}>
+              <li key={l.id} data-active={l.id === selected} data-hidden={l.hidden}>
                 <button type="button" className="design-editor__layer-name" onClick={() => setSelected(l.id)}>
-                  <span className="design-editor__layer-type">{TYPE_LABELS[l.type]}</span>
-                  {l.name}
+                  <span>{l.name}</span>
+                  <small>{TYPE_LABELS[l.type]}</small>
                 </button>
                 <span className="design-editor__layer-tools">
-                  <button type="button" className="icon-button" title="Bring forward" aria-label={`Bring ${l.name} forward`} onClick={() => move(l.id, 1)}>
-                    &uarr;
+                  <button type="button" className="design-editor__tool" title="Bring forward" aria-label={`Bring ${l.name} forward`} onClick={() => move(l.id, 1)}>
+                    <Icon d="M12 19V5M5 12l7-7 7 7" />
                   </button>
-                  <button type="button" className="icon-button" title="Send back" aria-label={`Send ${l.name} back`} onClick={() => move(l.id, -1)}>
-                    &darr;
+                  <button type="button" className="design-editor__tool" title="Send back" aria-label={`Send ${l.name} back`} onClick={() => move(l.id, -1)}>
+                    <Icon d="M12 5v14M5 12l7 7 7-7" />
                   </button>
-                  <button type="button" className="icon-button" title={l.hidden ? "Show" : "Hide"} aria-pressed={l.hidden} onClick={() => setLayer(l.id, { hidden: !l.hidden })}>
-                    {l.hidden ? "Show" : "Hide"}
+                  <button type="button" className="design-editor__tool" title={l.hidden ? "Show" : "Hide"} aria-label={`${l.hidden ? "Show" : "Hide"} ${l.name}`} aria-pressed={l.hidden} onClick={() => setLayer(l.id, { hidden: !l.hidden })}>
+                    <Icon d={l.hidden ? "M3 3l18 18M10.6 10.6a2 2 0 0 0 2.8 2.8M9.9 5.2A9.7 9.7 0 0 1 12 5c6 0 9.5 7 9.5 7a17 17 0 0 1-3.2 4.1M6.6 6.6A16.6 16.6 0 0 0 2.5 12S6 19 12 19a9.4 9.4 0 0 0 5.4-1.6" : "M2.5 12S6 5 12 5s9.5 7 9.5 7S18 19 12 19 2.5 12 2.5 12zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"} />
                   </button>
-                  <button type="button" className="icon-button" title={l.locked ? "Unlock" : "Lock"} aria-pressed={l.locked} onClick={() => setLayer(l.id, { locked: !l.locked })}>
-                    {l.locked ? "Locked" : "Lock"}
+                  <button type="button" className="design-editor__tool" title={l.locked ? "Unlock" : "Lock"} aria-label={`${l.locked ? "Unlock" : "Lock"} ${l.name}`} aria-pressed={l.locked} onClick={() => setLayer(l.id, { locked: !l.locked })}>
+                    <Icon d={l.locked ? "M6 11h12v10H6zM8 11V7a4 4 0 0 1 8 0v4" : "M6 11h12v10H6zM8 11V7a4 4 0 0 1 7.5-1.9"} />
                   </button>
                 </span>
               </li>
@@ -427,8 +427,10 @@ export function DesignEditor({ post, index, platform, onPlatform, onChange, onEr
           onError={onError}
           onApply={(d, kind) => {
             remember();
-            const texts = roleTexts(design);
-            const next = withRoleTexts(d, { number: texts.number, kicker: texts.kicker, title: texts.title, body: texts.body });
+            // Carry over only the words this slide has: a layout's own
+            // placeholder (a list number, say) stays when the slide has none.
+            const texts = Object.fromEntries(Object.entries(fieldsFor(design)).filter(([, v]) => typeof v === "string" && v.trim()));
+            const next = withRoleTexts(d, texts);
             onChange(next, { ...fieldsFor(next), ...(kind ? { kind } : {}) });
             setSelected(null);
             setLayoutsOpen(false);
@@ -440,6 +442,14 @@ export function DesignEditor({ post, index, platform, onPlatform, onChange, onEr
 }
 
 const round = (n: number) => Math.round(n * 100) / 100;
+
+function Icon({ d }: { d: string }) {
+  return (
+    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d={d} />
+    </svg>
+  );
+}
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
