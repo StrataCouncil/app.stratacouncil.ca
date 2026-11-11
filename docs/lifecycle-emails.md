@@ -21,7 +21,7 @@ disclosure to justify, mostly stored in the US, and priced per contact.
 
 | Kind | Who gets it | Journeys |
 |---|---|---|
-| **Service** | Anyone with an account (and invitees, for their invitation) | Invitation reminders, training reminders, Admin setup, re-engagement |
+| **Service and setup tips** | Anyone with an account (and invitees, for their invitation), on the basis of the account they opened; kept factual (no prices, discounts, or calls to subscribe) | New sign-up, invitation reminders, training reminders, Admin setup, re-engagement |
 | **Promotional** | Only people who opted in: `profiles.marketing_opt_in` (0006, with the date as proof) | The feature series, newsletters |
 
 Every email, of either kind:
@@ -36,6 +36,10 @@ Every email, of either kind:
   (Gmail and Yahoo require them).
 - Is written in Canadian English, with Oxford commas, and no emoji.
 
+Unsubscribing from setup tips or reminders never stops sign-in links,
+security notices, invitations, or meeting and discussion emails: those
+are transactional and always sent.
+
 The Account page gets an **Emails** section with a switch for each kind:
 setup tips, reminders, and product news (marketing opt-in; turning it on
 records the date).
@@ -44,9 +48,12 @@ The Privacy Policy's account notifications list (marketing site,
 section 5) adds "reminders about setting up your strata, invitations,
 and training you've started".
 
-To confirm with a lawyer before launch: the opt-in wording at sign-up,
-and that each journey sits on the right side of the service/promotional
-line.
+To confirm with a lawyer before launch: the opt-in wording at sign-up;
+that setup tips may go to every account holder (CASL: the account and
+the Terms they accepted, and factual information about an account they
+use), or whether they need express consent too; and that Park Place,
+666 Burrard St #3100, is a valid mailing address for Trickfilm
+Entertainment Inc.
 
 ## The engine
 
@@ -82,31 +89,65 @@ A **Lifecycle emails** page in the Super Admin console:
 
 ## The journeys
 
-### 0. New sign-up (service), first, with the foundation
+### 0. New sign-up (setup tips), first, with the foundation
 
-Decided 2026-11-10; built first, in the foundation PR, with its copy
-reviewed before any code. For people who sign up on their own; people
-who arrive by invitation land in their strata and get the member welcome
-instead.
+Decided 2026-11-10, refined 2026-11-11 after review. Built first, in the
+foundation PR. For people who sign up on their own; people who arrive by
+invitation land in their strata and get the member welcome instead.
 
-A new person lands in Council Training after their sign-in link, and can
-connect a strata from there (add one, or ask to join one). So the flow
-has two goals: start training, and connect a strata.
+**Chosen by what the person has done, not only by the calendar.** The
+days are the earliest each email can go; at send time the engine picks
+the email for the next thing they haven't done:
 
-| When | Email | Sent only if | Purpose |
-|---|---|---|---|
-| About an hour after first sign-in | Welcome to StrataCouncil.ca | Always | What's free (Council Training, the Library), how to connect their strata; one button, Start Council Training |
-| Day 2 | Your first module takes about 15 minutes | Training not started | One recommended module and a Start button. If they started and stopped: "Pick up where you left off" |
-| Day 4 | Bring your strata onto StrataCouncil.ca | No strata connected, no join request waiting | What they need (the strata plan PDF, about 5 minutes), what's free, what a subscription adds; one button, Connect your strata |
-| Day 9 | Anything we can help with? | Still no training and no strata | A short last note with both links, then nothing more |
+| What they've done | What they get |
+|---|---|
+| Signed up, nothing else yet | Welcome, then the training suggestion |
+| Started a module, not finished | "Pick up where you left off" instead of the training suggestion |
+| Finished a module, no strata | Straight to Connect your strata |
+| Asked to join a strata | No connect email |
+| Connected a strata | Setup tips stop; the strata-ready email takes over |
+| Used Meeting Mode | No mention of the free first meeting |
 
-- Each step stops as soon as its goal is met.
-- Connecting a strata moves them on: to Admin setup if they added it, or
-  to the member welcome if they joined one.
-- Footer link: "Stop setup tips". Wording matches the in-app Getting
-  Started checklist.
-- Folded into the same PR: the sign-up page's opt-in text says
-  "StrataSphere" with an em dash; it becomes "Stratasphere&trade;".
+| Earliest | Email | Purpose |
+|---|---|---|
+| About an hour after first sign-in | Welcome to StrataCouncil.ca | Three free places to start. One button, Start Council Training; two text links under it, Explore the Library and Connect your strata |
+| Day 2 | A good place to start | One recommended module, no time commitment in the subject. Or "Pick up where you left off: <module>" |
+| Day 4 | Bring your strata onto StrataCouncil.ca | The two ways in, joining (its admin approves and sets your role) or adding (Strata Plan PDF, confirm you're an owner, council member, or authorized agent; our team checks it); or wait for a council colleague to invite you |
+| Day 9 | Anything we can help with? | Both links, then: "This is the last of our setup emails. Your account stays open whenever you're ready." Kept exactly as written |
+
+Copy rules for setup tips:
+
+- Factual and helpful: no prices, discounts, urgency, or calls to
+  subscribe. The free first meeting is explained once, where it matters
+  (the strata-ready email), and never to someone who's used Meeting Mode.
+- Document search is described as it really works: "including scans of
+  typed or printed pages" (OCR reads typed and printed pages well, not
+  handwriting or very faint scans).
+- Joining or adding a strata never implies the person can administer it
+  or upload records; roles come from the strata's admin.
+
+**Strata ready (not a new journey).** The existing approval email
+(`creationRequestApprovedEmail`) becomes "what's next": invite your
+council and set their roles, upload your governing documents (bylaws,
+rules, recent minutes, budget, depreciation report), and prepare your
+first meeting, which is free, including Meeting Mode and up to ten
+Stratasphere questions; after that, both need a subscription. It's a
+transactional email, sent to every new admin.
+
+Footer link: "Stop setup tips". Wording matches the in-app Getting
+Started checklist. Also in this PR: the sign-up opt-in text says
+"StrataSphere" with an em dash (becomes "Stratasphere&trade;"), and the
+creation-request-denied email asks people to "reply to" support from a
+no-reply address (becomes "write to").
+
+**Metrics** (console, per journey and overall):
+
+1. Welcome to first meaningful action (training started, Library
+   opened, or strata setup begun).
+2. Training started to module finished.
+3. Sign-up to strata connected.
+4. Strata connected to first meeting.
+5. First meeting to subscription.
 
 ### 1. Foundation, invitation reminders, training reminders (service)
 
