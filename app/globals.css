@@ -10446,7 +10446,7 @@ button.design-editor__swatch {
   grid-template-columns: 112px 232px minmax(0, 1fr) 280px;
   grid-template-areas:
     "slides tools stage settings"
-    "slides tools timeline timeline";
+    "slides tools timeline settings";
   gap: 12px;
   align-items: start;
 }
