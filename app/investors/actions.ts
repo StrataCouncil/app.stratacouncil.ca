@@ -3,6 +3,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { currentDeck, currentInvestor } from "@/lib/investors/session";
 import { signUpInvestor, type InvestorSignupState } from "@/lib/investors/signup";
+import { TURNSTILE_FIELD } from "@/lib/security/turnstile";
 
 /**
  * The investor briefing (0061). Signing up: name, email, the disclaimer
@@ -22,6 +23,7 @@ export async function requestInvestorLink(_prev: InvestorSignupState, form: Form
     accredited: form.get("accredited") === "on",
     website: form.get("website"),
     ref: form.get("ref"),
+    turnstile: form.get(TURNSTILE_FIELD),
   });
 }
 

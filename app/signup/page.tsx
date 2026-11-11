@@ -5,6 +5,7 @@ import { Suspense, useActionState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Logo } from "@/components/Logo";
 import { sendOtp } from "@/lib/auth/actions";
+import { Turnstile } from "@/components/Turnstile";
 import { initialSendOtpState } from "@/lib/auth/otp-state";
 import { readCampaign } from "@/lib/campaign";
 
@@ -129,6 +130,12 @@ function SignupForm() {
               {state.message}
             </p>
           )}
+          <div className="form-trap" aria-hidden="true">
+            <label>
+              Website <input name="website" type="text" tabIndex={-1} autoComplete="off" />
+            </label>
+          </div>
+          <Turnstile action="signup" resetKey={state} />
           <button type="submit" className="button button-primary" disabled={pending} data-testid="signup-submit">
             {pending ? "Sending…" : "Create account"}
           </button>

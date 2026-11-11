@@ -7,6 +7,8 @@ import { createClient } from "@/lib/supabase/server";
 import { MFA_BACKUP_COOKIE_NAME } from "@/lib/auth/mfa-session";
 import type { SendOtpState } from "@/lib/auth/otp-state";
 import { readCampaign } from "@/lib/campaign";
+import { domainTakesMail } from "@/lib/security/mail-domain";
+import { TURNSTILE_FIELD } from "@/lib/security/turnstile";
 
 // SendOtpState's type and initial value moved to lib/auth/otp-state.ts —
 // this "use server" file may only export async functions (Next.js 15.5),
@@ -32,6 +34,12 @@ import { readCampaign } from "@/lib/campaign";
  *   sign-up with the email filled in. That does confirm whether an email
  *   has an account, which is accepted here for a clear message.
  *
+ * Bots (Mailtrap's hard-bounce report, 2026-11-11): the Turnstile token
+ * goes to Supabase, which checks it once CAPTCHA is on in its dashboard
+ * (Authentication, Attack Protection), so a bot can't skip this form; a
+ * hidden field people never see catches simple bots; and no link goes to
+ * a domain that can't receive mail.
+ *
  * Invited people don't come through here: their account is created when
  * the invite is sent (auth.admin.generateLink, roster-actions.ts), so a
  * later sign-in finds it.
@@ -49,11 +57,23 @@ export async function sendOtp(
   if (!email) {
     return { status: "error", message: "Enter your email address." };
   }
+  // The hidden field people never see: anything in it is a bot. It's told the link went.
+  if (String(formData.get("website") ?? "").trim()) {
+    return { status: "sent", email };
+  }
   if (signingUp && !fullName) {
     return { status: "error", email, message: "Enter your full name." };
   }
   if (signingUp && formData.get("accept_terms") !== "on") {
     return { status: "error", email, message: "Agree to the Terms & Conditions and Privacy Policy to continue." };
+  }
+
+  if (!(await domainTakesMail(email))) {
+    return { status: "error", email, message: "That email address can't receive mail. Check the spelling (after the @ especially) and try again." };
+  }
+  const captchaToken = String(formData.get(TURNSTILE_FIELD) ?? "") || undefined;
+  if (process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY && !captchaToken) {
+    return { status: "error", email, message: "The security check hasn't finished. Wait a moment, then try again." };
   }
 
   const origin = (await headers()).get("origin");
@@ -67,6 +87,7 @@ export async function sendOtp(
     options: {
       shouldCreateUser: signingUp,
       emailRedirectTo: confirm,
+      captchaToken,
       ...(signingUp
         ? { data: { full_name: fullName, marketing_opt_in: marketingOptIn, ...(campaign ? { campaign } : {}) } }
         : {}),
@@ -77,6 +98,9 @@ export async function sendOtp(
     // Supabase's answer to a sign-in for an email it doesn't know.
     if (!signingUp && (error.code === "otp_disabled" || /signups? not allowed/i.test(error.message))) {
       return { status: "no_account", email };
+    }
+    if (/captcha/i.test(error.message)) {
+      return { status: "error", email, message: "The security check didn't pass. Try again; if it keeps happening, reload the page." };
     }
     return { status: "error", email, message: error.message };
   }
