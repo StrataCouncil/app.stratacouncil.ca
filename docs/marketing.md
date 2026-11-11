@@ -170,6 +170,10 @@ stand-in; the editor uses the real logo files).
 
 ## Newsletter (design, 2026-11-11)
 
+Status: on hold (2026-11-11). Mailtrap's free plan has no room for
+another sending domain; the owner will subscribe once there's a paying
+customer, then this gets built. Nothing is built yet.
+
 ### The list
 
 - **One list.** People join from:
@@ -193,10 +197,25 @@ stand-in; the editor uses the real logo files).
 
 - **Mailtrap's bulk stream,** not the transactional one that sends
   sign-in links and meeting emails.
-- **Its own sending address on its own subdomain,** for example
-  `news@mail.stratacouncil.ca`, with its own SPF, DKIM, and DMARC records,
-  so newsletter complaints can never hurt delivery of sign-in and meeting
-  emails. To set up in Mailtrap and DNS before the first issue.
+- **Its own sending address on its own subdomain:**
+  `newsletter@news.stratacouncil.ca`, with its own SPF, DKIM, and DMARC
+  records, so newsletter complaints can never hurt delivery of sign-in
+  and meeting emails.
+
+**Setting up the channel (when Mailtrap is on a paid plan):**
+
+1. Mailtrap, Sending Domains, Add Domain: `news.stratacouncil.ca`.
+   Mailtrap lists about five records (domain verification, two DKIM
+   keys, a return-path record for SPF, and DMARC).
+2. Cloudflare (stratacouncil.ca, DNS): add each record exactly as
+   Mailtrap shows it, copied, not retyped. Every CNAME **DNS only**
+   (grey cloud): proxied CNAMEs break verification. Names like
+   `rwmt1._domainkey.news` are entered as shown; Cloudflare adds
+   `.stratacouncil.ca`. DMARC starts at `p=none`, tightened once sending
+   is clean.
+3. Mailtrap: Verify (minutes, up to an hour).
+4. Mailtrap: an API token for that domain's Bulk stream, saved in Vercel
+   as `MAILTRAP_BULK_API_TOKEN` (never anywhere else).
 - **No-reply,** like every other email (decided 2026-11-11).
 
 ### The format
