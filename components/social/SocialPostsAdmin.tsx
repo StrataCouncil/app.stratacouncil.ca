@@ -4,7 +4,7 @@ import { tz } from "@/lib/time-zone";
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { createSocialPost, deleteSocialPost } from "@/app/admin/social/actions";
+import { createSocialPost, deleteSocialPost } from "@/app/admin/marketing/socials/actions";
 import type { SocialPostSummary } from "@/lib/data/social";
 import { AUDIENCE_LABELS, AUDIENCES, DESTINATIONS, TEMPLATE_LABELS, TEMPLATES, type Audience, type Destination, type Template } from "@/lib/social/post";
 
@@ -32,7 +32,7 @@ export function SocialPostsAdmin({ posts }: { posts: SocialPostSummary[] }) {
       setBusy(null);
       return setError(r.error);
     }
-    router.push(`/admin/social/${r.id}`);
+    router.push(`/admin/marketing/socials/${r.id}`);
   }
 
   async function remove(p: SocialPostSummary) {
@@ -138,13 +138,13 @@ export function SocialPostsAdmin({ posts }: { posts: SocialPostSummary[] }) {
                 {posts.map((p) => (
                   <tr key={p.id} data-testid={`social-post-${p.id}`}>
                     <td>
-                      <Link href={`/admin/social/${p.id}`}>{p.title}</Link>
+                      <Link href={`/admin/marketing/socials/${p.id}`}>{p.title}</Link>
                       <div className="roster-table__meta">{p.campaign}</div>
                     </td>
                     <td>{p.slideCount}</td>
                     <td>{time(p.updatedAt)}</td>
                     <td className="demo-links__actions">
-                      <Link href={`/admin/social/${p.id}`} className="button button-secondary button-small">
+                      <Link href={`/admin/marketing/socials/${p.id}`} className="button button-secondary button-small">
                         Open
                       </Link>
                       <button type="button" className="button button-secondary button-small agenda-danger" disabled={busy !== null} onClick={() => remove(p)}>

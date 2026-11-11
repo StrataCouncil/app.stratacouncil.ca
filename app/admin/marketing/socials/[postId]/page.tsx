@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { AdminTabs } from "@/components/AdminTabs";
+import { MarketingTabs } from "@/components/MarketingTabs";
 import { AppShell } from "@/components/AppShell";
 import { SocialEditor } from "@/components/social/SocialEditor";
 import { getCurrentProfile } from "@/lib/data/profile";
@@ -16,7 +17,8 @@ export default async function AdminSocialPostPage({ params }: { params: Promise<
   return (
     <AppShell active="admin">
       <div className="wrap wrap--wide page">
-        <AdminTabs active="social" />
+        <AdminTabs active="marketing" />
+        <MarketingTabs active="socials" />
         <SocialEditor initial={post} />
       </div>
     </AppShell>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { setJourney } from "@/app/admin/emails/actions";
+import { setJourney } from "@/app/admin/marketing/emails/actions";
 
 /** A lifecycle journey's on/off switch in the console. */
 export function JourneySwitch({ journey, enabled }: { journey: string; enabled: boolean }) {

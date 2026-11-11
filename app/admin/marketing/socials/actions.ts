@@ -93,7 +93,7 @@ export async function createSocialPost(input: {
     console.error("[createSocialPost] insert", error.message);
     return { ok: false, error: "The draft was written but couldn't be saved. Try again." };
   }
-  revalidatePath("/admin/social");
+  revalidatePath("/admin/marketing/socials");
   return { ok: true, id };
 }
 
@@ -226,6 +226,6 @@ export async function deleteSocialPost(id: string): Promise<Result> {
     console.error("[deleteSocialPost]", error.message);
     return { ok: false, error: "The pictures are gone, but the post couldn't be deleted. Try again." };
   }
-  revalidatePath("/admin/social");
+  revalidatePath("/admin/marketing/socials");
   return { ok: true };
 }

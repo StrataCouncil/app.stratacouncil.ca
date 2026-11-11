@@ -66,6 +66,10 @@ const nextConfig = {
       },
     ];
   },
+  // The Marketing tab opens on its first section.
+  async redirects() {
+    return [{ source: "/admin/marketing", destination: "/admin/marketing/socials", permanent: false }];
+  },
   poweredByHeader: false,
 };
 export default nextConfig;

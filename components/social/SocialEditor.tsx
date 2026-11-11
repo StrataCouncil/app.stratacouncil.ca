@@ -12,7 +12,7 @@ import {
   saveSocialPost,
   searchSocialPhotos,
   signSocialUpload,
-} from "@/app/admin/social/actions";
+} from "@/app/admin/marketing/socials/actions";
 import { PhotoPicker, PhotoCreditLine } from "@/components/training/PhotoPicker";
 import { ScaledSlide, SlideCanvas } from "@/components/social/SlideCanvas";
 import { socialFontClass } from "@/components/social/fonts";
@@ -192,7 +192,7 @@ export function SocialEditor({ initial }: { initial: SocialPost }) {
     setBusy(null);
     if (!r.ok) return setError(r.error);
     dirty.current = false;
-    router.push("/admin/social");
+    router.push("/admin/marketing/socials");
   }
 
   const problems = useMemo(() => wordingProblems(postTexts(post)), [post]);
@@ -202,7 +202,7 @@ export function SocialEditor({ initial }: { initial: SocialPost }) {
   return (
     <div className={`social-editor ${socialFontClass}`} data-testid="social-editor">
       <div className="social-editor__bar">
-        <Link href="/admin/social" className="link-button">
+        <Link href="/admin/marketing/socials" className="link-button">
           All posts
         </Link>
         <span className="card__meta" data-testid="social-save-state">

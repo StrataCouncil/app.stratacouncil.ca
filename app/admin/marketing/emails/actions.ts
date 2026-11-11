@@ -24,6 +24,6 @@ export async function setJourney(journey: string, enabled: boolean): Promise<{ o
     console.error("[setJourney]", error.message);
     return { ok: false, error: "Couldn't save. Run migration 0086 if it hasn't been run." };
   }
-  revalidatePath("/admin/emails");
+  revalidatePath("/admin/marketing/emails");
   return { ok: true };
 }

@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { AdminTabs } from "@/components/AdminTabs";
+import { MarketingTabs } from "@/components/MarketingTabs";
 import { AppShell } from "@/components/AppShell";
 import { JourneySwitch } from "@/components/JourneySwitch";
 import { requireSuperAdmin } from "@/lib/data/admin";
@@ -65,7 +66,8 @@ export default async function EmailsPage() {
   return (
     <AppShell active="admin">
       <div className="wrap page">
-        <AdminTabs active="emails" />
+        <AdminTabs active="marketing" />
+        <MarketingTabs active="emails" />
         <div className="page-header">
           <h1>Lifecycle emails</h1>
           <p>
