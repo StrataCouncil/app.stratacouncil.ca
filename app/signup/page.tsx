@@ -118,9 +118,9 @@ function SignupForm() {
                 data-testid="signup-marketing-opt-in"
               />
               <span>
-                Send me occasional updates &mdash; legislative changes, new
-                StrataSphere features, and other news. Optional, and you can
-                unsubscribe any time.
+                Send me occasional updates: legislative changes, new
+                Stratasphere&trade; features, and other news. Optional, and you
+                can unsubscribe any time.
               </span>
             </label>
           </div>

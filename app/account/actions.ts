@@ -93,3 +93,16 @@ export async function removeAvatar(): Promise<{ ok: true } | { ok: false; error:
   revalidatePath("/", "layout");
   return { ok: true };
 }
+
+/** The Emails card: setup tips and product news (0086, set_my_email_preferences). */
+export async function saveEmailPreferences(prefs: { setupTips: boolean; productNews: boolean }): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (IS_DEMO) return { ok: false, error: "Email preferences aren't part of the demo." };
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("set_my_email_preferences", { setup_tips: Boolean(prefs.setupTips), product_news: Boolean(prefs.productNews) });
+  if (error) {
+    console.error("[saveEmailPreferences]", error.message);
+    return { ok: false, error: "Couldn't save. Please try again." };
+  }
+  revalidatePath("/account");
+  return { ok: true };
+}

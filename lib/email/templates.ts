@@ -6,8 +6,8 @@
  * tokens (doc05 §3) without pulling in the marketing site's CSS.
  */
 
-const INK = "#1b2a41";
-const MUTED = "#6b7280";
+export const INK = "#1b2a41";
+export const MUTED = "#6b7280";
 const ACCENT = "#b4602f";
 const PAPER = "#f8f6f1";
 
@@ -19,7 +19,8 @@ const ASSET_BASE = "https://app.stratacouncil.ca/email";
 // Mail apps cache images by address, so a changed image gets a new file
 // name: an old copy shown at the new size comes out stretched.
 
-function wrap(bodyHtml: string) {
+/** The email frame. `footerHtml` goes under the company line (lifecycle emails put their address and unsubscribe link there). */
+export function wrap(bodyHtml: string, footerHtml = "") {
   return `<!doctype html>
 <html>
   <body style="margin:0;padding:0;background:${PAPER};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
@@ -41,7 +42,7 @@ function wrap(bodyHtml: string) {
               <td style="padding-top:20px;font-size:12px;color:${MUTED};">
                 StrataCouncil.ca &middot; British Columbia, Canada<br />
                 <span style="display:inline-block;margin-top:6px;">A product of
-                  <img src="${ASSET_BASE}/trickfilm.png" width="73" height="20" alt="Trickfilm Entertainment Inc." style="display:inline-block;vertical-align:middle;border:0;margin-left:4px;" /></span>
+                  <img src="${ASSET_BASE}/trickfilm.png" width="73" height="20" alt="Trickfilm Entertainment Inc." style="display:inline-block;vertical-align:middle;border:0;margin-left:4px;" /></span>${footerHtml}
               </td>
             </tr>
           </table>
@@ -52,7 +53,7 @@ function wrap(bodyHtml: string) {
 </html>`;
 }
 
-function button(href: string, label: string) {
+export function button(href: string, label: string) {
   return `<a href="${href}" style="display:inline-block;background:${ACCENT};color:#ffffff;text-decoration:none;font-weight:600;padding:12px 24px;border-radius:6px;margin:16px 0;">${label}</a>`;
 }
 
@@ -92,7 +93,7 @@ export function genericAuthEmail(confirmUrl: string) {
   return { subject: "StrataCouncil.ca", html, text };
 }
 
-function escapeHtml(value: string) {
+export function escapeHtml(value: string) {
   return value
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -140,12 +141,17 @@ export function creationRequestApprovedEmail(params: {
 }) {
   const name = escapeHtml(params.corporationName);
   const sp = escapeHtml(params.strataPlanNumber);
+  const li = `margin:0 0 8px;font-size:14px;color:${INK};`;
   const html = wrap(`
-    <p style="margin:0 0 16px;font-size:16px;color:${INK};"><strong>${name}</strong> (${sp}) is now set up on StrataCouncil.ca, and you&rsquo;re its admin.</p>
-    <p style="margin:0 0 8px;font-size:14px;color:${INK};">Sign in to invite your council, assign roles, and start uploading your strata&rsquo;s documents.</p>
+    <p style="margin:0 0 16px;font-size:16px;color:${INK};"><strong>${name}</strong> (${sp}) is now set up on StrataCouncil.ca, and you&rsquo;re its admin. Three good next steps:</p>
+    <ol style="margin:0 0 8px;padding-left:20px;">
+      <li style="${li}"><strong>Invite your council</strong> and give each person their role.</li>
+      <li style="${li}"><strong>Upload your governing documents:</strong> bylaws, rules, recent minutes, the budget, and the depreciation report.</li>
+      <li style="${li}"><strong>Prepare your first meeting.</strong> It&rsquo;s free, including Meeting Mode and up to ten Stratasphere&trade; questions. After that, both need a subscription.</li>
+    </ol>
     ${button(params.openUrl, "Open your strata")}
   `);
-  const text = `${params.corporationName} (${params.strataPlanNumber}) is now set up on StrataCouncil.ca, and you're its admin.\n\nSign in to invite your council, assign roles, and start uploading your strata's documents:\n\n${params.openUrl}`;
+  const text = `${params.corporationName} (${params.strataPlanNumber}) is now set up on StrataCouncil.ca, and you're its admin. Three good next steps:\n\n1. Invite your council and give each person their role.\n2. Upload your governing documents: bylaws, rules, recent minutes, the budget, and the depreciation report.\n3. Prepare your first meeting. It's free, including Meeting Mode and up to ten Stratasphere questions. After that, both need a subscription.\n\nOpen your strata: ${params.openUrl}`;
   return { subject: `${params.strataPlanNumber} is set up on StrataCouncil.ca`, html, text };
 }
 
@@ -153,7 +159,7 @@ export function creationRequestDeniedEmail(params: { strataPlanNumber: string })
   const sp = escapeHtml(params.strataPlanNumber);
   const html = wrap(`
     <p style="margin:0 0 16px;font-size:16px;color:${INK};">We weren&rsquo;t able to approve your request to add ${sp} to StrataCouncil.ca.</p>
-    <p style="margin:0;font-size:14px;color:${INK};">If you think this is a mistake, or the strata is already on the platform under a different plan number, reply to support@stratacouncil.ca and we&rsquo;ll take another look.</p>
+    <p style="margin:0;font-size:14px;color:${INK};">If you think this is a mistake, or the strata is already on the platform under a different plan number, write to support@stratacouncil.ca and we&rsquo;ll take another look.</p>
   `);
   const text = `We weren't able to approve your request to add ${params.strataPlanNumber} to StrataCouncil.ca.\n\nIf you think this is a mistake, or the strata is already on the platform under a different plan number, contact support@stratacouncil.ca and we'll take another look.`;
   return { subject: `Your request to add ${params.strataPlanNumber}`, html, text };

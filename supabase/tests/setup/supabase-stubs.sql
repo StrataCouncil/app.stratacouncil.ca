@@ -7,7 +7,7 @@ do $$ begin create role authenticated nologin; exception when duplicate_object t
 do $$ begin create role service_role nologin; exception when duplicate_object then null; end $$;
 do $$ begin create role anon nologin; exception when duplicate_object then null; end $$;
 create schema auth; create schema storage;
-create table auth.users (id uuid primary key, email text, raw_user_meta_data jsonb default '{}');
+create table auth.users (id uuid primary key, email text, raw_user_meta_data jsonb default '{}', email_confirmed_at timestamptz);
 create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('test.uid', true), '')::uuid $$;
 -- auth.jwt(): only the session's assurance level is used (0053). Suites
 -- run as a two-step-verified session (aal2) unless they `set test.aal = 'aal1'`.

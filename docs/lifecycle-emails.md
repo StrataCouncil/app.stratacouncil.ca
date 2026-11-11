@@ -1,6 +1,6 @@
 # Lifecycle emails (design)
 
-Status: designed 2026-11-10, not built; on hold for a cycle (2026-11-10). Replaces
+Status: journey 0 (new sign-up) and the foundation built 2026-11-11 (migration 0086), off until turned on in the console; journeys 1 to 4 designed, not built. Replaces
 `docs/training-reminders.md` (2026-10-30), whose mailing preferences and
 training reminders are folded in here. Build in four PRs, in the order
 below, after the owner's Go.
@@ -60,9 +60,10 @@ Entertainment Inc.
 - **Rules in code.** Each email is a rule: who it's for, what starts it
   (an event, or a condition such as "no council invited 2 days after
   approval"), its delay, and the goal that ends it.
-- **A daily sweep,** an Inngest scheduled function at about 10:00 PT,
-  evaluates the condition rules. Event rules (a welcome on joining) fire
-  from Inngest events sent by the server actions that already exist.
+- **An hourly sweep,** an Inngest scheduled function
+  (`lib/inngest/lifecycle.ts`), evaluates the rules and sends only
+  between 9:00 and 17:00 BC time. A journey is off until turned on, and
+  only people who confirm their email after it's turned on are in it.
 - **Checked again at send time.** If the person has reached the goal
   since, the email is skipped. Nobody is reminded of something they've
   done.
@@ -110,7 +111,7 @@ the email for the next thing they haven't done:
 
 | Earliest | Email | Purpose |
 |---|---|---|
-| About an hour after first sign-in | Welcome to StrataCouncil.ca | Three free places to start. One button, Start Council Training; two text links under it, Explore the Library and Connect your strata |
+| About an hour after first sign-in | Welcome to StrataCouncil.ca | Two free places to start: Council Training, and their strata (with the Library, which is inside a strata). One button, Start Council Training; a text link under it, connect your strata |
 | Day 2 | A good place to start | One recommended module, no time commitment in the subject. Or "Pick up where you left off: <module>" |
 | Day 4 | Bring your strata onto StrataCouncil.ca | The two ways in, joining (its admin approves and sets your role) or adding (Strata Plan PDF, confirm you're an owner, council member, or authorized agent; our team checks it); or wait for a council colleague to invite you |
 | Day 9 | Anything we can help with? | Both links, then: "This is the last of our setup emails. Your account stays open whenever you're ready." Kept exactly as written |

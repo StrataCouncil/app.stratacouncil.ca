@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { removeAvatar, updatePhone, uploadAvatar } from "@/app/account/actions";
@@ -54,7 +54,7 @@ async function squarePhoto(file: File): Promise<File> {
   return new File([blob], "photo.jpg", { type: "image/jpeg" });
 }
 
-export function AccountSettings({ profile }: { profile: CurrentProfile }) {
+export function AccountSettings({ profile, emails }: { profile: CurrentProfile; emails?: ReactNode }) {
   const router = useRouter();
   const [avatarUrl, setAvatarUrl] = useState<string | null>(profile.avatarUrl);
   const [photoBusy, setPhotoBusy] = useState(false);
@@ -268,6 +268,8 @@ export function AccountSettings({ profile }: { profile: CurrentProfile }) {
           {profile.twoFactorEnabled ? "Manage" : "Set up 2FA"}
         </Link>
       </div>
+
+      {emails}
 
       <div className="card account-settings__danger-zone">
         <h3>Delete account</h3>
