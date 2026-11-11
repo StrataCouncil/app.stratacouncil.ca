@@ -4,6 +4,7 @@ import { useActionState, useState } from "react";
 import { Logo } from "@/components/Logo";
 import { Modal } from "@/components/Modal";
 import { Disclaimer } from "@/components/investors/Disclaimer";
+import { Turnstile } from "@/components/Turnstile";
 import { requestInvestorLink, type InvestorSignupState } from "@/app/investors/actions";
 import { DISCLAIMER_TITLE, INVESTORS_EMAIL, LINK_DAYS, PRIVACY_URL } from "@/lib/investors/briefing";
 
@@ -79,6 +80,7 @@ export function InvestorSignup({ referral, linkExpired }: { referral: string | n
                   {state.message}
                 </p>
               )}
+              <Turnstile action="investor" resetKey={state} />
               <button type="submit" className="button button-primary investor-signup__submit" disabled={pending}>
                 {pending ? "Sending…" : "Email me the briefing link"}
               </button>

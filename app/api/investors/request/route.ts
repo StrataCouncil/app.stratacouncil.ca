@@ -6,7 +6,8 @@ import { signUpInvestor } from "@/lib/investors/signup";
  * marketing site's server posts the form here as JSON and shows what comes
  * back. Same rules as the sign-up page (lib/investors/signup.ts): name,
  * email, the disclaimer and the accredited confirmation, three links an
- * hour per email, the hidden bot field.
+ * hour per email, the hidden bot field, and the Turnstile token the
+ * marketing site's form collected (`turnstile`).
  */
 export async function POST(request: NextRequest) {
   const text = await request.text();
@@ -25,6 +26,7 @@ export async function POST(request: NextRequest) {
     accredited: body.accredited === true,
     website: body.website,
     ref: body.ref,
+    turnstile: body.turnstile,
   });
   return NextResponse.json({ status: result.status, message: result.message, email: result.email });
 }

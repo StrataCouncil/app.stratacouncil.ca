@@ -11,6 +11,8 @@ import {
   referralId,
 } from "@/lib/investors/briefing";
 import { hashToken, linkExpiry, newToken } from "@/lib/investors/session";
+import { domainTakesMail } from "@/lib/security/mail-domain";
+import { verifyTurnstile } from "@/lib/security/turnstile";
 
 /**
  * Signing up for the investor briefing (0061): name, email, the
@@ -30,6 +32,8 @@ export interface InvestorSignupInput {
   /** The hidden field people never see; anything in it is a bot. */
   website?: unknown;
   ref?: unknown;
+  /** The Turnstile token (components/Turnstile.tsx), checked here with TURNSTILE_SECRET_KEY. */
+  turnstile?: unknown;
 }
 
 const MAX_LINKS_PER_HOUR = 3;
@@ -45,6 +49,8 @@ export async function signUpInvestor(input: InvestorSignupInput): Promise<Invest
   if (!email) return { status: "error", message: "Please enter a valid email address.", ...kept };
   if (!input.disclaimer) return { status: "error", message: "Please read and accept the Legal Disclaimer.", ...kept };
   if (!input.accredited) return { status: "error", message: "Please confirm that you are an accredited investor.", ...kept };
+  if (!(await verifyTurnstile(input.turnstile))) return { status: "error", message: "The security check didn't pass. Please try again; if it keeps happening, reload the page.", ...kept };
+  if (!(await domainTakesMail(email))) return { status: "error", message: "That email address can't receive mail. Please check the spelling.", ...kept };
 
   const admin = createAdminClient();
   const now = new Date().toISOString();

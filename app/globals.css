@@ -8422,7 +8422,8 @@ a.kb-card:hover {
   color: var(--accent-dark);
 }
 
-.investor-signup__trap {
+.investor-signup__trap,
+.form-trap {
   position: absolute;
   left: -10000px;
   width: 1px;
@@ -11002,4 +11003,9 @@ button.design-editor__swatch {
   .se-settings {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+}
+
+/* Turnstile (bot check): usually invisible; a checkbox when Cloudflare isn't sure. */
+.turnstile:not(:empty) {
+  margin: 0 0 0.9rem;
 }
