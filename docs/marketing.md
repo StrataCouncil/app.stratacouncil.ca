@@ -127,10 +127,14 @@ stand-in; the editor uses the real logo files).
      **Save as template** (`social_templates`, server-only). Starting
      from one copies it with fresh ids; the template never changes.
      Uploaded photos and clips aren't kept in a template.
-   - **Animation:** each layer's entrance (none, fade, rise, pop, wipe)
-     with a start and length; a slide length (5 s by default, up to 60);
-     a timeline under the canvas (drag an entrance to move it, its end to
-     lengthen it, the ruler to see a moment) and Play.
+   - **Animation:** each layer's entrance (fade in, grow, or slide in
+     right, left, up, or down) and exit (fade out, shrink, or slide out
+     right, left, up, or down), each with a start and length; a slide
+     length (5 s by default, up to 60); a timeline under the canvas (with
+     a layer selected, that layer's entrance and exit; with none, every
+     layer that moves; drag a bar to move it, its end to lengthen it, the
+     ruler to see a moment) and Play. Revised 2026-11-11 (part 3); part
+     2's rise, pop, and wipe read as slide in up, grow, and slide in right.
    - **Video layers:** upload an MP4 or MOV (up to 200 MB), or a free
      Pixabay clip; trim, fill or fit, corners, brightness; it loops if
      the slide is longer. No sound in this version.
@@ -141,6 +145,13 @@ stand-in; the editor uses the real logo files).
      (H.264, VP9 only where H.264 isn't available) at 30 frames a second.
      LinkedIn's PDF uses the stills. X and TikTok can't mix pictures and
      video in one post; their text file says so.
+
+3. Built 2026-11-11 (no migration): choosing a photo or clip for a new
+   frame now lands (the pick was applied to the slide as it was before
+   the frame was added, which removed the frame); exits; and the editor
+   on one grid: a top bar (title, Saved, Post settings, Save as template,
+   Export), post settings folded away, then slides | add and layers |
+   canvas | settings, with the timeline under the canvas.
 
 ### Pixabay (stock video)
 

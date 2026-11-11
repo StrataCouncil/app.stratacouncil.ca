@@ -25,10 +25,16 @@ export const BRAND_LABELS: Record<BrandColor, string> = { ink: "Ink", cream: "Cr
 
 export type TextRole = "number" | "kicker" | "title" | "body" | "";
 
-/** How a layer comes onto the slide in a video export (none: it's there from the start). */
-export const ENTRANCES = ["none", "fade", "rise", "pop", "wipe"] as const;
+/** How a layer comes onto the slide in a video export (none: it's there from the start). Slides are named for the way the layer moves. */
+export const ENTRANCES = ["none", "fade", "grow", "right", "left", "up", "down"] as const;
 export type Entrance = (typeof ENTRANCES)[number];
-export const ENTRANCE_LABELS: Record<Entrance, string> = { none: "None (there from the start)", fade: "Fade in", rise: "Rise and fade", pop: "Pop", wipe: "Wipe from the left" };
+export const ENTRANCE_LABELS: Record<Entrance, string> = { none: "None", fade: "Fade in", grow: "Grow", right: "Slide in right", left: "Slide in left", up: "Slide in up", down: "Slide in down" };
+/** How it leaves (none: it stays to the end). */
+export const EXITS = ["none", "fade", "shrink", "right", "left", "up", "down"] as const;
+export type Exit = (typeof EXITS)[number];
+export const EXIT_LABELS: Record<Exit, string> = { none: "None", fade: "Fade out", shrink: "Shrink", right: "Slide out right", left: "Slide out left", up: "Slide out up", down: "Slide out down" };
+/** The first version's entrances, read as the nearest new one. */
+const OLD_ENTRANCES: Record<string, Entrance> = { rise: "up", pop: "grow", wipe: "right" };
 
 interface Base {
   id: string;
@@ -46,6 +52,10 @@ interface Base {
   enter: Entrance;
   enterAt: number;
   enterFor: number;
+  /** Its exit, the same way. */
+  exit: Exit;
+  exitAt: number;
+  exitFor: number;
 }
 export interface TextLayer extends Base {
   type: "text";
@@ -169,9 +179,12 @@ export function normalizeDesign(v: unknown, normalizePhoto: (p: unknown) => Soci
       opacity: num(l.opacity, 0, 100, 100),
       hidden: l.hidden === true,
       locked: l.locked === true,
-      enter: pick(ENTRANCES, l.enter, "none"),
+      enter: pick(ENTRANCES, OLD_ENTRANCES[String(l.enter)] ?? l.enter, "none"),
       enterAt: num(l.enterAt, 0, DESIGN_LIMITS.duration, 0),
       enterFor: num(l.enterFor, 0.1, 5, 0.6),
+      exit: pick(EXITS, l.exit, "none"),
+      exitAt: num(l.exitAt, 0, DESIGN_LIMITS.duration, Math.max(0, duration - 0.6)),
+      exitFor: num(l.exitFor, 0.1, 5, 0.6),
     };
     switch (l.type) {
       case "text":
@@ -234,44 +247,76 @@ export function normalizeDesign(v: unknown, normalizePhoto: (p: unknown) => Soci
 
 // ── Motion ─────────────────────────────────────────────────────────────
 
-/** Whether a slide is exported as video: a layer has an entrance, or it shows a clip. */
+/** Whether a slide is exported as video: a layer comes in or goes out, or it shows a clip. */
 export function designMoves(d: SlideDesign | null | undefined): boolean {
-  return Boolean(d?.layers.some((l) => !l.hidden && (l.enter !== "none" || (l.type === "video" && l.clip))));
+  return Boolean(d?.layers.some((l) => !l.hidden && (l.enter !== "none" || l.exit !== "none" || (l.type === "video" && l.clip))));
 }
 
-/** How a layer looks at a moment: its opacity (0 to 1), a lift (percent of the slide's height), a scale, and how much of it a wipe shows (0 to 1). */
+/** How a layer looks at a moment: its opacity (0 to 1), how far it's moved (percent of the slide's width and height), and its scale. */
 export interface LayerMoment {
   opacity: number;
-  lift: number;
+  dx: number;
+  dy: number;
   scale: number;
-  reveal: number;
 }
-export const STILL: LayerMoment = { opacity: 1, lift: 0, scale: 1, reveal: 1 };
+export const STILL: LayerMoment = { opacity: 1, dx: 0, dy: 0, scale: 1 };
+const GONE: LayerMoment = { opacity: 0, dx: 0, dy: 0, scale: 1 };
 
+/** How far a slide moves, in percent of the slide. */
+const TRAVEL = 12;
 const easeOut = (x: number) => 1 - Math.pow(1 - x, 3);
+const easeIn = (x: number) => x * x * x;
 
-/** A layer at `t` seconds into the slide. Before its entrance starts it's not shown; after it ends it's still. */
-export function layerAt(l: Pick<Base, "enter" | "enterAt" | "enterFor">, t: number): LayerMoment {
-  if (l.enter === "none") return STILL;
-  const raw = (t - l.enterAt) / Math.max(0.1, l.enterFor);
-  if (raw >= 1) return STILL;
-  if (raw <= 0) return { opacity: 0, lift: 0, scale: 1, reveal: 0 };
-  const p = easeOut(raw);
-  switch (l.enter) {
+/** Away from its place: `a` is 1 when fully away, 0 when in place. */
+function away(kind: Entrance | Exit, a: number): LayerMoment {
+  const o = 1 - a;
+  switch (kind) {
+    case "none":
+      return STILL;
     case "fade":
-      return { opacity: p, lift: 0, scale: 1, reveal: 1 };
-    case "rise":
-      return { opacity: p, lift: (1 - p) * 6, scale: 1, reveal: 1 };
-    case "pop":
-      return { opacity: Math.min(1, raw * 2.5), lift: 0, scale: 0.82 + 0.18 * p, reveal: 1 };
-    case "wipe":
-      return { opacity: 1, lift: 0, scale: 1, reveal: p };
+      return { ...STILL, opacity: o };
+    case "grow":
+    case "shrink":
+      return { opacity: Math.min(1, o * 2.5), dx: 0, dy: 0, scale: 0.6 + 0.4 * o };
+    // Slides fade over the first part of the move; layerAt adds the move itself.
+    case "right":
+    case "left":
+    case "up":
+    case "down":
+      return { opacity: Math.min(1, o * 1.6), dx: 0, dy: 0, scale: 1 };
   }
 }
+const DIR: Record<"right" | "left" | "up" | "down", [number, number]> = { right: [1, 0], left: [-1, 0], up: [0, -1], down: [0, 1] };
 
-/** When the last entrance ends, in seconds. */
-export function lastEntranceEnd(d: SlideDesign): number {
-  return d.layers.reduce((end, l) => (l.enter === "none" ? end : Math.max(end, l.enterAt + l.enterFor)), 0);
+/** A layer at `t` seconds into the slide: not shown before its entrance, moving during it, still, then moving out, and gone after its exit. */
+export function layerAt(l: Pick<Base, "enter" | "enterAt" | "enterFor" | "exit" | "exitAt" | "exitFor">, t: number): LayerMoment {
+  if (l.enter !== "none") {
+    const raw = (t - l.enterAt) / Math.max(0.1, l.enterFor);
+    if (raw <= 0) return GONE;
+    if (raw < 1) {
+      const a = 1 - easeOut(raw);
+      const m = away(l.enter, a);
+      // Coming in: from behind where it moves to.
+      const d = l.enter in DIR ? DIR[l.enter as keyof typeof DIR] : [0, 0];
+      return { ...m, dx: -d[0] * TRAVEL * a, dy: -d[1] * TRAVEL * a };
+    }
+  }
+  if (l.exit !== "none") {
+    const raw = (t - l.exitAt) / Math.max(0.1, l.exitFor);
+    if (raw >= 1) return GONE;
+    if (raw > 0) {
+      const a = easeIn(raw);
+      const m = away(l.exit, a);
+      const d = l.exit in DIR ? DIR[l.exit as keyof typeof DIR] : [0, 0];
+      return { ...m, dx: d[0] * TRAVEL * a, dy: d[1] * TRAVEL * a };
+    }
+  }
+  return STILL;
+}
+
+/** When the last movement ends, in seconds. */
+export function lastMoveEnd(d: SlideDesign): number {
+  return d.layers.reduce((end, l) => Math.max(end, l.enter === "none" ? 0 : l.enterAt + l.enterFor, l.exit === "none" ? 0 : l.exitAt + l.exitFor), 0);
 }
 
 /** Where in its clip a video layer is at `t` seconds into the slide: the trimmed part, looped. */
@@ -343,7 +388,7 @@ export function designClips(d: SlideDesign | null | undefined): SocialClip[] {
 
 // ── New layers ─────────────────────────────────────────────────────────
 
-const base = (name: string, box: Box): Base => ({ id: newLayerId(), name, ...box, opacity: 100, hidden: false, locked: false, enter: "none", enterAt: 0, enterFor: 0.6 });
+const base = (name: string, box: Box): Base => ({ id: newLayerId(), name, ...box, opacity: 100, hidden: false, locked: false, enter: "none", enterAt: 0, enterFor: 0.6, exit: "none", exitAt: DEFAULT_DURATION - 0.6, exitFor: 0.6 });
 
 export function newLayer(type: LayerType, onBg: BrandColor): Layer {
   const ink = onBg === "ink" || onBg === "accent" ? "white" : "ink";

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { clipTime, designMoves, lastEntranceEnd, layerAt, LAYOUT_KEYS, LAYOUT_KINDS, layoutDesign, newLayer, normalizeDesign, roleTexts, STILL, type SlideDesign } from "../lib/social/design.ts";
+import { clipTime, designMoves, lastMoveEnd, layerAt, LAYOUT_KEYS, LAYOUT_KINDS, layoutDesign, newLayer, normalizeDesign, roleTexts, STILL, type SlideDesign } from "../lib/social/design.ts";
 import { creditLines, normalizeClip, normalizePhoto, normalizeSlides, platformTextFile, slideFileName, toPost } from "../lib/social/post.ts";
 import { BUILT_IN_TEMPLATES, builtInTemplate, isBuiltInRef, slidesFromTemplate } from "../lib/social/templates.ts";
 import { MAX_CLIP_BYTES, toStockClip } from "../lib/media/pixabay.ts";
@@ -21,19 +21,19 @@ test("a clip is kept only from the post's own folder, with its length, size, and
   assert.equal(normalizeClip({ ...clip, credit: { source: "pixabay", name: "Lee", pageUrl: "https://evil.example/x" } }, ID)!.credit, null);
 });
 
-test("entrances, timing, slide length, and video layers survive a save; nonsense is trimmed", () => {
+test("entrances, exits, timing, slide length, and video layers survive a save; nonsense is trimmed", () => {
   const video = { ...newLayer("video", "ink"), clip, trimStart: 2, trimEnd: 6 };
-  const text = { ...newLayer("text", "ink"), enter: "rise", enterAt: 1.2, enterFor: 0.8 };
-  const d = norm({ bg: "ink", layers: [video, text, { ...newLayer("shape", "ink"), enter: "spin", enterAt: -4, enterFor: 99 }], tall: {}, duration: 7 })!;
+  const text = { ...newLayer("text", "ink"), enter: "up", enterAt: 1.2, enterFor: 0.8, exit: "shrink", exitAt: 6, exitFor: 0.5 };
+  const d = norm({ bg: "ink", layers: [video, text, { ...newLayer("shape", "ink"), enter: "spin", enterAt: -4, enterFor: 99, exit: "explode" }], tall: {}, duration: 7 })!;
   assert.equal(d.duration, 7);
   const [v, t, s] = d.layers;
   assert.ok(v.type === "video" && v.clip && v.trimStart === 2 && v.trimEnd === 6);
-  assert.deepEqual([t.enter, t.enterAt, t.enterFor], ["rise", 1.2, 0.8]);
-  assert.deepEqual([s.enter, s.enterAt, s.enterFor], ["none", 0, 5]);
-  // Old designs (before part 2) get the defaults.
-  const old = norm({ bg: "cream", layers: [{ type: "text", text: "Hi" }], tall: {} })!;
+  assert.deepEqual([t.enter, t.enterAt, t.enterFor, t.exit, t.exitAt, t.exitFor], ["up", 1.2, 0.8, "shrink", 6, 0.5]);
+  assert.deepEqual([s.enter, s.enterAt, s.enterFor, s.exit], ["none", 0, 5, "none"]);
+  // Old designs (before part 2) get the defaults; part 2's entrances map to the nearest new one.
+  const old = norm({ bg: "cream", layers: [{ type: "text", text: "Hi" }, { type: "text", text: "Rise", enter: "rise" }, { type: "text", text: "Pop", enter: "pop" }, { type: "text", text: "Wipe", enter: "wipe" }], tall: {} })!;
   assert.equal(old.duration, 5);
-  assert.equal(old.layers[0].enter, "none");
+  assert.deepEqual(old.layers.map((l) => [l.enter, l.exit]), [["none", "none"], ["up", "none"], ["grow", "none"], ["right", "none"]]);
   // A trim can't run past the clip, and the end stays after the start.
   const bad = norm({ bg: "ink", layers: [{ ...video, trimStart: 30, trimEnd: 1 }], tall: {} })!.layers[0];
   assert.ok(bad.type === "video" && bad.trimStart <= 12.4 && bad.trimEnd > bad.trimStart && bad.trimEnd <= 12.5);
@@ -43,17 +43,40 @@ test("entrances, timing, slide length, and video layers survive a save; nonsense
   assert.equal(norm({ bg: "ink", layers: [], tall: {}, duration: 500 })!.duration, 60);
 });
 
-test("a layer's entrance: hidden before it starts, moving during, still after", () => {
-  const rise = { enter: "rise" as const, enterAt: 1, enterFor: 1 };
-  assert.deepEqual(layerAt(rise, 0.5), { opacity: 0, lift: 0, scale: 1, reveal: 0 });
-  const mid = layerAt(rise, 1.5);
-  assert.ok(mid.opacity > 0.5 && mid.opacity < 1 && mid.lift > 0 && mid.lift < 6);
-  assert.deepEqual(layerAt(rise, 2), STILL);
-  assert.deepEqual(layerAt({ enter: "none", enterAt: 3, enterFor: 1 }, 0), STILL);
-  const wipe = layerAt({ enter: "wipe", enterAt: 0, enterFor: 1 }, 0.5);
-  assert.ok(wipe.reveal > 0.5 && wipe.reveal < 1 && wipe.opacity === 1);
-  const pop = layerAt({ enter: "pop", enterAt: 0, enterFor: 1 }, 0.2);
-  assert.ok(pop.scale < 1 && pop.scale >= 0.82);
+const motion = (o: Partial<{ enter: string; enterAt: number; enterFor: number; exit: string; exitAt: number; exitFor: number }>) =>
+  ({ enter: "none", enterAt: 0, enterFor: 1, exit: "none", exitAt: 4, exitFor: 1, ...o }) as Parameters<typeof layerAt>[0];
+
+test("entrances: hidden before, moving in from behind where they slide to, then still", () => {
+  const right = motion({ enter: "right", enterAt: 1 });
+  assert.equal(layerAt(right, 0.5).opacity, 0);
+  const mid = layerAt(right, 1.3);
+  assert.ok(mid.dx < 0 && mid.dy === 0 && mid.opacity > 0, "slide in right comes from the left");
+  assert.deepEqual(layerAt(right, 2), STILL);
+  assert.ok(layerAt(motion({ enter: "left" }), 0.3).dx > 0);
+  assert.ok(layerAt(motion({ enter: "up" }), 0.3).dy > 0, "slide in up comes from below");
+  assert.ok(layerAt(motion({ enter: "down" }), 0.3).dy < 0);
+  const grow = layerAt(motion({ enter: "grow" }), 0.2);
+  assert.ok(grow.scale < 1 && grow.scale >= 0.6);
+  const fade = layerAt(motion({ enter: "fade" }), 0.5);
+  assert.ok(fade.opacity > 0 && fade.opacity < 1 && fade.dx === 0 && fade.scale === 1);
+  assert.deepEqual(layerAt(motion({}), 0), STILL);
+});
+
+test("exits: still until they start, moving out the way they slide, then gone", () => {
+  const out = motion({ exit: "left", exitAt: 3, exitFor: 1 });
+  assert.deepEqual(layerAt(out, 2.9), STILL);
+  const mid = layerAt(out, 3.6);
+  assert.ok(mid.dx < 0 && mid.dy === 0, "slide out left leaves to the left");
+  assert.ok(layerAt(out, 3.95).opacity < 1, "and fades as it goes");
+  assert.equal(layerAt(out, 4.1).opacity, 0);
+  assert.ok(layerAt(motion({ exit: "down", exitAt: 0 }), 0.6).dy > 0);
+  assert.ok(layerAt(motion({ exit: "shrink", exitAt: 0 }), 0.6).scale < 1);
+  assert.ok(layerAt(motion({ exit: "fade", exitAt: 0 }), 0.6).opacity < 1);
+  // Both: in, still, out.
+  const both = motion({ enter: "fade", enterAt: 0, enterFor: 1, exit: "fade", exitAt: 3, exitFor: 1 });
+  assert.equal(layerAt(both, 0).opacity, 0);
+  assert.deepEqual(layerAt(both, 2), STILL);
+  assert.equal(layerAt(both, 5).opacity, 0);
 });
 
 test("a slide is a video once something moves or plays; clips loop their trimmed part", () => {
@@ -61,9 +84,11 @@ test("a slide is a video once something moves or plays; clips loop their trimmed
   assert.equal(designMoves(still), false);
   assert.equal(designMoves({ ...still, layers: [{ ...still.layers[0], enter: "fade" }] }), true);
   assert.equal(designMoves({ ...still, layers: [{ ...still.layers[0], enter: "fade", hidden: true }] }), false);
+  assert.equal(designMoves({ ...still, layers: [{ ...still.layers[0], exit: "shrink" }] }), true);
   assert.equal(designMoves({ ...still, layers: [newLayer("video", "cream")] }), false, "an empty video frame doesn't make a video");
   assert.equal(designMoves({ ...still, layers: [{ ...newLayer("video", "cream"), clip: normalizeClip(clip, ID) } as never] }), true);
-  assert.equal(lastEntranceEnd({ ...still, layers: [{ ...still.layers[0], enter: "fade", enterAt: 2, enterFor: 1.5 }] }), 3.5);
+  assert.equal(lastMoveEnd({ ...still, layers: [{ ...still.layers[0], enter: "fade", enterAt: 2, enterFor: 1.5 }] }), 3.5);
+  assert.equal(lastMoveEnd({ ...still, layers: [{ ...still.layers[0], exit: "fade", exitAt: 4.5, exitFor: 0.5 }] }), 5);
   const trim = { trimStart: 2, trimEnd: 4 };
   assert.equal(clipTime(trim, 0), 2);
   assert.equal(clipTime(trim, 1.5), 3.5);

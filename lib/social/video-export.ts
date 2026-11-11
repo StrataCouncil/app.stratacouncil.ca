@@ -1,6 +1,6 @@
 import { toCanvas } from "html-to-image";
 import { ArrayBufferTarget, Muxer } from "mp4-muxer";
-import { BRAND, boxFor, clipTime, layerAt, type Layer, type SlideDesign, type VideoLayer } from "./design.ts";
+import { BRAND, boxFor, clipTime, layerAt, STILL, type Layer, type SlideDesign, type VideoLayer } from "./design.ts";
 
 /**
  * A moving slide to MP4, in the browser (docs/marketing.md, "Socials
@@ -46,7 +46,7 @@ async function pickCodec(width: number, height: number): Promise<{ config: Video
 
 type Piece = { kind: "still"; image: HTMLCanvasElement } | { kind: "moving"; layer: Layer; image: HTMLCanvasElement } | { kind: "clip"; layer: VideoLayer; video: HTMLVideoElement };
 
-const isMoving = (l: Layer) => l.enter !== "none";
+const isMoving = (l: Layer) => l.enter !== "none" || l.exit !== "none";
 
 /** Draw the slide with only these layers showing, on a clear background. */
 async function capture(root: HTMLElement, show: Set<string>, width: number, height: number): Promise<HTMLCanvasElement> {
@@ -142,7 +142,8 @@ export async function renderSlideVideo(
   canvas.height = height;
   const ctx = canvas.getContext("2d", { alpha: false })!;
 
-  async function draw(t: number) {
+  /** One frame; `still` draws every layer in place (the still picture). */
+  async function draw(t: number, still = false) {
     ctx.save();
     ctx.fillStyle = BRAND[design.bg];
     ctx.fillRect(0, 0, width, height);
@@ -152,21 +153,16 @@ export async function renderSlideVideo(
         continue;
       }
       const l = p.layer;
-      const m = layerAt(l, t);
-      if (m.opacity <= 0 || m.reveal <= 0) continue;
+      const m = still ? STILL : layerAt(l, t);
+      if (m.opacity <= 0) continue;
       const b = boxFor(design, l, tall);
       const box = { x: (b.x / 100) * width, y: (b.y / 100) * height, w: (b.w / 100) * width, h: (b.h / 100) * height };
       ctx.save();
       const cx = box.x + box.w / 2;
       const cy = box.y + box.h / 2;
-      ctx.translate(cx, cy + (m.lift / 100) * height);
+      ctx.translate(cx + (m.dx / 100) * width, cy + (m.dy / 100) * height);
       ctx.scale(m.scale, m.scale);
       ctx.translate(-cx, -cy);
-      if (m.reveal < 1) {
-        ctx.beginPath();
-        ctx.rect(box.x, box.y, box.w * m.reveal, box.h);
-        ctx.clip();
-      }
       if (p.kind === "moving") {
         ctx.globalAlpha = m.opacity;
         ctx.drawImage(p.image, 0, 0);
@@ -214,8 +210,8 @@ export async function renderSlideVideo(
   muxer.finalize();
   const mp4 = new Blob([muxer.target.buffer], { type: "video/mp4" });
 
-  // The still: every entrance finished, and clips where the slide ends.
-  await draw(Math.max(design.duration - 1 / FPS, 0));
+  // The still: every layer in place, and clips where the slide ends.
+  await draw(Math.max(design.duration - 1 / FPS, 0), true);
   const still = await new Promise<Blob>((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new VideoExportError("The still picture couldn't be drawn."))), "image/png"));
   return { mp4, still };
 }
