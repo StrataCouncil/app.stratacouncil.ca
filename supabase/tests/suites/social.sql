@@ -31,3 +31,16 @@ select pg_temp.expect_error($q$select count(*) from social_posts$q$, 'permission
 reset role;
 delete from social_posts;
 select pg_temp.expect('the server can delete a post', (select count(*) = 0 from social_posts));
+
+-- 0087: saved layouts are server-only too.
+reset role;
+insert into social_layouts (name, design) values ('Big quote', '{"bg":"ink","layers":[],"tall":{}}');
+select pg_temp.expect_error($q$insert into social_layouts (name, design) values ('', '{}')$q$, 'social_layouts_name_check');
+select pg_temp.expect_error($q$insert into social_layouts (name, design) values ('x', '[]')$q$, 'social_layouts_design_check');
+set role authenticated;
+set test.uid = '00000000-0000-0000-0000-00000000000d';
+select pg_temp.expect_error($q$select count(*) from social_layouts$q$, 'permission denied');
+reset role;
+set role anon;
+select pg_temp.expect_error($q$select count(*) from social_layouts$q$, 'permission denied');
+reset role;

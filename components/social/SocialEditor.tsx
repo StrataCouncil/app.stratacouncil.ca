@@ -15,6 +15,8 @@ import {
 } from "@/app/admin/marketing/socials/actions";
 import { PhotoPicker, PhotoCreditLine } from "@/components/training/PhotoPicker";
 import { ScaledSlide, SlideCanvas } from "@/components/social/SlideCanvas";
+import { DesignEditor } from "@/components/social/DesignEditor";
+import { designFromSlide, roleTexts, withRoleTexts, type SlideDesign } from "@/lib/social/design";
 import { socialFontClass } from "@/components/social/fonts";
 import { buildExportZip, exportFileName } from "@/lib/social/export-client";
 import {
@@ -53,9 +55,14 @@ const SOCIAL_BUCKET = "social-media";
  * Training module. Changes save on their own after a pause. The preview is
  * the export: the same canvas, scaled down.
  */
+/** Slides made before the editor had layers get a design from their kind and words (saved on the first change). */
+function withDesigns(p: SocialPost): SocialPost {
+  return { ...p, slides: p.slides.map((s, index) => (s.design ? s : { ...s, design: designFromSlide(s, { template: p.template, theme: p.theme, index }) })) };
+}
+
 export function SocialEditor({ initial }: { initial: SocialPost }) {
   const router = useRouter();
-  const [post, setPost] = useState(initial);
+  const [post, setPost] = useState(() => withDesigns(initial));
   const [current, setCurrent] = useState(0);
   const [platform, setPlatform] = useState<Platform>("instagram");
   const [captionTab, setCaptionTab] = useState<Platform>("instagram");
@@ -65,7 +72,9 @@ export function SocialEditor({ initial }: { initial: SocialPost }) {
   const [picker, setPicker] = useState(false);
   const [instruction, setInstruction] = useState("");
   const [exporting, setExporting] = useState<{ done: number; total: number } | null>(null);
-  const dirty = useRef(false);
+  const dirty = useRef(initial.slides.some((s) => !s.design));
+  const findResolve = useRef<((p: SocialPhoto | null) => void) | null>(null);
+  const [pickerQuery, setPickerQuery] = useState("");
   const stageRef = useRef<HTMLDivElement>(null);
 
   // ── Saving ──────────────────────────────────────────────────────────
@@ -106,13 +115,19 @@ export function SocialEditor({ initial }: { initial: SocialPost }) {
   const slide = post.slides[current] ?? null;
   const patchSlide = (patch: Partial<SocialSlide>) =>
     update((p) => ({ ...p, slides: p.slides.map((s, i) => (i === current ? { ...s, ...patch } : s)) }));
-  const setPhoto = (photo: SocialPhoto | null) => patchSlide({ photo });
+  const setDesign = useCallback(
+    (design: SlideDesign, fields?: Partial<SocialSlide>) =>
+      update((p) => ({ ...p, slides: p.slides.map((s, i) => (i === current ? { ...s, ...fields, design } : s)) })),
+    [current, update]
+  );
 
   // ── Slides ──────────────────────────────────────────────────────────
   function addSlide(kind: SlideKind) {
     if (post.slides.length >= LIMITS.slides) return setError(`A post can have up to ${LIMITS.slides} slides.`);
     const at = Math.min(current + 1, post.slides.length);
-    update((p) => ({ ...p, slides: [...p.slides.slice(0, at), emptySlide(kind), ...p.slides.slice(at)] }));
+    const fresh = { ...emptySlide(kind), title: kind === "cta" ? "Start free council training" : "Your title", number: kind === "point" ? String(at) : "" };
+    const s: SocialSlide = { ...fresh, design: designFromSlide(fresh, { template: post.template, theme: post.theme, index: at }) };
+    update((p) => ({ ...p, slides: [...p.slides.slice(0, at), s, ...p.slides.slice(at)] }));
     setCurrent(at);
   }
   function moveSlide(i: number, dir: -1 | 1) {
@@ -138,29 +153,46 @@ export function SocialEditor({ initial }: { initial: SocialPost }) {
     const r = await redraftSocialSlide(post.id, post.slides, current, instruction);
     setBusy(null);
     if (!r.ok) return setError(r.error);
-    patchSlide({ number: r.slide.number, kicker: r.slide.kicker, title: r.slide.title, body: r.slide.body, photoQuery: r.slide.photoQuery });
+    const words = { number: r.slide.number, kicker: r.slide.kicker, title: r.slide.title, body: r.slide.body };
+    patchSlide({ ...words, photoQuery: r.slide.photoQuery, design: slide.design ? withRoleTexts(slide.design, words) : null });
     setInstruction("");
   }
 
   // ── Photos ──────────────────────────────────────────────────────────
-  async function upload(file: File) {
-    setBusy("upload");
+  async function upload(file: File): Promise<SocialPhoto | null> {
     setError(null);
     const ticket = await createSocialUpload(post.id, { type: file.type, size: file.size });
     if (!ticket.ok) {
-      setBusy(null);
-      return setError(ticket.error);
+      setError(ticket.error);
+      return null;
     }
     const { error: upError } = await createClient().storage.from(SOCIAL_BUCKET).uploadToSignedUrl(ticket.path, ticket.token, file, { contentType: file.type });
     if (upError) {
-      setBusy(null);
-      return setError("The upload didn't finish. Try again.");
+      setError("The upload didn't finish. Try again.");
+      return null;
     }
     const signed = await signSocialUpload(post.id, ticket.path);
-    setBusy(null);
-    if (!signed.ok) return setError(signed.error);
+    if (!signed.ok) {
+      setError(signed.error);
+      return null;
+    }
     // A PNG is usually a cut-out with a transparent background.
-    setPhoto({ path: ticket.path, src: signed.src, alt: slide?.photo?.alt || "", credit: null, fit: file.type === "image/png" ? "cutout" : "cover" });
+    return { path: ticket.path, src: signed.src, alt: "", credit: null, fit: file.type === "image/png" ? "cutout" : "cover" };
+  }
+
+  /** The photo picker, for the editor: resolves with the chosen photo, or null if closed. */
+  const findPhoto = useCallback((query: string) => {
+    findResolve.current?.(null);
+    setPickerQuery(query);
+    setPicker(true);
+    return new Promise<SocialPhoto | null>((resolve) => {
+      findResolve.current = resolve;
+    });
+  }, []);
+  function closePicker(photo: SocialPhoto | null) {
+    setPicker(false);
+    findResolve.current?.(photo);
+    findResolve.current = null;
   }
 
   // ── Export and delete ───────────────────────────────────────────────
@@ -249,7 +281,7 @@ export function SocialEditor({ initial }: { initial: SocialPost }) {
           />
         </label>
         <label className="field">
-          <span>Template</span>
+          <span>Look for new slides</span>
           <select value={post.template} onChange={(e) => update((p) => ({ ...p, template: e.target.value as Template }))} data-testid="social-template">
             {TEMPLATES.map((t) => (
               <option key={t} value={t}>
@@ -259,7 +291,7 @@ export function SocialEditor({ initial }: { initial: SocialPost }) {
           </select>
         </label>
         <label className="field">
-          <span>Colours</span>
+          <span>Colours for new slides</span>
           <select value={post.theme} onChange={(e) => update((p) => ({ ...p, theme: e.target.value as Theme }))} data-testid="social-theme">
             {THEMES.map((t) => (
               <option key={t} value={t}>
@@ -332,108 +364,24 @@ export function SocialEditor({ initial }: { initial: SocialPost }) {
           </label>
         </aside>
 
-        <div className="social-editor__preview">
-          <div className="social-editor__platforms" role="tablist" aria-label="Preview as">
-            {PLATFORMS.map((p) => (
-              <button key={p} type="button" role="tab" aria-selected={platform === p} className="button button-secondary button-small" data-active={platform === p} onClick={() => setPlatform(p)}>
-                {PLATFORM_INFO[p].label}
-              </button>
-            ))}
-          </div>
-          {slide ? (
-            <ScaledSlide scale={previewScale} width={info.width} height={info.height}>
-              <SlideCanvas post={post} slide={slide} index={current} total={post.slides.length} platform={platform} />
-            </ScaledSlide>
-          ) : (
-            <p className="card__meta">No slides yet. Add one.</p>
-          )}
-          {platform === "x" && slidesFor("x", post.slides).every((x) => x.index !== current) && (
-            <p className="card__meta">X takes 4 pictures: this slide isn&rsquo;t one of them (the cover, the next two, and the call to action are).</p>
-          )}
-        </div>
-
-        {slide && (
-          <section className="social-editor__fields" aria-label={`Slide ${current + 1}`}>
-            <label className="field">
-              <span>Kind</span>
-              <select value={slide.kind} onChange={(e) => patchSlide({ kind: e.target.value as SlideKind })} data-testid="social-slide-kind">
-                {SLIDE_KINDS.map((k) => (
-                  <option key={k} value={k}>
-                    {SLIDE_KIND_LABELS[k]}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="field">
-              <span>{slide.kind === "quote" ? "Stat or big number" : "Number"}</span>
-              <input value={slide.number} maxLength={LIMITS.number} onChange={(e) => patchSlide({ number: e.target.value })} data-testid="social-slide-number" />
-            </label>
-            <label className="field field--wide">
-              <span>Kicker (a short line above the title)</span>
-              <input value={slide.kicker} maxLength={LIMITS.kicker} onChange={(e) => patchSlide({ kicker: e.target.value })} data-testid="social-slide-kicker" />
-            </label>
-            <label className="field field--wide">
-              <span>Title</span>
-              <input value={slide.title} maxLength={LIMITS.slideTitle} onChange={(e) => patchSlide({ title: e.target.value })} data-testid="social-slide-title" />
-            </label>
-            <label className="field field--wide">
-              <span>Text</span>
-              <textarea rows={4} value={slide.body} maxLength={LIMITS.body} onChange={(e) => patchSlide({ body: e.target.value })} data-testid="social-slide-body" />
-            </label>
-
-            <div className="field field--wide">
-              <span>Photo</span>
-              {slide.photo ? (
-                <div className="social-editor__photo">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  {slide.photo.src && <img src={slide.photo.src} alt="" />}
-                  <div>
-                    <label className="field">
-                      <span>Placement</span>
-                      <select value={slide.photo.fit} onChange={(e) => setPhoto({ ...slide.photo!, fit: e.target.value === "cutout" ? "cutout" : "cover" })}>
-                        <option value="cover">Photo (fills its frame)</option>
-                        <option value="cutout">Cut-out (transparent PNG)</option>
-                      </select>
-                    </label>
-                    <label className="field">
-                      <span>Alt text</span>
-                      <input value={slide.photo.alt} maxLength={300} onChange={(e) => setPhoto({ ...slide.photo!, alt: e.target.value })} />
-                    </label>
-                    <PhotoCreditLine credit={slide.photo.credit} />
-                    <button type="button" className="link-button" onClick={() => setPhoto(null)}>
-                      Remove photo
-                    </button>
-                  </div>
-                </div>
-              ) : null}
-              <span className="social-editor__photo-actions">
-                <button type="button" className="button button-secondary button-small" onClick={() => setPicker(true)} data-testid="social-find-photo">
-                  Find a photo
-                </button>
-                <label className="button button-secondary button-small">
-                  {busy === "upload" ? "Uploading…" : "Upload"}
-                  <input
-                    type="file"
-                    accept="image/png,image/jpeg,image/webp"
-                    hidden
-                    onChange={(e) => {
-                      const f = e.target.files?.[0];
-                      e.target.value = "";
-                      if (f) void upload(f);
-                    }}
-                  />
-                </label>
-              </span>
-            </div>
-
-            <div className="field field--wide">
-              <span>Rewrite this slide with AI</span>
-              <input value={instruction} maxLength={500} placeholder="Optional: what to change (shorter, more practical, mention minutes...)" onChange={(e) => setInstruction(e.target.value)} />
+        {slide?.design ? (
+          <div className="social-editor__design">
+            <DesignEditor post={post} index={current} platform={platform} onPlatform={setPlatform} onChange={setDesign} onError={setError} findPhoto={findPhoto} uploadPhoto={upload} />
+            {platform === "x" && slidesFor("x", post.slides).every((x) => x.index !== current) && (
+              <p className="card__meta">X takes 4 pictures: this slide isn&rsquo;t one of them (the cover, the next two, and the call to action are).</p>
+            )}
+            <div className="social-editor__rewrite">
+              <label className="field">
+                <span>Rewrite this slide&rsquo;s words with AI</span>
+                <input value={instruction} maxLength={500} placeholder="Optional: what to change (shorter, more practical, mention minutes...)" onChange={(e) => setInstruction(e.target.value)} />
+              </label>
               <button type="button" className="button button-secondary button-small" onClick={rewrite} disabled={busy !== null} data-testid="social-rewrite">
                 {busy === "rewrite" ? "Rewriting…" : "Rewrite"}
               </button>
             </div>
-          </section>
+          </div>
+        ) : (
+          <p className="card__meta">No slides yet. Add one.</p>
         )}
       </div>
 
@@ -449,16 +397,18 @@ export function SocialEditor({ initial }: { initial: SocialPost }) {
         <CaptionEditor post={post} platform={captionTab} update={update} />
       </section>
 
-      {picker && slide && (
+      {picker && (
         <PhotoPicker
           searchWith={searchSocialPhotos}
-          initialQuery={slide.photoQuery || slide.title}
-          onClose={() => setPicker(false)}
+          initialQuery={pickerQuery}
+          onClose={() => closePicker(null)}
           onPick={async (p) => {
-            setPicker(false);
             const used = await noteSocialPhotoUse(p.downloadLocation);
-            if (!used.ok) return setError(used.error);
-            setPhoto({ path: null, src: p.src, alt: p.alt, credit: p.credit as SocialPhoto["credit"], fit: "cover" });
+            if (!used.ok) {
+              setError(used.error);
+              return closePicker(null);
+            }
+            closePicker({ path: null, src: p.src, alt: p.alt, credit: p.credit as SocialPhoto["credit"], fit: "cover" });
           }}
         />
       )}

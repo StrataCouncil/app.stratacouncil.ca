@@ -1,5 +1,6 @@
 /* eslint-disable @next/next/no-img-element */
-import type { CSSProperties, ReactNode } from "react";
+import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from "react";
+import { BRAND, boxFor, type Layer, type SlideDesign } from "@/lib/social/design";
 import { DESTINATIONS, PLATFORM_INFO, type Platform, type SocialPost, type SocialSlide, type Template, type Theme } from "@/lib/social/post";
 
 /**
@@ -132,6 +133,7 @@ export interface SlideCanvasProps {
 }
 
 export function SlideCanvas({ post, slide, index, total, platform }: SlideCanvasProps) {
+  if (slide.design) return <LayeredSlide design={slide.design} platform={platform} index={index} total={total} showNumbers={post.showSlideNumbers ?? total > 1} />;
   const { width, height, handle } = PLATFORM_INFO[platform];
   const tall = height > 1500;
   const s = surfaceFor(post.template, post.theme, slide, index);
@@ -542,6 +544,166 @@ function CtaSlide(c: Ctx) {
       <Footer {...c} />
     </>
   );
+}
+
+// ── Layers (the Socials editor's designs) ─────────────────────────────
+
+export interface LayerInteraction {
+  selectedId: string | null;
+  /** The editor's scale, so the selection outline and handle stay the same size on screen. */
+  scale: number;
+  onPointerDown: (e: ReactPointerEvent, id: string, mode: "move" | "resize") => void;
+}
+
+/**
+ * A slide drawn from its design, at its real size: each layer placed in
+ * percent of the slide (TikTok's 9:16 uses its own positions, lib/social/design.ts).
+ * The editor passes `interaction` to make layers selectable and movable;
+ * the export draws the same thing without it.
+ */
+export function LayeredSlide({
+  design,
+  platform,
+  index,
+  total,
+  showNumbers,
+  interaction,
+}: {
+  design: SlideDesign;
+  platform: Platform;
+  index: number;
+  total: number;
+  showNumbers: boolean;
+  interaction?: LayerInteraction;
+}) {
+  const { width, height, handle } = PLATFORM_INFO[platform];
+  const tall = height > 1500;
+  const counter = showNumbers ? `${String(index + 1).padStart(2, "0")} / ${String(total).padStart(2, "0")}` : "";
+  return (
+    <div style={{ width, height, position: "relative", overflow: "hidden", background: BRAND[design.bg], fontFamily: SANS, boxSizing: "border-box" }}>
+      {design.layers.map((l) => {
+        if (l.hidden) return null;
+        const b = boxFor(design, l, tall);
+        const selected = interaction?.selectedId === l.id;
+        const box: CSSProperties = {
+          position: "absolute",
+          left: (b.x / 100) * width,
+          top: (b.y / 100) * height,
+          width: (b.w / 100) * width,
+          height: (b.h / 100) * height,
+          opacity: l.opacity / 100,
+          cursor: interaction ? (l.locked ? "default" : "move") : undefined,
+          outline: selected ? `${2 / interaction!.scale}px solid #2f6fb4` : undefined,
+          outlineOffset: selected ? 1 / interaction!.scale : undefined,
+        };
+        return (
+          <div
+            key={l.id}
+            data-layer={l.id}
+            style={box}
+            onPointerDown={interaction ? (e) => interaction.onPointerDown(e, l.id, "move") : undefined}
+          >
+            <LayerContent layer={l} width={width} boxH={(b.h / 100) * height} handle={handle} counter={counter} />
+            {selected && !l.locked && (
+              <span
+                aria-hidden
+                onPointerDown={(e) => {
+                  e.stopPropagation();
+                  interaction!.onPointerDown(e, l.id, "resize");
+                }}
+                style={{
+                  position: "absolute",
+                  right: -7 / interaction!.scale,
+                  bottom: -7 / interaction!.scale,
+                  width: 14 / interaction!.scale,
+                  height: 14 / interaction!.scale,
+                  background: "#fff",
+                  border: `${2 / interaction!.scale}px solid #2f6fb4`,
+                  borderRadius: 2 / interaction!.scale,
+                  cursor: "nwse-resize",
+                }}
+              />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function LayerContent({ layer: l, width, boxH, handle, counter }: { layer: Layer; width: number; boxH: number; handle: string; counter: string }) {
+  const px = (pct: number) => (pct / 100) * width;
+  switch (l.type) {
+    case "text":
+      return (
+        <div
+          style={{
+            width: "100%",
+            height: "100%",
+            fontFamily: l.font === "serif" ? SERIF : SANS,
+            fontWeight: l.weight,
+            fontSize: px(l.size),
+            lineHeight: l.lineHeight,
+            color: BRAND[l.color],
+            textAlign: l.align,
+            textTransform: l.caps ? "uppercase" : undefined,
+            letterSpacing: l.caps ? "0.08em" : l.font === "serif" ? "-0.005em" : undefined,
+            fontVariationSettings: l.font === "serif" ? '"SOFT" 50' : undefined,
+            whiteSpace: "pre-wrap",
+            overflowWrap: "break-word",
+          }}
+        >
+          {l.text}
+        </div>
+      );
+    case "image":
+      if (!l.photo?.src) {
+        return <div style={{ width: "100%", height: "100%", borderRadius: px(l.radius), background: "repeating-linear-gradient(135deg, rgba(27,42,65,0.08) 0 12px, rgba(27,42,65,0.14) 12px 24px)" }} />;
+      }
+      return (
+        <img
+          src={l.photo.src}
+          alt={l.photo.alt}
+          crossOrigin="anonymous"
+          style={{
+            width: "100%",
+            height: "100%",
+            objectFit: l.fit,
+            objectPosition: l.fit === "contain" ? "bottom center" : "center",
+            borderRadius: px(l.radius),
+            filter: l.brightness !== 100 ? `brightness(${l.brightness}%)` : undefined,
+            display: "block",
+          }}
+        />
+      );
+    case "shape":
+      return <div style={{ width: "100%", height: "100%", background: BRAND[l.color], borderRadius: px(l.radius) }} />;
+    case "dots":
+      return (
+        <div
+          style={{
+            width: "100%",
+            height: "100%",
+            backgroundImage: `radial-gradient(circle, ${BRAND[l.color]} 3.2px, transparent 3.8px)`,
+            backgroundSize: "20px 20px",
+            WebkitMaskImage: "radial-gradient(circle at center, #000 30%, transparent 72%)",
+            maskImage: "radial-gradient(circle at center, #000 30%, transparent 72%)",
+          }}
+        />
+      );
+    case "logo":
+      return (
+        <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: l.variant === "mark" ? "center" : "flex-start" }}>
+          {l.variant === "mark" ? <Mark size={boxH} color={BRAND[l.color]} /> : <Lockup color={BRAND[l.color]} size={boxH / 1.6} />}
+        </div>
+      );
+    case "auto": {
+      const style: CSSProperties = { width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: l.align === "right" ? "flex-end" : l.align === "center" ? "center" : "flex-start", color: BRAND[l.color], fontFamily: SANS, fontWeight: 700, fontSize: px(l.size), letterSpacing: "0.06em" };
+      if (l.what === "swipe") return <div style={style}><SwipeCue color={BRAND[l.color]} /></div>;
+      const text = l.what === "handle" ? handle : counter;
+      return text ? <div style={style}>{text}</div> : null;
+    }
+  }
 }
 
 /** The slide drawn small: a CSS scale of the real-size canvas, so the preview is exactly the export. */

@@ -68,7 +68,7 @@ stand-in; the editor uses the real logo files).
   (brand swatches), and "Rewrite with AI".
 - **Photos:** Unsplash or uploads, as now; fill, fit, or crop; rounded
   corners; brightness.
-- **Video:** uploads (MP4 or MOV) or free stock clips from Pexels; trim,
+- **Video:** uploads (MP4 or MOV) or free stock clips from Pixabay; trim,
   and text layers over the clip. Exported without sound in the first
   version (most people watch muted); keeping the clip's sound comes
   later.
@@ -102,9 +102,9 @@ stand-in; the editor uses the real logo files).
 - **Uploads:** videos go to the existing private `social-media` bucket,
   with its size limit raised for video (to about 200 MB) and video types
   allowed (a small migration, with grants unchanged).
-- **Stock video:** Pexels' free API. Needs a `PEXELS_API_KEY` in Vercel
-  (free account). Pexels asks for a credit line, shown beside the clip in
-  the editor, as Unsplash's is now.
+- **Stock video:** Pixabay's free API (Pexels paused new API keys,
+  2026-11-11). Needs a `PIXABAY_API_KEY` in Vercel (free account). No
+  credit line is required; the editor shows the source anyway.
 - **Saved layouts:** a server-only table of named layouts (a slide's
   layers), Super Admins only, in the same migration.
 - **Not in the first version:** keyframe animation beyond entrances,
@@ -116,7 +116,7 @@ stand-in; the editor uses the real logo files).
    (canvas, layers, text, photos, shapes, logo, brand kit, safe areas,
    undo, saved layouts), with PNG export.
 2. Animation (timeline, entrances, Play) and MP4 export.
-3. Video layers: upload, Pexels, trim, and video export.
+3. Video layers: upload, Pixabay, trim, and video export.
 
 ## Newsletter (design, 2026-11-11)
 
@@ -147,8 +147,7 @@ stand-in; the editor uses the real logo files).
   `news@mail.stratacouncil.ca`, with its own SPF, DKIM, and DMARC records,
   so newsletter complaints can never hurt delivery of sign-in and meeting
   emails. To set up in Mailtrap and DNS before the first issue.
-- **No-reply,** like every other email, unless the owner wants replies to
-  reach a real inbox.
+- **No-reply,** like every other email (decided 2026-11-11).
 
 ### The format
 
