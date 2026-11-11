@@ -1,8 +1,9 @@
 # Marketing tab (design)
 
 Status: the tab is built (2026-11-11), with Socials and Emails under it.
-Interactives, Newsletter, and the Socials editor are designed below or
-still to design; each is built after the owner's Go.
+The Socials editor and the Newsletter are designed below (2026-11-11);
+Interactives still needs its own design. Each is built after the owner's
+Go.
 
 ## The Marketing tab
 
@@ -34,7 +35,165 @@ and Investors stay where they are for now.
   app's sign-in, meeting, and setup emails (Mailtrap's bulk stream, its
   own sending address), so newsletter complaints can't affect them.
 - **Socials:** the editor is too limited; it needs a basic version of
-  Canva. To design.
+  Canva, with video. Designed below, from a clickable mockup the owner
+  approved.
+
+## Socials editor (design, 2026-11-11)
+
+A basic Canva for carousel posts, from the clickable mockup the owner
+approved ("looks awesome"; small things to find in production). Mockup:
+https://claude.ai/artifact/DiGsw4eCkLjpscNc1Qe5AT (its logo is a drawn
+stand-in; the editor uses the real logo files).
+
+### Decided
+
+- **Video:** both clips with text over them and slides whose layers
+  animate in.
+- **Brand kit only:** Fraunces and Work Sans, the six brand colours (ink,
+  cream, paper, accent, accent light, white), and the StrataCouncil.ca
+  logo. No other fonts or colours.
+- **Platforms:** Instagram, Facebook, LinkedIn, and X at 4:5 (1080 by
+  1350), TikTok at 9:16 (1080 by 1920).
+
+### The editor
+
+- **Three panes:** slides and layers on the left, the canvas in the
+  middle, settings for the selected layer and the brand kit on the right;
+  a timeline under the canvas.
+- **Layers:** text, photo, video, shape, logo. Drag to move, a corner
+  handle to resize, arrow keys to nudge (Shift for more). Snap to the
+  centre with a guide. Reorder, hide, lock, delete. Undo and redo, and
+  autosave as today.
+- **Text:** font (the two brand fonts), weight, size, alignment, colour
+  (brand swatches), and "Rewrite with AI".
+- **Photos:** Unsplash or uploads, as now; fill, fit, or crop; rounded
+  corners; brightness.
+- **Video:** uploads (MP4 or MOV) or free stock clips from Pexels; trim,
+  and text layers over the clip. Exported without sound in the first
+  version (most people watch muted); keeping the clip's sound comes
+  later.
+- **Animation:** each layer's entrance (none, fade, rise, pop, wipe), with
+  a start time and length, on the timeline; Play previews the slide.
+- **Safe areas:** per platform, shaded where the app covers the slide
+  (TikTok's buttons, caption, and top bar; the strip X crops in the
+  timeline).
+- **Layouts:** today's three looks (List, Story, Editorial) become
+  starting layouts, and any slide can be saved as a layout of your own.
+- **Draft with AI:** as today, but it fills layers, in the brand kit.
+- **Export:** one ZIP, a folder per platform, as today: PNG for still
+  slides, MP4 for slides with video or animation, plus the caption file.
+  Made in the browser, so no server cost.
+
+### How it's built
+
+- **The slide format:** a slide becomes a background and a list of
+  layers (position and size in percent of the slide, so one design fits
+  every platform; per-platform nudges are stored as overrides). Stored in
+  the existing `social_posts.slides` column. Today's slides are converted
+  to layers the first time they're opened, so nothing is lost.
+- **One renderer:** the editor and the export draw the same layer list.
+  Still slides export as PNG through the same path as today
+  (html-to-image).
+- **Video and animation export:** each frame is drawn to a canvas (the
+  video's current frame, then the layers at that moment), encoded in the
+  browser with WebCodecs, and packed into an MP4. 30 frames a second, up
+  to 60 seconds a slide. Works in current Chrome, Edge, Safari, and
+  Firefox; an older browser is told to update.
+- **Uploads:** videos go to the existing private `social-media` bucket,
+  with its size limit raised for video (to about 200 MB) and video types
+  allowed (a small migration, with grants unchanged).
+- **Stock video:** Pexels' free API. Needs a `PEXELS_API_KEY` in Vercel
+  (free account). Pexels asks for a credit line, shown beside the clip in
+  the editor, as Unsplash's is now.
+- **Saved layouts:** a server-only table of named layouts (a slide's
+  layers), Super Admins only, in the same migration.
+- **Not in the first version:** keyframe animation beyond entrances,
+  background removal, real-time co-editing, and other fonts or colours.
+
+### Build, in three PRs
+
+1. The layer model, conversion of existing slides, and the new editor
+   (canvas, layers, text, photos, shapes, logo, brand kit, safe areas,
+   undo, saved layouts), with PNG export.
+2. Animation (timeline, entrances, Play) and MP4 export.
+3. Video layers: upload, Pexels, trim, and video export.
+
+## Newsletter (design, 2026-11-11)
+
+### The list
+
+- **One list.** People join from:
+  - a sign-up form on stratacouncil.ca;
+  - the opt-in on the app's sign-up page (today's `marketing_opt_in`);
+  - the Product news switch on the Account page.
+- **Consent:** express, with the date and where it came from kept as
+  proof (CASL). The website form uses a confirmation email (double
+  opt-in), so nobody can sign someone else up; app sign-ups are already
+  confirmed by their sign-in link.
+- **Unsubscribe any time:** one click from any issue (with the
+  `List-Unsubscribe` headers), or the Account page switch. Unsubscribing
+  from the newsletter never stops account, meeting, or setup emails.
+- **Data:** a server-only `newsletter_subscribers` table (email, name if
+  given, source, consented at, confirmed at, unsubscribed at, a token for
+  links). An account's Product news switch and its subscriber row stay in
+  step. Names and emails are personal information under PIPA: used only
+  to send the newsletter, never given to the AI, and deleted on request.
+
+### The separate channel
+
+- **Mailtrap's bulk stream,** not the transactional one that sends
+  sign-in links and meeting emails.
+- **Its own sending address on its own subdomain,** for example
+  `news@mail.stratacouncil.ca`, with its own SPF, DKIM, and DMARC records,
+  so newsletter complaints can never hurt delivery of sign-in and meeting
+  emails. To set up in Mailtrap and DNS before the first issue.
+- **No-reply,** like every other email, unless the owner wants replies to
+  reach a real inbox.
+
+### The format
+
+From the owner's research on SaaS newsletters (Stripe, Mailchimp, Ahrefs,
+Linear): respect the reader's time, no marketing fluff, every update tied
+to something practical.
+
+- **Text first.** No hero banner: a short opening note.
+- **Three or four short sections,** each tied to what it does for
+  council:
+  - What's new: a feature in one line, why it matters, a link.
+  - One useful guide from the Library.
+  - Legislation and CRT updates in plain English.
+  - Now and then, a tip from a real meeting.
+- **Interactives:** email can't run them, so an issue can carry an
+  animated preview (a short GIF) that opens the Interactive.
+- **The footer:** company name, mailing address, why they're receiving
+  it, and one-click unsubscribe.
+
+### In the console (Marketing, Newsletter)
+
+- **Subscribers:** the list, with source and dates, a count, search,
+  remove, and export.
+- **Issues:** write an issue in sections (the blocks above), preview it,
+  send a test to yourself, then send now or schedule it.
+- **Sending:** in batches through Inngest, at a pace Mailtrap's bulk
+  stream allows; each send logged.
+- **Results:** delivered, clicks per link, and unsubscribes per issue.
+  Opens aren't counted (mail apps preload images).
+
+### On the marketing site
+
+- A short sign-up form (email, optional name, one line on what they'll
+  get), on the home page and in the footer. It posts to the app, which
+  sends the confirmation email.
+- The privacy policy adds the newsletter: what's collected, why, and how
+  to unsubscribe.
+
+### Build, in two PRs
+
+1. The list, consent and confirmation, unsubscribe, the marketing-site
+   form, and the Subscribers screen.
+2. Issues: the editor, test sends, sending through the bulk stream,
+   scheduling, and results.
+
 
 ## Interactives (first notes, from 2026-11-05)
 
