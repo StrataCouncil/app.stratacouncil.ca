@@ -1,11 +1,14 @@
 import JSZip from "jszip";
 import { PDFDocument, PDFName, PDFString } from "pdf-lib";
 import { toBlob } from "html-to-image";
+import { designMoves } from "./design.ts";
 import { PLATFORMS, PLATFORM_INFO, platformTextFile, readmeFile, slideFileName, slideLink, slidesFor, type Platform, type SocialPost } from "./post.ts";
+import { canExportVideo, renderSlideVideo, VideoExportError } from "./video-export.ts";
 
 /**
  * The carousel export, in the browser (no server work): every platform's
- * slides drawn to PNG from the hidden export stage, a text file per
+ * slides drawn to PNG from the hidden export stage (MP4 plus a still PNG
+ * for slides with movement or video, lib/social/video-export.ts), a text file per
  * platform with the post text and tracked links, a PDF for LinkedIn whose
  * pages link to their slide's tracked link, and a README, all in one ZIP.
  */
@@ -69,7 +72,10 @@ export function exportFileName(post: SocialPost) {
  * Build the ZIP from the export stage: `stage` holds one element per
  * platform and slide, marked data-platform and data-index.
  */
-export async function buildExportZip(post: SocialPost, stage: HTMLElement, onProgress?: (done: number, total: number) => void): Promise<Blob> {
+export async function buildExportZip(post: SocialPost, stage: HTMLElement, onProgress?: (done: number, total: number, detail?: string) => void): Promise<Blob> {
+  if (post.slides.some((s) => designMoves(s.design)) && !canExportVideo()) {
+    throw new VideoExportError("This post has slides with movement or video, and this browser can't make video files. Use a current version of Chrome, Edge, or Safari.");
+  }
   await ready(stage);
   const zip = new JSZip();
   const root = zip.folder(post.campaign)!;
@@ -80,12 +86,21 @@ export async function buildExportZip(post: SocialPost, stage: HTMLElement, onPro
     const folder = root.folder(platform)!;
     const { width, height } = PLATFORM_INFO[platform];
     const pngs: { png: Blob; index: number }[] = [];
-    for (const [n, { index }] of slidesFor(platform, post.slides).entries()) {
+    for (const [n, { slide, index }] of slidesFor(platform, post.slides).entries()) {
       const node = stage.querySelector<HTMLElement>(`[data-platform="${platform}"][data-index="${index}"]`);
       if (!node) throw new Error(`Slide ${index + 1} for ${PLATFORM_INFO[platform].label} isn't on the stage.`);
-      const png = await slidePng(node.firstElementChild as HTMLElement, width, height);
-      folder.file(slideFileName(n), png);
-      pngs.push({ png, index });
+      if (slide.design && designMoves(slide.design)) {
+        const video = await renderSlideVideo(node.firstElementChild as HTMLElement, slide.design, { width, height }, (f, frames) =>
+          onProgress?.(done, total, `${PLATFORM_INFO[platform].label}, slide ${index + 1}: frame ${f} of ${frames}`)
+        );
+        folder.file(slideFileName(n, "mp4"), video.mp4);
+        folder.file(slideFileName(n), video.still);
+        pngs.push({ png: video.still, index });
+      } else {
+        const png = await slidePng(node.firstElementChild as HTMLElement, width, height);
+        folder.file(slideFileName(n), png);
+        pngs.push({ png, index });
+      }
       onProgress?.(++done, total);
     }
     folder.file("post.txt", platformTextFile(post, platform));

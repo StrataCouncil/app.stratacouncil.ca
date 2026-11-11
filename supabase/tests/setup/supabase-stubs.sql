@@ -12,6 +12,6 @@ create function auth.uid() returns uuid language sql stable as $$ select nullif(
 -- auth.jwt(): only the session's assurance level is used (0053). Suites
 -- run as a two-step-verified session (aal2) unless they `set test.aal = 'aal1'`.
 create function auth.jwt() returns jsonb language sql stable as $$ select jsonb_build_object('aal', coalesce(nullif(current_setting('test.aal', true), ''), 'aal2')) $$;
-create table storage.buckets (id text primary key, name text, public boolean, file_size_limit bigint);
+create table storage.buckets (id text primary key, name text, public boolean, file_size_limit bigint, allowed_mime_types text[]);
 grant usage on schema public, auth to authenticated;
 create schema extensions; grant usage on schema extensions to authenticated;

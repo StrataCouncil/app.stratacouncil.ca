@@ -46,12 +46,15 @@ export async function getSocialPost(id: string): Promise<SocialPost | null> {
   return withSignedPhotos(toPost(data));
 }
 
-/** Fill in signed links for uploaded photos, on slides and in their layers. */
+/** Fill in signed links for uploaded photos and video clips, on slides and in their layers. */
 export async function withSignedPhotos(post: SocialPost): Promise<SocialPost> {
   const paths = new Set<string>();
   for (const s of post.slides) {
     if (s.photo?.path) paths.add(s.photo.path);
-    for (const l of s.design?.layers ?? []) if (l.type === "image" && l.photo?.path) paths.add(l.photo.path);
+    for (const l of s.design?.layers ?? []) {
+      if (l.type === "image" && l.photo?.path) paths.add(l.photo.path);
+      if (l.type === "video" && l.clip?.path) paths.add(l.clip.path);
+    }
   }
   if (!paths.size) return post;
   const { data } = await createAdminClient().storage.from(SOCIAL_BUCKET).createSignedUrls([...paths], SIGNED_SECONDS);
@@ -62,7 +65,12 @@ export async function withSignedPhotos(post: SocialPost): Promise<SocialPost> {
     slides: post.slides.map((s) => ({
       ...s,
       photo: sign(s.photo),
-      design: s.design ? { ...s.design, layers: s.design.layers.map((l) => (l.type === "image" ? { ...l, photo: sign(l.photo) } : l)) } : null,
+      design: s.design
+        ? {
+            ...s.design,
+            layers: s.design.layers.map((l) => (l.type === "image" ? { ...l, photo: sign(l.photo) } : l.type === "video" ? { ...l, clip: sign(l.clip) } : l)),
+          }
+        : null,
     })),
   };
 }

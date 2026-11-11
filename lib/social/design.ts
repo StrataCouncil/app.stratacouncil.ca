@@ -9,7 +9,7 @@
  * (sans), and the StrataCouncil.ca logo. Pure: shared by the editor, the
  * export, the server's checks, and the tests.
  */
-import type { SocialPhoto, SocialSlide, SlideKind, Template, Theme } from "./post.ts";
+import type { SocialClip, SocialPhoto, SocialSlide, SlideKind, Template, Theme } from "./post.ts";
 
 export const BRAND = {
   ink: "#1b2a41",
@@ -25,6 +25,11 @@ export const BRAND_LABELS: Record<BrandColor, string> = { ink: "Ink", cream: "Cr
 
 export type TextRole = "number" | "kicker" | "title" | "body" | "";
 
+/** How a layer comes onto the slide in a video export (none: it's there from the start). */
+export const ENTRANCES = ["none", "fade", "rise", "pop", "wipe"] as const;
+export type Entrance = (typeof ENTRANCES)[number];
+export const ENTRANCE_LABELS: Record<Entrance, string> = { none: "None (there from the start)", fade: "Fade in", rise: "Rise and fade", pop: "Pop", wipe: "Wipe from the left" };
+
 interface Base {
   id: string;
   name: string;
@@ -37,6 +42,10 @@ interface Base {
   opacity: number;
   hidden: boolean;
   locked: boolean;
+  /** Its entrance, and when (seconds from the start of the slide) and for how long. */
+  enter: Entrance;
+  enterAt: number;
+  enterFor: number;
 }
 export interface TextLayer extends Base {
   type: "text";
@@ -82,7 +91,18 @@ export interface AutoLayer extends Base {
   color: BrandColor;
   align: "left" | "center" | "right";
 }
-export type Layer = TextLayer | ImageLayer | ShapeLayer | LogoLayer | DotsLayer | AutoLayer;
+/** A video clip (an upload, or a Pixabay clip copied into the post's folder), shown without sound. */
+export interface VideoLayer extends Base {
+  type: "video";
+  clip: SocialClip | null;
+  fit: "cover" | "contain";
+  radius: number;
+  brightness: number;
+  /** The part of the clip used, in seconds; it loops if the slide is longer. */
+  trimStart: number;
+  trimEnd: number;
+}
+export type Layer = TextLayer | ImageLayer | ShapeLayer | LogoLayer | DotsLayer | AutoLayer | VideoLayer;
 export type LayerType = Layer["type"];
 
 export interface Box {
@@ -96,9 +116,12 @@ export interface SlideDesign {
   layers: Layer[];
   /** TikTok (9:16) positions for layers moved there; the rest are worked out. */
   tall: Record<string, Box>;
+  /** Seconds, for a slide exported as video (it has entrances or a clip). */
+  duration: number;
 }
 
-export const DESIGN_LIMITS = { layers: 30, text: 600, name: 60 } as const;
+export const DESIGN_LIMITS = { layers: 30, text: 600, name: 60, duration: 60, clips: 3 } as const;
+export const DEFAULT_DURATION = 5;
 export const WEIGHTS = [300, 400, 500, 600, 700, 800, 900] as const;
 
 const num = (v: unknown, min: number, max: number, fallback: number) => {
@@ -125,11 +148,13 @@ function normalizeBox(v: unknown): Box | null {
  * sizes in range, photos through normalizePhoto (uploads only from this
  * post's folder, Unsplash only with its credit).
  */
-export function normalizeDesign(v: unknown, normalizePhoto: (p: unknown) => SocialPhoto | null): SlideDesign | null {
+export function normalizeDesign(v: unknown, normalizePhoto: (p: unknown) => SocialPhoto | null, normalizeClip: (c: unknown) => SocialClip | null = () => null): SlideDesign | null {
   const d = v as Record<string, unknown> | null;
   if (!d || typeof d !== "object" || !Array.isArray(d.layers)) return null;
   const seen = new Set<string>();
   const layers: Layer[] = [];
+  const duration = num(d.duration, 1, DESIGN_LIMITS.duration, DEFAULT_DURATION);
+  let clips = 0;
   for (const raw of d.layers.slice(0, DESIGN_LIMITS.layers)) {
     const l = raw as Record<string, unknown> | null;
     if (!l || typeof l !== "object") continue;
@@ -137,7 +162,17 @@ export function normalizeDesign(v: unknown, normalizePhoto: (p: unknown) => Soci
     if (seen.has(id)) id = newLayerId();
     seen.add(id);
     const box = normalizeBox(l) ?? { x: 0, y: 0, w: 50, h: 20 };
-    const base = { id, name: str(l.name, DESIGN_LIMITS.name) || "Layer", ...box, opacity: num(l.opacity, 0, 100, 100), hidden: l.hidden === true, locked: l.locked === true };
+    const base = {
+      id,
+      name: str(l.name, DESIGN_LIMITS.name) || "Layer",
+      ...box,
+      opacity: num(l.opacity, 0, 100, 100),
+      hidden: l.hidden === true,
+      locked: l.locked === true,
+      enter: pick(ENTRANCES, l.enter, "none"),
+      enterAt: num(l.enterAt, 0, DESIGN_LIMITS.duration, 0),
+      enterFor: num(l.enterFor, 0.1, 5, 0.6),
+    };
     switch (l.type) {
       case "text":
         layers.push({
@@ -176,6 +211,16 @@ export function normalizeDesign(v: unknown, normalizePhoto: (p: unknown) => Soci
           align: pick(["left", "center", "right"] as const, l.align, "left"),
         });
         break;
+      case "video": {
+        // A few clips a slide at most: each one is decoded frame by frame in the export.
+        const clip = clips < DESIGN_LIMITS.clips ? normalizeClip(l.clip) : null;
+        if (clip) clips++;
+        const length = clip?.duration ?? DESIGN_LIMITS.duration;
+        const trimStart = num(l.trimStart, 0, Math.max(0, length - 0.1), 0);
+        const trimEnd = num(l.trimEnd, trimStart + 0.1, length, length);
+        layers.push({ ...base, type: "video", clip, fit: l.fit === "contain" ? "contain" : "cover", radius: num(l.radius, 0, 20, 0), brightness: num(l.brightness, 30, 160, 100), trimStart, trimEnd });
+        break;
+      }
     }
   }
   const tall: Record<string, Box> = {};
@@ -184,7 +229,55 @@ export function normalizeDesign(v: unknown, normalizePhoto: (p: unknown) => Soci
     const b = normalizeBox(rawTall[l.id]);
     if (b) tall[l.id] = b;
   }
-  return { bg: color(d.bg, "cream"), layers, tall };
+  return { bg: color(d.bg, "cream"), layers, tall, duration };
+}
+
+// ── Motion ─────────────────────────────────────────────────────────────
+
+/** Whether a slide is exported as video: a layer has an entrance, or it shows a clip. */
+export function designMoves(d: SlideDesign | null | undefined): boolean {
+  return Boolean(d?.layers.some((l) => !l.hidden && (l.enter !== "none" || (l.type === "video" && l.clip))));
+}
+
+/** How a layer looks at a moment: its opacity (0 to 1), a lift (percent of the slide's height), a scale, and how much of it a wipe shows (0 to 1). */
+export interface LayerMoment {
+  opacity: number;
+  lift: number;
+  scale: number;
+  reveal: number;
+}
+export const STILL: LayerMoment = { opacity: 1, lift: 0, scale: 1, reveal: 1 };
+
+const easeOut = (x: number) => 1 - Math.pow(1 - x, 3);
+
+/** A layer at `t` seconds into the slide. Before its entrance starts it's not shown; after it ends it's still. */
+export function layerAt(l: Pick<Base, "enter" | "enterAt" | "enterFor">, t: number): LayerMoment {
+  if (l.enter === "none") return STILL;
+  const raw = (t - l.enterAt) / Math.max(0.1, l.enterFor);
+  if (raw >= 1) return STILL;
+  if (raw <= 0) return { opacity: 0, lift: 0, scale: 1, reveal: 0 };
+  const p = easeOut(raw);
+  switch (l.enter) {
+    case "fade":
+      return { opacity: p, lift: 0, scale: 1, reveal: 1 };
+    case "rise":
+      return { opacity: p, lift: (1 - p) * 6, scale: 1, reveal: 1 };
+    case "pop":
+      return { opacity: Math.min(1, raw * 2.5), lift: 0, scale: 0.82 + 0.18 * p, reveal: 1 };
+    case "wipe":
+      return { opacity: 1, lift: 0, scale: 1, reveal: p };
+  }
+}
+
+/** When the last entrance ends, in seconds. */
+export function lastEntranceEnd(d: SlideDesign): number {
+  return d.layers.reduce((end, l) => (l.enter === "none" ? end : Math.max(end, l.enterAt + l.enterFor)), 0);
+}
+
+/** Where in its clip a video layer is at `t` seconds into the slide: the trimmed part, looped. */
+export function clipTime(l: Pick<VideoLayer, "trimStart" | "trimEnd">, t: number): number {
+  const span = Math.max(0.1, l.trimEnd - l.trimStart);
+  return l.trimStart + (((t % span) + span) % span);
 }
 
 // ── Positions on TikTok (9:16) ─────────────────────────────────────────
@@ -240,12 +333,17 @@ export function cloneDesign(d: SlideDesign): SlideDesign {
   const ids = new Map(d.layers.map((l) => [l.id, newLayerId()]));
   const tall: Record<string, Box> = {};
   for (const [k, v] of Object.entries(d.tall)) if (ids.has(k)) tall[ids.get(k)!] = { ...v };
-  return { bg: d.bg, layers: d.layers.map((l) => ({ ...l, id: ids.get(l.id)! })), tall };
+  return { bg: d.bg, layers: d.layers.map((l) => ({ ...l, id: ids.get(l.id)! })), tall, duration: d.duration };
+}
+
+/** The clips on the slide, in order. */
+export function designClips(d: SlideDesign | null | undefined): SocialClip[] {
+  return (d?.layers ?? []).flatMap((l) => (l.type === "video" && l.clip ? [l.clip] : []));
 }
 
 // ── New layers ─────────────────────────────────────────────────────────
 
-const base = (name: string, box: Box): Base => ({ id: newLayerId(), name, ...box, opacity: 100, hidden: false, locked: false });
+const base = (name: string, box: Box): Base => ({ id: newLayerId(), name, ...box, opacity: 100, hidden: false, locked: false, enter: "none", enterAt: 0, enterFor: 0.6 });
 
 export function newLayer(type: LayerType, onBg: BrandColor): Layer {
   const ink = onBg === "ink" || onBg === "accent" ? "white" : "ink";
@@ -262,6 +360,8 @@ export function newLayer(type: LayerType, onBg: BrandColor): Layer {
       return { ...base("Pattern", { x: 60, y: -6, w: 46, h: 36 }), type: "dots", color: onBg === "accent" ? "ink" : "accent" };
     case "auto":
       return { ...base("Handle", { x: 9, y: 92, w: 50, h: 3.4 }), type: "auto", what: "handle", size: 2.6, color: ink, align: "left" };
+    case "video":
+      return { ...base("Video", { x: 0, y: 0, w: 100, h: 100 }), type: "video", clip: null, fit: "cover", radius: 0, brightness: 100, trimStart: 0, trimEnd: DESIGN_LIMITS.duration };
   }
 }
 
@@ -325,7 +425,7 @@ export function designFromSlide(slide: Pick<SocialSlide, "kind" | "number" | "ki
     if (slide.body) text("Text", "body", slide.body, { x: 8.9, y: 72, w: 74, h: textHeight(slide.body, 3.8, 74, 1.4), font: "sans", weight: 500, size: 3.8, lineHeight: 1.4, color: "cream" });
     add({ ...base("Handle", { x: 8.9, y: 92.6, w: 50, h: 3.4 }), type: "auto", what: "handle", size: 2.6, color: "white", align: "left", opacity: 85 });
     add({ ...base("Slide number", { x: 61, y: 92.6, w: 30, h: 3.4 }), type: "auto", what: "counter", size: 2.6, color: "white", align: "right", opacity: 85 });
-    return { bg, layers, tall: {} };
+    return { bg, layers, tall: {}, duration: DEFAULT_DURATION };
   }
 
   if (slide.kind === "cta") {
@@ -336,7 +436,7 @@ export function designFromSlide(slide: Pick<SocialSlide, "kind" | "number" | "ki
     add({ ...base("Button", { x: 24, y: 66, w: 52, h: 8.6 }), type: "shape", color: bg === "ink" ? "accent" : "ink", radius: 6 });
     text("Button label", "", "stratacouncil.ca", { x: 24, y: 68.4, w: 52, h: 4.4, font: "sans", weight: 700, size: 3.4, align: "center", color: "white", lineHeight: 1.1 });
     add({ ...base("Logo", { x: 30, y: 86, w: 40, h: 5 }), type: "logo", variant: "lockup", color: c.text });
-    return { bg, layers, tall: {} };
+    return { bg, layers, tall: {}, duration: DEFAULT_DURATION };
   }
 
   if (pattern) add({ ...base("Pattern", slide.kind === "cover" ? { x: -5.5, y: -4.4, w: 39, h: 31 } : [{ x: 62, y: -6, w: 43, h: 34 }, { x: -7, y: 64, w: 41, h: 33 }, { x: 60, y: 60, w: 44, h: 36 }][opts.index % 3]), type: "dots", color: c.hi, opacity: 30 });
@@ -378,5 +478,142 @@ export function designFromSlide(slide: Pick<SocialSlide, "kind" | "number" | "ki
   }
   if (slide.kind === "cover") add({ ...base("Swipe", { x: 8.9, y: 84, w: 40, h: 3.4 }), type: "auto", what: "swipe", size: 2.6, color: c.text, align: "left" });
   footer();
-  return { bg, layers, tall: {} };
+  return { bg, layers, tall: {}, duration: DEFAULT_DURATION };
+}
+
+// ── More layouts (2026-11-11) ─────────────────────────────────────────
+
+export const LAYOUT_KEYS = ["stat", "quote", "fullPhoto", "checklist", "sideBySide", "bigCta"] as const;
+export type LayoutKey = (typeof LAYOUT_KEYS)[number];
+export const LAYOUT_LABELS: Record<LayoutKey, string> = {
+  stat: "Giant stat",
+  quote: "Pull quote",
+  fullPhoto: "Full-bleed photo",
+  checklist: "Checklist",
+  sideBySide: "Side by side",
+  bigCta: "Big call to action",
+};
+/** The slide kind each layout stands for, so the AI's rewrites and the X picks still know what the slide is. */
+export const LAYOUT_KINDS: Record<LayoutKey, SlideKind> = { stat: "quote", quote: "quote", fullPhoto: "photo", checklist: "point", sideBySide: "point", bigCta: "cta" };
+
+export interface LayoutWords {
+  number: string;
+  kicker: string;
+  title: string;
+  body: string;
+  photo: SocialPhoto | null;
+}
+
+/**
+ * One of the six extra layouts, filled with the slide's words (or a
+ * placeholder where it has none). `bg` is the slide's background now, so a
+ * layout keeps the post's colours; the photo layouts pick their own.
+ */
+export function layoutDesign(key: LayoutKey, w: LayoutWords, bg: BrandColor): SlideDesign {
+  const layers: Layer[] = [];
+  const add = <L extends Layer>(l: L) => (layers.push(l), l);
+  const text = (name: string, role: TextRole, t: string, color: BrandColor, o: Partial<TextLayer> & Box) =>
+    add({ ...base(name, o), type: "text", text: t, role, font: "serif", weight: 900, size: 9, lineHeight: 1, color, align: "left", caps: false, ...o } as TextLayer);
+  const footer = (color: BrandColor, x = 8.9, opacity = 80) => {
+    add({ ...base("Handle", { x, y: 92.6, w: 50, h: 3.4 }), type: "auto", what: "handle", size: 2.6, color, align: "left", opacity });
+    add({ ...base("Slide number", { x: 61, y: 92.6, w: 30, h: 3.4 }), type: "auto", what: "counter", size: 2.6, color, align: "right", opacity });
+  };
+  const title = w.title || "Your title";
+  const done = (background: BrandColor): SlideDesign => ({ bg: background, layers, tall: {}, duration: DEFAULT_DURATION });
+
+  switch (key) {
+    case "stat": {
+      const c = onColours(bg);
+      const stat = w.number || "73%";
+      const size = fitSize(34, stat, 3, 18);
+      text("Stat", "number", stat, c.hi, { x: 6, y: 16, w: 88, h: size * 0.8 * 0.9 + 2, size, lineHeight: 0.85, align: "center" });
+      const ty = 20 + size * 0.8 * 0.9 + 4;
+      const ts = fitSize(6.4, title, 40, 4.4);
+      const th = textHeight(title, ts, 76, 1.08);
+      text("Title", "title", title, c.text, { x: 12, y: ty, w: 76, h: th, size: ts, lineHeight: 1.08, weight: 700, align: "center" });
+      if (w.body) text("Source", "body", w.body, c.muted, { x: 16, y: ty + th + 3, w: 68, h: textHeight(w.body, 2.8, 68, 1.4), font: "sans", weight: 500, size: 2.8, lineHeight: 1.4, align: "center", opacity: 85 });
+      footer(c.muted);
+      return done(bg);
+    }
+    case "quote": {
+      const c = onColours(bg);
+      add({ ...base("Pattern", { x: 58, y: 56, w: 48, h: 40 }), type: "dots", color: c.hi, opacity: 25 });
+      text("Quote mark", "", "“", c.hi, { x: 7, y: 4, w: 30, h: 22, size: 30, lineHeight: 1 });
+      const qs = fitSize(7.6, title, 60, 4.6);
+      const qh = textHeight(title, qs, 82, 1.12);
+      text("Quote", "title", title, c.text, { x: 8.9, y: 26, w: 82, h: qh, size: qs, lineHeight: 1.12, weight: 600 });
+      add({ ...base("Rule", { x: 8.9, y: 29 + qh, w: 10, h: 0.6 }), type: "shape", color: c.hi, radius: 0.2 });
+      text("Who said it", "kicker", w.kicker || "Name, strata council member", c.text, { x: 8.9, y: 32 + qh, w: 76, h: 4, font: "sans", weight: 700, size: 2.6, caps: true, lineHeight: 1.2 });
+      footer(c.muted);
+      return done(bg);
+    }
+    case "fullPhoto": {
+      add({ ...base("Photo", { x: 0, y: 0, w: 100, h: 100 }), type: "image", photo: w.photo, fit: "cover", radius: 0, brightness: 100, locked: Boolean(w.photo) });
+      add({ ...base("Band", { x: 0, y: 58, w: 100, h: 42 }), type: "shape", color: "ink", radius: 0, opacity: 82 });
+      if (w.kicker) text("Kicker", "kicker", w.kicker, "accentLight", { x: 8.9, y: 63, w: 82, h: 4, font: "sans", weight: 700, size: 2.6, caps: true, lineHeight: 1.1 });
+      const ts = fitSize(8.4, title, 28, 5);
+      text("Title", "title", title, "white", { x: 8.9, y: w.kicker ? 68 : 65, w: 82, h: textHeight(title, ts, 82, 1.02), size: ts, lineHeight: 1.02 });
+      footer("cream", 8.9, 85);
+      return done("ink");
+    }
+    case "checklist": {
+      const c = onColours(bg);
+      const ts = fitSize(8.4, title, 28, 5.2);
+      const th = textHeight(title, ts, 82, 1.02);
+      text("Title", "title", title, c.text, { x: 8.9, y: 9, w: 82, h: th, size: ts, lineHeight: 1.02 });
+      const lines = w.body.split("\n").map((l) => l.replace(/^\s*(?:[-*•]|\d+[.)])\s*/, "").trim()).filter(Boolean).slice(0, 5);
+      const items = lines.length >= 2 ? lines : ["The first thing to check", "The second thing to check", "The third thing to check"];
+      const top = 9 + th + 6;
+      const step = Math.min(13, (86 - top) / items.length);
+      items.forEach((item, i) => {
+        const y = top + i * step;
+        add({ ...base(`Tick ${i + 1}`, { x: 8.9, y: y + 0.4, w: 5.2, h: 4.16 }), type: "shape", color: c.hi, radius: 50 });
+        text(`Line ${i + 1}`, "", item, c.text, { x: 17.5, y, w: 73, h: textHeight(item, 3.8, 73, 1.25), font: "sans", weight: 600, size: 3.8, lineHeight: 1.25 });
+      });
+      footer(c.muted);
+      return done(bg);
+    }
+    case "sideBySide": {
+      const c = onColours(bg);
+      add({ ...base("Photo", { x: 0, y: 0, w: 46, h: 100 }), type: "image", photo: w.photo, fit: "cover", radius: 0, brightness: 100 });
+      let y = 12;
+      if (w.kicker) {
+        text("Kicker", "kicker", w.kicker, c.hi, { x: 52, y, w: 40, h: 4, font: "sans", weight: 800, size: 2.4, caps: true, lineHeight: 1.12 });
+        y += 6;
+      }
+      const ts = fitSize(6.6, title, 22, 4.4);
+      const th = textHeight(title, ts, 40, 1.04);
+      text("Title", "title", title, c.text, { x: 52, y, w: 40, h: th, size: ts, lineHeight: 1.04 });
+      y += th + 3;
+      add({ ...base("Rule", { x: 52, y, w: 10, h: 0.6 }), type: "shape", color: c.hi, radius: 0.2 });
+      y += 3;
+      if (w.body) {
+        const bs = fitSize(3.2, w.body, 110, 2.5);
+        text("Text", "body", w.body, c.muted, { x: 52, y, w: 40, h: textHeight(w.body, bs, 40, 1.42), font: "sans", weight: 400, size: bs, lineHeight: 1.42 });
+      }
+      add({ ...base("Handle", { x: 52, y: 92.6, w: 40, h: 3.4 }), type: "auto", what: "handle", size: 2.4, color: c.muted, align: "left", opacity: 80 });
+      add({ ...base("Slide number", { x: 61, y: 92.6, w: 31, h: 3.4 }), type: "auto", what: "counter", size: 2.4, color: c.muted, align: "right", opacity: 80 });
+      return done(bg);
+    }
+    case "bigCta": {
+      const background: BrandColor = bg === "ink" ? "accent" : "ink";
+      const c = onColours(background);
+      add({ ...base("Pattern", { x: 52, y: -8, w: 56, h: 46 }), type: "dots", color: c.hi, opacity: 30 });
+      add({ ...base("Logo", { x: 8.9, y: 10, w: 16, h: 12.8 }), type: "logo", variant: "mark", color: c.text });
+      const ts = fitSize(11.6, title, 20, 6.4);
+      const th = textHeight(title, ts, 82, 0.98);
+      text("Title", "title", title, c.text, { x: 8.9, y: 32, w: 82, h: th, size: ts, lineHeight: 0.98 });
+      let y = 34 + th;
+      if (w.body) {
+        const bh = textHeight(w.body, 3.6, 74, 1.4);
+        text("Text", "body", w.body, c.muted, { x: 8.9, y, w: 74, h: bh, font: "sans", weight: 500, size: 3.6, lineHeight: 1.4 });
+        y += bh + 3;
+      }
+      y = Math.max(y + 2, 66);
+      add({ ...base("Button", { x: 8.9, y, w: 56, h: 9.6 }), type: "shape", color: background === "ink" ? "accent" : "ink", radius: 6 });
+      text("Button label", "", "stratacouncil.ca", "white", { x: 8.9, y: y + 2.6, w: 56, h: 4.6, font: "sans", weight: 700, size: 3.8, align: "center", lineHeight: 1.1 });
+      add({ ...base("Handle", { x: 8.9, y: 92.6, w: 50, h: 3.4 }), type: "auto", what: "handle", size: 2.6, color: c.muted, align: "left", opacity: 80 });
+      return done(background);
+    }
+  }
 }

@@ -6,6 +6,8 @@ import { askClaudeJson, ClaudeRefusalError } from "@/lib/ai/claude";
 import { requireSuperAdmin } from "@/lib/data/admin";
 import { SOCIAL_BUCKET } from "@/lib/data/social";
 import { PhotoError, searchPhotos, trackPhotoUse, type StockPhoto } from "@/lib/media/unsplash";
+import { downloadClip, getClip, searchClips, VideoError, type StockClip } from "@/lib/media/pixabay";
+import { builtInTemplate, builtInTemplates, isBuiltInRef, slidesFromTemplate, type PostTemplate } from "@/lib/social/templates";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { DRAFT_SYSTEM, draftRequest, draftSchema, slideRewriteRequest, slideRewriteSchema, textRewriteRequest, textRewriteSchema } from "@/lib/social/draft";
 import { cloneDesign, normalizeDesign, type SlideDesign } from "@/lib/social/design";
@@ -20,6 +22,7 @@ import {
   TEMPLATES,
   type Audience,
   type Destination,
+  type SocialClip,
   type SocialSlide,
   type Template,
 } from "@/lib/social/post";
@@ -250,14 +253,18 @@ export async function noteSocialPhotoUse(downloadLocation: string): Promise<Resu
 }
 
 const PICTURE_TYPES: Record<string, string> = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp" };
+const VIDEO_TYPES: Record<string, string> = { "video/mp4": "mp4", "video/quicktime": "mov" };
 const MAX_PICTURE = 20 * 1024 * 1024;
+/** The bucket's own limit (0088). */
+const MAX_VIDEO = 200 * 1024 * 1024;
 
-/** A one-time upload link into the post's folder; PNGs keep their transparency for cut-outs. */
+/** A one-time upload link into the post's folder: a picture (PNGs keep their transparency for cut-outs) or a video (MP4 or MOV). */
 export async function createSocialUpload(id: string, file: { type: string; size: number }): Promise<Result<{ path: string; token: string }>> {
   if (!(await staffId()) || !isId(id)) return NOT_ALLOWED;
-  const ext = PICTURE_TYPES[file.type];
-  if (!ext) return { ok: false, error: "Use a PNG, JPEG, or WebP picture." };
-  if (!(file.size > 0) || file.size > MAX_PICTURE) return { ok: false, error: "Pictures can be up to 20 MB." };
+  const video = file.type in VIDEO_TYPES;
+  const ext = PICTURE_TYPES[file.type] ?? VIDEO_TYPES[file.type];
+  if (!ext) return { ok: false, error: "Use a PNG, JPEG, or WebP picture, or an MP4 or MOV video." };
+  if (!(file.size > 0) || file.size > (video ? MAX_VIDEO : MAX_PICTURE)) return { ok: false, error: video ? "Videos can be up to 200 MB." : "Pictures can be up to 20 MB." };
   const admin = createAdminClient();
   const { data: post } = await admin.from("social_posts").select("id").eq("id", id).maybeSingle();
   if (!post) return { ok: false, error: "This post no longer exists." };
@@ -276,6 +283,155 @@ export async function signSocialUpload(id: string, path: string): Promise<Result
   const { data, error } = await createAdminClient().storage.from(SOCIAL_BUCKET).createSignedUrl(path, 6 * 60 * 60);
   if (error || !data) return { ok: false, error: "Couldn't load the picture." };
   return { ok: true, src: data.signedUrl };
+}
+
+// ── Stock video (Pixabay) ──────────────────────────────────────────────
+
+export async function searchSocialClips(query: string, page: number): Promise<Result<{ clips: StockClip[]; totalPages: number }>> {
+  if (!(await staffId())) return NOT_ALLOWED;
+  try {
+    return { ok: true, ...(await searchClips(query, Math.max(1, Math.min(25, Math.floor(page) || 1)))) };
+  } catch (err) {
+    if (err instanceof VideoError) return { ok: false, error: err.message };
+    console.error("[searchSocialClips]", err instanceof Error ? err.message : err);
+    return { ok: false, error: "Video search didn't work. Try again." };
+  }
+}
+
+/**
+ * Put a Pixabay clip on a slide: asked of Pixabay again by its id (the
+ * browser only says which one), downloaded, and copied into the post's
+ * folder, so the post never links to Pixabay's files.
+ */
+export async function copySocialClip(id: string, clipId: number): Promise<Result<{ clip: SocialClip }>> {
+  if (!(await staffId()) || !isId(id)) return NOT_ALLOWED;
+  const admin = createAdminClient();
+  const { data: post } = await admin.from("social_posts").select("id").eq("id", id).maybeSingle();
+  if (!post) return { ok: false, error: "This post no longer exists." };
+  try {
+    const stock = await getClip(Number(clipId));
+    const file = await downloadClip(stock);
+    const path = `${id}/${randomUUID()}.mp4`;
+    const { error } = await admin.storage.from(SOCIAL_BUCKET).upload(path, file, { contentType: "video/mp4", upsert: false });
+    if (error) {
+      console.error("[copySocialClip] upload", error.message);
+      return { ok: false, error: "Couldn't keep a copy of the clip. Run migration 0088 if it hasn't been run." };
+    }
+    const { data: signed } = await admin.storage.from(SOCIAL_BUCKET).createSignedUrl(path, 6 * 60 * 60);
+    return {
+      ok: true,
+      clip: {
+        path,
+        src: signed?.signedUrl ?? "",
+        duration: stock.duration,
+        width: stock.width,
+        height: stock.height,
+        credit: { source: "pixabay", name: stock.user, pageUrl: stock.pageUrl },
+      },
+    };
+  } catch (err) {
+    if (err instanceof VideoError) return { ok: false, error: err.message };
+    console.error("[copySocialClip]", err instanceof Error ? err.message : err);
+    return { ok: false, error: "Couldn't use that clip. Try again." };
+  }
+}
+
+// ── Post templates (0088) ──────────────────────────────────────────────
+
+/** The template library: the built-in templates, then saved ones, newest first. */
+export async function listSocialTemplates(): Promise<Result<{ templates: PostTemplate[]; savedError?: string }>> {
+  if (!(await staffId())) return NOT_ALLOWED;
+  const builtIns = builtInTemplates();
+  const { data, error } = await createAdminClient()
+    .from("social_templates")
+    .select("id, name, description, slides, show_slide_numbers")
+    .order("created_at", { ascending: false })
+    .limit(100);
+  if (error) {
+    console.error("[listSocialTemplates]", error.message);
+    return { ok: true, templates: builtIns, savedError: "Couldn't load the saved templates. Run migration 0088 if it hasn't been run." };
+  }
+  const saved = (data ?? []).map((r) => ({
+    ref: r.id as string,
+    name: r.name as string,
+    description: (r.description as string) ?? "",
+    slides: normalizeSlides(r.slides, NO_POST),
+    showSlideNumbers: (r.show_slide_numbers as boolean | null) ?? null,
+    builtIn: false,
+  }));
+  return { ok: true, templates: [...builtIns, ...saved] };
+}
+
+/** Save a post's slides as a template. Uploaded photos and videos stay with their post (no post's folder matches the empty id). */
+export async function saveSocialTemplate(input: { name: string; description: string; slides: unknown; showSlideNumbers: unknown }): Promise<Result<{ id: string }>> {
+  const userId = await staffId();
+  if (!userId) return NOT_ALLOWED;
+  const name = String(input.name ?? "").trim().slice(0, 60);
+  if (!name) return { ok: false, error: "Give the template a name." };
+  const slides = normalizeSlides(input.slides, NO_POST);
+  if (!slides.length) return { ok: false, error: "There are no slides to save." };
+  const { data, error } = await createAdminClient()
+    .from("social_templates")
+    .insert({
+      name,
+      description: String(input.description ?? "").trim().slice(0, 200),
+      slides: slidesFromTemplate(slides),
+      show_slide_numbers: typeof input.showSlideNumbers === "boolean" ? input.showSlideNumbers : null,
+      created_by: userId,
+    })
+    .select("id")
+    .single();
+  if (error || !data) {
+    console.error("[saveSocialTemplate]", error?.message);
+    return { ok: false, error: "Couldn't save the template. Run migration 0088 if it hasn't been run." };
+  }
+  revalidatePath("/admin/marketing/socials");
+  return { ok: true, id: data.id as string };
+}
+
+export async function deleteSocialTemplate(id: string): Promise<Result> {
+  if (!(await staffId()) || !isId(id)) return NOT_ALLOWED;
+  const { error } = await createAdminClient().from("social_templates").delete().eq("id", id);
+  if (error) return { ok: false, error: "Couldn't delete the template." };
+  revalidatePath("/admin/marketing/socials");
+  return { ok: true };
+}
+
+/** Start a post from a template: a copy with fresh ids, so editing the post leaves the template as it was. */
+export async function createSocialPostFromTemplate(ref: string, destination: Destination): Promise<Result<{ id: string }>> {
+  const userId = await staffId();
+  if (!userId) return NOT_ALLOWED;
+  let template: Pick<PostTemplate, "name" | "slides" | "showSlideNumbers"> | null = null;
+  const builtIn = isBuiltInRef(String(ref ?? ""));
+  if (builtIn) template = builtInTemplate(builtIn);
+  else if (isId(String(ref ?? ""))) {
+    const { data } = await createAdminClient().from("social_templates").select("name, slides, show_slide_numbers").eq("id", ref).maybeSingle();
+    if (data) template = { name: data.name as string, slides: normalizeSlides(data.slides, NO_POST), showSlideNumbers: (data.show_slide_numbers as boolean | null) ?? null };
+  }
+  if (!template) return { ok: false, error: "That template no longer exists." };
+  const id = randomUUID();
+  const { error } = await createAdminClient()
+    .from("social_posts")
+    .insert({
+      id,
+      title: template.name.slice(0, 120),
+      campaign: campaignSlug(template.name),
+      template: "list",
+      theme: "paper",
+      destination: destination in DESTINATIONS ? destination : "home",
+      topic: `From the template "${template.name}"`,
+      audience: "council",
+      slides: slidesFromTemplate(template.slides),
+      captions: normalizeCaptions({}),
+      show_slide_numbers: template.showSlideNumbers,
+      created_by: userId,
+    });
+  if (error) {
+    console.error("[createSocialPostFromTemplate]", error.message);
+    return { ok: false, error: "Couldn't start the post. Try again." };
+  }
+  revalidatePath("/admin/marketing/socials");
+  return { ok: true, id };
 }
 
 /** Delete a post for good: its uploaded pictures, then its row. */

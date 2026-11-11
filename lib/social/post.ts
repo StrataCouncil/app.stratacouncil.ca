@@ -12,7 +12,7 @@
  * layers. The slide's own fields (kind, number, kicker, title, body,
  * photo) are what the AI drafts and what a new design starts from.
  */
-import { designPhotos, designTexts, normalizeDesign, roleTexts, type SlideDesign } from "./design.ts";
+import { designClips, designMoves, designPhotos, designTexts, normalizeDesign, roleTexts, type SlideDesign } from "./design.ts";
 
 export const PLATFORMS = ["instagram", "facebook", "linkedin", "tiktok", "x"] as const;
 export type Platform = (typeof PLATFORMS)[number];
@@ -78,6 +78,24 @@ export interface SocialPhoto {
   credit: PhotoCredit | null;
   /** "cutout": a transparent PNG placed on the slide. "cover": the photo fills its frame. */
   fit: "cover" | "cutout";
+}
+
+export interface ClipCredit {
+  source: "pixabay";
+  name: string;
+  pageUrl: string;
+}
+
+/** A video clip in the post's folder of the social-media bucket: an upload, or a Pixabay clip copied there. */
+export interface SocialClip {
+  path: string;
+  /** A short-lived signed link, filled in when the post is loaded (never saved). */
+  src: string;
+  /** Seconds. */
+  duration: number;
+  width: number;
+  height: number;
+  credit: ClipCredit | null;
 }
 
 export interface SocialSlide {
@@ -175,6 +193,28 @@ export function normalizePhoto(v: unknown, postId: string): SocialPhoto | null {
   return src && credit ? { path: null, src, alt, credit, fit } : null;
 }
 
+export function normalizeClipCredit(v: unknown): ClipCredit | null {
+  const c = v as Record<string, unknown> | null;
+  if (!c || c.source !== "pixabay") return null;
+  const name = clip(c.name, 120).trim();
+  const pageUrl = safeUrl(c.pageUrl, ["pixabay.com"]);
+  return name && pageUrl ? { source: "pixabay", name, pageUrl } : null;
+}
+
+/** A clip as saved: only from this post's folder, with its length and size; its link is signed when loaded. */
+export function normalizeClip(v: unknown, postId: string): SocialClip | null {
+  const c = v as Record<string, unknown> | null;
+  if (!c || typeof c !== "object" || typeof c.path !== "string") return null;
+  const path = c.path;
+  if (!path.startsWith(`${postId}/`) || path.includes("..") || path.length > 200 || !/\.(mp4|mov)$/i.test(path)) return null;
+  const n = (x: unknown, max: number) => (typeof x === "number" && Number.isFinite(x) && x > 0 ? Math.min(max, Math.round(x * 100) / 100) : 0);
+  const duration = n(c.duration, 3600);
+  const width = Math.round(n(c.width, 8192));
+  const height = Math.round(n(c.height, 8192));
+  if (!duration || !width || !height) return null;
+  return { path, src: "", duration, width, height, credit: normalizeClipCredit(c.credit) };
+}
+
 export function newSlideId() {
   const random =
     typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID().slice(0, 8) : Math.random().toString(36).slice(2, 10);
@@ -204,7 +244,11 @@ export function normalizeSlides(v: unknown, postId: string): SocialSlide[] {
         body: clip(s.body, LIMITS.body),
         photoQuery: clip(s.photoQuery, LIMITS.photoQuery),
         photo: normalizePhoto(s.photo, postId),
-        design: normalizeDesign(s.design, (p) => normalizePhoto(p, postId)),
+        design: normalizeDesign(
+          s.design,
+          (p) => normalizePhoto(p, postId),
+          (c) => normalizeClip(c, postId)
+        ),
       },
     ];
   });
@@ -364,8 +408,8 @@ export function postTexts(post: Pick<SocialPost, "title" | "slides" | "captions"
 
 // ── Export ─────────────────────────────────────────────────────────────
 
-export function slideFileName(index: number) {
-  return `slide-${String(index + 1).padStart(2, "0")}.png`;
+export function slideFileName(index: number, kind: "png" | "mp4" = "png") {
+  return `slide-${String(index + 1).padStart(2, "0")}.${kind}`;
 }
 
 /** The text file in each platform's folder: what to post, every tracked link, alt text and credits. */
@@ -383,14 +427,19 @@ export function platformTextFile(post: SocialPost, platform: Platform): string {
   lines.push("SLIDES (upload in this order)", "-----------------------------");
   for (const [n, { slide, index }] of chosen.entries()) {
     const words = slide.design ? roleTexts(slide.design) : slide;
-    lines.push(`${slideFileName(n)}  ${[words.number, words.title].filter(Boolean).join(" ").replace(/\s*\n\s*/g, " ") || SLIDE_KIND_LABELS[slide.kind]}`);
+    const moves = designMoves(slide.design);
+    lines.push(`${slideFileName(n, moves ? "mp4" : "png")}  ${[words.number, words.title].filter(Boolean).join(" ").replace(/\s*\n\s*/g, " ") || SLIDE_KIND_LABELS[slide.kind]}`);
+    if (moves) lines.push(`  Also as a still picture: ${slideFileName(n)}`);
     lines.push(`  Link: ${slideLink(post, platform, index)}`);
     const alts = slidePhotos(slide).map((p) => p.alt).filter(Boolean);
     if (alts.length) lines.push(`  Alt text: ${alts.join(" / ")}`);
   }
-  if (platform === "linkedin") lines.push("", "carousel.pdf: upload as a document post. Each page links to its slide's tracked link.");
+  if (platform === "linkedin") lines.push("", "carousel.pdf: upload as a document post. Each page links to its slide's tracked link. Slides with movement or video are shown as their still picture.");
+  if ((platform === "x" || platform === "tiktok") && chosen.length > 1 && chosen.some(({ slide }) => designMoves(slide.design))) {
+    lines.push("", `${info.label} doesn't mix pictures and video in one post: post an MP4 on its own, or use the still pictures for a carousel.`);
+  }
   const credits = creditLines(post);
-  if (credits.length) lines.push("", "PHOTO CREDITS", "-------------", ...credits);
+  if (credits.length) lines.push("", "CREDITS", "-------", ...credits);
   return lines.join("\n") + "\n";
 }
 
@@ -401,14 +450,20 @@ export function slidePhotos(slide: Pick<SocialSlide, "photo" | "design">): Socia
 
 export function creditLines(post: Pick<SocialPost, "slides">): string[] {
   const seen = new Set<string>();
-  return post.slides.flatMap((s) =>
-    slidePhotos(s).flatMap((p) => {
+  return post.slides.flatMap((s) => [
+    ...slidePhotos(s).flatMap((p) => {
       const c = p.credit;
       if (!c || seen.has(c.photoUrl)) return [];
       seen.add(c.photoUrl);
       return [`Photo by ${c.name} on Unsplash: ${c.photoUrl}`];
-    })
-  );
+    }),
+    ...designClips(s.design).flatMap((v) => {
+      const c = v.credit;
+      if (!c || seen.has(c.pageUrl)) return [];
+      seen.add(c.pageUrl);
+      return [`Video by ${c.name} on Pixabay: ${c.pageUrl}`];
+    }),
+  ]);
 }
 
 /** The ZIP's top-level README: the campaign and every link. */
@@ -421,11 +476,12 @@ export function readmeFile(post: SocialPost): string {
     `Links go to: ${DESTINATIONS[post.destination].label} (${DESTINATIONS[post.destination].url})`,
     "",
     "One folder per platform, each with its slides and a text file to post from.",
+    "Slides with movement or video are MP4 files (no sound); the rest are PNG pictures.",
     "",
     "CAPTION LINKS",
     ...PLATFORMS.map((p) => `${PLATFORM_INFO[p].label}: ${PLATFORM_INFO[p].linksInPost ? captionLink(post, p) : bioLink(p) + " (bio)"}`),
   ];
   const credits = creditLines(post);
-  if (credits.length) lines.push("", "PHOTO CREDITS", ...credits);
+  if (credits.length) lines.push("", "CREDITS", ...credits);
   return lines.join("\n") + "\n";
 }

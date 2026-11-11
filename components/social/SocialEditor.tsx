@@ -10,9 +10,12 @@ import {
   noteSocialPhotoUse,
   redraftSocialSlide,
   saveSocialPost,
+  saveSocialTemplate,
   searchSocialPhotos,
   signSocialUpload,
 } from "@/app/admin/marketing/socials/actions";
+import { ClipPicker } from "@/components/social/ClipPicker";
+import { Modal } from "@/components/Modal";
 import { PhotoPicker, PhotoCreditLine } from "@/components/training/PhotoPicker";
 import { ScaledSlide, SlideCanvas } from "@/components/social/SlideCanvas";
 import { DesignEditor } from "@/components/social/DesignEditor";
@@ -40,6 +43,7 @@ import {
   type Destination,
   type Platform,
   type SlideKind,
+  type SocialClip,
   type SocialPhoto,
   type SocialPost,
   type SocialSlide,
@@ -71,7 +75,10 @@ export function SocialEditor({ initial }: { initial: SocialPost }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [picker, setPicker] = useState(false);
   const [instruction, setInstruction] = useState("");
-  const [exporting, setExporting] = useState<{ done: number; total: number } | null>(null);
+  const [exporting, setExporting] = useState<{ done: number; total: number; detail?: string } | null>(null);
+  const [clipPicker, setClipPicker] = useState<string | null>(null);
+  const clipResolve = useRef<((c: SocialClip | null) => void) | null>(null);
+  const [templateOpen, setTemplateOpen] = useState(false);
   // Each change bumps the version; a save confirms the version it sent. Unsaved
   // while they differ, so leaving mid-save or after a failed save still warns.
   const version = useRef(initial.slides.some((s) => !s.design) ? 1 : 0);
@@ -207,6 +214,60 @@ export function SocialEditor({ initial }: { initial: SocialPost }) {
     return { path: ticket.path, src: signed.src, alt: "", credit: null, fit: file.type === "image/png" ? "cutout" : "cover" };
   }
 
+  /** A video upload: its length and size read here first (a clip the browser can't play can't be exported either). */
+  async function uploadClip(file: File): Promise<SocialClip | null> {
+    setError(null);
+    const meta = await new Promise<{ duration: number; width: number; height: number } | null>((resolve) => {
+      const v = document.createElement("video");
+      const url = URL.createObjectURL(file);
+      v.preload = "metadata";
+      v.muted = true;
+      v.onloadedmetadata = () => {
+        URL.revokeObjectURL(url);
+        resolve(v.videoWidth && Number.isFinite(v.duration) ? { duration: v.duration, width: v.videoWidth, height: v.videoHeight } : null);
+      };
+      v.onerror = () => {
+        URL.revokeObjectURL(url);
+        resolve(null);
+      };
+      v.src = url;
+    });
+    if (!meta) {
+      setError("This browser can't play that video. Export it as an MP4 (H.264) and try again.");
+      return null;
+    }
+    const ticket = await createSocialUpload(post.id, { type: file.type, size: file.size });
+    if (!ticket.ok) {
+      setError(ticket.error);
+      return null;
+    }
+    const { error: upError } = await createClient().storage.from(SOCIAL_BUCKET).uploadToSignedUrl(ticket.path, ticket.token, file, { contentType: file.type });
+    if (upError) {
+      setError("The upload didn't finish. Try again.");
+      return null;
+    }
+    const signed = await signSocialUpload(post.id, ticket.path);
+    if (!signed.ok) {
+      setError(signed.error);
+      return null;
+    }
+    return { path: ticket.path, src: signed.src, duration: Math.round(meta.duration * 100) / 100, width: meta.width, height: meta.height, credit: null };
+  }
+
+  /** The Pixabay picker, for the editor: resolves with the copied clip, or null if closed. */
+  const findClip = useCallback((query: string) => {
+    clipResolve.current?.(null);
+    setClipPicker(query);
+    return new Promise<SocialClip | null>((resolve) => {
+      clipResolve.current = resolve;
+    });
+  }, []);
+  function closeClipPicker(clip: SocialClip | null) {
+    setClipPicker(null);
+    clipResolve.current?.(clip);
+    clipResolve.current = null;
+  }
+
   /** The photo picker, for the editor: resolves with the chosen photo, or null if closed. */
   const findPhoto = useCallback((query: string) => {
     findResolve.current?.(null);
@@ -230,7 +291,7 @@ export function SocialEditor({ initial }: { initial: SocialPost }) {
     for (let i = 0; i < 20 && !stageRef.current; i++) await new Promise((r) => setTimeout(r, 50));
     try {
       if (!stageRef.current) throw new Error("The export stage didn't appear.");
-      const blob = await buildExportZip(post, stageRef.current, (done, total) => setExporting({ done, total }));
+      const blob = await buildExportZip(post, stageRef.current, (done, total, detail) => setExporting({ done, total, detail }));
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -239,7 +300,7 @@ export function SocialEditor({ initial }: { initial: SocialPost }) {
       setTimeout(() => URL.revokeObjectURL(url), 10_000);
     } catch (err) {
       console.error("[export]", err);
-      setError("The export didn't finish. A photo may not have loaded; reload the page and try again.");
+      setError(err instanceof Error && err.name !== "Error" && err.message ? err.message : "The export didn't finish. A photo or clip may not have loaded; reload the page and try again.");
     }
     setExporting(null);
   }
@@ -271,11 +332,19 @@ export function SocialEditor({ initial }: { initial: SocialPost }) {
           <button type="button" className="button button-secondary" onClick={remove} disabled={busy !== null || exporting !== null} data-testid="social-delete">
             Delete post
           </button>
+          <button type="button" className="button button-secondary" onClick={() => setTemplateOpen(true)} disabled={post.slides.length === 0} data-testid="social-save-template">
+            Save as template
+          </button>
           <button type="button" className="button button-primary" onClick={exportZip} disabled={exporting !== null || post.slides.length === 0} data-testid="social-export">
             {exporting ? `Drawing ${exporting.done} of ${exporting.total}…` : "Export ZIP"}
           </button>
         </span>
       </div>
+      {exporting?.detail && (
+        <p className="card__meta" role="status" data-testid="social-export-detail">
+          Making video: {exporting.detail}. Keep this tab open.
+        </p>
+      )}
 
       {error && (
         <p className="form-alert" role="alert">
@@ -393,7 +462,18 @@ export function SocialEditor({ initial }: { initial: SocialPost }) {
 
         {slide?.design ? (
           <div className="social-editor__design">
-            <DesignEditor post={post} index={current} platform={platform} onPlatform={setPlatform} onChange={setDesign} onError={setError} findPhoto={findPhoto} uploadPhoto={upload} />
+            <DesignEditor
+              post={post}
+              index={current}
+              platform={platform}
+              onPlatform={setPlatform}
+              onChange={setDesign}
+              onError={setError}
+              findPhoto={findPhoto}
+              uploadPhoto={upload}
+              findClip={findClip}
+              uploadClip={uploadClip}
+            />
             {platform === "x" && slidesFor("x", post.slides).every((x) => x.index !== current) && (
               <p className="card__meta">X takes 4 pictures: this slide isn&rsquo;t one of them (the cover, the next two, and the call to action are).</p>
             )}
@@ -440,6 +520,10 @@ export function SocialEditor({ initial }: { initial: SocialPost }) {
         />
       )}
 
+      {clipPicker !== null && <ClipPicker postId={post.id} initialQuery={clipPicker} onClose={() => closeClipPicker(null)} onPick={(c) => closeClipPicker(c)} />}
+
+      {templateOpen && <SaveTemplate post={post} onClose={() => setTemplateOpen(false)} />}
+
       {/* The export stage: every platform's slides at full size, off screen, for drawing to PNG. */}
       {exporting && (
         <div ref={stageRef} aria-hidden style={{ position: "fixed", left: -20000, top: 0, pointerEvents: "none" }}>
@@ -453,6 +537,55 @@ export function SocialEditor({ initial }: { initial: SocialPost }) {
         </div>
       )}
     </div>
+  );
+}
+
+/** Save the post's slides as a template, to start other posts from. */
+function SaveTemplate({ post, onClose }: { post: SocialPost; onClose: () => void }) {
+  const [name, setName] = useState(post.title.slice(0, 60));
+  const [description, setDescription] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const dropsMedia = post.slides.some((s) => s.design?.layers.some((l) => (l.type === "image" && l.photo?.path) || (l.type === "video" && l.clip)));
+
+  async function save(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    const r = await saveSocialTemplate({ name, description, slides: post.slides, showSlideNumbers: post.showSlideNumbers });
+    setBusy(false);
+    setResult(r.ok ? { ok: true, message: "Saved. It's in the template library under New post." } : { ok: false, message: r.error });
+  }
+
+  return (
+    <Modal title="Save as template" onClose={onClose}>
+      <form onSubmit={save} style={{ display: "grid", gap: "0.9rem" }}>
+        <p className="card__meta">The slides and their designs become a template in the library. Editing this post afterwards doesn&rsquo;t change the template.</p>
+        <label className="field">
+          <span>Name</span>
+          <input value={name} maxLength={60} required autoFocus onChange={(e) => setName(e.target.value)} data-testid="template-name" />
+        </label>
+        <label className="field">
+          <span>Description (optional)</span>
+          <input value={description} maxLength={200} placeholder="e.g. A cover, five tips, and a call to action" onChange={(e) => setDescription(e.target.value)} />
+        </label>
+        {dropsMedia && <p className="card__meta">Uploaded photos and video clips stay with this post; the template keeps empty frames where they were. Unsplash photos are kept.</p>}
+        {result && (
+          <p className={result.ok ? "form-alert form-alert--ok" : "form-alert form-alert--error"} role="status">
+            {result.message}
+          </p>
+        )}
+        <div className="modal__actions">
+          <button type="button" className="button button-secondary" onClick={onClose}>
+            {result?.ok ? "Done" : "Cancel"}
+          </button>
+          {!result?.ok && (
+            <button className="button button-primary" disabled={busy || !name.trim()} data-testid="template-save">
+              {busy ? "Saving…" : "Save template"}
+            </button>
+          )}
+        </div>
+      </form>
+    </Modal>
   );
 }
 

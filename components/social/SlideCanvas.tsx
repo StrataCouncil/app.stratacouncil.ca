@@ -1,6 +1,6 @@
 /* eslint-disable @next/next/no-img-element */
-import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from "react";
-import { BRAND, boxFor, type Layer, type SlideDesign } from "@/lib/social/design";
+import { useEffect, useRef, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { BRAND, boxFor, clipTime, layerAt, type Layer, type SlideDesign, type VideoLayer } from "@/lib/social/design";
 import { DESTINATIONS, PLATFORM_INFO, type Platform, type SocialPost, type SocialSlide, type Template, type Theme } from "@/lib/social/post";
 
 /**
@@ -568,6 +568,8 @@ export function LayeredSlide({
   total,
   showNumbers,
   interaction,
+  time,
+  playing = false,
 }: {
   design: SlideDesign;
   platform: Platform;
@@ -575,6 +577,10 @@ export function LayeredSlide({
   total: number;
   showNumbers: boolean;
   interaction?: LayerInteraction;
+  /** Seconds into the slide, to show its entrances at that moment; left out, every layer is in place. */
+  time?: number;
+  /** The editor's Play: clips run on their own instead of being stepped to `time`. */
+  playing?: boolean;
 }) {
   const { width, height, handle } = PLATFORM_INFO[platform];
   const tall = height > 1500;
@@ -585,13 +591,16 @@ export function LayeredSlide({
         if (l.hidden) return null;
         const b = boxFor(design, l, tall);
         const selected = interaction?.selectedId === l.id;
+        const m = time === undefined ? null : layerAt(l, time);
         const box: CSSProperties = {
           position: "absolute",
           left: (b.x / 100) * width,
           top: (b.y / 100) * height,
           width: (b.w / 100) * width,
           height: (b.h / 100) * height,
-          opacity: l.opacity / 100,
+          opacity: (l.opacity / 100) * (m?.opacity ?? 1),
+          transform: m && (m.lift || m.scale !== 1) ? `translateY(${(m.lift / 100) * height}px) scale(${m.scale})` : undefined,
+          clipPath: m && m.reveal < 1 ? `inset(0 ${(1 - m.reveal) * 100}% 0 0)` : undefined,
           cursor: interaction ? (l.locked ? "default" : "move") : undefined,
           outline: selected ? `${2 / interaction!.scale}px solid #2f6fb4` : undefined,
           outlineOffset: selected ? 1 / interaction!.scale : undefined,
@@ -603,7 +612,7 @@ export function LayeredSlide({
             style={box}
             onPointerDown={interaction ? (e) => interaction.onPointerDown(e, l.id, "move") : undefined}
           >
-            <LayerContent layer={l} width={width} boxH={(b.h / 100) * height} handle={handle} counter={counter} />
+            <LayerContent layer={l} width={width} boxH={(b.h / 100) * height} handle={handle} counter={counter} time={time ?? 0} playing={playing} />
             {selected && !l.locked && (
               <span
                 aria-hidden
@@ -631,9 +640,18 @@ export function LayeredSlide({
   );
 }
 
-function LayerContent({ layer: l, width, boxH, handle, counter }: { layer: Layer; width: number; boxH: number; handle: string; counter: string }) {
+function LayerContent({ layer: l, width, boxH, handle, counter, time, playing }: { layer: Layer; width: number; boxH: number; handle: string; counter: string; time: number; playing: boolean }) {
   const px = (pct: number) => (pct / 100) * width;
   switch (l.type) {
+    case "video":
+      if (!l.clip?.src) {
+        return (
+          <div style={{ width: "100%", height: "100%", borderRadius: px(l.radius), background: "repeating-linear-gradient(135deg, rgba(27,42,65,0.10) 0 12px, rgba(27,42,65,0.18) 12px 24px)", display: "flex", alignItems: "center", justifyContent: "center", color: "rgba(27,42,65,0.6)", fontFamily: SANS, fontWeight: 700, fontSize: 40 }}>
+            Video
+          </div>
+        );
+      }
+      return <ClipView layer={l} radius={px(l.radius)} time={time} playing={playing} />;
     case "text":
       return (
         <div
@@ -704,6 +722,54 @@ function LayerContent({ layer: l, width, boxH, handle, counter }: { layer: Layer
       return text ? <div style={style}>{text}</div> : null;
     }
   }
+}
+
+/**
+ * A video layer: stepped to the moment being shown, or left to run during
+ * the editor's Play (looping its trimmed part). Always muted. The export
+ * draws clips frame by frame itself (lib/social/video-export.ts).
+ */
+function ClipView({ layer: l, radius, time, playing }: { layer: VideoLayer; radius: number; time: number; playing: boolean }) {
+  const ref = useRef<HTMLVideoElement>(null);
+  useEffect(() => {
+    const v = ref.current;
+    if (!v) return;
+    if (playing) {
+      v.currentTime = clipTime(l, time);
+      void v.play().catch(() => undefined);
+      const loop = () => {
+        if (v.currentTime >= l.trimEnd - 0.05) v.currentTime = l.trimStart;
+      };
+      v.addEventListener("timeupdate", loop);
+      return () => {
+        v.removeEventListener("timeupdate", loop);
+        v.pause();
+      };
+    }
+    v.pause();
+    const at = clipTime(l, time);
+    if (Math.abs(v.currentTime - at) > 0.04) v.currentTime = at;
+    // `time` moves every frame during Play; only a pause or a scrub should step the clip.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playing, playing ? 0 : time, l.trimStart, l.trimEnd, l.clip?.src]);
+  return (
+    <video
+      ref={ref}
+      src={l.clip!.src}
+      muted
+      playsInline
+      preload="auto"
+      crossOrigin="anonymous"
+      style={{
+        width: "100%",
+        height: "100%",
+        objectFit: l.fit,
+        borderRadius: radius,
+        filter: l.brightness !== 100 ? `brightness(${l.brightness}%)` : undefined,
+        display: "block",
+      }}
+    />
+  );
 }
 
 /** The slide drawn small: a CSS scale of the real-size canvas, so the preview is exactly the export. */

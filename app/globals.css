@@ -9063,8 +9063,7 @@ a.kb-card:hover {
   display: grid;
   gap: 0.6rem;
   justify-items: center;
-  position: sticky;
-  top: 1rem;
+  align-content: start;
 }
 .design-editor__toolbar {
   display: flex;
@@ -10305,4 +10304,198 @@ button.design-editor__swatch {
 }
 .video-check__summary--ok {
   color: #2f7a4a;
+}
+
+/* Socials editor, part 2: the timeline, the template library, and the clip picker. */
+.design-timeline {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  padding: 0.6rem 0.7rem;
+  display: grid;
+  gap: 0.5rem;
+}
+.design-timeline__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.design-timeline__clock {
+  font-variant-numeric: tabular-nums;
+}
+.design-timeline__length input {
+  width: 4.2rem;
+  padding: 0.2rem 0.35rem;
+}
+.design-timeline__rows {
+  display: grid;
+  gap: 2px;
+  max-height: 220px;
+  overflow-y: auto;
+  --name: 7.5rem;
+}
+.design-timeline__ruler {
+  position: relative;
+  height: 18px;
+  margin-left: var(--name);
+  border-bottom: 1px solid var(--line);
+  cursor: ew-resize;
+  font-size: 0.68rem;
+  color: var(--muted);
+  touch-action: none;
+}
+.design-timeline__ruler span {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+}
+.design-timeline__ruler span:first-child {
+  transform: none;
+}
+.design-timeline__ruler span:last-of-type:not(:first-child) {
+  transform: translateX(-100%);
+}
+.design-timeline__head {
+  position: absolute;
+  top: 0;
+  width: 2px;
+  height: 999px;
+  background: #2f6fb4;
+  pointer-events: none;
+  z-index: 2;
+}
+.design-timeline__row {
+  display: grid;
+  grid-template-columns: var(--name) 1fr;
+  align-items: center;
+  min-height: 22px;
+}
+.design-timeline__row[data-active="true"] {
+  background: rgba(47, 111, 180, 0.08);
+}
+.design-timeline__name {
+  border: 0;
+  background: none;
+  padding: 0 0.4rem 0 0;
+  font: inherit;
+  font-size: 0.75rem;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  color: var(--ink);
+}
+.design-timeline__track {
+  position: relative;
+  height: 18px;
+  overflow: hidden;
+}
+.design-timeline__still,
+.design-timeline__clip {
+  position: absolute;
+  top: 8px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--line);
+}
+.design-timeline__clip {
+  top: 3px;
+  height: 12px;
+  border-radius: 3px;
+  background: repeating-linear-gradient(90deg, rgba(27, 42, 65, 0.16) 0 6px, rgba(27, 42, 65, 0.08) 6px 12px);
+}
+.design-timeline__entrance {
+  position: absolute;
+  top: 2px;
+  height: 14px;
+  min-width: 10px;
+  border-radius: 4px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.62rem;
+  font-weight: 600;
+  line-height: 14px;
+  padding-left: 4px;
+  overflow: hidden;
+  white-space: nowrap;
+  cursor: grab;
+  touch-action: none;
+  z-index: 1;
+}
+.design-timeline__entrance b {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 6px;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.25);
+  cursor: ew-resize;
+}
+
+.social-templates {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-top: 0.75rem;
+}
+.social-templates__item {
+  display: grid;
+  gap: 0.25rem;
+  justify-items: start;
+}
+.social-templates__pick {
+  display: grid;
+  gap: 0.3rem;
+  justify-items: start;
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--paper);
+  padding: 0.75rem;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.social-templates__pick:hover:not(:disabled),
+.social-templates__pick:focus-visible {
+  border-color: var(--accent);
+}
+.social-templates__stack {
+  position: relative;
+  display: block;
+  width: calc(140px + 28px);
+  height: calc(175px + 16px);
+  margin-bottom: 0.35rem;
+}
+.social-templates__stack > span {
+  position: absolute;
+  top: 0;
+  left: 0;
+  box-shadow: 0 2px 8px rgba(27, 42, 65, 0.18);
+  border-radius: 8px;
+}
+
+.clip-picker__item button {
+  position: relative;
+}
+.clip-picker__item video {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  background: var(--ink);
+}
+.clip-picker__length {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  background: rgba(27, 42, 65, 0.8);
+  color: #fff;
+  font-size: 0.7rem;
+  padding: 1px 6px;
+  border-radius: 999px;
 }
