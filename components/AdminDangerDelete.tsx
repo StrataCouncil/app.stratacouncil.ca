@@ -7,7 +7,9 @@ import { deleteAccount, deleteStrata, previewAccountDelete, previewStrataDelete,
 /**
  * The Super Admin console's deletes (app/admin/delete-actions.ts): first
  * what would go, then a typed confirmation. Used on a strata's console
- * page, and on the Stratas tab for an account.
+ * page, and for an account on a person's console page (`email` given:
+ * no search box, and back to the Users list once it's gone) or on the
+ * Stratas tab (search by email).
  */
 
 function Plan({ plan, files }: { plan: DeletePlanRow[]; files: number }) {
@@ -97,9 +99,9 @@ export function DeleteStrataCard({ corpId, name }: { corpId: string; name: strin
   );
 }
 
-export function DeleteAccountCard() {
+export function DeleteAccountCard({ email: fixedEmail }: { email?: string } = {}) {
   const router = useRouter();
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(fixedEmail ?? "");
   const [found, setFound] = useState<{ name: string; email: string; plan: DeletePlanRow[]; files: number } | null>(null);
   const [typed, setTyped] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -120,6 +122,7 @@ export function DeleteAccountCard() {
       setError(null);
       const r = await deleteAccount(found.email, typed);
       if (!r.ok) return setError(r.error);
+      if (fixedEmail) return router.push("/admin/users");
       setDone(`${found.name} (${found.email}) is deleted.`);
       setFound(null);
       setEmail("");
@@ -129,13 +132,17 @@ export function DeleteAccountCard() {
 
   return (
     <section className="card danger-card" data-testid="delete-account">
-      <h2>Delete an account</h2>
+      <h2>{fixedEmail ? "Delete this account" : "Delete an account"}</h2>
       <p className="card__meta">
         For test or abandoned accounts. Removes the person&rsquo;s sign-in, profile, photo, Council Training progress and
         anything else that&rsquo;s only theirs. An account still in a strata, or with records in one, can&rsquo;t be deleted:
         remove them from it, or delete the strata, first.
       </p>
-      {!found ? (
+      {!found && fixedEmail ? (
+        <button type="button" className="button button-secondary" onClick={preview} disabled={pending} data-testid="delete-account-preview">
+          {pending ? "Checking…" : "Show what would be deleted"}
+        </button>
+      ) : !found ? (
         <form
           className="danger-card__row"
           onSubmit={(e) => {
