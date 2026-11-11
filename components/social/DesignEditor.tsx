@@ -427,8 +427,10 @@ export function DesignEditor({ post, index, platform, onPlatform, onChange, onEr
           onError={onError}
           onApply={(d, kind) => {
             remember();
-            const texts = roleTexts(design);
-            const next = withRoleTexts(d, { number: texts.number, kicker: texts.kicker, title: texts.title, body: texts.body });
+            // Carry over only the words this slide has: a layout's own
+            // placeholder (a list number, say) stays when the slide has none.
+            const texts = Object.fromEntries(Object.entries(fieldsFor(design)).filter(([, v]) => typeof v === "string" && v.trim()));
+            const next = withRoleTexts(d, texts);
             onChange(next, { ...fieldsFor(next), ...(kind ? { kind } : {}) });
             setSelected(null);
             setLayoutsOpen(false);
