@@ -75,7 +75,13 @@ export async function listMeetings(corpId: string): Promise<MeetingRecord[]> {
     .select(COLUMNS)
     .eq("corporation_id", corpId)
     .order("meeting_date", { ascending: false });
-  if (error) console.error("[listMeetings]", error.message);
+  // A failed read throws (the strata's error page), never an empty list:
+  // an empty list reads as "no meetings" (0092: a missing column grant did
+  // exactly that).
+  if (error) {
+    console.error("[listMeetings]", error.message);
+    throw new Error("Couldn't load meetings.");
+  }
   return (data ?? []).map(toMeeting);
 }
 
