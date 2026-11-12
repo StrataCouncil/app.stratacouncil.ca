@@ -3,13 +3,12 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getMeeting, getLotRoll } from "@/lib/data/meetings";
-import { electedChair, normalizeAgenda, meetingTypeLabels, type AgendaItem } from "@/lib/meetings/agenda";
+import { electedChair, normalizeAgenda, type AgendaItem } from "@/lib/meetings/agenda";
 import { checkAttachments } from "@/lib/meetings/attachments";
 import { deferUnresolved, minutesSummary, type AttendanceStatus } from "@/lib/meetings/rules";
 import { buildMinutes, clockTime } from "@/lib/meetings/minutes";
-import { askStratasphere, type AssistantTurn } from "@/lib/ai/stratasphere";
-import { IS_DEMO, demoLimitFail } from "@/lib/demo";
-import { logDemoActivity, refundDemoAllowance, takeDemoAllowance } from "@/lib/demo-usage";
+import type { StratasphereSource } from "@/lib/ai/stratasphere";
+import { logDemoActivity } from "@/lib/demo-usage";
 import { fileDiscussionRecord } from "@/lib/discussions/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { motionCounts, movementLines } from "@/lib/meetings/live";
@@ -17,7 +16,7 @@ import { decidedDuringVote } from "@/lib/meetings/steps";
 
 /**
  * Meeting Mode (doc01 §4): saving the running meeting, Call to Order, the
- * embedded assistant, and adjournment. Only the person who launched the
+ * Stratasphere conversation for the meeting, and adjournment. Only the person who launched the
  * meeting gets anywhere here — RLS and the lifecycle functions (0014,
  * 0015) enforce it.
  */
@@ -117,52 +116,63 @@ export async function callToOrder(
   return { ok: true, startedAt: meeting?.actualStartAt ?? new Date().toISOString() };
 }
 
-export async function askMeetingAssistant(
-  corpId: string,
-  meetingId: string,
-  itemId: string,
-  agenda: unknown,
-  history: AssistantTurn[],
-  question: string
-) {
+/** A saved question or answer from this meeting, for Meeting Mode's Stratasphere panel. */
+export type MeetingTurn = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  sources: StratasphereSource[];
+  itemId: string;
+};
+
+/**
+ * This person's Stratasphere conversation for this meeting (PR 4b), if they
+ * have one: its id and the questions asked about each agenda item, with
+ * their answers. Conversations are private to their owner (RLS, 0019).
+ */
+export async function meetingConversation(corpId: string, meetingId: string): Promise<{ id: string | null; turns: MeetingTurn[] }> {
+  const none = { id: null, turns: [] };
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  const meeting = await getMeeting(corpId, meetingId);
-  // Whoever runs the meeting, and council members following it live (0073).
-  const following =
-    meeting && meeting.launchedBy !== user?.id && meeting.status === "LIVE"
-      ? (await supabase.rpc("can_follow_meeting", { p_meeting_id: meetingId })).data === true
-      : false;
-  if (!user || !meeting || (meeting.launchedBy !== user.id && !following) || meeting.status === "ADJOURNED") {
-    return { ok: false as const, error: "The assistant is available to whoever is running this meeting, and to council members following it." };
+  if (!user) return none;
+  const { data: last } = await supabase
+    .from("conversation_messages")
+    .select("conversation_id, conversations!inner(user_id, corporation_id)")
+    .eq("role", "user")
+    .eq("focus->>kind", "agenda_item")
+    .eq("focus->>meetingId", meetingId)
+    .eq("conversations.user_id", user.id)
+    .eq("conversations.corporation_id", corpId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!last) return none;
+  const id = last.conversation_id as string;
+  const { data: rows } = await supabase
+    .from("conversation_messages")
+    .select("id, role, content, citations, focus")
+    .eq("conversation_id", id)
+    .order("created_at", { ascending: true })
+    .limit(400);
+  const turns: MeetingTurn[] = [];
+  let itemId: string | null = null;
+  for (const m of rows ?? []) {
+    if (m.role === "user") {
+      const f = (m.focus ?? null) as { kind?: string; meetingId?: string; itemId?: string } | null;
+      itemId = f?.kind === "agenda_item" && f.meetingId === meetingId && f.itemId ? f.itemId : null;
+    }
+    if (!itemId) continue;
+    turns.push({
+      id: m.id as string,
+      role: m.role as "user" | "assistant",
+      content: m.content as string,
+      sources: Array.isArray(m.citations) ? (m.citations as StratasphereSource[]) : [],
+      itemId,
+    });
   }
-  const liveAgenda = normalizeAgenda(agenda);
-  const item = liveAgenda.find((i) => i.id === itemId);
-  if (!item) return { ok: false as const, error: "Pick an agenda item first." };
-  if (IS_DEMO && !(await takeDemoAllowance("meeting"))) {
-    await logDemoActivity({ kind: "limit", detail: { reason: "Meeting Mode questions", question } });
-    return demoLimitFail();
-  }
-  const result = await askStratasphere({
-    supabase,
-    corpId,
-    question,
-    // Only the text of each turn: records come from our own database, never from the browser.
-    history: (history ?? [])
-      .filter((t) => t && (t.role === "user" || t.role === "assistant") && typeof t.content === "string")
-      .slice(-10)
-      .map((t) => ({ role: t.role, content: t.content })),
-    meeting: { item, agenda: liveAgenda, meetingLabel: meetingTypeLabels[meeting.type] },
-  });
-  if (!result.ok) await refundDemoAllowance("meeting");
-  await logDemoActivity({
-    kind: "stratasphere.meeting",
-    detail: result.ok ? { item: item.text, question, answer: result.text } : { item: item.text, question, failed: result.error },
-  });
-  // The records an answer drew on stay on the server.
-  return result.ok ? { ok: true as const, text: result.text, sources: result.sources } : result;
+  return { id, turns };
 }
 
 /**

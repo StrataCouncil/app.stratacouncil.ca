@@ -11,7 +11,7 @@ import type { FocusRef, SavedFocus } from "@/lib/stratasphere-focus";
  */
 export type ResolvedFocus =
   | { ref: FocusRef; label: string; kind: "meeting"; meetingLabel: string; date: string; agenda: AgendaItem[] }
-  | { ref: FocusRef; label: string; kind: "agenda_item"; meetingLabel: string; date: string; item: AgendaItem }
+  | { ref: FocusRef; label: string; kind: "agenda_item"; meetingLabel: string; date: string; item: AgendaItem; agenda: AgendaItem[] }
   | {
       ref: FocusRef;
       label: string;
@@ -55,7 +55,7 @@ export async function resolveFocus(supabase: SupabaseClient, corpId: string, ref
     }
     const item = agenda.find((i) => i.id === ref.itemId);
     if (!item) return null;
-    return { ref, label: `${meetingLabel}, ${date}: ${item.text}`, kind: "agenda_item", meetingLabel, date, item };
+    return { ref, label: `${meetingLabel}, ${date}: ${item.text}`, kind: "agenda_item", meetingLabel, date, item, agenda };
   }
   if (ref.kind === "document") {
     const { data: d } = await supabase

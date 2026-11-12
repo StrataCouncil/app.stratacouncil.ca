@@ -34,3 +34,9 @@ test("suggested questions come from templates: the record's kind and title, no A
   assert.equal(suggestionsFor({ kind: "discussion", title: "Fence repair." })[1], "Have we decided anything about fence repair before?");
   assert.equal(suggestionsFor({ kind: "none" }).length, 3);
 });
+
+test("a suggestion uses an item's subject, before a colon or dash", () => {
+  assert.equal(suggestionsFor({ kind: "agenda_item", title: "Roof replacement: quotes" })[0], "What have we decided about roof replacement before?");
+  assert.equal(suggestionsFor({ kind: "agenda_item", title: "AGM - date and venue" })[0], "What have we decided about AGM before?");
+  assert.equal(suggestionsFor({ kind: "agenda_item", title: "Pet-friendly bylaw" })[0], "What have we decided about pet-friendly bylaw before?");
+});

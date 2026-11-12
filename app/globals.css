@@ -3704,12 +3704,6 @@ li[data-done="true"] .checklist__mark {
   width: 100%;
   min-height: 0;
 }
-.mm-ai__head {
-  display: flex;
-  flex-direction: column;
-  padding: 0.75rem 1rem;
-  border-bottom: 1px solid var(--line);
-}
 .mm-ai__log {
   flex: 1;
   overflow-y: auto;
@@ -3718,23 +3712,17 @@ li[data-done="true"] .checklist__mark {
   flex-direction: column;
   gap: 0.6rem;
 }
-.mm-ai__msg {
-  padding: 0.55rem 0.75rem;
-  border-radius: var(--radius-sm);
-  background: var(--locked-bg);
-  white-space: pre-wrap;
+/* Stratasphere in the meeting column (PR 4b): the panel's pieces, a little tighter. */
+.mm-ai .mm-ai__focus {
+  padding: 0.5rem 1rem;
+}
+.mm-ai .dock-msg__bubble,
+.mm-ai .dock-suggest__q {
   font-size: 0.9rem;
-  line-height: 1.45;
 }
-.mm-ai__msg[data-role="user"] {
-  align-self: flex-end;
-  background: var(--ink);
-  color: #fff;
-  max-width: 85%;
-}
-.mm-ai__msg[data-error] {
-  background: var(--danger-bg);
-  color: var(--danger);
+.mm-ai .dock-suggest__q:disabled {
+  cursor: default;
+  opacity: 0.6;
 }
 /* The question box across the column, Ask under it on the right. */
 .mm-ai__form {

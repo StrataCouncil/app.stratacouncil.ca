@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { StratasphereSource } from "@/lib/ai/stratasphere";
+import { askStream } from "@/lib/stratasphere-stream";
 import { DEMO_LIMIT_MESSAGE } from "@/lib/demo";
 import { showDemoLimit } from "@/lib/demo-client";
 import { sameFocus, suggestionsFor, type FocusRef } from "@/lib/stratasphere-focus";
@@ -23,7 +24,8 @@ import { useStrata } from "@/components/StrataContext";
  * not subscribed, it explains Stratasphere at no cost (no AI call).
  *
  * Not shown on Ask (that's the full page), or in Meeting Mode and the
- * members' live page, whose own assistant stays until PR 4b.
+ * members' live page, which have the same panel in their right column
+ * (components/meetings/MeetingStratasphere.tsx).
  */
 
 export type PageFocus = { ref: FocusRef; label: string; title: string };
@@ -171,67 +173,26 @@ export function StratasphereDock({ mode, children }: { mode: "chat" | "pitch" | 
       setMessages((prev) =>
         patch === null ? prev.filter((m) => m.id !== "pending") : prev.map((m) => (m.id === "pending" ? { ...m, ...patch, pending: false } : m))
       );
-    try {
-      const res = await fetch("/api/stratasphere/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ corpId, conversationId, question, focus: active?.ref ?? null }),
-      });
-      if (!res.ok || !res.body) {
-        const body = (await res.json().catch(() => null)) as { error?: string; demoLimit?: boolean } | null;
-        settle(null);
-        if (body?.demoLimit) {
-          setDraft(question);
-          showDemoLimit("Stratasphere questions");
-          setError(DEMO_LIMIT_MESSAGE);
-          return;
-        }
-        setError(body?.error ?? "Stratasphere couldn't answer right now. Please try again.");
-        return;
+    const result = await askStream(
+      { corpId, conversationId, question, focus: active?.ref ?? null },
+      {
+        start: (id) => setConversationId(id),
+        text: (soFar) => setMessages((prev) => prev.map((m) => (m.id === "pending" ? { ...m, content: soFar } : m))),
       }
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      let answer = "";
-      let finished = false;
-      for (;;) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        let nl: number;
-        while ((nl = buffer.indexOf("\n")) >= 0) {
-          const raw = buffer.slice(0, nl).trim();
-          buffer = buffer.slice(nl + 1);
-          if (!raw) continue;
-          const ev = JSON.parse(raw) as
-            | { type: "start"; conversationId: string }
-            | { type: "delta"; text: string }
-            | { type: "done"; messageId: string | null; sources: StratasphereSource[] }
-            | { type: "error"; error: string };
-          if (ev.type === "start") setConversationId(ev.conversationId);
-          else if (ev.type === "delta") {
-            answer += ev.text;
-            setMessages((prev) => prev.map((m) => (m.id === "pending" ? { ...m, content: answer } : m)));
-          } else if (ev.type === "done") {
-            finished = true;
-            settle({ id: ev.messageId ?? `a-${Date.now()}`, content: answer, sources: ev.sources });
-          } else if (ev.type === "error") {
-            finished = true;
-            settle(null);
-            setError(ev.error);
-          }
-        }
-      }
-      if (!finished) {
-        settle(null);
-        setError("The answer was interrupted. Please try again.");
-      }
-    } catch {
-      settle(null);
-      setError("Stratasphere couldn't answer right now. Please check your connection and try again.");
-    } finally {
-      setStreaming(false);
+    );
+    setStreaming(false);
+    if (result.ok) {
+      settle({ id: result.messageId ?? `a-${Date.now()}`, content: result.text, sources: result.sources });
+      return;
     }
+    settle(null);
+    if (result.demoLimit) {
+      setDraft(question);
+      showDemoLimit("Stratasphere questions");
+      setError(DEMO_LIMIT_MESSAGE);
+      return;
+    }
+    setError(result.error);
   }
 
   const suggestions = suggestionsFor(active ? { kind: active.ref.kind, title: active.title } : { kind: "none" });

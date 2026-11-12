@@ -70,9 +70,15 @@ function focusKey(f: FocusRef) {
   }
 }
 
-/** A topic from a title, for a question: "Roof Replacement" -> "roof replacement". Keeps acronyms (AGM, CRF). */
+/**
+ * A topic from a title, for a question: "Roof Replacement" -> "roof
+ * replacement", and "Roof replacement: quotes" -> "roof replacement" (the
+ * subject before a colon or dash). Keeps acronyms (AGM, CRF).
+ */
 function topic(title: string) {
-  const t = title.trim().replace(/\s+/g, " ").replace(/[.?!:;]+$/, "");
+  const whole = title.trim().replace(/\s+/g, " ");
+  const subject = whole.split(/\s*(?::|\s[–—-]\s)\s*/)[0];
+  const t = (subject.length >= 3 ? subject : whole).replace(/[.?!:;]+$/, "");
   return t
     .split(" ")
     .map((w) => (/^[A-Z0-9]{2,}$/.test(w) ? w : w.toLowerCase()))
