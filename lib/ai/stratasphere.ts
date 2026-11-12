@@ -93,8 +93,20 @@ type Prepared =
       sources: StratasphereSource[];
       /** The full bylaws given as context: listed as sources only when the answer draws on them. */
       bylawSources: StratasphereSource[];
+      /** What reached the model, for the recall check (lib/ai/recall.ts). */
+      diagnostics: ContextDiagnostics;
     }
   | { ok: false; error: string; limit?: boolean };
+
+/** Which records a request carried: read by the recall check, never by the model. */
+export interface ContextDiagnostics {
+  bylawDocumentIds: string[];
+  attachmentDocumentIds: string[];
+  ledgerDecisionIds: string[];
+  /** Search results in the order they were given, with their scores. */
+  hits: Array<{ scope: KnowledgeHit["scope"]; documentId: string | null; title: string | null; similarity: number }>;
+  searchFailed: boolean;
+}
 
 /** Chips show each document's real title (what's sent to the AI is stripped; what members see isn't). */
 function sourcesFrom(hits: KnowledgeHit[], hasLedger: boolean, titles: Map<string, string>): StratasphereSource[] {
@@ -147,7 +159,8 @@ async function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
 async function attachmentsBlock(supabase: SupabaseClient, corpId: string, item: AgendaItem, ctx: StripContext) {
   const ids = item.atts.map((a) => a.documentId).filter((x): x is string => Boolean(x));
   const disclosures: string[] = [];
-  if (!ids.length) return { text: "", disclosures };
+  const read: string[] = [];
+  if (!ids.length) return { text: "", disclosures, read };
   const { data } = await supabase
     .from("documents")
     .select("id, title, source_type, url, indexing_status, document_text, uploaded_at")
@@ -160,6 +173,8 @@ async function attachmentsBlock(supabase: SupabaseClient, corpId: string, item: 
   for (const d of docs) {
     const title = stripForCorporation(d.title ?? "Attachment", ctx);
     if (d.indexing_status === "indexed" && d.document_text) {
+      // Counted as read only if some of its text fits (the recall check).
+      if (budget > 0) read.push(d.id as string);
       let text = stripForCorporation(d.document_text, ctx);
       if (text.length > budget) {
         text = `${text.slice(0, Math.max(0, budget))}\n[...truncated]`;
@@ -174,7 +189,7 @@ async function attachmentsBlock(supabase: SupabaseClient, corpId: string, item: 
       disclosures.push(`The attachment "${title}" couldn't be read (it may be an image or a scanned document with no text). Say so if the question is about it.`);
     }
   }
-  return { text: parts.join("\n\n"), disclosures };
+  return { text: parts.join("\n\n"), disclosures, read };
 }
 
 const MAX_BYLAWS_CHARS = 150_000;
@@ -324,11 +339,11 @@ async function profileBlock(supabase: SupabaseClient, corpId: string, ctx: Strip
 async function ledgerBlock(supabase: SupabaseClient, corpId: string, ctx: StripContext) {
   const { data } = await supabase
     .from("decisions")
-    .select("decided_at, meeting_type, title, category, motion_text, mover, seconder, decision_type, votes_for, votes_against, votes_abstain, source")
+    .select("id, decided_at, meeting_type, title, category, motion_text, mover, seconder, decision_type, votes_for, votes_against, votes_abstain, source")
     .eq("corporation_id", corpId)
     .order("decided_at", { ascending: false })
     .limit(50);
-  return (data ?? [])
+  const text = (data ?? [])
     .map((d) => {
       const votes = d.votes_for != null ? ` (${d.votes_for} for / ${d.votes_against ?? 0} against / ${d.votes_abstain ?? 0} abstain)` : "";
       const who = d.mover ? ` Moved ${d.mover}${d.seconder ? `, seconded ${d.seconder}` : ""}.` : "";
@@ -337,6 +352,7 @@ async function ledgerBlock(supabase: SupabaseClient, corpId: string, ctx: StripC
       return stripForCorporation(`[${where}] ${d.title} — CARRIED${votes}.${who}${motion}`, ctx);
     })
     .join("\n");
+  return { text, ids: (data ?? []).map((d) => d.id as string) };
 }
 
 function liveDecisionsBlock(agenda: AgendaItem[], ctx: StripContext) {
@@ -363,13 +379,46 @@ function hitsBlock(hits: KnowledgeHit[]) {
     .join("\n\n");
 }
 
+type PrepareInput = {
+  supabase: SupabaseClient;
+  corpId: string;
+  question: string;
+  history: AssistantTurn[];
+  meeting?: MeetingScope;
+  /** Older turns were dropped from this conversation's history. */
+  trimmed?: boolean;
+};
+
 /**
- * Everything up to the model call: the allowance check, PII stripping, and
- * context assembly. `supabase` is the signed-in user's client — every read
- * goes through RLS, and the per-call allowance (subscription, or the free
- * meeting's ten calls) is checked and counted first.
+ * Everything up to the model call: the allowance check, then the request.
+ * `supabase` is the signed-in user's client — every read goes through RLS,
+ * and the per-call allowance (subscription, or the free meeting's ten
+ * calls) is checked and counted first.
  */
-async function prepareStratasphere({
+async function prepareStratasphere(input: PrepareInput): Promise<Prepared> {
+  if (!input.question.trim()) return { ok: false, error: "Ask a question." };
+  const { data: allowed, error: allowError } = await input.supabase.rpc("consume_stratasphere_request", { p_corporation_id: input.corpId });
+  if (allowError) {
+    console.error("[askStratasphere] allowance", allowError.message);
+    return { ok: false, error: "Stratasphere isn't available right now." };
+  }
+  if (!allowed) {
+    return {
+      ok: false,
+      limit: true,
+      error: "Stratasphere needs a subscription. (Your free meeting includes ten questions, and they've been used.)",
+    };
+  }
+  return assembleStratasphere(input);
+}
+
+/**
+ * The request exactly as the model would get it: PII stripping and context
+ * assembly, with no allowance check and no model call. Used by every
+ * question (through prepareStratasphere) and by the recall check, so the
+ * check always tests what Stratasphere really sends.
+ */
+export async function assembleStratasphere({
   supabase,
   corpId,
   question,
@@ -388,19 +437,6 @@ async function prepareStratasphere({
   const q = question.trim().slice(0, 4000);
   if (!q) return { ok: false, error: "Ask a question." };
 
-  const { data: allowed, error: allowError } = await supabase.rpc("consume_stratasphere_request", { p_corporation_id: corpId });
-  if (allowError) {
-    console.error("[askStratasphere] allowance", allowError.message);
-    return { ok: false, error: "Stratasphere isn't available right now." };
-  }
-  if (!allowed) {
-    return {
-      ok: false,
-      limit: true,
-      error: "Stratasphere needs a subscription. (Your free meeting includes ten questions, and they've been used.)",
-    };
-  }
-
   const ctx = await loadStripContext(createAdminClient(), corpId);
   const { data: corp } = await supabase
     .from("strata_corporations")
@@ -412,16 +448,18 @@ async function prepareStratasphere({
   const strippedQuestion = stripForCorporation(q, ctx);
   const disclosures: string[] = [];
 
-  const [profile, attachments, ledger, bylaws, hits] = await Promise.all([
+  let searchFailed = false;
+  const [profile, attachments, ledgerResult, bylaws, hits] = await Promise.all([
     profileBlock(supabase, corpId, ctx).catch((err) => {
       console.error("[askStratasphere] profile", err instanceof Error ? err.message : err);
       return "";
     }),
-    meeting ? attachmentsBlock(supabase, corpId, meeting.item, ctx) : Promise.resolve({ text: "", disclosures: [] }),
+    meeting ? attachmentsBlock(supabase, corpId, meeting.item, ctx) : Promise.resolve({ text: "", disclosures: [] as string[], read: [] as string[] }),
     ledgerBlock(supabase, corpId, ctx),
     bylawsBlock(supabase, corpId, ctx),
     withTimeout(searchKnowledge(supabase, corpId, strippedQuestion), SEARCH_TIMEOUT_MS).catch((err) => {
       console.error("[askStratasphere] search", err instanceof Error ? err.message : err);
+      searchFailed = true;
       disclosures.push(
         "The document search failed for this question. Begin your answer with: \"Note: I was unable to search the document repository right now. My answer is based on the decision ledger" +
           (meeting ? " and item attachments" : "") +
@@ -431,6 +469,7 @@ async function prepareStratasphere({
     }),
   ]);
   disclosures.push(...attachments.disclosures);
+  const ledger = ledgerResult.text;
 
   const bylawIds = new Set(bylaws.sources.map((b) => (b.kind === "document" ? b.documentId : "")));
   const local = hits.filter((h) => h.scope === "corporation" && !(h.documentId && bylawIds.has(h.documentId)));
@@ -513,6 +552,13 @@ async function prepareStratasphere({
     maxTokens: meeting ? 4000 : 8000,
     sources: sourcesFrom(hits, Boolean(ledger.trim()), await documentTitles(supabase, corpId, hits)),
     bylawSources: bylaws.sources,
+    diagnostics: {
+      bylawDocumentIds: bylaws.sources.flatMap((b) => (b.kind === "document" ? [b.documentId] : [])),
+      attachmentDocumentIds: attachments.read,
+      ledgerDecisionIds: ledgerResult.ids,
+      hits: hits.map((h) => ({ scope: h.scope, documentId: h.documentId, title: h.title, similarity: h.similarity })),
+      searchFailed,
+    },
   };
 }
 
@@ -521,7 +567,7 @@ function composeUserTurn(context: string | null, question: string) {
   return context ? `=== RECORDS FOUND FOR THIS QUESTION ===\n${context}\n\n=== QUESTION ===\n${question}` : question;
 }
 
-type AskInput = Parameters<typeof prepareStratasphere>[0];
+type AskInput = PrepareInput;
 
 /**
  * One row per answer in stratasphere_usage (0024), for the Super Admin
@@ -552,7 +598,7 @@ async function logUsage(input: AskInput, usage: TokenUsage) {
 }
 
 /** Search hits, plus the full bylaws when the answer refers to bylaws. */
-function finalSources(prepared: Extract<Prepared, { ok: true }>, text: string) {
+export function finalSources(prepared: Extract<Prepared, { ok: true }>, text: string) {
   if (!/\bbylaws?\b/i.test(text)) return prepared.sources;
   const have = new Set(prepared.sources.map((s) => (s.kind === "document" ? s.documentId : "")));
   return [...prepared.bylawSources.filter((b) => b.kind === "document" && !have.has(b.documentId)), ...prepared.sources].slice(0, 12);
