@@ -432,7 +432,28 @@ Reading the code turned up five. Each is fixed here and each gets recall-check c
 **Honest misses:** the "I don't see anything" rule gains two requirements. It
 names what it searched (bylaws, the ledger, the documents, legislation). And it
 lists documents on file that might hold the answer but couldn't be read. It
-never says "there is no record".
+never says "there is no record". It no longer mentions cross-platform
+precedent to the person (don't advertise the precedent pool).
+
+**Built in PR 5** (migration 0095):
+- Separate slots: the strata's own documents 16, precedent 4, legislation 8.
+- The whole ledger in the cached part, newest first, up to 120,000
+  characters; older decisions that match the question (its exact strings,
+  then its words) are sent with it, up to 15.
+- Keyword search (`keyword_knowledge_chunks`): exact strings (lot numbers in
+  every stored form, bylaw and section numbers, quoted phrases, reference
+  numbers such as invoice numbers) are always included, as whole words; the
+  question's words by full-text search add up to 6 more passages. Only the
+  strata's own current documents.
+- Disclosures when part of the bylaws, an attachment, the platform records,
+  or the records found for a question wasn't read.
+- The documents list marks those not read yet or not readable.
+- No passage twice: documents sent in full aren't repeated as search
+  passages (one cut short keeps its passages), nor are passages already
+  shown with an earlier question in the conversation.
+- A 1-hour cache, with two breakpoints: the bylaws and ledger, then the
+  platform records (which a live meeting changes), so a meeting's changes
+  don't invalidate the bylaws and ledger.
 
 ### The recall check (required gate)
 
@@ -573,7 +594,7 @@ database tests, build, browser test), and you run the migration and merge.
    - **4b** (no migration): the panel inside Meeting Mode and the members'
      live page, replacing the embedded assistant, with its questions saved;
      the hourly limit's message says when they can ask again.
-5. **Finding records and cost.** Behind the recall gate:
+5. **Finding records and cost** (migration 0095). Behind the recall gate:
    - Separate precedent slots.
    - The whole ledger.
    - Keyword search.

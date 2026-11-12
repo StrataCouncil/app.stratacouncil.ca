@@ -60,6 +60,7 @@ function usageOf(message: Anthropic.Beta.BetaMessage): TokenUsage {
     output: u.output_tokens ?? 0,
     cacheRead: u.cache_read_input_tokens ?? 0,
     cacheWrite: u.cache_creation_input_tokens ?? 0,
+    cacheWrite1h: u.cache_creation?.ephemeral_1h_input_tokens ?? 0,
   };
 }
 

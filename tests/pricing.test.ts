@@ -9,3 +9,9 @@ test("cost estimate per million tokens", () => {
   // A typical cached follow-up: 2k new, 30k read from cache, 1k written, 600 out.
   assert.ok(Math.abs(estimateCostUsd({ input: 2000, output: 600, cacheRead: 30000, cacheWrite: 1000 }) - 0.031) < 1e-9);
 });
+
+test("an hour's cache write costs twice the input price; the rest are 5-minute writes", () => {
+  assert.equal(estimateCostUsd({ input: 0, output: 0, cacheRead: 0, cacheWrite: 1_000_000, cacheWrite1h: 1_000_000 }), 8);
+  assert.equal(estimateCostUsd({ input: 0, output: 0, cacheRead: 0, cacheWrite: 2_000_000, cacheWrite1h: 1_000_000 }), 13);
+  assert.equal(estimateCostUsd({ input: 0, output: 0, cacheRead: 0, cacheWrite: 1_000_000 }), 5);
+});

@@ -4,7 +4,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { askClaudeText, ClaudeRefusalError, streamClaudeText } from "@/lib/ai/claude";
 import { estimateCostUsd, type TokenUsage } from "@/lib/ai/pricing";
 import { loadStripContext, stripForCorporation, type StripContext } from "@/lib/kb/privacy";
-import { searchKnowledge, type KnowledgeHit } from "@/lib/kb/search";
+import { searchKeywords, searchKnowledge, type KnowledgeHit } from "@/lib/kb/search";
+import { exactStrings, lineScore, mergeHits, searchWords } from "@/lib/kb/keywords";
 import { buildStrataProfile, type ProfileMeeting } from "@/lib/ai/strata-profile";
 import { listPublishedLibrary } from "@/lib/data/library";
 import { knowledgeResourceKindLabels } from "@/lib/library/catalogue";
@@ -39,7 +40,7 @@ NO OPINIONS: Report what the sources say. Never offer opinions, judgments, predi
 
 CITE YOUR SOURCE: Every factual claim names its source — document title, decision date and meeting type, agenda item title, or legislation section. If a source can't be named, the claim can't be made.
 
-IF YOU DON'T KNOW, SAY SO PRECISELY: If nothing in the corporation's records or in cross-platform precedent answers the question, say: "I don't see anything in {CORP}'s records — or in cross-platform precedent — that answers this. You may want to check [the specific document type] directly, or ask your strata manager." If only cross-platform precedent is relevant, answer from it and label it unmistakably as precedent from other strata corporations, never as this corporation's own data. For anything out of scope, say: "I can only answer questions about {CORP}'s own records, cross-platform precedent, and BC strata legislation. I'm not able to [look that up online / advise on what you should do legally / access another corporation's own records]." Cross-platform precedent is not "another corporation's records" — it is anonymized and included by design.
+IF YOU DON'T KNOW, SAY SO PRECISELY: If nothing in the context answers the question, say what you looked through and that you don't see it there, for example: "I don't see this in {CORP}'s bylaws, decision ledger, documents and minutes on file, or BC strata legislation." Never say "there is no record" or that something never happened or doesn't exist: say only that you don't see it in what you looked through. If the DOCUMENTS ON FILE list marks a document as not read or not readable and it could hold the answer (judge by its title and folder), name it: "There's a document called [title] on file that I couldn't read." Then give one concrete direction: the specific document type to check, or the strata manager. If only cross-platform precedent is relevant, answer from it and label it unmistakably as precedent from other strata corporations, never as this corporation's own data. For anything out of scope, say: "I can only answer questions about {CORP}'s own records and BC strata legislation. I'm not able to [look that up online / advise on what you should do legally / access another corporation's records]." Cross-platform precedent is not "another corporation's records": it is anonymized and included by design.
 
 RECENCY RULE: When multiple documents or decisions address the same topic, treat the most recently uploaded one as the most authoritative — documents are sorted with the most recent first and their upload date is stamped in the content header. For financial statements, always use the most recently uploaded version for current figures while referencing older statements for trends or year-over-year context. For bylaws or policies, the most recently uploaded version governs. Acknowledge older records where relevant but base your answer on the most recent.
 
@@ -163,7 +164,9 @@ async function attachmentsBlock(supabase: SupabaseClient, corpId: string, item: 
   const ids = item.atts.map((a) => a.documentId).filter((x): x is string => Boolean(x));
   const disclosures: string[] = [];
   const read: string[] = [];
-  if (!ids.length) return { text: "", disclosures, read };
+  /** Sent in full: their search passages would only repeat them. */
+  const whole: string[] = [];
+  if (!ids.length) return { text: "", disclosures, read, whole };
   const { data } = await supabase
     .from("documents")
     .select("id, title, source_type, url, indexing_status, document_text, uploaded_at")
@@ -181,6 +184,11 @@ async function attachmentsBlock(supabase: SupabaseClient, corpId: string, item: 
       let text = stripForCorporation(d.document_text, ctx);
       if (text.length > budget) {
         text = `${text.slice(0, Math.max(0, budget))}\n[...truncated]`;
+        disclosures.push(
+          unreadPart(title, budget > 0 ? "the end of it wasn't read: the attachments are longer than can be read at once" : "none of it was read: the other attachments filled the space")
+        );
+      } else {
+        whole.push(d.id as string);
       }
       budget -= text.length;
       parts.push(`[ATTACHMENT: ${title}, added ${String(d.uploaded_at).slice(0, 10)}]\n${text}\n[END ATTACHMENT]`);
@@ -192,10 +200,15 @@ async function attachmentsBlock(supabase: SupabaseClient, corpId: string, item: 
       disclosures.push(`The attachment "${title}" couldn't be read (it may be an image or a scanned document with no text). Say so if the question is about it.`);
     }
   }
-  return { text: parts.join("\n\n"), disclosures, read };
+  return { text: parts.join("\n\n"), disclosures, read, whole };
 }
 
 const MAX_BYLAWS_CHARS = 150_000;
+
+/** A required disclosure when part of a record wasn't read (PR 5, §7 gap 4). */
+function unreadPart(title: string, what: string) {
+  return `Part of "${title}" wasn't read (${what}). If the answer could be in the part that wasn't read, say so: "Part of '${title}' wasn't read."`;
+}
 
 /**
  * The strata's current bylaws, in full, on every question. Bylaw questions
@@ -216,16 +229,27 @@ async function bylawsBlock(supabase: SupabaseClient, corpId: string, ctx: StripC
   let budget = MAX_BYLAWS_CHARS;
   const parts: string[] = [];
   const sources: StratasphereSource[] = [];
+  const disclosures: string[] = [];
+  const whole: string[] = [];
   for (const d of data ?? []) {
-    if (!d.document_text || budget <= 0) continue;
+    if (!d.document_text) continue;
     const title = stripForCorporation(d.title ?? "Bylaws", ctx);
+    if (budget <= 0) {
+      disclosures.push(unreadPart(title, "none of it was read: the bylaws before it filled the space"));
+      continue;
+    }
     let text = stripForCorporation(d.document_text, ctx);
-    if (text.length > budget) text = `${text.slice(0, budget)}\n[...truncated]`;
+    if (text.length > budget) {
+      text = `${text.slice(0, budget)}\n[...truncated]`;
+      disclosures.push(unreadPart(title, "the end of it wasn't read: it's longer than can be read at once"));
+    } else {
+      whole.push(d.id as string);
+    }
     budget -= text.length;
     parts.push(`[BYLAWS: ${title}, uploaded ${String(d.uploaded_at).slice(0, 10)}]\n${text}\n[END BYLAWS]`);
     sources.push({ kind: "document", title: d.title || "Bylaws", documentId: d.id });
   }
-  return { text: parts.join("\n\n"), sources };
+  return { text: parts.join("\n\n"), sources, disclosures, whole };
 }
 
 const MAX_PROFILE_CHARS = 80000;
@@ -256,7 +280,7 @@ async function profileBlock(supabase: SupabaseClient, corpId: string, ctx: Strip
       .limit(40),
     supabase
       .from("documents")
-      .select("title, category, uploaded_at, is_current")
+      .select("title, category, uploaded_at, is_current, indexing_status")
       .eq("corporation_id", corpId)
       .order("uploaded_at", { ascending: false })
       .limit(400),
@@ -328,7 +352,13 @@ async function profileBlock(supabase: SupabaseClient, corpId: string, ctx: Strip
           })),
         };
       }),
-      documents: (docs.data ?? []).map((d) => ({ title: d.title ?? "Untitled", category: d.category, uploadedAt: String(d.uploaded_at), current: d.is_current !== false })),
+      documents: (docs.data ?? []).map((d) => ({
+        title: d.title ?? "Untitled",
+        category: d.category,
+        uploadedAt: String(d.uploaded_at),
+        current: d.is_current !== false,
+        status: (d.indexing_status as string | null) ?? null,
+      })),
       announcements: (announcements.data ?? [])
         .filter((a) => !a.expires_at || Date.parse(a.expires_at) > now)
         .map((a) => ({ title: a.title, body: a.body, publishedAt: String(a.published_at) })),
@@ -336,24 +366,58 @@ async function profileBlock(supabase: SupabaseClient, corpId: string, ctx: Strip
     },
     (s) => stripForCorporation(s, ctx)
   );
-  return text.length > MAX_PROFILE_CHARS ? `${text.slice(0, MAX_PROFILE_CHARS)}\n[...profile truncated]` : text;
+  return text.length > MAX_PROFILE_CHARS ? `${text.slice(0, MAX_PROFILE_CHARS)}\n${PROFILE_TRUNCATED}` : text;
 }
 
+const PROFILE_TRUNCATED = "[...profile truncated]";
+
+/** The whole ledger, one line per decision, newest first, up to about 1,000 decisions (PR 5, §7 gap 2). */
+const MAX_LEDGER_CHARS = 120_000;
+/** Decisions read at most (a safety limit, far beyond any strata's history). */
+const MAX_LEDGER_ROWS = 10_000;
+/** Older decisions past the limit that match a question, sent with it. */
+const MAX_OLDER_DECISIONS = 15;
+
+type LedgerLine = { id: string; line: string };
+
 async function ledgerBlock(supabase: SupabaseClient, corpId: string, ctx: StripContext) {
-  const { data } = await supabase
-    .from("decisions")
-    .select("id, decided_at, meeting_type, title, category, motion_text, mover, seconder, decision_type, votes_for, votes_against, votes_abstain, source")
-    .eq("corporation_id", corpId)
-    .order("decided_at", { ascending: false })
-    .limit(50);
-  const text = (data ?? [])
-    .map((d) => {
-      const votes = d.votes_for != null ? ` (${d.votes_for} for / ${d.votes_against ?? 0} against / ${d.votes_abstain ?? 0} abstain)` : "";
-      const who = d.mover ? ` Moved ${d.mover}${d.seconder ? `, seconded ${d.seconder}` : ""}.` : "";
-      const where = `${String(d.decided_at).slice(0, 10)}, ${d.meeting_type ?? "meeting"}${d.source === "historic_minutes" ? " (from uploaded past minutes)" : ""}`;
-      const motion = d.motion_text ? ` Motion: ${d.motion_text}` : "";
-      return stripForCorporation(`[${where}] ${d.title} — CARRIED${votes}.${who}${motion}`, ctx);
-    })
+  // Every decision, in pages (the API returns at most 1,000 rows at a time).
+  const rows: Array<Record<string, unknown>> = [];
+  for (let from = 0; from < MAX_LEDGER_ROWS; from += 1000) {
+    const { data, error } = await supabase
+      .from("decisions")
+      .select("id, decided_at, meeting_type, title, category, motion_text, mover, seconder, decision_type, votes_for, votes_against, votes_abstain, source")
+      .eq("corporation_id", corpId)
+      .order("decided_at", { ascending: false })
+      .order("id", { ascending: true })
+      .range(from, from + 999);
+    if (error) {
+      console.error("[askStratasphere] ledger", error.message);
+      break;
+    }
+    rows.push(...(data ?? []));
+    if (!data || data.length < 1000) break;
+  }
+  const lines: LedgerLine[] = rows.map((d) => {
+    const votes = d.votes_for != null ? ` (${d.votes_for} for / ${d.votes_against ?? 0} against / ${d.votes_abstain ?? 0} abstain)` : "";
+    const who = d.mover ? ` Moved ${d.mover}${d.seconder ? `, seconded ${d.seconder}` : ""}.` : "";
+    const where = `${String(d.decided_at).slice(0, 10)}, ${d.meeting_type ?? "meeting"}${d.source === "historic_minutes" ? " (from uploaded past minutes)" : ""}`;
+    const motion = d.motion_text ? ` Motion: ${d.motion_text}` : "";
+    return { id: d.id as string, line: stripForCorporation(`[${where}] ${d.title} — CARRIED${votes}.${who}${motion}`, ctx) };
+  });
+  // Newest first, as many as fit; the rest are searched for each question.
+  let used = 0;
+  let cut = 0;
+  while (cut < lines.length && used + lines[cut].line.length + 1 <= MAX_LEDGER_CHARS) used += lines[cut++].line.length + 1;
+  const sent = lines.slice(0, cut);
+  const older = lines.slice(cut);
+  const text = [
+    ...sent.map((l) => l.line),
+    older.length
+      ? `[The ${older.length} oldest decisions, from ${older[older.length - 1].line.slice(1, 11)} to ${older[0].line.slice(1, 11)}, aren't listed here: those that match a question are sent with it, under OLDER DECISIONS.]`
+      : "",
+  ]
+    .filter(Boolean)
     .join("\n");
   // Decisions council made between meetings: closed Discussions whose
   // motion carried, awaiting ratification (decided 2026-11-12). Once a
@@ -379,7 +443,7 @@ async function ledgerBlock(supabase: SupabaseClient, corpId: string, ctx: StripC
       )
     )
     .join("\n");
-  return { text: [awaiting, text].filter(Boolean).join("\n"), ids: (data ?? []).map((d) => d.id as string) };
+  return { text: [awaiting, text].filter(Boolean).join("\n"), ids: sent.map((l) => l.id), older };
 }
 
 function liveDecisionsBlock(agenda: AgendaItem[], ctx: StripContext) {
@@ -568,7 +632,7 @@ export async function assembleStratasphere({
   const disclosures: string[] = [];
 
   let searchFailed = false;
-  const [profile, attachments, ledgerResult, bylaws, hits] = await Promise.all([
+  const [profile, attachments, ledgerResult, bylaws, meaningHits, keywordHits] = await Promise.all([
     profileBlock(supabase, corpId, ctx).catch((err) => {
       console.error("[askStratasphere] profile", err instanceof Error ? err.message : err);
       return "";
@@ -577,7 +641,7 @@ export async function assembleStratasphere({
       ? attachmentsBlock(supabase, corpId, meeting.item, ctx)
       : focus?.kind === "agenda_item"
         ? attachmentsBlock(supabase, corpId, focus.item, ctx)
-        : Promise.resolve({ text: "", disclosures: [] as string[], read: [] as string[] }),
+        : Promise.resolve({ text: "", disclosures: [] as string[], read: [] as string[], whole: [] as string[] }),
     ledgerBlock(supabase, corpId, ctx),
     bylawsBlock(supabase, corpId, ctx),
     withTimeout(searchKnowledge(supabase, corpId, strippedQuestion), SEARCH_TIMEOUT_MS).catch((err) => {
@@ -590,16 +654,49 @@ export async function assembleStratasphere({
       );
       return [] as KnowledgeHit[];
     }),
+    // Alongside the meaning search: exact strings and words (0095). If it
+    // fails, the answer still has the meaning search.
+    withTimeout(searchKeywords(supabase, corpId, strippedQuestion), SEARCH_TIMEOUT_MS).catch((err) => {
+      console.error("[askStratasphere] keyword search", err instanceof Error ? err.message : err);
+      return [] as KnowledgeHit[];
+    }),
   ]);
-  disclosures.push(...attachments.disclosures);
+  const hits = mergeHits(meaningHits, keywordHits);
+  disclosures.push(...attachments.disclosures, ...bylaws.disclosures);
+  if (profile.endsWith(PROFILE_TRUNCATED)) {
+    disclosures.push(
+      "The end of the platform records (the oldest meetings or documents in the list) wasn't read: there are more than can be read at once. If the answer could be there, say so."
+    );
+  }
   const ledger = ledgerResult.text;
+  // Decisions older than those listed in full, searched for this question.
+  const exact = exactStrings(strippedQuestion);
+  const words = searchWords(strippedQuestion);
+  const olderDecisions = ledgerResult.older
+    .map((l) => ({ ...l, score: lineScore(l.line, exact, words) }))
+    .filter((l) => l.score >= 2)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, MAX_OLDER_DECISIONS);
   const looking = focus ? focusBlock(focus, ctx) : null;
   if (looking?.disclosure) disclosures.push(looking.disclosure);
 
-  const bylawIds = new Set(bylaws.sources.map((b) => (b.kind === "document" ? b.documentId : "")));
-  const local = hits.filter((h) => h.scope === "corporation" && !(h.documentId && bylawIds.has(h.documentId)));
-  const global = hits.filter((h) => h.scope === "global_precedent");
-  const legislation = hits.filter((h) => h.scope === "legislation");
+  // Each passage once in a request: not the bylaws or attachments already
+  // sent in full (one cut short keeps its passages, so its unread end can
+  // still be found), and not a passage already shown with an earlier
+  // question in this conversation (still in front of the model).
+  const inFull = new Set([...bylaws.whole, ...attachments.whole]);
+  const earlier = history.map((t) => t.context ?? "").join("\n");
+  let repeated = 0;
+  const fresh = (h: KnowledgeHit) => {
+    if (earlier && earlier.includes(h.text)) {
+      repeated++;
+      return false;
+    }
+    return true;
+  };
+  const local = hits.filter((h) => h.scope === "corporation" && !(h.documentId && inFull.has(h.documentId))).filter(fresh);
+  const global = hits.filter((h) => h.scope === "global_precedent").filter(fresh);
+  const legislation = hits.filter((h) => h.scope === "legislation").filter(fresh);
 
   // The request is laid out for the prompt cache: what's the same for every
   // question (rules, bylaws, ledger) first, then the conversation, where
@@ -609,20 +706,31 @@ export async function assembleStratasphere({
     ? `You are Stratasphere, the AI governance assistant for Strata Plan ${corpId} (${corpName}), operating inside a live ${meeting.meetingLabel}. Answer in 2–4 sentences.`
     : `You are Stratasphere, the AI governance assistant for Strata Plan ${corpId} (${corpName}). Answer in up to a short paragraph.`;
 
-  const standing = [
-    block(`${corpName.toUpperCase()} ON STRATACOUNCIL.CA (live platform records: the roster, council, meetings, documents on file, management, announcements, and the Library)`, profile),
+  // Cached for an hour (PR 5, §7 "Cost"): the bylaws and ledger, which
+  // change only when a document is uploaded or a meeting adjourns, then the
+  // platform records, which change more often (a live meeting updates its
+  // agenda). Two breakpoints, so a change to the platform records still
+  // reads the bylaws and ledger from the cache. Nothing here changes from
+  // one question to the next.
+  const records = [
     block(`${corpName.toUpperCase()} BYLAWS (full text of the current bylaws, most recent first)`, bylaws.text),
     block("DECISION LEDGER (carried motions, newest first)", ledger),
   ]
     .filter(Boolean)
     .join("\n");
+  const platform = block(
+    `${corpName.toUpperCase()} ON STRATACOUNCIL.CA (live platform records: the roster, council, meetings, documents on file, management, announcements, and the Library)`,
+    profile
+  );
 
+  const hour = { type: "ephemeral", ttl: "1h" } as const;
   const system: Anthropic.Beta.BetaTextBlockParam[] = [
     { type: "text", text: [preamble, CARDINAL_RULES.replaceAll("{CORP}", corpName), PERMITTED].join("\n\n") },
+    { type: "text", text: records || "=== STANDING RECORDS ===\nNo bylaws or decisions are on file.", cache_control: hour },
     {
       type: "text",
-      text: `${standing || "=== STANDING RECORDS ===\nNo bylaws or decisions are on file."}\n\nEach question below comes with the records found for it. Answer only what is supported by these records and those excerpts.`,
-      cache_control: { type: "ephemeral" },
+      text: `${platform || "=== PLATFORM RECORDS ===\nNot available for this question."}\n\nEach question below comes with the records found for it. Answer only what is supported by these records and those excerpts.`,
+      cache_control: hour,
     },
   ];
 
@@ -640,6 +748,12 @@ export async function assembleStratasphere({
     disclosures.length ? block("DISCLOSURES REQUIRED FOR THIS ANSWER", disclosures.join("\n")) : "",
     meeting ? block("CURRENT AGENDA ITEM ATTACHMENTS (HIGHEST PRIORITY, verbatim)", attachments.text) : "",
     meeting ? block("DECISIONS MADE SO FAR IN THIS MEETING (not yet in the ledger)", liveDecisionsBlock(meeting.agenda, ctx)) : "",
+    olderDecisions.length
+      ? block(
+          "OLDER DECISIONS (from the decision ledger, older than those listed in full, that match this question)",
+          olderDecisions.map((l) => l.line).join("\n")
+        )
+      : "",
     block(`${corpName.toUpperCase()} DOCUMENT EXCERPTS (most relevant to this question)`, hitsBlock(local)),
     block("CROSS-PLATFORM PRECEDENT (anonymized, from other strata corporations — never this corporation's own data)", hitsBlock(global)),
     block(
@@ -649,8 +763,18 @@ export async function assembleStratasphere({
   ]
     .filter(Boolean)
     .join("\n");
+  if (repeated) {
+    turnContext = [
+      turnContext,
+      `[${repeated} passage${repeated === 1 ? "" : "s"} found for this question already appear${repeated === 1 ? "s" : ""} with earlier questions above, and ${repeated === 1 ? "isn't" : "aren't"} repeated here.]`,
+    ]
+      .filter(Boolean)
+      .join("\n");
+  }
   if (!turnContext) turnContext = "No further records matched this question.";
-  if (turnContext.length > MAX_CONTEXT_CHARS) turnContext = `${turnContext.slice(0, MAX_CONTEXT_CHARS)}\n[...context truncated]`;
+  if (turnContext.length > MAX_CONTEXT_CHARS) {
+    turnContext = `[Not all the records found for this question fit: the end of them wasn't read. If the answer could be missing because of that, say so.]\n${turnContext.slice(0, MAX_CONTEXT_CHARS)}\n[...context truncated]`;
+  }
 
   const messages: Anthropic.Beta.BetaMessageParam[] = history.map((t) => ({
     role: t.role,
@@ -684,7 +808,8 @@ export async function assembleStratasphere({
     diagnostics: {
       bylawDocumentIds: bylaws.sources.flatMap((b) => (b.kind === "document" ? [b.documentId] : [])),
       attachmentDocumentIds: attachments.read,
-      ledgerDecisionIds: ledgerResult.ids,
+      ledgerDecisionIds: [...ledgerResult.ids, ...olderDecisions.map((l) => l.id)],
+      // Every passage found, including those already shown with an earlier question.
       hits: hits.map((h) => ({ scope: h.scope, documentId: h.documentId, title: h.title, similarity: h.similarity })),
       searchFailed,
     },
