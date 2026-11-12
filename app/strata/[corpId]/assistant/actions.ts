@@ -1,5 +1,6 @@
 "use server";
 
+import type { SavedFocus } from "@/lib/stratasphere-focus";
 import { createClient } from "@/lib/supabase/server";
 import type { StratasphereSource } from "@/lib/ai/stratasphere";
 import type { ConversationMessage, ConversationProject } from "@/lib/data/conversations";
@@ -30,7 +31,7 @@ export async function getConversationMessages(
   if (!convo) return notFound;
   const { data, error } = await supabase
     .from("conversation_messages")
-    .select("id, role, content, citations, created_at")
+    .select("id, role, content, citations, created_at, focus")
     .eq("conversation_id", conversationId)
     .order("created_at", { ascending: true })
     .limit(1000);
@@ -43,6 +44,7 @@ export async function getConversationMessages(
       content: m.content,
       sources: Array.isArray(m.citations) ? (m.citations as StratasphereSource[]) : [],
       createdAt: m.created_at,
+      focus: (m.focus as SavedFocus | null) ?? null,
     })),
   };
 }

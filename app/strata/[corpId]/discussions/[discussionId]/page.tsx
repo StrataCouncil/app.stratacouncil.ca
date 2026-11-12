@@ -1,3 +1,4 @@
+import { LookingAt } from "@/components/StratasphereDock";
 import { tz } from "@/lib/time-zone";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -36,6 +37,14 @@ export default async function DiscussionPage({ params }: { params: Promise<{ cor
   return (
     <>
       <StrataSphereNav active="discussions" />
+      {/* Stratasphere sees a discussion only once it's a decision: closed, with the motion carried (decided 2026-11-12). */}
+      <LookingAt
+        focus={
+          d.storedStatus === "closed" && d.result === "supported" && d.voteRequired
+            ? { ref: { kind: "discussion", discussionId: d.id }, label: `Discussion: ${d.title}`, title: d.title }
+            : null
+        }
+      />
       <Link href={`/strata/${corpId}/discussions`} className="kb-article__back">
         &larr; Discussions
       </Link>

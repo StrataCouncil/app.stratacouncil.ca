@@ -10,6 +10,7 @@ import {
   type IndexingStatus,
 } from "@/lib/documents";
 import type { FiledCopy, RepositoryDocument } from "@/lib/data/documents";
+import { AskAboutButton } from "@/components/StratasphereDock";
 import { getDocumentDownloadUrl, mergeDuplicateDocument, moveDocument, reindexDocument } from "@/app/strata/[corpId]/documents/actions";
 
 /** An agenda item a document is attached to, ready to show. */
@@ -177,6 +178,11 @@ export function DocumentList({
                 )}
               </div>
               <div className="text-actions">
+                {/* Opens the Stratasphere panel looking at this document (PR 4a); shown only to those who can use it. */}
+                <AskAboutButton
+                  className="text-action"
+                  focus={{ ref: { kind: "document", documentId: doc.id }, label: doc.title, title: doc.title }}
+                />
                 {canIndex && (
                   <button
                     type="button"

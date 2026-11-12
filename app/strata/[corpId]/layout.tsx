@@ -7,6 +7,7 @@ import { ScreenGate } from "@/components/ScreenGate";
 import { stripeModeFor } from "@/lib/stripe/client";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { SubscribeNudge } from "@/components/SubscribeNudge";
+import { StratasphereDock } from "@/components/StratasphereDock";
 import { getConnectedCorporations, type ConnectedCorporation } from "@/lib/data/corporations";
 import { createClient } from "@/lib/supabase/server";
 import { getStrataAccess } from "@/lib/data/strata";
@@ -128,7 +129,20 @@ export default async function StrataSphereLayout({
               seesDiscussions: access?.seesDiscussions ?? false,
             }}
           >
-            {children}
+            {/* One Stratasphere assistant (PR 4a): council, managers, and admins. Subscribed: Stratasphere; not: what it is, free. */}
+            <StratasphereDock
+              mode={
+                !(access?.isCouncil || access?.isAdmin || access?.roles.includes("manager"))
+                  ? "none"
+                  : access?.stratasphere
+                    ? "chat"
+                    : !subscribed
+                      ? "pitch"
+                      : "none"
+              }
+            >
+              {children}
+            </StratasphereDock>
           </StrataContextProvider>
         </ScreenGate>
       </div>

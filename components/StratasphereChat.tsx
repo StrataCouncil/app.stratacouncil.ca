@@ -13,6 +13,8 @@ import {
 } from "@/app/strata/[corpId]/assistant/actions";
 import { getDocumentDownloadUrl } from "@/app/strata/[corpId]/documents/actions";
 import { openInNewTab } from "@/lib/open-in-tab";
+import Link from "next/link";
+import { focusHref, type SavedFocus } from "@/lib/stratasphere-focus";
 import type { StratasphereSource } from "@/lib/ai/stratasphere";
 import { DEMO_LIMITS, DEMO_LIMIT_MESSAGE, SIGNUP_URL } from "@/lib/demo";
 import { showDemoLimit } from "@/lib/demo-client";
@@ -44,12 +46,13 @@ function dateGroup(iso: string, now: Date): string {
 function sourceLabel(s: StratasphereSource): string {
   if (s.kind === "document") return s.title;
   if (s.kind === "legislation") return s.title;
-  if (s.kind === "decisions") return "Decision ledger";
-  return "Cross-platform precedent";
+  return "Decision ledger";
 }
 
-function Sources({ corpId, sources }: { corpId: string; sources: StratasphereSource[] }) {
+/** An answer's sources as chips; documents open. Precedent from other stratas is never shown as a source. */
+export function Sources({ corpId, sources: all }: { corpId: string; sources: StratasphereSource[] }) {
   const [error, setError] = useState("");
+  const sources = all.filter((s) => s.kind !== "precedent");
   if (!sources.length) return null;
 
   async function open(documentId: string) {
@@ -81,6 +84,16 @@ function Sources({ corpId, sources }: { corpId: string; sources: StratasphereSou
       )}
       {error && <span className="chat-message__sources-error">{error}</span>}
     </div>
+  );
+}
+
+/** Under a question: what the person was looking at when they asked it, linked back. */
+export function AskedAbout({ corpId, focus }: { corpId: string; focus: SavedFocus }) {
+  const href = focusHref(corpId, focus);
+  return (
+    <p className="chat-message__focus" data-testid="asked-about">
+      Asked while looking at {href ? <Link href={href}>{focus.label}</Link> : focus.label}
+    </p>
   );
 }
 
@@ -238,6 +251,7 @@ export function StratasphereChat({
   indexedDocuments,
   initialConversations,
   initialProjects,
+  initialConversationId = null,
   demoLeft = null,
 }: {
   corpId: string;
@@ -245,6 +259,8 @@ export function StratasphereChat({
   indexedDocuments: number;
   initialConversations: ConversationSummary[];
   initialProjects: ConversationProject[];
+  /** Open this conversation first (the panel's "Open full page", ?c=). */
+  initialConversationId?: string | null;
   /** The demo site: questions this visitor has left (lib/demo.ts DEMO_LIMITS). Null elsewhere. */
   demoLeft?: number | null;
 }) {
@@ -295,6 +311,13 @@ export function StratasphereChat({
     el.style.height = "auto";
     el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
   }, [draft]);
+
+  // Opened from the panel's "Open full page": that conversation, if it's theirs.
+  useEffect(() => {
+    if (initialConversationId && initialConversations.some((c) => c.id === initialConversationId)) void select(initialConversationId);
+    // Once, on arrival.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function select(id: string) {
     setListOpen(false);
@@ -730,6 +753,7 @@ export function StratasphereChat({
                     </span>
                   ) : null}
                 </div>
+                {m.role === "user" && m.focus ? <AskedAbout corpId={corpId} focus={m.focus} /> : null}
                 {m.role === "assistant" && !m.pending && <Sources corpId={corpId} sources={m.sources} />}
               </div>
             ))}

@@ -11162,3 +11162,268 @@ button.design-editor__swatch {
     grid-template-columns: 1fr;
   }
 }
+
+/* One Stratasphere assistant (PR 4a): the floating button and the docked
+   panel (components/StratasphereDock.tsx). On a desktop the panel sits on
+   the right and the page narrows to make room; on a phone it's a sheet. */
+:root {
+  --dock-width: 400px;
+}
+
+.dock-shell[data-open="true"] {
+  margin-right: var(--dock-width);
+  transition: margin-right 0.15s ease;
+}
+
+.dock-fab {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 60;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.8rem 1.15rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--ink);
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  box-shadow: 0 10px 28px rgba(27, 42, 65, 0.25);
+  cursor: pointer;
+}
+
+.dock-fab:hover {
+  background: #26395a;
+}
+
+.dock-fab:focus-visible,
+.dock-panel button:focus-visible,
+.dock-panel a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.dock-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 70;
+  width: var(--dock-width);
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border-left: 1px solid var(--line);
+  box-shadow: -12px 0 32px rgba(27, 42, 65, 0.08);
+}
+
+.dock-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.9rem 1rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.dock-panel__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.dock-panel__link {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-size: 0.875rem;
+  color: var(--accent-dark);
+  text-decoration: underline;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.dock-panel__link:disabled {
+  color: var(--locked);
+  cursor: default;
+}
+
+.dock-panel__close {
+  background: none;
+  border: 0;
+  font-size: 1.5rem;
+  line-height: 1;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.dock-panel__focus {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.6rem 1rem;
+  background: var(--paper);
+  border-bottom: 1px solid var(--line);
+  font-size: 0.875rem;
+  color: var(--ink);
+}
+
+.dock-panel__focus strong {
+  font-weight: 600;
+}
+
+.dock-panel__focus button {
+  flex: none;
+  background: none;
+  border: 0;
+  font-size: 1.15rem;
+  line-height: 1;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.dock-panel__body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.dock-suggest {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.dock-suggest__q {
+  text-align: left;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 0.6rem 0.75rem;
+  font: inherit;
+  font-size: 0.9375rem;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.dock-suggest__q:hover {
+  border-color: var(--accent);
+}
+
+.dock-msg {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.dock-msg[data-role="user"] {
+  align-items: flex-end;
+}
+
+.dock-msg__bubble {
+  white-space: pre-wrap;
+  line-height: 1.55;
+  font-size: 0.9375rem;
+}
+
+.dock-msg[data-role="user"] .dock-msg__bubble {
+  max-width: 85%;
+  background: var(--ink);
+  color: #fff;
+  padding: 0.55rem 0.8rem;
+  border-radius: 12px 12px 2px 12px;
+}
+
+.dock-msg__note {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.dock-panel__error {
+  color: var(--danger);
+  font-size: 0.875rem;
+}
+
+.dock-panel__compose {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-end;
+  padding: 0.75rem 1rem;
+  border-top: 1px solid var(--line);
+}
+
+.dock-panel__compose textarea {
+  flex: 1;
+  resize: none;
+  font: inherit;
+  font-size: 0.9375rem;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+
+.dock-pitch {
+  gap: 1rem;
+}
+
+.dock-pitch__example {
+  margin: 0;
+  padding: 0.9rem;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.dock-pitch__q {
+  align-self: flex-end;
+  background: var(--ink);
+  color: #fff;
+  padding: 0.45rem 0.7rem;
+  border-radius: 12px 12px 2px 12px;
+  font-size: 0.875rem;
+}
+
+.dock-pitch__a {
+  font-size: 0.9375rem;
+  line-height: 1.55;
+}
+
+.dock-pitch__sources,
+.dock-pitch__example figcaption {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.chat-message__focus {
+  font-size: 0.8125rem;
+  color: var(--muted);
+  text-align: right;
+}
+
+/* Narrower screens: the panel covers the page instead of squeezing it. */
+@media (max-width: 1100px) {
+  .dock-shell[data-open="true"] {
+    margin-right: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .dock-panel {
+    width: 100%;
+    border-left: 0;
+  }
+  .dock-fab {
+    right: 16px;
+    bottom: 16px;
+  }
+}

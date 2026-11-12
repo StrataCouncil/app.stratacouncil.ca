@@ -4,6 +4,8 @@ import { getStrataAccess } from "@/lib/data/strata";
 import { streamStratasphere, type AssistantTurn, type StratasphereSource } from "@/lib/ai/stratasphere";
 import { titleFromQuestion } from "@/lib/ai/conversation-title";
 import { trimHistory } from "@/lib/ai/conversation-history";
+import { resolveFocus, savedFocus } from "@/lib/ai/focus";
+import { parseFocusRef } from "@/lib/stratasphere-focus";
 import { DEMO_LIMIT_MESSAGE, IS_DEMO } from "@/lib/demo";
 import { demoVisitorId, logDemoActivity, refundDemoAllowance, takeDemoAllowance } from "@/lib/demo-usage";
 
@@ -13,11 +15,16 @@ import { demoVisitorId, logDemoActivity, refundDemoAllowance, takeDemoAllowance 
  * the answer back as newline-delimited JSON while it's written, then saves
  * the answer with the sources it drew on:
  *
- *   {"type":"start","conversationId","title"}
+ *   {"type":"start","conversationId","title","focus"}
  *   {"type":"delta","text"} ...
  *   {"type":"done","messageId","sources"}   or   {"type":"error","error"}
  *
  * Conversations are private to their owner (RLS, 0019).
+ *
+ * The floating panel (PR 4a) also sends `focus`: a reference to what the
+ * person is looking at. It's read again here with their own access and
+ * refused if they couldn't open it; only the reference and its label are
+ * saved with the question (conversation_messages.focus, 0094).
  */
 export const maxDuration = 120;
 
@@ -37,6 +44,7 @@ export async function POST(request: NextRequest) {
     corpId?: string;
     conversationId?: string | null;
     question?: string;
+    focus?: unknown;
   } | null;
   const corpId = String(body?.corpId ?? "");
   const question = String(body?.question ?? "").trim().slice(0, 4000);
@@ -55,6 +63,12 @@ export async function POST(request: NextRequest) {
   if (!access.stratasphere) {
     return NextResponse.json({ error: "Stratasphere is for council members, managers, and admins." }, { status: 403 });
   }
+  // What they're looking at, if anything: read with their own access, or refused.
+  const focusRef = body?.focus == null ? null : parseFocusRef(body.focus);
+  if (body?.focus != null && !focusRef) return NextResponse.json({ error: "That record isn't available." }, { status: 400 });
+  const focus = focusRef ? await resolveFocus(supabase, access.corpId, focusRef) : null;
+  if (focusRef && !focus) return NextResponse.json({ error: "That record isn't available to you." }, { status: 403 });
+
   // The demo: three questions per visitor (lib/demo.ts DEMO_LIMITS).
   if (IS_DEMO && !(await takeDemoAllowance("chat"))) {
     await logDemoActivity({ kind: "limit", path: `/strata/${corpId}/assistant`, detail: { reason: "Stratasphere questions", question } });
@@ -119,7 +133,7 @@ export async function POST(request: NextRequest) {
 
   const { data: asked, error: qError } = await supabase
     .from("conversation_messages")
-    .insert({ conversation_id: conversationId, role: "user", content: question })
+    .insert({ conversation_id: conversationId, role: "user", content: question, focus: focus ? savedFocus(focus) : null })
     .select("id")
     .single();
   if (qError || !asked) {
@@ -133,9 +147,9 @@ export async function POST(request: NextRequest) {
   const visitor = IS_DEMO ? await demoVisitorId() : null;
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
-      controller.enqueue(line({ type: "start", conversationId: id, title }));
+      controller.enqueue(line({ type: "start", conversationId: id, title, focus: focus ? savedFocus(focus) : null }));
       const result = await streamStratasphere(
-        { supabase, corpId: access.corpId, question, history, trimmed },
+        { supabase, corpId: access.corpId, question, history, trimmed, focus },
         (text) => controller.enqueue(line({ type: "delta", text }))
       );
       if (!result.ok) {

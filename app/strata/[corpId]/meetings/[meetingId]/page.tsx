@@ -1,3 +1,5 @@
+import { LookingAt } from "@/components/StratasphereDock";
+import { shortDate } from "@/lib/ai/focus";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { StrataSphereNav } from "@/components/StrataSphereNav";
@@ -49,6 +51,13 @@ export default async function MeetingPage({
   return (
     <>
       <StrataSphereNav active="meetings" />
+      <LookingAt
+        focus={{
+          ref: { kind: "meeting", meetingId: meeting.id },
+          label: `${meetingTypeLabels[meeting.type]}, ${shortDate(meeting.meetingDate)}`,
+          title: meetingTypeLabels[meeting.type],
+        }}
+      />
       <Link href={`/strata/${corpId}/meetings`} className="card__meta" style={{ display: "inline-block", marginBottom: "0.75rem" }}>
         &larr; All meetings
       </Link>

@@ -236,10 +236,17 @@ One subscribing strata of about 20 lots covers them.
 
 ### How it looks
 
-- **A floating button,** bottom right, on every Decide and Remember page.
+- **A floating button,** bottom right, on every strata page, shown only to
+  the people who can use Stratasphere: council members, managers, and admins.
+  - **Subscribed:** it opens the assistant.
+  - **Not subscribed:** it opens a short example and Subscribe (or "Ask your
+    admin to subscribe" for those who can't manage billing).
+  - **Hidden** on the full Ask page and in Meeting Mode (until PR 4b), and for
+    owners who aren't on council.
   - **Desktop:** it opens a panel docked on the right that pushes the page
     narrower instead of covering it.
-  - **Phones:** it opens a full-height sheet.
+  - **Phones:** it opens a full-height sheet. (Strata pages are desktop-only
+    on phones for now, so in practice phones use the full Ask page.)
 - **Inside Meeting Mode,** the panel takes the place of today's embedded
   assistant in the right column. It never covers the runner's controls, video,
   or voting.
@@ -252,7 +259,7 @@ One subscribing strata of about 20 lots covers them.
   - "What have we decided about roof replacement before?"
   - "What do our bylaws say about this?"
   - "Summarize the attachments."
-- **The panel's header** has "New conversation" and "Open full page".
+- **The panel's header** has "New" (conversation) and "Full page".
 - **Under each answer:** its sources, as clickable chips (as today), and the
   line "Research only, not part of the minutes."
 
@@ -280,9 +287,18 @@ The page tells the panel what's on screen as a small reference, never as text:
 | Meeting Mode or agenda, item open | `{kind: "agenda_item", meetingId, itemId}` |
 | A meeting, no item open | `{kind: "meeting", meetingId}` |
 | A document | `{kind: "document", documentId}` |
-| A ledger entry | `{kind: "decision", decisionId}` |
-| Owners, Council, Overview | `{kind: "page", page: "owners"}` (no extra records; the profile already covers them) |
-| Discussions | None. Discussions are never sent to Stratasphere. |
+| A closed Discussion whose motion carried | `{kind: "discussion", discussionId}` |
+| Other pages | None: a general question. |
+
+**Discussions** are just that, discussions. Once the vote is in and the
+discussion is closed with its motion carried, it becomes a decision, to be
+ratified at an upcoming meeting. Only then does Stratasphere see it: as a focus,
+and in the decision ledger as "carried, awaiting ratification" (title, motion,
+date closed, and vote counts; never the comments or who voted which way). Open
+discussions, and those that didn't carry, are never sent.
+
+The Decision Ledger has no page of its own; it stays behind the scenes, for
+Stratasphere.
 
 - **The server re-reads the record with the person's own access** (RLS) and
   refuses anything they couldn't open themselves. It never trusts text sent from
@@ -294,7 +310,7 @@ The page tells the panel what's on screen as a small reference, never as text:
   IS LOOKING AT (highest priority)":
   - The item and its motion.
   - All its attachments (as Meeting Mode does today).
-  - For a decision: its minutes.
+  - For a carried discussion: its motion, date, and vote counts.
   - For a document: the whole document.
 
   Search still runs across everything else as usual, so focus adds context and
@@ -535,13 +551,13 @@ database tests, build, browser test), and you run the migration and merge.
    - The Remember pages: Documents read-only when unsubscribed, and the new
      Decision Ledger page.
    - Redirects for anything that moves.
-4. **The one assistant.**
-   - The floating panel and focus references.
-   - Saved conversations from every surface, with where each started.
-   - Suggested questions.
-   - The panel inside Meeting Mode, replacing the embedded assistant.
-   - The hourly safeguard.
-   - The locked panel for unsubscribed stratas.
+4. **The one assistant,** in two PRs.
+   - **4a** (migration 0094): the floating panel and focus references; the
+     focus saved with each question and shown on the full page ("Asked while
+     looking at ..."); suggested questions; the example panel for unsubscribed
+     stratas; carried Discussions in the ledger.
+   - **4b:** the panel inside Meeting Mode, replacing the embedded assistant
+     (its answers then saved too), and the hourly safeguard.
 5. **Finding records and cost.** Behind the recall gate:
    - Separate precedent slots.
    - The whole ledger.

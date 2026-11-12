@@ -10,6 +10,7 @@ import { listPublishedLibrary } from "@/lib/data/library";
 import { knowledgeResourceKindLabels } from "@/lib/library/catalogue";
 import { meetingFormatLabels, meetingTypeLabels, type MeetingFormat, type MeetingType } from "@/lib/meetings/agenda";
 import type { AgendaItem } from "@/lib/meetings/agenda";
+import type { ResolvedFocus } from "@/lib/ai/focus";
 
 /**
  * Stratasphere, the AI governance assistant (doc02 §3–§5). One system for
@@ -352,7 +353,31 @@ async function ledgerBlock(supabase: SupabaseClient, corpId: string, ctx: StripC
       return stripForCorporation(`[${where}] ${d.title} — CARRIED${votes}.${who}${motion}`, ctx);
     })
     .join("\n");
-  return { text, ids: (data ?? []).map((d) => d.id as string) };
+  // Decisions council made between meetings: closed Discussions whose
+  // motion carried, awaiting ratification (decided 2026-11-12). Once a
+  // meeting ratifies one it's that meeting's decision above, so only those
+  // still awaiting are added. Read with the service role, because a
+  // manager who uses Stratasphere may not see Discussions themselves; only
+  // the motion, its date, and the count, never the comments or who voted
+  // which way. Open discussions are never read.
+  const { data: pending } = await createAdminClient()
+    .from("discussions")
+    .select("title, motion, closed_at, votes_for, votes_against, votes_abstain")
+    .eq("corporation_id", corpId)
+    .eq("status", "closed")
+    .eq("result", "supported")
+    .eq("vote_required", true)
+    .order("closed_at", { ascending: false })
+    .limit(20);
+  const awaiting = (pending ?? [])
+    .map((d) =>
+      stripForCorporation(
+        `[${String(d.closed_at).slice(0, 10)}, council Discussion between meetings, awaiting ratification at the next council meeting] ${d.title} — CARRIED by council vote (${d.votes_for ?? 0} for / ${d.votes_against ?? 0} against / ${d.votes_abstain ?? 0} abstain). Motion: ${d.motion}`,
+        ctx
+      )
+    )
+    .join("\n");
+  return { text: [awaiting, text].filter(Boolean).join("\n"), ids: (data ?? []).map((d) => d.id as string) };
 }
 
 function liveDecisionsBlock(agenda: AgendaItem[], ctx: StripContext) {
@@ -366,6 +391,65 @@ function liveDecisionsBlock(agenda: AgendaItem[], ctx: StripContext) {
       );
     })
     .join("\n");
+}
+
+/**
+ * The record the person is looking at (PR 4a), as text for the model:
+ * stripped like everything else. Its attachments, for an agenda item, come
+ * from attachmentsBlock. Discussions reach here only closed with the motion
+ * carried (lib/ai/focus.ts): the motion and the count, never the comments
+ * or who voted which way.
+ */
+function focusBlock(f: ResolvedFocus, ctx: StripContext): { text: string; disclosure?: string } {
+  const strip = (t: string) => stripForCorporation(t, ctx);
+  const motionLine = (it: AgendaItem) => {
+    const m = it.motion;
+    if (!m?.text) return "";
+    const result = m.outcome ? ` Result: ${m.outcome} (${m.for} for / ${m.against} against / ${m.abstain} abstain).` : "";
+    return ` Motion: ${m.text}.${result}`;
+  };
+  switch (f.kind) {
+    case "agenda_item": {
+      const it = f.item;
+      const parts = [
+        `${f.meetingLabel}, ${f.date}. Agenda item: "${it.text}" (${it.cat}).`,
+        it.background ? `Background: ${it.background}` : "",
+        it.financial ? `Financial implications: ${it.financial}` : "",
+        it.risks ? `Risks: ${it.risks}` : "",
+        motionLine(it).trim(),
+        it.minutesSummary ? `Minutes: ${it.minutesSummary}` : "",
+      ].filter(Boolean);
+      return { text: strip(parts.join("\n")) };
+    }
+    case "meeting":
+      return {
+        text: strip(
+          [`${f.meetingLabel}, ${f.date}. Agenda:`, ...f.agenda.map((it) => `${it.num}. ${it.text} (${it.cat}).${motionLine(it)}`)].join("\n")
+        ),
+      };
+    case "document": {
+      if (!f.text) {
+        return {
+          text: strip(`Document: "${f.title}", added ${f.uploadedAt}.`),
+          disclosure: strip(
+            f.indexingStatus === "pending" || f.indexingStatus === "processing" || f.indexingStatus === "waiting"
+              ? `The document the person is looking at ("${f.title}") hasn't been read yet. Say so if the question is about it.`
+              : `The document the person is looking at ("${f.title}") couldn't be read (it may be an image or a scan with no text). Say so if the question is about it.`
+          ),
+        };
+      }
+      const body = f.text.length > MAX_ATTACHMENT_CHARS ? `${f.text.slice(0, MAX_ATTACHMENT_CHARS)}\n[...truncated]` : f.text;
+      return { text: strip(`[DOCUMENT: ${f.title}, added ${f.uploadedAt}]\n${body}\n[END DOCUMENT]`) };
+    }
+    case "discussion":
+      return {
+        text: strip(
+          `A council decision made between meetings, in a Discussion closed ${f.closedAt}: "${f.title}". Motion: ${f.motion}. ` +
+            `CARRIED by council vote (${f.votes.for} for / ${f.votes.against} against / ${f.votes.abstain} abstain). ` +
+            "It awaits ratification at the next council meeting."
+        ),
+      };
+  }
 }
 
 /** Legislation chunks already open with their citation line (Act, current-to date, section). */
@@ -385,6 +469,8 @@ type PrepareInput = {
   question: string;
   history: AssistantTurn[];
   meeting?: MeetingScope;
+  /** What the person is looking at, already read with their own access (lib/ai/focus.ts). */
+  focus?: ResolvedFocus | null;
   /** Older turns were dropped from this conversation's history. */
   trimmed?: boolean;
 };
@@ -427,6 +513,7 @@ export async function assembleStratasphere({
   question,
   history,
   meeting,
+  focus,
   trimmed,
 }: {
   supabase: SupabaseClient;
@@ -434,6 +521,7 @@ export async function assembleStratasphere({
   question: string;
   history: AssistantTurn[];
   meeting?: MeetingScope;
+  focus?: ResolvedFocus | null;
   /** Older turns were dropped from this conversation's history. */
   trimmed?: boolean;
 }): Promise<Prepared> {
@@ -457,7 +545,11 @@ export async function assembleStratasphere({
       console.error("[askStratasphere] profile", err instanceof Error ? err.message : err);
       return "";
     }),
-    meeting ? attachmentsBlock(supabase, corpId, meeting.item, ctx) : Promise.resolve({ text: "", disclosures: [] as string[], read: [] as string[] }),
+    meeting
+      ? attachmentsBlock(supabase, corpId, meeting.item, ctx)
+      : focus?.kind === "agenda_item"
+        ? attachmentsBlock(supabase, corpId, focus.item, ctx)
+        : Promise.resolve({ text: "", disclosures: [] as string[], read: [] as string[] }),
     ledgerBlock(supabase, corpId, ctx),
     bylawsBlock(supabase, corpId, ctx),
     withTimeout(searchKnowledge(supabase, corpId, strippedQuestion), SEARCH_TIMEOUT_MS).catch((err) => {
@@ -473,6 +565,8 @@ export async function assembleStratasphere({
   ]);
   disclosures.push(...attachments.disclosures);
   const ledger = ledgerResult.text;
+  const looking = focus ? focusBlock(focus, ctx) : null;
+  if (looking?.disclosure) disclosures.push(looking.disclosure);
 
   const bylawIds = new Set(bylaws.sources.map((b) => (b.kind === "document" ? b.documentId : "")));
   const local = hits.filter((h) => h.scope === "corporation" && !(h.documentId && bylawIds.has(h.documentId)));
@@ -505,6 +599,10 @@ export async function assembleStratasphere({
   ];
 
   let turnContext = [
+    // What the person is looking at goes first and in full (PR 4a). Search
+    // below still runs across everything, so it adds context, never narrows it.
+    looking ? block("THE RECORD THE PERSON IS LOOKING AT (highest priority)", looking.text) : "",
+    focus?.kind === "agenda_item" ? block("THAT AGENDA ITEM'S ATTACHMENTS (HIGHEST PRIORITY, verbatim)", attachments.text) : "",
     meeting
       ? block(
           "CURRENT AGENDA ITEM",
@@ -553,7 +651,7 @@ export async function assembleStratasphere({
     turnContext,
     effort: meeting ? "low" : "medium",
     maxTokens: meeting ? 4000 : 8000,
-    sources: sourcesFrom(hits, Boolean(ledger.trim()), await documentTitles(supabase, corpId, hits)),
+    sources: withFocusSource(focus, sourcesFrom(hits, Boolean(ledger.trim()), await documentTitles(supabase, corpId, hits))),
     bylawSources: bylaws.sources,
     diagnostics: {
       bylawDocumentIds: bylaws.sources.flatMap((b) => (b.kind === "document" ? [b.documentId] : [])),
@@ -563,6 +661,14 @@ export async function assembleStratasphere({
       searchFailed,
     },
   };
+}
+
+/** The document the person was looking at leads the sources, once. */
+function withFocusSource(focus: ResolvedFocus | null | undefined, sources: StratasphereSource[]): StratasphereSource[] {
+  if (focus?.kind !== "document") return sources;
+  const rest = sources.filter((x) => !(x.kind === "document" && x.documentId === focus.documentId));
+  const lead: StratasphereSource = { kind: "document", title: focus.title, documentId: focus.documentId };
+  return [lead, ...rest].slice(0, 12);
 }
 
 /** A question as the model sees it: the records found for it, then the question. Must stay byte-stable (cache). */
