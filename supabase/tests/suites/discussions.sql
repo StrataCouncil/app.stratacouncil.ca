@@ -30,17 +30,24 @@ insert into corporation_role_assignments (corporation_id, role, user_id) values
   ('BCS-1234', 'member_at_large', '70000000-0000-0000-0000-000000000004'),
   ('BCS-1234', 'manager', '70000000-0000-0000-0000-000000000005');
 delete from subscriptions where corporation_id = 'BCS-1234';
+-- Discussions are started by meeting runners (0093): Pat and Tess run meetings.
+update corporation_memberships set can_run_meetings = true
+  where corporation_id = 'BCS-1234' and user_id in ('70000000-0000-0000-0000-000000000001', '70000000-0000-0000-0000-000000000002');
 
 select pg_temp.expect('visitors can''t settle ratifications themselves',
   not has_function_privilege('authenticated', 'public.settle_discussion_ratifications()', 'execute'));
 select pg_temp.expect('the files bucket is private', (select not public from storage.buckets where id = 'discussion-files'));
 
 set role authenticated;
--- Council and those who run meetings can start one: not a manager who can't run meetings, or an owner.
+-- Only those who run meetings start one (0093): not a manager who can't run meetings, an owner, or a
+-- council member who doesn't run meetings (Mia, who still reads, comments, and votes below).
 set test.uid = '70000000-0000-0000-0000-000000000005';
-select pg_temp.expect_error($q$select create_discussion('BCS-1234', 'Roof', '', '', '', 'THAT council get three quotes.')$q$, 'Only council members');
+select pg_temp.expect_error($q$select create_discussion('BCS-1234', 'Roof', '', '', '', 'THAT council get three quotes.')$q$, 'Only those who run meetings');
 set test.uid = '70000000-0000-0000-0000-000000000006';
-select pg_temp.expect_error($q$select create_discussion('BCS-1234', 'Roof', '', '', '', 'THAT council get three quotes.')$q$, 'Only council members');
+select pg_temp.expect_error($q$select create_discussion('BCS-1234', 'Roof', '', '', '', 'THAT council get three quotes.')$q$, 'Only those who run meetings');
+set test.uid = '70000000-0000-0000-0000-000000000004';
+select pg_temp.expect_error($q$select create_discussion('BCS-1234', 'Roof', '', '', '', 'THAT council get three quotes.')$q$, 'Only those who run meetings');
+select pg_temp.expect('a council member who doesn''t run meetings still sees Discussions', can_see_discussions('BCS-1234') and not can_start_discussions('BCS-1234'));
 -- The strata's admin (Bob) runs meetings, so since 0078 they may start one too (checked, not used up here).
 set test.uid = '00000000-0000-0000-0000-00000000000b';
 select pg_temp.expect('the admin, who runs meetings, may start one (0078)', can_see_discussions('BCS-1234'));

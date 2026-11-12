@@ -32,6 +32,8 @@ insert into corporation_role_assignments (corporation_id, role, user_id) values
 delete from subscriptions where corporation_id = 'BCS-1234';
 -- 0081: discussions without a vote. Subscribed, so the free limit doesn't get in the way.
 insert into subscriptions (corporation_id, status) values ('BCS-1234', 'active');
+-- Discussions are started by meeting runners (0093): Tess runs meetings.
+update corporation_memberships set can_run_meetings = true where corporation_id = 'BCS-1234' and user_id = '70000000-0000-0000-0000-000000000002';
 
 set role authenticated;
 set test.uid = '70000000-0000-0000-0000-000000000002';

@@ -30,8 +30,10 @@ grant select, insert on ids to authenticated;
 
 -- Discussions remember each voter's lot.
 set role authenticated;
-set test.uid = '00000000-0000-0000-0000-00000000000f';
+-- Bob (the admin, who runs meetings) starts it: since 0093 only meeting runners start discussions.
+set test.uid = '00000000-0000-0000-0000-00000000000b';
 insert into ids select 'd', create_discussion('BCS-1234', 'Landscaping contract', '', '', '', 'THAT council award the landscaping contract.');
+set test.uid = '00000000-0000-0000-0000-00000000000f';
 select pg_temp.expect('each voter has their lot',
   (select array_agg(lot_number order by lot_number) = array['SL001','SL002','SL003'] from discussion_voters where discussion_id = (select id from ids where name = 'd')));
 

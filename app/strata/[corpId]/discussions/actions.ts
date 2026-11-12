@@ -199,6 +199,8 @@ async function canAttach(corpId: string, id: string, commentId: string | null): 
     return null;
   }
   if (d.created_by !== user.id) return "Only the person who started this discussion can attach files to the motion.";
+  // And only while they still run meetings, as for editing it (0093).
+  if (!(await getStrataAccess(corpId))?.canRunMeetings) return "Only those who run meetings can change a discussion.";
   const { count } = await supabase.from("discussion_voters").select("id", { count: "exact", head: true }).eq("discussion_id", id).not("vote", "is", null);
   if ((count ?? 0) > 0) return "Someone has voted, so the motion's attachments can no longer change.";
   return null;
@@ -290,7 +292,8 @@ export async function draftDiscussionMotion(
   input: { title: string; background: string; financial: string; risks: string }
 ): Promise<Ok<{ motionText: string }> | Fail | DemoLimitFail> {
   const access = await getStrataAccess(corpId);
-  if (!access?.seesDiscussions) return { ok: false, error: "Only council members and those who run meetings can start a discussion." };
+  // Only those who run meetings start, and so draft, a discussion (0093).
+  if (!access?.canRunMeetings) return { ok: false, error: "Only those who run meetings can start a discussion." };
   if (!access.subscribed) {
     return { ok: false, error: "Drafting a motion with AI comes with a Stratasphere subscription." };
   }

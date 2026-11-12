@@ -4,11 +4,11 @@ import { StrataSphereNav } from "@/components/StrataSphereNav";
 import { DiscussionForm } from "@/components/discussions/DiscussionForm";
 import { getStrataAccess } from "@/lib/data/strata";
 
-/** Start a council discussion (0070). Any council member; free and unlimited (0090). */
+/** Start a council discussion (0070). Those who run meetings (0093); free and unlimited (0090). */
 export default async function NewDiscussionPage({ params }: { params: Promise<{ corpId: string }> }) {
   const { corpId } = await params;
   const access = await getStrataAccess(corpId);
-  if (!access?.seesDiscussions) notFound();
+  if (!access?.canRunMeetings) notFound();
   return (
     <>
       <StrataSphereNav active="discussions" />

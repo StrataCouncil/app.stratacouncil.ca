@@ -46,5 +46,27 @@ select pg_temp.expect('and closes the one they started', (select status = 'close
 
 set test.uid = '00000000-0000-0000-0000-00000000000e';
 select pg_temp.expect('an owner with no role sees nothing', (select count(*) = 0 from discussions));
-select pg_temp.expect_error($q$select create_discussion('BCS-1234', 'X', '', '', '', 'THAT')$q$, 'Only council members and those who run meetings');
+select pg_temp.expect_error($q$select create_discussion('BCS-1234', 'X', '', '', '', 'THAT')$q$, 'Only those who run meetings');
+
+-- 0093: only meeting runners start (and run) a discussion. Finn is council but doesn't run meetings:
+-- he reads, comments, and votes, but can't start one, edit one, or close one.
+set test.uid = '00000000-0000-0000-0000-00000000000f';
+select pg_temp.expect_error($q$select create_discussion('BCS-1234', 'X', '', '', '', 'THAT')$q$, 'Only those who run meetings');
+select pg_temp.expect('council still reads Discussions', can_see_discussions('BCS-1234') and (select count(*) >= 1 from discussions));
+set test.uid = '78000000-0000-0000-0000-000000000001';
+create temp table d93 as select create_discussion('BCS-1234', 'Lobby paint', '', '', '', 'THAT council repaint the lobby') id;
+grant select on d93 to authenticated;
+set test.uid = '00000000-0000-0000-0000-00000000000f';
+select add_discussion_comment((select id from d93), 'Blue, please');
+select pg_temp.expect('council still comments', exists (select 1 from discussion_comments where discussion_id = (select id from d93) and body = 'Blue, please'));
+select pg_temp.expect_error($q$select close_discussion((select id from d93))$q$, 'Only the person who started this discussion, or an Admin');
+-- The manager loses meeting-running permission: they can no longer run the one they started; the Admin still closes it.
+reset role;
+update corporation_memberships set can_run_meetings = false where user_id = '78000000-0000-0000-0000-000000000001';
+set role authenticated;
+set test.uid = '78000000-0000-0000-0000-000000000001';
+select pg_temp.expect_error($q$select update_discussion((select id from d93), 'Lobby paint', '', '', '', 'THAT council repaint the lobby blue')$q$, 'Only the person who started this discussion can change it');
+set test.uid = '00000000-0000-0000-0000-00000000000b';
+select close_discussion((select id from d93));
+select pg_temp.expect('the Admin closes it', (select status = 'closed' from discussions where id = (select id from d93)));
 reset role;
