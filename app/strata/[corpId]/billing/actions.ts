@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { stripeFor, stripeModeFor } from "@/lib/stripe/client";
-import { annualTermEnd, calculateBilling, customBilling, ENTERPRISE_LOTS, getPriceIds, padAllowed, type BillingInterval } from "@/lib/stripe/prices";
+import { annualTermEnd, ENTERPRISE_LOTS, getPriceIds, type BillingInterval } from "@/lib/stripe/prices";
 import { parseCivicAddress, readBillingAddress, toStripeAddress, type BillingAddress } from "@/lib/billing-address";
 import { recordPaymentMethodUpdate, recordSubscriptionPayment } from "@/lib/stripe/payment-results";
 import type Stripe from "stripe";
@@ -519,7 +519,8 @@ export async function startSubscriptionPayment(
       const custom = await stripe.prices.create({
         currency: "cad",
         unit_amount: Math.round(enterprise.amount * 100),
-        recurring: { interval: enterprise.interval === "annual" ? "year" : "month" },
+        // Billed monthly either way; "annual" is a 12-month commitment, as on the Yearly plan.
+        recurring: { interval: "month" },
         tax_behavior: "exclusive",
         product: typeof baseProduct === "string" ? baseProduct : baseProduct.id,
         nickname: `Enterprise, ${corporationId}`,
@@ -532,26 +533,20 @@ export async function startSubscriptionPayment(
         { price: perUnit, quantity: corp.unit_count },
       ];
     }
-    // One pre-authorized debit can't be over Stripe's CA$3,000: a larger charge is card only.
-    const bankDebit = padAllowed(enterprise ? customBilling(enterprise.amount, enterprise.interval) : calculateBilling(corp.unit_count, interval));
     const created = await stripe.subscriptions.create({
       customer: customerId,
       items,
       automatic_tax: { enabled: true },
       payment_behavior: "default_incomplete",
       payment_settings: {
-        payment_method_types: bankDebit ? ["acss_debit", "card"] : ["card"],
-        ...(bankDebit
-          ? {
-              payment_method_options: {
-                acss_debit: {
-                  verification_method: "automatic",
-                  // A strata corporation's account: a business agreement, not personal.
-                  mandate_options: { transaction_type: "business" },
-                },
-              },
-            }
-          : {}),
+        payment_method_types: ["acss_debit", "card"],
+        payment_method_options: {
+          acss_debit: {
+            verification_method: "automatic",
+            // A strata corporation's account: a business agreement, not personal.
+            mandate_options: { transaction_type: "business" },
+          },
+        },
         // The method used for this first payment pays every renewal.
         save_default_payment_method: "on_subscription",
       },

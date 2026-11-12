@@ -1,16 +1,19 @@
 /**
- * The Stratasphere plans (docs/learn-decide-remember.md §4):
+ * The Stratasphere plans (docs/learn-decide-remember.md §4). Both bill
+ * monthly; nothing is ever charged once a year.
  *
  *   Monthly: $30 a month per strata, plus $3 a month per strata lot.
- *   Yearly:  $300 a year per strata, plus $30 a year per strata lot,
- *            charged once a year (two months free).
+ *            Cancel any month.
+ *   Yearly:  $25 a month per strata, plus $2.50 a month per strata lot,
+ *            for a 12-month commitment (two months free over the year).
  *   GST (5%) on top, calculated by Stripe Tax. No cap.
  *   Enterprise: over ENTERPRISE_LOTS lots, or a management company:
- *            "Talk to us", and a price the Super Admin sets for that strata.
+ *            "Talk to us", and a monthly price the Super Admin sets for that
+ *            strata, month to month or on a 12-month commitment.
  *
- * In Stripe each plan is two Prices: a flat base and a per-unit (per lot)
- * price. Monthly is interval=month; yearly ("annual" in the code and the
- * database) is interval=year.
+ * In Stripe each plan is two Prices, both interval=month: a flat base and a
+ * per-unit (per lot) price. "annual" in the code and the database is the
+ * Yearly plan.
  *
  * Env vars (Vercel Production + Preview): STRIPE_PRICE_MONTHLY_BASE,
  * STRIPE_PRICE_MONTHLY_UNIT, STRIPE_PRICE_ANNUAL_BASE,
@@ -39,61 +42,42 @@ export function getPriceIds(
 }
 
 /**
- * The rates, per billing period, kept in step with the Stripe Prices by
- * hand (no API call is cheap enough for every page view).
+ * The monthly rates, kept in step with the Stripe Prices by hand (no API
+ * call is cheap enough for every page view).
  */
-export const PLAN_RATES: Record<BillingInterval, { base: number; perLot: number; period: "month" | "year" }> = {
-  monthly: { base: 30, perLot: 3, period: "month" },
-  annual: { base: 300, perLot: 30, period: "year" },
+export const PLAN_RATES: Record<BillingInterval, { base: number; perLot: number }> = {
+  monthly: { base: 30, perLot: 3 },
+  annual: { base: 25, perLot: 2.5 },
 };
 
 /** Above this many lots, a strata talks to us (Enterprise) instead of subscribing itself. */
 export const ENTERPRISE_LOTS = 100;
 
-/** Stripe's limit on one Canadian pre-authorized debit, in dollars: a larger charge is card only. */
-export const PAD_LIMIT = 3000;
-
 export const GST_RATE = 0.05;
 
+/** One month's charge. */
 export interface PlanPrice {
   subtotal: number;
   gst: number;
   total: number;
-  /** What the amounts are per. */
-  period: "month" | "year";
-  /** The total spread over a month, for comparing plans and adding up stratas. */
-  monthlyTotal: number;
-  monthlySubtotal: number;
 }
 
 const cents = (n: number) => Math.round(n * 100) / 100;
 
-function priced(subtotal: number, period: "month" | "year"): PlanPrice {
+function priced(subtotal: number): PlanPrice {
   const gst = cents(subtotal * GST_RATE);
-  const total = cents(subtotal + gst);
-  const months = period === "year" ? 12 : 1;
-  return { subtotal: cents(subtotal), gst, total, period, monthlyTotal: total / months, monthlySubtotal: subtotal / months };
+  return { subtotal: cents(subtotal), gst, total: cents(subtotal + gst) };
 }
 
-/** Subtotal, GST, and total per billing period for a strata's lot count and plan. */
+/** The monthly charge (subtotal, GST, total) for a strata's lot count and plan. */
 export function calculateBilling(unitCount: number, interval: BillingInterval): PlanPrice {
-  const { base, perLot, period } = PLAN_RATES[interval];
-  return priced(base + perLot * Math.max(0, unitCount), period);
+  const { base, perLot } = PLAN_RATES[interval];
+  return priced(base + perLot * Math.max(0, unitCount));
 }
 
-/** An Enterprise price: an agreed amount (before GST) per month or per year. */
-export function customBilling(amount: number, interval: BillingInterval): PlanPrice {
-  return priced(amount, interval === "annual" ? "year" : "month");
-}
-
-/** Pre-authorized debit is offered only when one charge stays within Stripe's limit. */
-export function padAllowed(price: PlanPrice): boolean {
-  return price.total <= PAD_LIMIT;
-}
-
-/** "a month" or "a year". */
-export function perPeriod(period: "month" | "year") {
-  return period === "year" ? "a year" : "a month";
+/** An Enterprise price: an agreed monthly amount, before GST. */
+export function customBilling(amount: number): PlanPrice {
+  return priced(amount);
 }
 
 /** The end of the first 12-month annual term, from when that term began.

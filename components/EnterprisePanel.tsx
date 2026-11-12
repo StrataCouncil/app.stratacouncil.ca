@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { clearEnterprisePrice, closeEnterpriseRequests, setEnterprisePrice } from "@/app/admin/actions";
-import { customBilling, ENTERPRISE_LOTS, perPeriod } from "@/lib/stripe/prices";
+import { customBilling, ENTERPRISE_LOTS } from "@/lib/stripe/prices";
 
 const fmt = (n: number) => n.toLocaleString("en-CA", { style: "currency", currency: "CAD" });
 const day = (iso: string) => new Date(iso).toLocaleDateString("en-CA", { year: "numeric", month: "long", day: "numeric" });
@@ -47,7 +47,7 @@ export function EnterprisePanel({
       else setSaved(true);
     });
 
-  const preview = Number(amount) > 0 ? customBilling(Number(amount), interval) : null;
+  const preview = Number(amount) > 0 ? customBilling(Number(amount)) : null;
 
   return (
     <section className="card stripe-mode" data-testid="enterprise-panel">
@@ -56,7 +56,7 @@ export function EnterprisePanel({
           <h3>Enterprise</h3>
           <p className="card__meta">
             {price
-              ? `${fmt(price.amount)} ${perPeriod(price.interval === "annual" ? "year" : "month")} before GST, set ${day(price.setAt)}. The strata's billing page offers only this plan.`
+              ? `${fmt(price.amount)} a month before GST, ${price.interval === "annual" ? "12-month commitment" : "month to month"}, set ${day(price.setAt)}. The strata's billing page offers only this plan.`
               : lots > ENTERPRISE_LOTS
                 ? `${lots} lots: over ${ENTERPRISE_LOTS}, so this strata can't subscribe until you set its price.`
                 : "Standard plans. Set a price here to replace them for this strata."}
@@ -90,14 +90,14 @@ export function EnterprisePanel({
         }}
       >
         <label className="field">
-          <span>Price before GST</span>
+          <span>Monthly price before GST</span>
           <input type="number" min="1" max="100000" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} required data-testid="enterprise-amount" />
         </label>
         <label className="field">
-          <span>Charged</span>
+          <span>Term</span>
           <select value={interval} onChange={(e) => setInterval(e.target.value as "monthly" | "annual")} data-testid="enterprise-interval">
-            <option value="annual">Once a year</option>
-            <option value="monthly">Monthly</option>
+            <option value="annual">12-month commitment</option>
+            <option value="monthly">Month to month</option>
           </select>
         </label>
         <label className="field enterprise-form__note">
@@ -107,7 +107,7 @@ export function EnterprisePanel({
         <div className="enterprise-form__actions">
           {preview && (
             <span className="card__meta">
-              {fmt(preview.total)} {perPeriod(preview.period)} with GST{preview.total > 3000 ? ", by card (over the bank-debit limit)" : ""}.
+              {fmt(preview.total)} a month with GST.
             </span>
           )}
           <button type="submit" className="button button-secondary button-small" disabled={pending} data-testid="enterprise-save">
