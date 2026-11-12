@@ -6,8 +6,11 @@
  *            Cancel any month.
  *   Yearly:  $25 a month per strata, plus $2.50 a month per strata lot,
  *            for a 12-month commitment (two months free over the year).
- *   GST (5%) on top, calculated by Stripe Tax. No cap.
- *   Enterprise: over ENTERPRISE_LOTS lots, or a management company:
+ *   GST (5%) on top, calculated by Stripe Tax. No cap, and no limit on
+ *   lots: any strata can subscribe itself, as long as the monthly charge
+ *   stays within Stripe's $3,000 limit on one payment (MONTHLY_CHARGE_LIMIT,
+ *   2026-11-12). Council's own spending limits are council's to work out.
+ *   Enterprise: a management company, or a strata past that limit:
  *            "Talk to us", and a monthly price the Super Admin sets for that
  *            strata, month to month or on a 12-month commitment.
  *
@@ -50,8 +53,12 @@ export const PLAN_RATES: Record<BillingInterval, { base: number; perLot: number 
   annual: { base: 25, perLot: 2.5 },
 };
 
-/** Above this many lots, a strata talks to us (Enterprise) instead of subscribing itself. */
-export const ENTERPRISE_LOTS = 100;
+/**
+ * Stripe's limit on one payment, GST included. A plan whose monthly charge
+ * is over it isn't offered; past it on both plans, a strata talks to us.
+ * Monthly fits up to 942 lots, Yearly up to 1,132.
+ */
+export const MONTHLY_CHARGE_LIMIT = 3000;
 
 export const GST_RATE = 0.05;
 
@@ -73,6 +80,11 @@ function priced(subtotal: number): PlanPrice {
 export function calculateBilling(unitCount: number, interval: BillingInterval): PlanPrice {
   const { base, perLot } = PLAN_RATES[interval];
   return priced(base + perLot * Math.max(0, unitCount));
+}
+
+/** Whether a plan's monthly charge, GST included, is within MONTHLY_CHARGE_LIMIT. */
+export function planFits(unitCount: number, interval: BillingInterval): boolean {
+  return calculateBilling(unitCount, interval).total <= MONTHLY_CHARGE_LIMIT;
 }
 
 /** An Enterprise price: an agreed monthly amount, before GST. */

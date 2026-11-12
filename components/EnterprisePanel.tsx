@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { clearEnterprisePrice, closeEnterpriseRequests, setEnterprisePrice } from "@/app/admin/actions";
-import { customBilling, ENTERPRISE_LOTS } from "@/lib/stripe/prices";
+import { customBilling, planFits } from "@/lib/stripe/prices";
 
 const fmt = (n: number) => n.toLocaleString("en-CA", { style: "currency", currency: "CAD" });
 const day = (iso: string) => new Date(iso).toLocaleDateString("en-CA", { year: "numeric", month: "long", day: "numeric" });
@@ -57,8 +57,8 @@ export function EnterprisePanel({
           <p className="card__meta">
             {price
               ? `${fmt(price.amount)} a month before GST, ${price.interval === "annual" ? "12-month commitment" : "month to month"}, set ${day(price.setAt)}. The strata's billing page offers only this plan.`
-              : lots > ENTERPRISE_LOTS
-                ? `${lots} lots: over ${ENTERPRISE_LOTS}, so this strata can't subscribe until you set its price.`
+              : !planFits(lots, "annual")
+                ? `${lots} lots: both plans are over the $3,000 Stripe takes in one payment, so this strata can't subscribe until you set its price.`
                 : "Standard plans. Set a price here to replace them for this strata."}
           </p>
         </div>

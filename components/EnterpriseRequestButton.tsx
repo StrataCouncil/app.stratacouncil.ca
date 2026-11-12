@@ -53,7 +53,7 @@ export function EnterpriseRequestButton({ corpId, reason, primary = false }: { c
             <form onSubmit={send}>
               <p className="card__meta">
                 {reason === "large"
-                  ? "We set the price with stratas over 100 lots."
+                  ? "We set the price with stratas whose monthly charge is over $3,000."
                   : "For management companies and anyone looking after several stratas."}{" "}
                 We&rsquo;ll reply to the email on your account.
               </p>
