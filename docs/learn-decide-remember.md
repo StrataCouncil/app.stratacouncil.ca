@@ -1,6 +1,6 @@
 # Learn, Decide, Remember: design
 
-Status: proposed (2026-11-12). Nothing here is built yet.
+Status: approved (2026-11-12), being built in the order of section 10.
 
 This is the plan for reorganizing StrataCouncil.ca into three sections, moving
 to the new free and paid split and the new price, rebuilding the Stratasphere
@@ -23,13 +23,22 @@ These decide every edge case below.
    answer, is a record that's on file and that Stratasphere doesn't see. No cost
    saving ships if it reduces what Stratasphere can see. The recall check
    (section 7) is a required gate.
-4. **A strata's records are never held hostage.** Unsubscribing or never
+4. **A strata's records are kept and available forever.** Unsubscribing or never
    subscribing locks the intelligence, never the records. Minutes, agendas,
-   votes, and stored files stay viewable and downloadable.
-5. **Privacy as today.** Stratasphere conversations are private to the person.
+   votes, and stored files stay viewable and downloadable, and are never
+   deleted for lack of a subscription.
+5. **Meeting Mode doesn't change.** Quorum, vote thresholds, live voting,
+   conflicts, handovers, minutes, and video behave exactly as they do now. The
+   only change is who may start built-in video (subscribers). Every existing
+   meetings database test must pass unchanged.
+6. **This is not an owner portal.** Owners never sign in. Notices may go to
+   owners on the roster (for example an AGM notice), but only council members,
+   managers (and their assistants), and the admins named on the Council page
+   use the app. Only they use Stratasphere.
+7. **Privacy as today.** Stratasphere conversations are private to the person.
    Stratasphere never reads Discussions, Council Training, or billing. PII
    stripping runs before anything leaves for Voyage or Anthropic.
-6. **Assistant answers are research, never record.** Nothing the assistant says
+8. **Assistant answers are research, never record.** Nothing the assistant says
    enters minutes, the ledger, or any official document.
 
 ---
@@ -155,50 +164,58 @@ Within a strata, the second-level nav is grouped by section:
 
 ## 4. Price and billing
 
-### The price
+### Three plans
 
-> **$30 a month per strata, plus $3 per strata lot, to a maximum of $158 a month.**
-> **Or yearly: $300 plus $30 per lot, to a maximum of $1,580.** GST (5%) is added.
+| Plan | Price | For |
+|---|---|---|
+| **Free, forever** | $0 | Learn and Decide (section 3) |
+| **Stratasphere** | **$30 a month per strata, plus $3 per strata lot.** Yearly: $300 plus $30 per lot, charged once a year. GST (5%) is added. | Any strata, self-serve |
+| **Enterprise** | Talk to us | Strata management companies, and stratas over 100 lots |
+
+There's no cap. A strata pays its lot count.
 
 | Lots | Monthly | Yearly | Yearly, with GST |
 |---|---|---|---|
 | 6 | $48 | $480 | $504 |
 | 20 | $90 | $900 | $945 |
-| 30 | $120 | $1,200 | $1,260 |
-| 42 | $156 | $1,560 | $1,638 |
-| 43+ | $158 | $1,580 | $1,659 |
+| 40 | $150 | $1,500 | $1,575 |
+| 45 | $165 | $1,650 | $1,733 |
+| 100 | $330 | $3,300 | $3,465 |
 
-- **The threshold:** paid monthly, the most anyone pays is $158 × 12 × 1.05 =
-  $1,990.80 a year. Both plans stay under $2,000 including GST at every size.
-- **Who reaches the cap:** stratas of about 43 lots and up. A typical 45-lot
-  strata sits right at the cap.
-- **The yearly plan** is two months free, and is now charged **once a year**.
-  Today "annual" is a cheaper monthly rate, because of Stripe's CA$3,000 limit
-  per pre-authorized debit (see `lib/stripe/prices.ts`). The new maximum,
-  $1,659 with GST, is well under that limit. A once-a-year charge is what a
-  treasurer wants, and it cuts card fees to one charge.
+- **The $2,000 threshold:** monthly billing passes $2,000 a year with GST at 43
+  lots, and yearly billing at 54 lots. Above that, councils put it in the
+  approved budget, which the budget pack (section 10, later) helps with. We
+  never say a subscription is automatically within anyone's spending limit.
+- **Enterprise:** the billing page offers "Talk to us" instead of self-serve
+  checkout for stratas over 100 lots (`ENTERPRISE_LOTS`, one constant), and for
+  anyone who asks about several stratas.
+  - The request goes to the Super Admin console and emails the Super Admins.
+  - The Super Admin sets that strata's price (a custom monthly or yearly
+    amount), or marks it complimentary, from the strata's console page.
+  - Portfolio billing for management companies comes later. For now each strata
+    is billed on its own, at the agreed price.
+- **The yearly plan** is two months free, now charged **once a year**. Today
+  "annual" is a cheaper monthly rate because of Stripe's CA$3,000 limit per
+  pre-authorized debit (see `lib/stripe/prices.ts`). Self-serve yearly stays
+  under that limit up to 85 lots with GST; between 86 and 100 lots, yearly is
+  charged by card or split into two charges, and Enterprise prices are set case
+  by case.
 - **Lot count** comes from `strata_corporations.unit_count`, which is verified
   from the strata plan at Super Admin review. When it changes, the price changes
   the same way it does today.
 
 ### In Stripe
 
-Each plan becomes **one tiered Price** (graduated tiers, quantity = lots),
-replacing today's two Prices per plan (base + per lot):
-
-| Plan | Tier 1, lots 1–42 | Tier 2, lots 43+ |
-|---|---|---|
-| Monthly | $3 per lot + $30 flat | $0 per lot + $2 flat |
-| Yearly | $30 per lot + $300 flat | $0 per lot + $20 flat |
-
-That gives exactly $156 at 42 lots and $158 from 43 lots up (yearly: $1,560 and $1,580).
-
-- **Env vars:** `STRIPE_PRICE_MONTHLY_BASE`/`_UNIT` and the annual pair become
-  `STRIPE_PRICE_MONTHLY` and `STRIPE_PRICE_YEARLY`, plus the `STRIPE_TEST_PRICE_*`
-  pair for sandbox stratas. You create the Prices in the Stripe dashboard (I'll
-  give exact steps), then put the IDs in Vercel.
+- **Today's structure stays:** a base Price plus a per-lot Price for each plan,
+  with new amounts. You create the new Prices in the Stripe dashboard (I'll give
+  exact steps) and put their IDs in Vercel, in the same env vars as now
+  (`STRIPE_PRICE_MONTHLY_BASE`/`_UNIT`, `STRIPE_PRICE_ANNUAL_BASE`/`_UNIT`,
+  and the `STRIPE_TEST_PRICE_*` set for sandbox stratas).
+- **The annual Prices become yearly** (`interval=year`).
+- **Enterprise:** custom Prices are created from the Super Admin console for
+  that one subscription.
 - **The display price** is calculated by one function, shared by the billing
-  page, the marketing site, and the tests, with tests at 1, 6, 42, 43, and 200 lots.
+  page, the marketing site, and the tests.
 - **Existing subscriptions** (complimentary and sandbox ones today) are left as
   they are. Complimentary stays complimentary. Any real subscription before this
   change keeps its price until you choose to move it.
@@ -207,15 +224,15 @@ That gives exactly $156 at 42 lots and $158 from 43 lots up (yearly: $1,560 and 
 
 These use measured costs from EPS9048: **$0.27 per assistant question** and
 $0.14 per Meeting Mode question. Built-in video is CA$0.0047 per person per
-minute, and card fees are 2.9% + $0.30. "Typical" means 60 questions a month,
-and "heavy" means 200.
+minute (about $3 per council meeting, plus an AGM a year), and card fees are
+2.9% + $0.30. "Typical" means 60 questions a month, and "heavy" means 200.
 
 | Lots | Price | Margin, typical | Margin, heavy |
 |---|---|---|---|
 | 6 | $48 | 56% | Loss (−23%) |
 | 20 | $90 | 75% | 33% |
-| 30 | $120 | 80% | 49% |
-| 43+ | $158 | 84% | 60% |
+| 45 | $165 | 85% | 62% |
+| 100 | $330 | 90% | 79% |
 
 The heavy-use loss on small stratas closes once section 7's caching work lands.
 Section 7 targets well under $0.15 for questions after the first in a session.
@@ -224,7 +241,7 @@ If it doesn't get there, the fix is a higher base price, never reading less.
 strata page will show AI cost per strata per month next to what it pays.
 
 **Fixed costs:** at least about US$45–60 a month (Supabase Pro and Vercel Pro).
-One strata at the cap covers them.
+One subscribing strata of about 20 lots covers them.
 
 ---
 
@@ -316,22 +333,22 @@ admin". It costs nothing.
 
 ---
 
-## 6. Who can use Stratasphere
+## 6. Who uses the app, and Stratasphere
 
-Today any member of a subscribed strata can use the assistant, including owners
-who've joined. "Unlimited" assumes about 7 council members and a manager. A
-strata where 40 owners have joined is a different cost.
+Decided: **council members, managers (including a manager's assistants), and
+the admins named on the Council page.** Owners never sign in. This is a council
+tool, not an owner portal.
 
-**Recommendation:** Stratasphere (Ask, the floating assistant, and the Decision
-Ledger) is for council members, the strata's managers, and its admins.
-
-- **Owners keep everything they have in Decide:** their own meetings view, and
-  documents shared with them.
-- **This fits our positioning:** council governance, not an owner portal.
-- **It keeps "unlimited" safe:** the cost is about the council, not the
-  building's size.
-
-This is founder decision 1 (section 11).
+- **Stratasphere** (Ask, the floating assistant, Documents search, and the
+  Decision Ledger) is for the same people, and only while the strata
+  subscribes. Someone who leaves council or management loses access the moment
+  their role ends.
+- **Owners appear only as roster entries,** used for lots, entitlement, quorum
+  and vote counts, and, later, notices such as AGM notices sent by council.
+- **Building PR 3, I'll audit every way a person who isn't council, a manager,
+  or an admin can hold a membership today** (for example an old owner invite),
+  and close each one, with a database test for each. Existing memberships like
+  that get a one-off script you can run.
 
 ---
 
@@ -450,8 +467,8 @@ behaviour as the baseline.
 
 Safe to re-run, with grants stated, as always.
 
-- `has_stratasphere_access(corp)`: member and subscribed, and (if decision 1 is
-  accepted) council, manager, or admin. The trial-meeting clause goes. This one
+- `has_stratasphere_access(corp)`: subscribed, and the person is on council, a
+  manager, or an admin of that strata. The trial-meeting clause goes. This one
   function already guards `decisions`, `match_knowledge_chunks`, and document
   search, so the rule is enforced in the database, not only in the pages.
 - `stratasphere_allowed(corp)`: replaces `consume_stratasphere_request`
@@ -492,7 +509,7 @@ Safe to re-run, with grants stated, as always.
 | Email to council, invitations | Covered by the email plan | Free. Nothing to the whole owner list. |
 | Built-in video | Yes | Paid |
 | Any AI, OCR, or embeddings | Yes | Paid |
-| Reading the strata plan when a strata is created | Yes, once per strata (cents) | Free. It's the one exception, decision 2. |
+| Reading the strata plan when a strata is created | Yes, once per strata (cents) | Free. It's the one exception (decision 2). |
 | Demo site questions | Yes (3 per visitor) | Marketing cost; see below |
 
 - **The demo:** it opens on a conversation that's already answered and stored,
@@ -512,11 +529,12 @@ database tests, build, browser test), and you run the migration and merge.
    Stratasphere is unchanged. We write the 40 cases together and record the
    baseline.
 2. **Free, paid, and price.**
+   - Enterprise: "Talk to us" requests, and custom prices from the Super Admin console.
    - Migration 0089.
    - Server-side gates, the indexing gate, and backfill on subscribing.
    - Unlimited council meetings and Discussions; free templates.
    - The own-video-link field.
-   - The tiered Stripe Prices, the price function, and the billing page,
+   - The new Stripe Prices, the price function, and the billing page,
      including the yearly plan charged once a year.
    - Removing the trial everywhere, in all copy and lifecycle emails.
 3. **Learn, Decide, Remember navigation.**
@@ -552,17 +570,14 @@ and "Free: Learn and Decide. Paid: Remember."
 
 ---
 
-## 11. Decisions for the founder
+## 11. Decisions (made 2026-11-12)
 
-1. **Who uses Stratasphere:** council, managers, and admins only (recommended),
-   or every member including owners.
-2. **Reading the strata plan when a strata is created:** keep it free (one AI
-   call per new strata, cents, and it makes your review faster and more
-   accurate), or replace it with typing the numbers in by hand so free sign-up
-   costs nothing at all. I recommend keeping it.
-3. **The top-bar labels:** "Learn / Decide / Remember" (recommended, matching the
-   website), or the product names "Council Training / Meeting Mode /
-   Stratasphere". Meeting Mode is only part of Decide, so the verbs fit better.
+1. **Who uses Stratasphere:** council, managers (and their assistants), and the
+   admins named on the Council page. Never owners.
+2. **Reading the strata plan when a strata is created:** stays free.
+3. **The top-bar labels:** Learn / Decide / Remember.
+4. **No price cap.** Stratasphere is $30 + $3 per lot. Management companies and
+   stratas over 100 lots go to Enterprise ("Talk to us").
 
 ---
 
