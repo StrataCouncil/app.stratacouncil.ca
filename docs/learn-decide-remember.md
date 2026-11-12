@@ -54,8 +54,8 @@ plainer words; they can change again later (lib/navigation.ts).
 | Top bar | Holds | Price | Strata needed? | Phones |
 |---|---|---|---|---|
 | **Resources** | Council Training, the Library (`/library`) | Free | No | Yes |
-| **Your Strata** | Overview, Meetings, Discussions, Council, Owners, Management, Billing | Free (some features paid, shown locked) | Yes | Desktop (as today) |
-| **Stratasphere** | Ask, Documents | Ask is paid; storing documents is free | Yes | Ask works on phones |
+| **Your Strata** | Overview, Meetings, Discussions, Documents, Council, Owners, Management, Billing | Free (some features paid, shown locked); storing documents is free | Yes | Desktop (as today) |
+| **Stratasphere** | Ask | Paid | Yes | Ask works on phones |
 
 - **Stratasphere** stops meaning "the strata workspace" and is the name of the
   paid tier and its assistant: Stratasphere is the memory.
@@ -66,8 +66,9 @@ plainer words; they can change again later (lib/navigation.ts).
 - **The decision ledger has no page.** Every carried motion is in it, and
   Stratasphere reads it behind the scenes; councils see each decision in
   its meeting's minutes. (Decided 2026-11-12.)
-- **Documents:** any connected member uploads, browses, and downloads, free,
-  subscribed or not. Search and Ask are the paid part. Documents stored while
+- **Documents** (in Your Strata since 2026-11-12: the repository belongs to
+  the strata; Stratasphere reads it): any connected member uploads, browses,
+  and downloads, free, subscribed or not. Search and Ask are the paid part. Documents stored while
   unsubscribed are read once when the strata subscribes; a note on Ask and
   Documents counts the ones still being read.
 - **No redirects:** nobody was using the old Library and Decisions pages, so

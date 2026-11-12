@@ -14,7 +14,7 @@ export function sectionFor(pathname: string): TopSection | null {
     return "resources";
   }
   const strata = /^\/strata\/[^/]+(\/[^/]+)?/.exec(pathname);
-  if (strata) return strata[1] === "/assistant" || strata[1] === "/documents" ? "stratasphere" : "strata";
+  if (strata) return strata[1] === "/assistant" ? "stratasphere" : "strata";
   if (pathname === "/strata" || pathname.startsWith("/strata/")) return "strata";
   return null;
 }
@@ -37,6 +37,9 @@ export const NAV_ITEMS: NavItem[] = [
   { slug: "meetings", label: "Meetings", section: "strata" },
   // Council votes between meetings (0070): council and those who run meetings.
   { slug: "discussions", label: "Discussions", section: "strata", councilOnly: true },
+  // The strata's document repository: every connected member, free to store.
+  // Stratasphere reads it, but it belongs to the strata (2026-11-12).
+  { slug: "documents", label: "Documents", section: "strata" },
   { slug: "council", label: "Council", section: "strata" },
   { slug: "lots", label: "Owners", section: "strata" },
   // Only the Admin and the Manager role see this one at all.
@@ -44,7 +47,6 @@ export const NAV_ITEMS: NavItem[] = [
   // Billing: the admin, and anyone they've given billing access to (0046); others never see the tab.
   { slug: "billing", label: "Billing", section: "strata", billingOnly: true },
   { slug: "assistant", label: "Ask", section: "stratasphere", gated: true, phone: true },
-  { slug: "documents", label: "Documents", section: "stratasphere" },
 ];
 
 /** The menu for a page: its section's items that this person sees. */

@@ -12,11 +12,11 @@ import { SubscriptionPendingNote } from "@/components/SubscriptionPendingNote";
  * The second-level menu inside a strata (2026-11-12): the items of the
  * top-bar section the page belongs to (components/TopNav.tsx).
  *
- *   Your Strata:   Overview, Meetings, Discussions, Council, Owners,
- *                  Management (managers and the admin), Billing (billing
- *                  access). Free.
+ *   Your Strata:   Overview, Meetings, Discussions, Documents (free to
+ *                  store), Council, Owners, Management (managers and the
+ *                  admin), Billing (billing access). Free.
  *   Stratasphere:  Ask (part of the subscription: shown with a lock until
- *                  the strata subscribes) and Documents (free to store).
+ *                  the strata subscribes).
  *
  * The Library is in Resources (/library), and the decision ledger has no
  * page of its own: Stratasphere reads it behind the scenes.

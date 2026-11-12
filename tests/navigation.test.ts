@@ -12,7 +12,8 @@ test("each page lights its top-bar section: Resources, Your Strata, Stratasphere
   assert.equal(sectionFor("/strata/EPS9048/meetings/abc/run"), "strata");
   assert.equal(sectionFor("/strata/EPS9048/lots"), "strata");
   assert.equal(sectionFor("/strata/EPS9048/assistant"), "stratasphere");
-  assert.equal(sectionFor("/strata/EPS9048/documents/bylaws"), "stratasphere");
+  assert.equal(sectionFor("/strata/EPS9048/documents"), "strata");
+  assert.equal(sectionFor("/strata/EPS9048/documents/bylaws"), "strata");
   assert.equal(sectionFor("/admin/recall"), "admin");
   assert.equal(sectionFor("/account"), null);
 });
@@ -22,18 +23,19 @@ const admin = { canManage: true, canBill: true, seesDiscussions: true };
 const labels = (active: string, who: typeof admin) => navItemsFor(active, who).map((i) => i.label);
 
 test("Your Strata: the admin sees every item, in order", () => {
-  assert.deepEqual(labels("home", admin), ["Overview", "Meetings", "Discussions", "Council", "Owners", "Management", "Billing"]);
+  assert.deepEqual(labels("home", admin), ["Overview", "Meetings", "Discussions", "Documents", "Council", "Owners", "Management", "Billing"]);
   assert.deepEqual(labels("meetings", admin), labels("home", admin));
 });
 
 test("Your Strata: a member without roles sees what's open to every member", () => {
-  assert.deepEqual(labels("home", everyone), ["Overview", "Meetings", "Council", "Owners"]);
-  assert.deepEqual(labels("lots", { ...everyone, seesDiscussions: true, canBill: true }), ["Overview", "Meetings", "Discussions", "Council", "Owners", "Billing"]);
+  assert.deepEqual(labels("home", everyone), ["Overview", "Meetings", "Documents", "Council", "Owners"]);
+  assert.deepEqual(labels("lots", { ...everyone, seesDiscussions: true, canBill: true }), ["Overview", "Meetings", "Discussions", "Documents", "Council", "Owners", "Billing"]);
+  assert.deepEqual(labels("documents", everyone), labels("home", everyone));
 });
 
-test("Stratasphere: Ask (locked until subscribed) and Documents, for everyone", () => {
-  assert.deepEqual(labels("assistant", everyone), ["Ask", "Documents"]);
-  assert.deepEqual(labels("documents", admin), ["Ask", "Documents"]);
+test("Stratasphere: Ask (locked until subscribed); Documents is in Your Strata", () => {
+  assert.deepEqual(labels("assistant", everyone), ["Ask"]);
+  assert.deepEqual(labels("assistant", admin), ["Ask"]);
   assert.equal(navItemsFor("assistant", admin).find((i) => i.label === "Ask")?.gated, true);
 });
 
