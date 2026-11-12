@@ -47,3 +47,11 @@ test("a form has no Effective or Version lines; a policy does", async () => {
   assert.ok(!form.includes("Effective: ") && !form.includes("Version: "));
   assert.ok(form.includes("EPS9048 Harbourview Gardens"));
 });
+
+test("the Library's download is blank: placeholders stay for council to fill in (2026-11-12)", async () => {
+  const { default: JSZip } = await import("jszip");
+  const buf = await policyDocx({ corporation: null, title: "Pet Policy", markup: "The Owners of [Strata Corporation name], Strata Plan [Strata Plan number]." });
+  const xml = await (await JSZip.loadAsync(buf)).file("word/document.xml")!.async("string");
+  assert.ok(xml.includes("[Strata Corporation name]") && xml.includes("[Strata Plan number]"));
+  assert.ok(xml.includes("Pet Policy") && !xml.includes("EPS9048"));
+});

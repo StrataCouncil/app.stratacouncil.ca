@@ -8,32 +8,18 @@ import { getConnectedCorporations } from "@/lib/data/corporations";
 import { IS_DEMO, SANDBOX_PERSONAS, SIGNUP_URL } from "@/lib/demo";
 import { sandboxSession } from "@/lib/demo-sandbox";
 import { DemoRestrictedProvider } from "@/components/DemoContext";
+import { TopNav } from "@/components/TopNav";
 
 /**
- * Top-level app shell (doc03 "Screen layout — two levels, not one flat
- * menu"): Council Training (the signed-in landing screen; Home was folded
- * into it on 2026-10-06) belongs to the user, not any corporation.
- *
- * Now reads the real signed-in user instead of the `currentProfile` /
- * `currentCorporation` mocks — this fixes the Stratasphere nav link
- * pointing at a hardcoded corp ID regardless of who's actually signed in,
- * and the Admin link showing/hiding based on a fake `isSuperAdmin` flag.
- * The Stratasphere link goes to the user's first real connected
- * corporation if they have one, or `/strata` (the connect/zero state)
- * if they don't.
+ * Top-level app shell. The top bar (components/TopNav.tsx) has three
+ * sections: Resources (Council Training and the Library, the person's own),
+ * Your Strata, and Stratasphere. Which one is lit comes from the URL, so
+ * pages don't pass it in (`active` is accepted and ignored).
  */
-export async function AppShell({
-  active,
-  children,
-}: {
-  active?: "training" | "strata" | "admin";
-  children: React.ReactNode;
-}) {
+export async function AppShell({ children }: { active?: string; children: React.ReactNode }) {
   const profile = await getCurrentProfile();
   const corporations = await getConnectedCorporations();
   const sandbox = await sandboxSession();
-  const primaryCorpHref =
-    corporations.length > 0 ? `/strata/${corporations[0].id}` : "/strata";
 
   return (
     <>
@@ -68,19 +54,7 @@ export async function AppShell({
             <Logo className="app-header__mark" />
             <span>StrataCouncil.ca</span>
           </Link>
-          <nav className="app-nav" aria-label="Primary">
-            <Link href="/training" data-active={active === "training"}>
-              Council Training
-            </Link>
-            <Link href={primaryCorpHref} data-active={active === "strata"} className="app-nav__sphere">
-              Stratasphere&trade;
-            </Link>
-            {profile?.isSuperAdmin && (
-              <Link href="/admin" data-active={active === "admin"}>
-                Super Admin
-              </Link>
-            )}
-          </nav>
+          <TopNav firstCorpId={corporations[0]?.id ?? null} isSuperAdmin={Boolean(profile?.isSuperAdmin)} />
           <AccountMenu profile={profile} />
         </div>
       </header>

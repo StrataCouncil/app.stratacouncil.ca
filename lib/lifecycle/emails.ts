@@ -61,12 +61,12 @@ export function signupEmail(step: SignupStep, p: SignupEmailParams): BuiltEmail 
         `<p style="${P}">${name}</p>
 <p style="${P}">Thanks for joining StrataCouncil.ca. Two free places to start:</p>
 <ul style="margin:0 0 8px;padding-left:20px;">
-  <li style="${LI}"><strong>Council Training:</strong> short modules for strata council members, at your own pace.</li>
-  <li style="${LI}"><strong>Your strata:</strong> one place for your council&rsquo;s documents, minutes, and roster, with the Library of plain-language playbooks and guides on BC strata law, budgets, bylaws, and more.</li>
+  <li style="${LI}"><strong>Council Training and the Library:</strong> short modules for strata council members at your own pace, and plain-language playbooks, guides, and templates on BC strata law, budgets, bylaws, and more.</li>
+  <li style="${LI}"><strong>Your strata:</strong> one place for your council&rsquo;s meetings, documents, minutes, and roster.</li>
 </ul>
 ${button(p.links.training, "Start Council Training")}
 <p style="margin:0;font-size:14px;color:${INK};">Or ${link(p.links.connect, "connect your strata")}.</p>`,
-        `${hi(p.firstName)}\n\nThanks for joining StrataCouncil.ca. Two free places to start:\n\n- Council Training: short modules for strata council members, at your own pace.\n- Your strata: one place for your council's documents, minutes, and roster, with the Library of plain-language playbooks and guides on BC strata law, budgets, bylaws, and more.\n\nStart Council Training: ${p.links.training}\n\nOr connect your strata: ${p.links.connect}`,
+        `${hi(p.firstName)}\n\nThanks for joining StrataCouncil.ca. Two free places to start:\n\n- Council Training and the Library: short modules for strata council members at your own pace, and plain-language playbooks, guides, and templates on BC strata law, budgets, bylaws, and more.\n- Your strata: one place for your council's meetings, documents, minutes, and roster.\n\nStart Council Training: ${p.links.training}\n\nOr connect your strata: ${p.links.connect}`,
         p.unsubscribeUrl
       );
     case "training": {

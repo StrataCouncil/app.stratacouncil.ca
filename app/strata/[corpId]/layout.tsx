@@ -13,9 +13,8 @@ import { getStrataAccess } from "@/lib/data/strata";
 import { IS_DEMO } from "@/lib/demo";
 
 /**
- * Stratasphere™ is desktop-only — the governance tools (roster tables,
- * documents, meeting mode) assume real screen space — except the
- * Library, which works on phones (see `ScreenGate`).
+ * A strata's pages are desktop-only (the governance tools assume real
+ * screen space), except Ask, which works on phones (see `ScreenGate`).
  *
  * Now checks the real `corporation_memberships` table for this corpId
  * instead of always rendering the hardcoded `currentCorporation` mock —

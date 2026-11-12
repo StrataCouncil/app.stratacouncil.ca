@@ -113,17 +113,15 @@ export default async function StrataSetupPage({
       <div className="wrap page">
         <div className="screen-gate-notice">
           <span className="pill pill--locked">Desktop required</span>
-          <h2>Stratasphere&trade; is best experienced on a larger screen</h2>
+          <h2>Setting up a strata needs a larger screen</h2>
           <p>
             Setting up your strata involves uploading a document and a
             short form &mdash; easier on a desktop or laptop. Please
             switch devices to continue.
           </p>
-          {corporations.map((c) => (
-            <Link key={c.id} href={`/strata/${c.id}/guides`} className="button button-primary">
-              {c.buildingName ?? c.legalName}: Library
-            </Link>
-          ))}
+          <Link href="/library" className="button button-primary">
+            Open the Library
+          </Link>
           <Link href="/training" className="button button-secondary">
             Go to Council Training
           </Link>

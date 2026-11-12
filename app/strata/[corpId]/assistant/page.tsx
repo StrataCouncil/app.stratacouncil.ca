@@ -2,6 +2,7 @@ import { SubscribeCta } from "@/components/SubscribeCta";
 import { StrataSphereNav } from "@/components/StrataSphereNav";
 import { StratasphereChat } from "@/components/StratasphereChat";
 import { getStrataAccess } from "@/lib/data/strata";
+import { IndexingNote } from "@/components/IndexingNote";
 import { listConversations } from "@/lib/data/conversations";
 import { createClient } from "@/lib/supabase/server";
 import { demoAllowanceLeft } from "@/lib/demo-usage";
@@ -56,6 +57,7 @@ export default async function AssistantPage({
   return (
     <>
       <StrataSphereNav active="assistant" />
+      <IndexingNote corpId={access.corpId} subscribed={access.subscribed} />
       <StratasphereChat
         corpId={corpId}
         corpName={corp?.building_name || corp?.legal_name || corpId}

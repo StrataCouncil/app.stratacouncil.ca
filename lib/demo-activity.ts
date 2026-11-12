@@ -31,8 +31,8 @@ export function demoPageName(path: string | null): string {
     [/^\/strata\/meetings/, "Meetings"],
     [/^\/strata\/minutes/, "Minutes"],
     [/^\/strata\/documents/, "Documents"],
-    [/^\/strata\/guides\/.+/, "Library article"],
-    [/^\/strata\/guides/, "Library"],
+    [/^\/library\/.+/, "Library article"],
+    [/^\/library/, "Library"],
     [/^\/strata\/discussions\/new/, "New discussion"],
     [/^\/strata\/discussions\/[^/]+\/vote/, "Confirm a vote"],
     [/^\/strata\/discussions\/.+/, "Discussion"],
@@ -42,7 +42,6 @@ export function demoPageName(path: string | null): string {
     [/^\/strata\/council/, "Council"],
     [/^\/strata\/lots/, "Owners"],
     [/^\/strata\/management/, "Management"],
-    [/^\/strata\/decisions/, "Decisions"],
     [/^\/account/, "Account"],
     [/^\/demo/, "Demo front door"],
   ];

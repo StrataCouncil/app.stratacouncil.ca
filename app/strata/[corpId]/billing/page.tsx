@@ -300,6 +300,10 @@ export default async function BillingPage({
             Stratasphere&trade; is on for {corp.building_name ?? corp.legal_name}. A receipt is on its way to{" "}
             {billingEmail.split(",")[0]}.
           </p>
+          <p>
+            Stratasphere&trade; is now reading the documents already stored for your strata. This can take up to 24 hours;
+            until a document is read, answers may not include it. Your decisions are ready to ask about straight away.
+          </p>
         </div>
       )}
 

@@ -5,6 +5,7 @@ import { DocumentUpload } from "@/components/DocumentUpload";
 import { DocumentExportRequest } from "@/components/DocumentExportRequest";
 import { GoogleDriveImport } from "@/components/GoogleDriveImport";
 import { getStrataAccess } from "@/lib/data/strata";
+import { IndexingNote } from "@/components/IndexingNote";
 import { documentCountsByCategory, hasUnfingerprintedFiles } from "@/lib/data/documents";
 import {
   documentCategories,
@@ -38,6 +39,7 @@ export default async function DocumentsPage({ params }: { params: Promise<{ corp
   return (
     <>
       <StrataSphereNav active="documents" />
+      <IndexingNote corpId={access.corpId} subscribed={access.subscribed} />
       <div className="doc-header">
         <div>
           <h2>Documents</h2>
