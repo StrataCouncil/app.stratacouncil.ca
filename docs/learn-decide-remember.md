@@ -241,15 +241,27 @@ One subscribing strata of about 20 lots covers them.
   - **Subscribed:** it opens the assistant.
   - **Not subscribed:** it opens a short example and Subscribe (or "Ask your
     admin to subscribe" for those who can't manage billing).
-  - **Hidden** on the full Ask page and in Meeting Mode (until PR 4b), and for
-    owners who aren't on council.
+  - **Hidden** on the full Ask page and in Meeting Mode (which has the same
+    panel in its right column), and for owners who aren't on council.
   - **Desktop:** it opens a panel docked on the right that pushes the page
     narrower instead of covering it.
   - **Phones:** it opens a full-height sheet. (Strata pages are desktop-only
     on phones for now, so in practice phones use the full Ask page.)
-- **Inside Meeting Mode,** the panel takes the place of today's embedded
-  assistant in the right column. It never covers the runner's controls, video,
-  or voting.
+- **Inside Meeting Mode** and on the members' live page (PR 4b), the same
+  panel sits in the right column, under "Stratasphere", where the old
+  assistant was. It never covers the runner's controls, video, or voting.
+  - It looks at the open agenda item and moves with the meeting.
+  - Whoever runs the meeting, and council members following it live, can ask
+    (as before). It closes at adjournment.
+  - The meeting is one conversation per person, named after the meeting
+    ("Strata Council Meeting, Nov 12, 2026"); each question is saved with its
+    item, and each item shows its own questions.
+  - The runner's screen saves first, and the server reads the saved agenda,
+    never the browser's copy.
+  - Sources open in a new tab, so the meeting and its video stay open.
+  - Without a subscription it shows one line: "Purchase a subscription to
+    access the Stratasphere assistant." No example and no Subscribe button
+    during a meeting.
 - **A pinned line at the top says what it's looking at,** for example "Looking
   at: March 4 council meeting, item 4, Roof replacement". A "×" clears it for a
   general question.
@@ -316,14 +328,16 @@ Stratasphere.
   Search still runs across everything else as usual, so focus adds context and
   never narrows it.
 - **In a live meeting,** it keeps the fast setting (effort low, 2–4 sentence
-  answers) and adds "decisions made so far in this meeting", as today.
+  answers) and adds "decisions made so far in this meeting", as before. Each
+  answer only builds on earlier questions about the same item.
 
 ### Unlimited, with one safeguard
 
 - **No quota for subscribed stratas.**
-- **A per-person limit of 30 questions an hour** stops runaway scripts, shared
-  logins, or loops. When hit, the message says when they can ask again. No real
-  person should ever see it.
+- **A per-person limit of 30 questions an hour** (in place since 0090) stops
+  runaway scripts, shared logins, or loops. When hit, the message says when
+  they can ask again ("You can ask again at 3:42 p.m. PT"). No real person
+  should ever see it.
 - `consume_stratasphere_request` is replaced by
   `stratasphere_allowed(corp)`: subscribed, council, manager, or admin, and
   under the hourly limit, counted from that person's answers in the last hour.
@@ -556,8 +570,9 @@ database tests, build, browser test), and you run the migration and merge.
      focus saved with each question and shown on the full page ("Asked while
      looking at ..."); suggested questions; the example panel for unsubscribed
      stratas; carried Discussions in the ledger.
-   - **4b:** the panel inside Meeting Mode, replacing the embedded assistant
-     (its answers then saved too), and the hourly safeguard.
+   - **4b** (no migration): the panel inside Meeting Mode and the members'
+     live page, replacing the embedded assistant, with its questions saved;
+     the hourly limit's message says when they can ask again.
 5. **Finding records and cost.** Behind the recall gate:
    - Separate precedent slots.
    - The whole ledger.

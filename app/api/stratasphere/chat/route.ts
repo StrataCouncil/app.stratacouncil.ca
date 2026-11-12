@@ -3,7 +3,11 @@ import { createClient } from "@/lib/supabase/server";
 import { getStrataAccess } from "@/lib/data/strata";
 import { streamStratasphere, type AssistantTurn, type StratasphereSource } from "@/lib/ai/stratasphere";
 import { titleFromQuestion } from "@/lib/ai/conversation-title";
-import { trimHistory } from "@/lib/ai/conversation-history";
+import { trimHistory, turnsForItem } from "@/lib/ai/conversation-history";
+import { getMeeting } from "@/lib/data/meetings";
+import { canAskInMeeting, MEETING_ASSISTANT_REFUSAL } from "@/lib/meetings/assistant-access";
+import { meetingTypeLabels } from "@/lib/meetings/agenda";
+import type { MeetingScope } from "@/lib/ai/stratasphere";
 import { resolveFocus, savedFocus } from "@/lib/ai/focus";
 import { parseFocusRef } from "@/lib/stratasphere-focus";
 import { DEMO_LIMIT_MESSAGE, IS_DEMO } from "@/lib/demo";
@@ -25,6 +29,13 @@ import { demoVisitorId, logDemoActivity, refundDemoAllowance, takeDemoAllowance 
  * person is looking at. It's read again here with their own access and
  * refused if they couldn't open it; only the reference and its label are
  * saved with the question (conversation_messages.focus, 0094).
+ *
+ * Meeting Mode (PR 4b) sends `live: true` with the open agenda item as the
+ * focus. Only whoever runs the meeting, or council following it live, may
+ * ask (as before). The agenda is the saved one, read here, never the
+ * browser's. Answers keep the fast meeting setting and "decisions so far",
+ * and only build on earlier questions about the same item. A meeting is one
+ * conversation per person, named after the meeting.
  */
 export const maxDuration = 120;
 
@@ -45,6 +56,7 @@ export async function POST(request: NextRequest) {
     conversationId?: string | null;
     question?: string;
     focus?: unknown;
+    live?: boolean;
   } | null;
   const corpId = String(body?.corpId ?? "");
   const question = String(body?.question ?? "").trim().slice(0, 4000);
@@ -69,9 +81,26 @@ export async function POST(request: NextRequest) {
   const focus = focusRef ? await resolveFocus(supabase, access.corpId, focusRef) : null;
   if (focusRef && !focus) return NextResponse.json({ error: "That record isn't available to you." }, { status: 403 });
 
-  // The demo: three questions per visitor (lib/demo.ts DEMO_LIMITS).
-  if (IS_DEMO && !(await takeDemoAllowance("chat"))) {
-    await logDemoActivity({ kind: "limit", path: `/strata/${corpId}/assistant`, detail: { reason: "Stratasphere questions", question } });
+  // Meeting Mode: the open item of a meeting this person runs or follows live.
+  const live = body?.live === true;
+  let meeting: MeetingScope | undefined;
+  if (live) {
+    if (!focus || focus.kind !== "agenda_item" || focusRef?.kind !== "agenda_item") {
+      return NextResponse.json({ error: "Open an agenda item to ask about it." }, { status: 400 });
+    }
+    const m = await getMeeting(access.corpId, focusRef.meetingId);
+    if (!m || !(await canAskInMeeting(supabase, user.id, m))) return NextResponse.json({ error: MEETING_ASSISTANT_REFUSAL }, { status: 403 });
+    meeting = { item: focus.item, agenda: focus.agenda, meetingLabel: meetingTypeLabels[m.type] };
+  }
+  const allowance = live ? "meeting" : "chat";
+
+  // The demo: a few questions per visitor (lib/demo.ts DEMO_LIMITS).
+  if (IS_DEMO && !(await takeDemoAllowance(allowance))) {
+    await logDemoActivity({
+      kind: "limit",
+      path: `/strata/${corpId}/assistant`,
+      detail: { reason: live ? "Meeting Mode questions" : "Stratasphere questions", question },
+    });
     return NextResponse.json({ error: DEMO_LIMIT_MESSAGE, demoLimit: true }, { status: 429 });
   }
 
@@ -92,7 +121,7 @@ export async function POST(request: NextRequest) {
     title = convo.title;
     let query = supabase
       .from("conversation_messages")
-      .select("role, content, citations, context, created_at")
+      .select("role, content, citations, context, created_at, focus")
       .eq("conversation_id", conversationId)
       .order("created_at", { ascending: true })
       .limit(400);
@@ -110,14 +139,19 @@ export async function POST(request: NextRequest) {
         await supabase.from("conversations").update({ context_start_at: turns[0].created_at }).eq("id", conversationId);
       }
     }
-    history = turns.map((m) => ({
-      role: m.role as "user" | "assistant",
-      content: m.content,
-      context: m.context,
-      sources: Array.isArray(m.citations) ? (m.citations as StratasphereSource[]).map(sourceName) : undefined,
-    }));
+    history =
+      meeting && focusRef?.kind === "agenda_item"
+        ? // In a meeting: this item's turns only, as text (each answer gets the item's records afresh).
+          turnsForItem(turns, focusRef.meetingId, focusRef.itemId).map((m) => ({ role: m.role as "user" | "assistant", content: m.content }))
+        : turns.map((m) => ({
+            role: m.role as "user" | "assistant",
+            content: m.content,
+            context: m.context,
+            sources: Array.isArray(m.citations) ? (m.citations as StratasphereSource[]).map(sourceName) : undefined,
+          }));
+    if (meeting) trimmed = false;
   } else {
-    title = titleFromQuestion(question);
+    title = focus?.kind === "agenda_item" && live ? `${focus.meetingLabel}, ${focus.date}` : titleFromQuestion(question);
     const { data: created, error } = await supabase
       .from("conversations")
       .insert({ corporation_id: access.corpId, user_id: user.id, title })
@@ -125,7 +159,7 @@ export async function POST(request: NextRequest) {
       .single();
     if (error || !created) {
       console.error("[stratasphere chat] create", error?.message);
-      await refundDemoAllowance("chat");
+      await refundDemoAllowance(allowance);
       return NextResponse.json({ error: "Couldn't start a conversation." }, { status: 500 });
     }
     conversationId = created.id as string;
@@ -138,7 +172,7 @@ export async function POST(request: NextRequest) {
     .single();
   if (qError || !asked) {
     console.error("[stratasphere chat] save question", qError?.message);
-    await refundDemoAllowance("chat");
+    await refundDemoAllowance(allowance);
     return NextResponse.json({ error: "Couldn't save your question." }, { status: 500 });
   }
 
@@ -149,12 +183,13 @@ export async function POST(request: NextRequest) {
     async start(controller) {
       controller.enqueue(line({ type: "start", conversationId: id, title, focus: focus ? savedFocus(focus) : null }));
       const result = await streamStratasphere(
-        { supabase, corpId: access.corpId, question, history, trimmed, focus },
+        // In a meeting, the item and its attachments come first through `meeting`.
+        { supabase, corpId: access.corpId, question, history, trimmed, focus: meeting ? null : focus, meeting },
         (text) => controller.enqueue(line({ type: "delta", text }))
       );
       if (!result.ok) {
-        await refundDemoAllowance("chat", visitor);
-        await logDemoActivity({ kind: "stratasphere.chat", path: `/strata/${corpId}/assistant`, detail: { question, failed: result.error } }, visitor);
+        await refundDemoAllowance(allowance, visitor);
+        await logDemoActivity({ kind: live ? "stratasphere.meeting" : "stratasphere.chat", path: `/strata/${corpId}/assistant`, detail: { question, failed: result.error } }, visitor);
         controller.enqueue(line({ type: "error", error: result.error }));
         controller.close();
         return;
@@ -168,7 +203,7 @@ export async function POST(request: NextRequest) {
         .single();
       await supabase.from("conversations").update({ updated_at: new Date().toISOString() }).eq("id", id);
       await logDemoActivity({
-        kind: "stratasphere.chat",
+        kind: live ? "stratasphere.meeting" : "stratasphere.chat",
         path: `/strata/${corpId}/assistant`,
         detail: { question, answer: result.text, sources: result.sources.map(sourceName).join("; ") },
       }, visitor);

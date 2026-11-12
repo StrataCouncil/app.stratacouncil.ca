@@ -11,7 +11,7 @@ import { fetchLiveState } from "@/lib/meetings/live-client";
 import { getDocumentDownloadUrl } from "@/app/strata/[corpId]/documents/actions";
 import { openInNewTab } from "@/lib/open-in-tab";
 import { MemberVote } from "@/components/meetings/LiveVote";
-import { Assistant } from "@/components/meetings/MeetingMode";
+import { MeetingStratasphere } from "@/components/meetings/MeetingStratasphere";
 import { videoPeople } from "@/lib/meetings/live";
 import { VideoPanel } from "@/components/meetings/VideoPanel";
 import { ConflictDialog, MeetingSide, MeetingUser, SharedViewer, TypedConfirm, useLeaveWarning } from "@/components/meetings/MeetingChrome";
@@ -342,14 +342,11 @@ export function LiveMeeting(props: {
           video={<VideoPanel meetingId={meetingId} isRunner={false} ended={adjourned} steppedOut={steppedOut} people={videoPeople(state.presence, props.names)} />}
           showHere={false}
           assistant={
-            <Assistant
-              key={item?.id ?? "none"}
+            <MeetingStratasphere
               corpId={corpId}
               meetingId={meetingId}
               item={item}
-              agenda={agenda}
               aiAvailable={props.aiAvailable}
-              isTrial={props.isTrial}
               demoLeft={demoLeft}
               setDemoLeft={setDemoLeft}
             />

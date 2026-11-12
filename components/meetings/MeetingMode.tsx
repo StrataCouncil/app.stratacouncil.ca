@@ -42,7 +42,8 @@ import {
 import { callToOrderScript, zonedInstant } from "@/lib/meetings/scripts";
 import { clockTime } from "@/lib/meetings/minutes";
 import { currentStep, itemSteps, usesLiveVoting, type Step } from "@/lib/meetings/steps";
-import { adjournMeeting, askMeetingAssistant, callToOrder, saveMeetingState } from "@/app/strata/[corpId]/meetings/[meetingId]/run/actions";
+import { MeetingStratasphere } from "@/components/meetings/MeetingStratasphere";
+import { adjournMeeting, callToOrder, saveMeetingState } from "@/app/strata/[corpId]/meetings/[meetingId]/run/actions";
 import { saveItemNote } from "@/app/strata/[corpId]/meetings/actions";
 import { getDocumentDownloadUrl } from "@/app/strata/[corpId]/documents/actions";
 import { openInNewTab } from "@/lib/open-in-tab";
@@ -51,8 +52,6 @@ import { videoPeople } from "@/lib/meetings/live";
 import { VideoPanel } from "@/components/meetings/VideoPanel";
 import { checkInAsRunner, fetchLiveState } from "@/lib/meetings/live-client";
 import { MeetingSide, MeetingUser, SharedViewer, TypedConfirm, useLeaveWarning } from "@/components/meetings/MeetingChrome";
-import { DEMO_LIMITS, DEMO_LIMIT_MESSAGE, SIGNUP_URL } from "@/lib/demo";
-import { isDemoLimit, showDemoLimit } from "@/lib/demo-client";
 import { ConflictsPanel, RunnerVotePanel } from "@/components/meetings/LiveVote";
 import { applyPresence, inMeeting, isJoin, presentForItem, steppedOutUsers, type Presenting, takesConflicts, type Choice, type ClosedVote, type LiveConflict, type LiveState, type OpenVote } from "@/lib/meetings/live";
 import {
@@ -76,12 +75,11 @@ import {
 /**
  * Meeting Mode (doc01 §4, doc03 Stage 5a). Run by one person — whoever
  * launched the meeting. Attendance and quorum, Call to Order, each item
- * with its script, motion, votes and outcome, the embedded Stratasphere
- * assistant, and adjournment. Everything saves as it changes.
+ * with its script, motion, votes and outcome, Stratasphere in the right
+ * column (MeetingStratasphere), and adjournment. Everything saves as it changes.
  */
 
 type Lot = { lot: string; name: string; isCouncil: boolean; role?: string | null };
-type Turn = { role: "user" | "assistant"; content: string; error?: boolean };
 type Confirm = { title: string; body: React.ReactNode; confirmLabel: string; danger?: boolean; onConfirm: () => void } | null;
 
 const ATTENDANCE_VIEW = "__attendance__";
@@ -1079,16 +1077,14 @@ export function MeetingMode(props: {
             />
           }
           assistant={
-            <Assistant
-              key={item?.id ?? "none"}
+            <MeetingStratasphere
               corpId={corpId}
               meetingId={meetingId}
               item={item}
-              agenda={agenda}
               aiAvailable={props.aiAvailable}
-              isTrial={props.isTrial}
               demoLeft={demoLeft}
               setDemoLeft={setDemoLeft}
+              beforeAsk={saveNow}
             />
           }
         />
@@ -1822,115 +1818,6 @@ function Detail({ title, body }: { title: string; body: string }) {
       <summary>{title}</summary>
       <p>{body}</p>
     </details>
-  );
-}
-
-export function Assistant(props: {
-  corpId: string;
-  meetingId: string;
-  item: AgendaItem | null;
-  agenda: AgendaItem[];
-  aiAvailable: boolean;
-  isTrial: boolean;
-  demoLeft: number | null;
-  setDemoLeft: (n: number) => void;
-}) {
-  // One conversation per item, for this session only (doc02 §4b).
-  const [log, setLog] = useState<Turn[]>([]);
-  const [text, setText] = useState("");
-  const [busy, setBusy] = useState(false);
-  const listRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    listRef.current?.scrollTo({ top: listRef.current.scrollHeight });
-  }, [log, busy]);
-
-  async function send(e: React.FormEvent) {
-    e.preventDefault();
-    const q = text.trim();
-    if (!q || !props.item || busy) return;
-    if (props.demoLeft === 0) return showDemoLimit("Meeting Mode questions");
-    setText("");
-    const history = log.filter((t) => !t.error).map(({ role, content }) => ({ role, content }));
-    setLog((l) => [...l, { role: "user", content: q }]);
-    setBusy(true);
-    const result = await askMeetingAssistant(props.corpId, props.meetingId, props.item.id, props.agenda, history, q).catch(() => ({
-      ok: false as const,
-      error: "Stratasphere couldn't answer right now. Please try again.",
-    }));
-    setBusy(false);
-    if (isDemoLimit(result)) {
-      props.setDemoLeft(0);
-      setLog((l) => l.slice(0, -1));
-      setText(q);
-      return showDemoLimit("Meeting Mode questions");
-    }
-    if (result.ok && props.demoLeft != null) props.setDemoLeft(Math.max(props.demoLeft - 1, 0));
-    setLog((l) => [...l, result.ok ? { role: "assistant", content: result.text } : { role: "assistant", content: result.error, error: true }]);
-  }
-
-  return (
-    <div className="mm-ai">
-      {/* The column's toggle already names Stratasphere; this only says what it can see. */}
-      {props.item?.atts.length ? (
-        <div className="mm-ai__head">
-          <span className="card__meta">
-            {props.item.atts.length} attachment{props.item.atts.length === 1 ? "" : "s"} in context
-          </span>
-        </div>
-      ) : null}
-      <div className="mm-ai__log" ref={listRef} aria-live="polite">
-        {log.length === 0 && (
-          <p className="card__meta">
-            {props.aiAvailable
-              ? `Ask about this item, your bylaws, past decisions, or meeting procedure.${
-                  props.demoLeft != null
-                    ? ` The demo includes ${DEMO_LIMITS.meeting} questions in Meeting Mode. ${props.demoLeft} left.`
-                    : ""
-                }`
-              : "The assistant comes with a Stratasphere subscription."}
-          </p>
-        )}
-        {log.map((t, i) => (
-          <div key={i} className="mm-ai__msg" data-role={t.role} data-error={t.error || undefined}>
-            {t.content}
-          </div>
-        ))}
-        {busy && (
-          <div className="mm-ai__msg" data-role="assistant">
-            Thinking…
-          </div>
-        )}
-      </div>
-      {props.demoLeft === 0 ? (
-        <div className="demo-limit-inline" data-testid="mm-ai-demo-limit">
-          <p>{DEMO_LIMIT_MESSAGE}</p>
-          <a href={SIGNUP_URL} className="button button-primary button-small">
-            Create your free account
-          </a>
-        </div>
-      ) : (
-      <form className="mm-ai__form" onSubmit={send}>
-        <textarea
-          rows={2}
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              (e.currentTarget.form as HTMLFormElement).requestSubmit();
-            }
-          }}
-          placeholder={props.item ? "Ask Stratasphere…" : "Open an agenda item to ask about it"}
-          disabled={!props.aiAvailable || !props.item}
-          aria-label="Ask Stratasphere"
-          data-testid="mm-ai-input"
-        />
-        <button type="submit" className="button button-primary button-small" disabled={!props.aiAvailable || !props.item || busy || !text.trim()}>
-          Ask
-        </button>
-      </form>
-      )}
-    </div>
   );
 }
 

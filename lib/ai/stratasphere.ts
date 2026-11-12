@@ -11,6 +11,8 @@ import { knowledgeResourceKindLabels } from "@/lib/library/catalogue";
 import { meetingFormatLabels, meetingTypeLabels, type MeetingFormat, type MeetingType } from "@/lib/meetings/agenda";
 import type { AgendaItem } from "@/lib/meetings/agenda";
 import type { ResolvedFocus } from "@/lib/ai/focus";
+import { clockTime } from "@/lib/meetings/minutes";
+import { HOURLY_LIMIT, nextAskAt } from "@/lib/ai/hourly-limit";
 
 /**
  * Stratasphere, the AI governance assistant (doc02 §3–§5). One system for
@@ -476,6 +478,32 @@ type PrepareInput = {
 };
 
 /**
+ * "That's 30 questions in the last hour. You can ask again at 3:42 p.m. PT."
+ * The time is when the oldest of those 30 turns an hour old. Usage is only
+ * readable with the service role, so it's read here for this person alone.
+ */
+export async function hourlyLimitMessage(supabase: SupabaseClient, now = Date.now()) {
+  const fallback = `That's ${HOURLY_LIMIT} questions in the last hour. Please wait a few minutes, then ask again.`;
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return fallback;
+    const { data } = await createAdminClient()
+      .from("stratasphere_usage")
+      .select("created_at")
+      .eq("user_id", user.id)
+      .gt("created_at", new Date(now - 3_600_000).toISOString())
+      .order("created_at", { ascending: false })
+      .limit(HOURLY_LIMIT);
+    const at = nextAskAt((data ?? []).map((r) => r.created_at as string), now);
+    return at ? `That's ${HOURLY_LIMIT} questions in the last hour. You can ask again at ${clockTime(at, "America/Vancouver")}.` : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+/**
  * Everything up to the model call: the allowance check, then the request.
  * `supabase` is the signed-in user's client — every read goes through RLS,
  * and the allowance (stratasphere_allowed, 0090: subscribed, council,
@@ -489,7 +517,7 @@ async function prepareStratasphere(input: PrepareInput): Promise<Prepared> {
     return { ok: false, error: "Stratasphere isn't available right now." };
   }
   if (allowed === "limit") {
-    return { ok: false, limit: true, error: "That's 30 questions in the last hour. Please wait a few minutes, then ask again." };
+    return { ok: false, limit: true, error: await hourlyLimitMessage(input.supabase) };
   }
   if (allowed !== "ok") {
     return {
