@@ -13,10 +13,13 @@ import { demoAllowanceLeft } from "@/lib/demo-usage";
  */
 export default async function AssistantPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ corpId: string }>;
+  searchParams: Promise<{ c?: string }>;
 }) {
   const { corpId } = await params;
+  const { c: openConversation } = await searchParams;
   const access = await getStrataAccess(corpId);
 
   if (!access?.stratasphere) {
@@ -64,6 +67,7 @@ export default async function AssistantPage({
         indexedDocuments={count ?? 0}
         initialConversations={conversations}
         initialProjects={projects}
+        initialConversationId={openConversation ?? null}
         demoLeft={demoLeft?.chat ?? null}
       />
     </>

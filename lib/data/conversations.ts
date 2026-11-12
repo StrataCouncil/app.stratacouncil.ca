@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import type { StratasphereSource } from "@/lib/ai/stratasphere";
+import type { SavedFocus } from "@/lib/stratasphere-focus";
 
 /**
  * The signed-in person's own Stratasphere history for one strata (0033).
@@ -24,6 +25,8 @@ export interface ConversationMessage {
   content: string;
   sources: StratasphereSource[];
   createdAt: string;
+  /** What the person was looking at when they asked (0094), for questions. */
+  focus?: SavedFocus | null;
 }
 
 export async function listConversations(corpId: string) {
