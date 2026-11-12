@@ -14,10 +14,13 @@ import { formatMinutes, lockedBehind, minutesLeft, nextModule, trackStatus, type
 export function TrainingOverview({
   tracks,
   news,
+  nav,
   hrefBase = "/training",
 }: {
   tracks: TrainingTrack[];
   news?: React.ReactNode;
+  /** The Resources menu, above the heading (not on the Super Admin preview). */
+  nav?: React.ReactNode;
   /** Where track and module links point. */
   hrefBase?: string;
 }) {
@@ -32,6 +35,7 @@ export function TrainingOverview({
 
   return (
     <div className="wrap page">
+      {nav}
       <div className="page-header">
         <h1>Council Training</h1>
         <p>

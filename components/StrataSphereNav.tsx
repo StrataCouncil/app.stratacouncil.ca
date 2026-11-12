@@ -3,40 +3,27 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useStrata } from "@/components/StrataContext";
+import { navItemsFor } from "@/lib/navigation";
 import { RequestSubscriptionButton } from "@/components/RequestSubscriptionButton";
 import { STRATASPHERE_PITCH, STRATASPHERE_TITLE } from "@/components/StratasphereValue";
 import { SubscriptionPendingNote } from "@/components/SubscriptionPendingNote";
 
 /**
- * StrataSphere sub-nav (doc03 "second level"): free sections show fully
- * open, gated sections stay visible but greyed with a lock — the tab
- * should read as "your strata's home, some of it unlocked, some of it
- * not," never as a paywall that hides things. Clicking a locked section
- * doesn't navigate; it explains what unlocks it and points the admin at
- * billing (subscribing is admin-only, doc01 §7 item 7).
+ * The second-level menu inside a strata (2026-11-12): the items of the
+ * top-bar section the page belongs to (components/TopNav.tsx).
  *
- * No standalone "Decisions" item — the decision ledger feeds the AI's
- * context and has no browse surface (doc01 §4a). No "Calendar" either —
- * not built in V1 (doc01 §7 item 21).
+ *   Your Strata:   Overview, Meetings, Discussions, Council, Owners,
+ *                  Management (managers and the admin), Billing (billing
+ *                  access). Free.
+ *   Stratasphere:  Ask (part of the subscription: shown with a lock until
+ *                  the strata subscribes) and Documents (free to store).
+ *
+ * The Library is in Resources (/library), and the decision ledger has no
+ * page of its own: Stratasphere reads it behind the scenes.
+ *
+ * A locked item doesn't navigate; it explains what unlocks it and points
+ * the admin at billing (subscribing is admin-only).
  */
-const allItems: Array<{ slug: string; label: string; gated: boolean; managersOnly?: boolean; billingOnly?: boolean; councilOnly?: boolean }> = [
-  // Overview is the strata's landing page: its dashboard.
-  { slug: "", label: "Overview", gated: false },
-  { slug: "assistant", label: "Stratasphere™", gated: true },
-  { slug: "guides", label: "Library", gated: false },
-  { slug: "council", label: "Council", gated: false },
-  { slug: "lots", label: "Owners", gated: false },
-  { slug: "meetings", label: "Meetings", gated: false },
-  // Council votes between meetings (0070): council only. The first is free;
-  // the page itself says when a subscription is needed for more.
-  { slug: "discussions", label: "Discussions", gated: false, councilOnly: true },
-  { slug: "documents", label: "Documents", gated: false },
-  // Billing: the admin, and anyone they've given billing access to (0046); others never see the tab.
-  { slug: "billing", label: "Billing", gated: false, billingOnly: true },
-  // Only the Admin and the Manager role see this one at all.
-  { slug: "management", label: "Management", gated: false, managersOnly: true },
-];
-
 function LockIcon() {
   return (
     <svg
@@ -59,12 +46,12 @@ function LockIcon() {
 
 export function StrataSphereNav({ active }: { active: string }) {
   const { corpId, subscribed, pending, canBill, canManage, seesDiscussions } = useStrata();
-  const items = allItems.filter((i) => (!i.managersOnly || canManage) && (!i.billingOnly || canBill) && (!i.councilOnly || seesDiscussions));
+  const items = navItemsFor(active, { canManage, canBill, seesDiscussions });
   const [prompt, setPrompt] = useState<string | null>(null);
 
   return (
     <>
-      <nav className="substrata-nav" aria-label="Stratasphere">
+      <nav className="substrata-nav" aria-label={items[0]?.section === "stratasphere" ? "Stratasphere" : "Your Strata"}>
         {items.map((item) => {
           const key = item.slug || "home";
           const locked = item.gated && !subscribed;
@@ -73,9 +60,9 @@ export function StrataSphereNav({ active }: { active: string }) {
               <button
                 key={key}
                 type="button"
-                className={`substrata-nav__locked${item.slug === "assistant" ? " substrata-nav__sphere" : ""}`}
+                className="substrata-nav__locked"
                 data-active={active === key}
-                data-desktop-only={item.slug === "assistant" ? undefined : "true"}
+                data-desktop-only={item.phone ? undefined : "true"}
                 aria-disabled="true"
                 onClick={() => setPrompt(item.label)}
                 data-testid={`nav-locked-${key}`}
@@ -91,9 +78,8 @@ export function StrataSphereNav({ active }: { active: string }) {
               key={key}
               href={`/strata/${corpId}${item.slug ? `/${item.slug}` : ""}`}
               data-active={active === key}
-              className={item.slug === "assistant" ? "substrata-nav__sphere" : undefined}
-              // The Library and the assistant work on phones (ScreenGate).
-              data-desktop-only={item.slug === "guides" || item.slug === "assistant" ? undefined : "true"}
+              // Ask works on phones (ScreenGate).
+              data-desktop-only={item.phone ? undefined : "true"}
               data-testid={`nav-${key}`}
             >
               {item.label}

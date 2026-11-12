@@ -691,7 +691,7 @@ export function StratasphereChat({
           <span>
             Draws on everything {corpName} has on StrataCouncil.ca (the owner roster, council, meetings, the document
             repository with {indexedDocuments} indexed {indexedDocuments === 1 ? "document" : "documents"}, minutes included,
-            and the decision ledger), BC strata legislation and anonymized precedent from other strata corporations.
+            and the decision ledger), and BC strata legislation.
           </span>
         </div>
         )}

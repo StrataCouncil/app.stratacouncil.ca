@@ -47,29 +47,34 @@ These decide every edge case below.
 
 ### Navigation
 
-The top bar becomes three sections, plus Super Admin for Super Admins:
+Built in PR 3a (2026-11-12). The top bar has three sections, plus Super Admin
+for Super Admins. The labels were changed from Learn / Decide / Remember to
+plainer words; they can change again later (lib/navigation.ts).
 
-| Section | Holds | Price | Strata needed? | Phones |
+| Top bar | Holds | Price | Strata needed? | Phones |
 |---|---|---|---|---|
-| **Learn** | Council Training, the Library, legislation and CRT updates | Free | No | Yes |
-| **Decide** | Overview, Meetings, Discussions, Council, Owners, Management, Billing | Free (some features paid, shown locked) | Yes | Desktop (as today) |
-| **Remember** | Stratasphere: Ask, Documents, Decision Ledger | Paid | Yes | Ask works on phones |
+| **Resources** | Council Training, the Library (`/library`) | Free | No | Yes |
+| **Your Strata** | Overview, Meetings, Discussions, Council, Owners, Management, Billing | Free (some features paid, shown locked) | Yes | Desktop (as today) |
+| **Stratasphere** | Ask, Documents | Ask is paid; storing documents is free | Yes | Ask works on phones |
 
-- **Stratasphere** stops meaning "the strata workspace" (today's top-bar label)
-  and becomes the name of the paid tier and its assistant. That matches how we
-  sell it: Stratasphere is the memory.
-- **The strata switcher** sits on every Decide and Remember page, as today.
-  Learn belongs to the person, not a strata.
-- **The floating Stratasphere button** appears on every Decide and Remember
-  page. It doesn't appear in Learn ("Training is not part of the Stratasphere").
-- **URLs stay where they are** (`/training`, `/strata/[corpId]/...`), with
-  redirects for anything that moves. Emails already sent keep working.
-
-Within a strata, the second-level nav is grouped by section:
-
-- **Decide:** Overview, Meetings, Discussions, Council, Owners, Management
-  (managers and admins only), Billing (billing access only).
-- **Remember:** Ask, Documents, Decision Ledger.
+- **Stratasphere** stops meaning "the strata workspace" and is the name of the
+  paid tier and its assistant: Stratasphere is the memory.
+- **The strata switcher** sits on every Your Strata and Stratasphere page, as
+  today. Inside a strata, both top-bar links stay on that strata.
+- **The Library** belongs to the person, not a strata: anyone signed in, with
+  or without a strata. Templates and forms download blank.
+- **The decision ledger has no page.** Every carried motion is in it, and
+  Stratasphere reads it behind the scenes; councils see each decision in
+  its meeting's minutes. (Decided 2026-11-12.)
+- **Documents:** any connected member uploads, browses, and downloads, free,
+  subscribed or not. Search and Ask are the paid part. Documents stored while
+  unsubscribed are read once when the strata subscribes; a note on Ask and
+  Documents counts the ones still being read.
+- **No redirects:** nobody was using the old Library and Decisions pages, so
+  they were removed rather than redirected.
+- **The floating Stratasphere button** (PR 4) appears on every Your Strata and
+  Stratasphere page, not in Resources ("Training is not part of the
+  Stratasphere").
 
 ### What each section holds
 
@@ -105,19 +110,17 @@ Within a strata, the second-level nav is grouped by section:
   plus the floating assistant everywhere in Decide and Remember. Unlimited.
 - **Documents:** the library, uploaded, read (including OCR), indexed, and
   searchable by meaning and by exact words.
-- **The Decision Ledger,** browsable for the first time (today the route is only
-  a lock panel): every carried motion, filterable by year, category, and
-  meeting, each linked to its minutes, and searchable.
+- **The decision ledger:** every carried motion, read by Stratasphere behind
+  the scenes. No page of its own (decided 2026-11-12).
 - **Historic minutes import:** AI reads past minutes and adds their decisions to
   the ledger.
 
 ### What an unsubscribed strata sees in Remember
 
 - **Documents:** the list stays visible. Every stored file opens and downloads,
-  and the full export works. Uploading to the library, search, and Ask are
-  locked. This covers stratas that cancel, and files uploaded before this change.
-- **Decision Ledger:** locked. The same decisions stay visible in each meeting's
-  minutes in Decide, so nothing is lost.
+  and the full export works, and uploading stays free. Search and Ask are
+  locked. Files uploaded meanwhile wait, and are read once on subscribing.
+- **Decisions:** always in each meeting's minutes, so nothing is lost.
 - **Ask:** locked. Past conversations stay saved and private. They're readable
   again on resubscribing, and the person can delete them at any time.
 - **Locks explain themselves:** an admin or billing contact can subscribe from

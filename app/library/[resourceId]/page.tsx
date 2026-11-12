@@ -1,17 +1,15 @@
 import { tz } from "@/lib/time-zone";
-import { SubscribeCta } from "@/components/SubscribeCta";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { StrataSphereNav } from "@/components/StrataSphereNav";
+import { AppShell } from "@/components/AppShell";
+import { ResourcesNav } from "@/components/ResourcesNav";
 import { LibraryDisclaimer } from "@/components/library/LibraryDisclaimer";
 import { LibraryArticle } from "@/components/library/LibraryArticle";
 import { getPublishedLibraryItem, listPublishedLibrary, type PublishedLibraryEntry } from "@/lib/data/library";
-import { getStrataAccess } from "@/lib/data/strata";
 import { logUserActivity } from "@/lib/user-activity";
 import { isUuid } from "@/lib/library/library";
 import {
   isDownloadableKind,
-  isTemplateLocked,
   knowledgeResourceKindLabels,
   knowledgeResources,
 } from "@/lib/library/catalogue";
@@ -25,11 +23,8 @@ import {
  * (`body`) plus the two things a blog layout adds: legislation citations
  * and related articles.
  *
- * Locked policy templates (`isTemplateLocked`) still get a real page —
- * title, summary, tags all render — but the article body and download
- * action are replaced with the same `lock-panel` upgrade pattern used for
- * the Stratasphere™ assistant, rather than 404ing or hiding the resource
- * entirely. Browsing the paywall is part of the incentive.
+ * In Resources (2026-11-12): free for everyone signed in, with or without a
+ * strata. Policy templates and forms download blank.
  *
  * `reviewStatus` is a data field only, not shown anywhere on this page —
  * see the note on `reviewStatus` in lib/library/catalogue.ts for why.
@@ -37,26 +32,23 @@ import {
 export default async function KnowledgeResourcePage({
   params,
 }: {
-  params: Promise<{ corpId: string; resourceId: string }>;
+  params: Promise<{ resourceId: string }>;
 }) {
-  const { corpId, resourceId } = await params;
-  const access = await getStrataAccess(corpId);
-  if (!access) notFound();
+  const { resourceId } = await params;
   if (isUuid(resourceId)) {
     const item = await getPublishedLibraryItem(resourceId);
     if (!item) notFound();
-    await logUserActivity({ kind: "guide_opened", strata: corpId, ref: item.id, label: item.title });
-    return <LibraryItemPage item={item} corpId={corpId} subscribed={access.subscribed} />;
+    await logUserActivity({ kind: "guide_opened", strata: null, ref: item.id, label: item.title });
+    return <LibraryItemPage item={item} />;
   }
   // Placeholder articles show on the Library as "Coming soon" and don't
   // open; an old link to one lands back on the Library.
   if (!knowledgeResources.some((r) => r.id === resourceId)) notFound();
-  redirect(`/strata/${corpId}/guides`);
+  redirect("/library");
 }
 
-/** A published Library item (0049). Templates are for subscribers. */
-async function LibraryItemPage({ item, corpId, subscribed }: { item: PublishedLibraryEntry; corpId: string; subscribed: boolean }) {
-  const locked = isTemplateLocked(item, subscribed);
+/** A published Library item (0049). Templates and forms download blank. */
+async function LibraryItemPage({ item }: { item: PublishedLibraryEntry }) {
   const others = (await listPublishedLibrary()).filter((r) => r.id !== item.id);
   const related = others
     .map((r) => ({ r, score: r.tags.filter((t) => item.tags.includes(t)).length + (r.kind === item.kind ? 0.5 : 0) }))
@@ -67,10 +59,11 @@ async function LibraryItemPage({ item, corpId, subscribed }: { item: PublishedLi
   const updated = new Date(item.publishedAt).toLocaleDateString("en-CA", { timeZone: tz("America/Vancouver", item.publishedAt), year: "numeric", month: "long", day: "numeric" });
 
   return (
-    <>
-      <StrataSphereNav active="guides" />
+    <AppShell>
+      <div className="wrap page">
+      <ResourcesNav active="library" />
 
-      <Link href={`/strata/${corpId}/guides`} className="kb-article__back">
+      <Link href="/library" className="kb-article__back">
         &larr; Library
       </Link>
 
@@ -79,11 +72,6 @@ async function LibraryItemPage({ item, corpId, subscribed }: { item: PublishedLi
           <div className="kb-card__meta-row" style={{ marginBottom: "0.6rem" }}>
             <span className={`kb-card__kind kb-card__kind--${item.kind}`}>{knowledgeResourceKindLabels[item.kind]}</span>
             <div className="kb-card__meta-row-right">
-              {locked && (
-                <span className="kb-lock-badge" title="Requires a Stratasphere™ subscription">
-                  Subscription
-                </span>
-              )}
               <span className="pill pill--locked">BC</span>
             </div>
           </div>
@@ -95,35 +83,23 @@ async function LibraryItemPage({ item, corpId, subscribed }: { item: PublishedLi
             <LibraryDisclaimer compact />
           </div>
 
-          {isDownloadableKind(item.kind) && !locked && (
+          {isDownloadableKind(item.kind) && (
             <div className="template-download" data-testid="template-download">
-              <a className="button button-secondary button-small" href={`/strata/${corpId}/guides/${item.id}/template.docx`} data-testid="template-docx">
+              <a className="button button-secondary button-small" href={`/library/${item.id}/template.docx`} data-testid="template-docx">
                 Download as Word (.docx)
               </a>
               {item.kind === "form" ? (
-                <p>Filled in with your strata&rsquo;s name and plan number, ready to adapt and use.</p>
+                <p>A blank form, ready to fill in with your strata&rsquo;s details.</p>
               ) : (
                 <p>
-                  Filled in with your strata&rsquo;s name and plan number. Adapt it to your strata, review and approve it as a
-                  council, add the date it&rsquo;s activated, then upload the approved policy to{" "}
-                  <Link href={`/strata/${corpId}/documents`}>Documents</Link> if you wish.
+                  A blank template. Fill in your strata&rsquo;s details, adapt it, review and approve it as a council, add the
+                  date it&rsquo;s activated, then upload the approved policy to your strata&rsquo;s Documents if you wish.
                 </p>
               )}
             </div>
           )}
 
-          {locked ? (
-            <div className="lock-panel" style={{ marginTop: "1.75rem" }} data-testid="template-lock-panel">
-              <h2>This {item.kind === "form" ? "form" : "template"} requires a subscription</h2>
-              <p>
-                Policy templates and forms are the part of the Library that&rsquo;s behind Stratasphere&trade;. Playbooks and
-                guides stay free for every connected member.
-              </p>
-              <SubscribeCta testId="template-subscribe-cta" />
-            </div>
-          ) : (
-            <LibraryArticle markup={item.markup} />
-          )}
+          <LibraryArticle markup={item.markup} />
         </article>
 
         <aside className="kb-article__sidebar">
@@ -143,7 +119,7 @@ async function LibraryItemPage({ item, corpId, subscribed }: { item: PublishedLi
               <ul className="kb-sidebar-list kb-sidebar-list--links">
                 {related.map((r) => (
                   <li key={r.id}>
-                    <Link href={`/strata/${corpId}/guides/${r.id}`}>{r.title}</Link>
+                    <Link href={`/library/${r.id}`}>{r.title}</Link>
                     <span className="kb-sidebar-list__kind">{knowledgeResourceKindLabels[r.kind]}</span>
                   </li>
                 ))}
@@ -152,6 +128,7 @@ async function LibraryItemPage({ item, corpId, subscribed }: { item: PublishedLi
           )}
         </aside>
       </div>
-    </>
+      </div>
+    </AppShell>
   );
 }

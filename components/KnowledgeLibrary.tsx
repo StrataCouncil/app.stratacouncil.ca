@@ -17,7 +17,7 @@ const kinds = Object.keys(knowledgeResourceKindLabels) as KnowledgeResourceKind[
  * lists. A new council member searching "noise complaint" or "reserve
  * fund" shouldn't have to guess which content type it lives under.
  *
- * Each card is a link into its own detail page (`/guides/[resourceId]`)
+ * Each card is a link into its own detail page (`/library/[resourceId]`)
  * — this is meant to read like a blog/news index, not a static summary
  * list. Policy templates behind the paywall (`isTemplateLocked`) still
  * render and still link through — the detail page is where the actual
@@ -55,12 +55,8 @@ export type LibraryCard = Pick<KnowledgeResource, "id" | "kind" | "title" | "sum
 
 export function KnowledgeLibrary({
   resources,
-  corpId,
-  subscribed,
 }: {
   resources: LibraryCard[];
-  corpId: string;
-  subscribed: boolean;
 }) {
   const [query, setQuery] = useState("");
   const [activeKind, setActiveKind] = useState<KnowledgeResourceKind | "all">("all");
@@ -141,10 +137,11 @@ export function KnowledgeLibrary({
                 </div>
               );
             }
-            const locked = isTemplateLocked(r, subscribed);
+            // Templates and forms are free since 2026-11-12; the lock stays wired in case it returns.
+            const locked = isTemplateLocked(r, true);
             return (
               <Link
-                href={`/strata/${corpId}/guides/${r.id}`}
+                href={`/library/${r.id}`}
                 className="card kb-card"
                 data-locked={locked}
                 key={r.id}

@@ -48,7 +48,8 @@ const HEADING_FONT = "Georgia";
 const BODY = 21; // 10.5 pt
 
 export interface PolicyExportInput {
-  corporation: { planNumber: string; name: string };
+  /** The strata it's for, or null for a blank template (placeholders left for the council to fill in). */
+  corporation: { planNumber: string; name: string } | null;
   title: string;
   markup: string;
   /** Work Sans Regular (lib/exports/fonts), embedded in the document. */
@@ -151,9 +152,9 @@ function body(blocks: Block[], fill: (s: string) => string): Array<Paragraph | T
 }
 
 export async function policyDocx({ corporation, title, markup, bodyFont, form }: PolicyExportInput): Promise<Buffer> {
-  const fill = (s: string) => fillPlaceholders(s, corporation);
-  const name = `${corporation.planNumber} ${corporation.name} \u2013 ${fill(title)}`;
-  const footerName = `${corporation.planNumber} ${corporation.name} - ${fill(title)}`;
+  const fill = (s: string) => (corporation ? fillPlaceholders(s, corporation) : s);
+  const name = corporation ? `${corporation.planNumber} ${corporation.name} \u2013 ${fill(title)}` : title;
+  const footerName = corporation ? `${corporation.planNumber} ${corporation.name} - ${fill(title)}` : title;
   const field = (label: string, last: boolean) =>
     new Paragraph({
       spacing: { after: last ? 320 : 0 },
@@ -176,7 +177,7 @@ export async function policyDocx({ corporation, title, markup, bodyFont, form }:
   ];
 
   const doc = new Document({
-    creator: corporation.name,
+    creator: corporation?.name ?? "StrataCouncil.ca",
     title: name,
     fonts: bodyFont ? [{ name: FONT, data: bodyFont }] : undefined,
     styles: {

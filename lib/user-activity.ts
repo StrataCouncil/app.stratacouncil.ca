@@ -21,7 +21,8 @@ export type UserActivityKind =
 
 export interface UserActivityEvent {
   kind: UserActivityKind;
-  strata: string;
+  /** The strata it happened in; null for the Library, which belongs to no strata. */
+  strata: string | null;
   ref?: string | null;
   label?: string | null;
 }
