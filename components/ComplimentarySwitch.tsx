@@ -63,7 +63,7 @@ export function ComplimentarySwitch({
         <Modal title={on ? "Switch off complimentary access?" : "Make this strata complimentary?"} onClose={() => setConfirming(false)}>
           <p>
             {on
-              ? "Meeting Mode and the Stratasphere assistant stop working for this strata straight away. Its documents, meetings and minutes stay. To keep the Stratasphere, the strata's admin subscribes and pays on its Billing page."
+              ? "Stratasphere (the assistant, document search, the ledger, built-in video) stops for this strata straight away. Its records, meetings, and minutes stay, and council meetings keep working free. To keep Stratasphere, the strata's admin subscribes on its Billing page."
               : "The strata gets everything a subscription unlocks, with no Stripe subscription and no charges, until you switch this off."}
           </p>
           {!on && hasStripeSubscription && (

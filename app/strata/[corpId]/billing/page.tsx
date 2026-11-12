@@ -8,7 +8,7 @@ import { IS_DEMO } from "@/lib/demo";
 import { getStripe, publishableKeyFor, stripeModeFor, type StripeMode } from "@/lib/stripe/client";
 import { settlePaymentMethodUpdate } from "@/lib/stripe/payment-results";
 import { UpdatePaymentMethod } from "@/components/UpdatePaymentMethod";
-import { annualTermEnd, calculateBilling } from "@/lib/stripe/prices";
+import { annualTermEnd, calculateBilling, customBilling, perPeriod, type BillingInterval } from "@/lib/stripe/prices";
 import { StatementsPeriodSelect } from "@/components/StatementsPeriodSelect";
 import { BillingDialog } from "@/components/BillingDialog";
 import { StrataSphereNav } from "@/components/StrataSphereNav";
@@ -141,6 +141,9 @@ export default async function BillingPage({
   const corp = (corps ?? []).find((c) => c.strata_plan_number === corpId);
   if (!corp) redirect(`/strata/${corpId}`);
   const sub = (subs ?? []).find((s) => s.corporation_id === corpId) ?? null;
+  // An Enterprise price agreed for this strata (0091): its only plan.
+  const { data: ent } = await admin.from("enterprise_prices").select("billing_interval, amount").eq("corporation_id", corpId).maybeSingle();
+  const enterprise = ent ? { amount: Number(ent.amount), interval: ent.billing_interval as BillingInterval } : null;
 
   // Sandbox stratas bill through Stripe test mode (0029).
   const stripeMode = await stripeModeFor(corpId);
@@ -178,7 +181,9 @@ export default async function BillingPage({
   const deactivated = sub?.status === "deactivated" && Boolean(sub.activated_at);
   const interval = (sub?.billing_interval as "monthly" | "annual" | undefined) ?? "monthly";
   const unitCount = corp.unit_count;
-  const { subtotal, gst, total } = calculateBilling(unitCount, interval);
+  const price = enterprise ? customBilling(enterprise.amount, enterprise.interval) : calculateBilling(unitCount, interval);
+  const { subtotal, gst, total } = price;
+  const planLabel = (i: BillingInterval) => (i === "annual" ? "yearly" : "monthly");
   const billingEmail = sub?.billing_email ?? "";
 
   // A real card/PAD label needs a live Stripe read — acceptable here
@@ -261,7 +266,8 @@ export default async function BillingPage({
         lots: c.unit_count as number,
         status: comp ? "Complimentary" : active ? "Active" : cPending ? "Pending" : s?.status === "deactivated" && s.activated_at ? "Deactivated" : "Not subscribed",
         activated: active && s?.activated_at ? (s.activated_at as string).slice(0, 10) : null,
-        monthly: active && !comp ? calculateBilling(c.unit_count, cInterval).subtotal : null,
+        // Each strata's charge as a monthly amount, so they add up (yearly is spread over 12).
+        monthly: active && !comp ? calculateBilling(c.unit_count, cInterval).monthlySubtotal : null,
       };
     });
   const totalMonthly = corpRows.reduce((sum, r) => sum + (r.monthly ?? 0), 0);
@@ -357,7 +363,9 @@ export default async function BillingPage({
           <h3>{STRATASPHERE_TITLE}</h3>
           <p>{STRATASPHERE_PITCH}</p>
           <p className="card__meta">
-            From {fmt(calculateBilling(unitCount, "annual").total)} a month incl. GST for {unitCount} lots.{" "}
+            {enterprise
+              ? `${fmt(price.total)} ${perPeriod(price.period)} incl. GST, the price we agreed.`
+              : `${fmt(calculateBilling(unitCount, "monthly").total)} a month, or ${fmt(calculateBilling(unitCount, "annual").total)} a year, incl. GST for ${unitCount} lots.`}{" "}
             {deactivated ? "Your strata's records are all still here." : "Council meetings and Discussions stay free either way."}
           </p>
           <Link href={`/strata/${corpId}/billing?step=plan`} className="button button-primary" data-testid="open-subscribe">
@@ -378,6 +386,7 @@ export default async function BillingPage({
             addressSame={sub?.billing_address_same ?? true}
             civicAddress={corp.address ?? ""}
             publishableKey={publishableKey}
+            enterprise={enterprise}
           />
         </BillingDialog>
       )}
@@ -504,22 +513,27 @@ export default async function BillingPage({
             </span>
           </div>
           <p>
-            {interval === "annual" ? "$82.50/mo base + $2.08/lot/mo" : "$99/mo base + $2.49/lot/mo"}
-            {interval === "annual" ? ", 12-month commitment" : ", cancel any month"}, {unitCount} lots.
+            {enterprise
+              ? `Enterprise, charged ${enterprise.interval === "annual" ? "once a year" : "monthly"}, ${unitCount} lots.`
+              : interval === "annual"
+                ? `Yearly: $300 a year per strata + $30 per lot, charged once a year, ${unitCount} lots.`
+                : `Monthly: $30 a month per strata + $3 per lot, cancel any month, ${unitCount} lots.`}
           </p>
 
           {(subscribed || deactivated) && (
             <div className="billing-lines">
               <div className="billing-line billing-line--subtotal">
                 <span>Subtotal</span>
-                <span>{fmt(subtotal)}/mo</span>
+                <span>
+                  {fmt(subtotal)}/{price.period === "year" ? "yr" : "mo"}
+                </span>
               </div>
               <div className="billing-line">
                 <span>GST (5%)</span>
                 <span>{fmt(gst)}</span>
               </div>
               <div className="billing-line billing-line--total">
-                <span>Total / month</span>
+                <span>Total / {price.period}</span>
                 <span>{fmt(total)}</span>
               </div>
             </div>
@@ -533,32 +547,33 @@ export default async function BillingPage({
                   ? `Next billing date: ${fmtDate(sub.current_period_end)}.`
                   : null}{" "}
               {sub?.activated_at ? `Active since ${fmtDate(sub.activated_at)}.` : null}
-              {termEnd && !sub?.cancel_at ? ` Current 12-month term ends ${fmtDate(termEnd)}.` : null}
+              {termEnd && !sub?.cancel_at ? ` The year you've paid for ends ${fmtDate(termEnd)}.` : null}
             </p>
           ) : deactivated ? (
             <p className="card__meta">
-              Deactivated{sub?.cancel_at ? ` since ${fmtDate(sub.cancel_at)}` : ""}. Documents and
-              guides stay free and fully available — Meeting Mode and the Stratasphere&trade;
-              assistant need an active subscription.
+              Deactivated{sub?.cancel_at ? ` since ${fmtDate(sub.cancel_at)}` : ""}. Your records are all
+              still here, and council meetings, minutes, and Discussions stay free. Stratasphere&trade; needs
+              an active subscription.
             </p>
           ) : (
             <p className="card__meta">
-              The document repository, guides, and roster are free. A subscription unlocks Meeting
-              Mode and the Stratasphere&trade; assistant.
+              Council meetings, Meeting Mode, minutes, Discussions, and training are free. A subscription adds
+              Stratasphere&trade;: the assistant, document search, the decision ledger, built-in meeting video, and
+              general meetings.
             </p>
           )}
 
           {subscribed && pendingInterval && (
             <div className="billing-pending" data-testid="pending-plan-switch">
               <p>
-                <strong>Switching to {pendingInterval} on {fmtDate(sub?.pending_interval_at ?? null)}.</strong>{" "}
+                <strong>Switching to {planLabel(pendingInterval)} on {fmtDate(sub?.pending_interval_at ?? null)}.</strong>{" "}
                 {interval === "annual"
-                  ? "Until then, the annual rate and 12-month commitment continue."
-                  : "Until then, the monthly rate continues. The 12-month term starts on that date."}
+                  ? "Until then, the year you've paid for continues."
+                  : "Until then, the monthly plan continues. The first yearly charge is on that date."}
               </p>
               <form action={keepCurrentPlan.bind(null, corpId)}>
                 <button className="button button-secondary button-small" data-testid="keep-plan-cta">
-                  Keep {interval}
+                  Keep {planLabel(interval)}
                 </button>
               </form>
             </div>
@@ -567,10 +582,10 @@ export default async function BillingPage({
           {subscribed && !sub?.cancel_at && (
             <>
               <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
-                {!pendingInterval && (
+                {!pendingInterval && !enterprise && (
                   <form action={changePlan.bind(null, corpId, otherInterval)}>
                     <button className="button button-secondary" data-testid="change-plan-cta">
-                      Switch to {otherInterval}
+                      Switch to {planLabel(otherInterval)}
                     </button>
                   </form>
                 )}
@@ -583,8 +598,8 @@ export default async function BillingPage({
               {nextAnniversary && (
                 <p className="card__meta" style={{ marginTop: "0.6rem" }}>
                   {interval === "annual"
-                    ? `A switch or cancellation takes effect on ${fmtDate(nextAnniversary)}, the end of your 12-month term. Until then, billing and access continue on the annual plan.`
-                    : `A switch to annual takes effect on ${fmtDate(nextAnniversary)}, your next billing date, and starts a 12-month term. A cancellation ends the subscription on that date.`}
+                    ? `A switch or cancellation takes effect on ${fmtDate(nextAnniversary)}, the end of the year you've paid for. Until then, access continues.`
+                    : `A switch to yearly takes effect on ${fmtDate(nextAnniversary)}, your next billing date, with the first yearly charge. A cancellation ends the subscription on that date.`}
                   {pendingInterval ? " Cancelling also drops the scheduled switch." : ""}
                 </p>
               )}

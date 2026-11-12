@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { calculateBilling, DISPLAY_RATES, type BillingInterval } from "@/lib/stripe/prices";
+import { calculateBilling, customBilling, ENTERPRISE_LOTS, padAllowed, perPeriod, PLAN_RATES, type BillingInterval } from "@/lib/stripe/prices";
+import { EnterpriseRequestButton } from "@/components/EnterpriseRequestButton";
 import { BillingContactForm, BillingPayStep } from "@/components/BillingStepForms";
 import { COMPANY_LEGAL_NAME, COMPANY_NAME, STATEMENT_DESCRIPTOR } from "@/lib/company";
 import { formatBillingAddress, type BillingAddress } from "@/lib/billing-address";
@@ -33,6 +34,7 @@ export function BillingSteps({
   addressSame,
   civicAddress,
   publishableKey,
+  enterprise = null,
 }: {
   corpId: string;
   unitCount: number;
@@ -43,6 +45,8 @@ export function BillingSteps({
   addressSame: boolean;
   civicAddress: string;
   publishableKey: string | null;
+  /** An Enterprise price the Super Admin set for this strata (0091): the only plan offered. */
+  enterprise?: { amount: number; interval: BillingInterval } | null;
 }) {
   // Never past a step whose prerequisites aren't met.
   const furthest: BillingStep = !billingEmail || !billingAddress ? "contact" : "pay";
@@ -53,9 +57,12 @@ export function BillingSteps({
 
   const monthly = calculateBilling(unitCount, "monthly");
   const annual = calculateBilling(unitCount, "annual");
-  const yearlySaving = (monthly.total - annual.total) * 12;
-  const savingPct = Math.round((1 - annual.subtotal / monthly.subtotal) * 100);
-  const chosen = interval === "annual" ? annual : monthly;
+  const yearlySaving = monthly.total * 12 - annual.total;
+  // Over ENTERPRISE_LOTS lots, self-serve plans aren't offered: Talk to us.
+  const enterpriseOnly = !enterprise && unitCount > ENTERPRISE_LOTS;
+  const chosen = enterprise ? customBilling(enterprise.amount, enterprise.interval) : interval === "annual" ? annual : monthly;
+  const yearly = chosen.period === "year";
+  const bankDebit = padAllowed(chosen);
 
   const cancel = (
     <Link href={cancelHref} className="button button-secondary" data-testid="billing-cancel">
@@ -84,46 +91,81 @@ export function BillingSteps({
 
       {step === "plan" && (
         <div className="billing-step">
-          <p className="card__meta">
-            {unitCount} strata lots. Both plans are billed monthly by pre-authorized debit or card.
-          </p>
-          <div className="billing-plans">
-            <div className="billing-plan" data-selected={interval === "monthly"} data-testid="plan-monthly">
-              {/* Empty rows matching the Annual card's badge and saving line, so the two cards line up. */}
-              <span className="billing-plan__badge billing-plan__badge--empty" aria-hidden="true">
-                &nbsp;
-              </span>
-              <strong>Monthly</strong>
-              <span className="billing-plan__price">
-                {fmt(monthly.total)}
-                <small>/month incl. GST</small>
-              </span>
-              <span className="card__meta">
-                {fmt(DISPLAY_RATES.monthly.basePriceMonthly)} base + {fmt(DISPLAY_RATES.monthly.perUnitMonthly)} per lot.
-                Month to month; cancel any month.
-              </span>
-              <span className="billing-plan__saving" aria-hidden="true" />
-              <Link href={href("contact", "monthly")} className="button button-secondary billing-plan__choose" data-testid="choose-monthly">
-                Monthly plan
-              </Link>
+          {enterprise ? (
+            <>
+              <p className="card__meta">{unitCount} strata lots. The price we agreed for this strata.</p>
+              <div className="billing-plans">
+                <div className="billing-plan billing-plan--recommended" data-selected="true" data-testid="plan-enterprise">
+                  <span className="billing-plan__badge">Enterprise</span>
+                  <strong>{enterprise.interval === "annual" ? "Yearly" : "Monthly"}</strong>
+                  <span className="billing-plan__price">
+                    {fmt(chosen.total)}
+                    <small>/{chosen.period} incl. GST</small>
+                  </span>
+                  <span className="card__meta">
+                    {fmt(chosen.subtotal)} {perPeriod(chosen.period)} plus GST.
+                  </span>
+                  <Link href={href("contact", enterprise.interval)} className="button button-primary billing-plan__choose" data-testid="choose-enterprise">
+                    Continue
+                  </Link>
+                </div>
+              </div>
+            </>
+          ) : enterpriseOnly ? (
+            <div className="billing-enterprise" data-testid="plan-enterprise-only">
+              <h3>Enterprise</h3>
+              <p>
+                For stratas over {ENTERPRISE_LOTS} lots, we set the price with you. Tell us a little about your strata and we&rsquo;ll
+                be in touch.
+              </p>
+              <EnterpriseRequestButton corpId={corpId} reason="large" primary />
             </div>
-            <div className="billing-plan billing-plan--recommended" data-selected={interval === "annual"} data-testid="plan-annual">
-              <span className="billing-plan__badge">Recommended &middot; save {savingPct}%</span>
-              <strong>Annual</strong>
-              <span className="billing-plan__price">
-                {fmt(annual.total)}
-                <small>/month incl. GST</small>
-              </span>
-              <span className="card__meta">
-                {fmt(DISPLAY_RATES.annual.basePriceMonthly)} base + {fmt(DISPLAY_RATES.annual.perUnitMonthly)} per lot. A
-                full year, billed monthly.
-              </span>
-              <span className="billing-plan__saving">Saves {fmt(yearlySaving)} a year over monthly</span>
-              <Link href={href("contact", "annual")} className="button button-primary billing-plan__choose" data-testid="choose-annual">
-                Annual plan
-              </Link>
-            </div>
-          </div>
+          ) : (
+            <>
+              <p className="card__meta">
+                {unitCount} strata lots. Monthly is charged each month, yearly once a year, by pre-authorized debit or card.
+                {!padAllowed(annual) && " The yearly plan is paid by card: one charge that size is over the limit for a bank debit."}
+              </p>
+              <div className="billing-plans">
+                <div className="billing-plan" data-selected={interval === "monthly"} data-testid="plan-monthly">
+                  {/* Empty rows matching the Yearly card's badge and saving line, so the two cards line up. */}
+                  <span className="billing-plan__badge billing-plan__badge--empty" aria-hidden="true">
+                    &nbsp;
+                  </span>
+                  <strong>Monthly</strong>
+                  <span className="billing-plan__price">
+                    {fmt(monthly.total)}
+                    <small>/month incl. GST</small>
+                  </span>
+                  <span className="card__meta">
+                    {fmt(PLAN_RATES.monthly.base)} a month per strata + {fmt(PLAN_RATES.monthly.perLot)} per lot. Cancel any month.
+                  </span>
+                  <span className="billing-plan__saving" aria-hidden="true" />
+                  <Link href={href("contact", "monthly")} className="button button-secondary billing-plan__choose" data-testid="choose-monthly">
+                    Monthly plan
+                  </Link>
+                </div>
+                <div className="billing-plan billing-plan--recommended" data-selected={interval === "annual"} data-testid="plan-annual">
+                  <span className="billing-plan__badge">Recommended &middot; two months free</span>
+                  <strong>Yearly</strong>
+                  <span className="billing-plan__price">
+                    {fmt(annual.total)}
+                    <small>/year incl. GST</small>
+                  </span>
+                  <span className="card__meta">
+                    {fmt(PLAN_RATES.annual.base)} a year per strata + {fmt(PLAN_RATES.annual.perLot)} per lot. Charged once a year.
+                  </span>
+                  <span className="billing-plan__saving">Saves {fmt(yearlySaving)} a year over monthly</span>
+                  <Link href={href("contact", "annual")} className="button button-primary billing-plan__choose" data-testid="choose-annual">
+                    Yearly plan
+                  </Link>
+                </div>
+              </div>
+              <p className="card__meta billing-plans__more">
+                Managing several stratas? <EnterpriseRequestButton corpId={corpId} reason="several" />
+              </p>
+            </>
+          )}
           <div className="billing-step__nav">{cancel}</div>
         </div>
       )}
@@ -151,8 +193,8 @@ export function BillingSteps({
             <div>
               <dt>Plan</dt>
               <dd>
-                {interval === "annual" ? "Annual: a full year, billed monthly" : "Monthly: month to month"}{" "}
-                <Link href={href("plan")}>Change</Link>
+                {enterprise ? `Enterprise, charged ${yearly ? "once a year" : "monthly"}` : yearly ? "Yearly: charged once a year" : "Monthly: month to month"}{" "}
+                {!enterprise && <Link href={href("plan")}>Change</Link>}
               </dd>
             </div>
             <div>
@@ -160,7 +202,7 @@ export function BillingSteps({
               <dd>{unitCount}</dd>
             </div>
             <div>
-              <dt>Monthly charge</dt>
+              <dt>{yearly ? "Yearly charge" : "Monthly charge"}</dt>
               <dd>
                 {fmt(chosen.subtotal)} + {fmt(chosen.gst)} GST = <strong>{fmt(chosen.total)}</strong>
                 <span className="billing-review__note">
@@ -182,8 +224,8 @@ export function BillingSteps({
             </div>
           </dl>
           <p className="card__meta">
-            {interval === "annual"
-              ? "You are subscribing to a full year of Stratasphere™, billed monthly. You may cancel at any time during your subscription period, but your payment method will be billed monthly until the expiration date. If you do cancel prior to the expiration date, you will have access to Stratasphere™ until it expires."
+            {yearly
+              ? "You are subscribing to a year of Stratasphere™, charged once a year. You may cancel at any time: it won't renew, and you will have access to Stratasphere™ until the end of the year you have paid for."
               : "You are subscribing month to month, billed monthly. You may cancel at any time; you will have access to Stratasphere™ until the end of the month you have paid for."}
           </p>
           <div className="billing-step__nav">
@@ -202,10 +244,11 @@ export function BillingSteps({
         <div className="billing-step">
           <h3>Payment</h3>
           <p className="card__meta">
-            {fmt(chosen.total)} a month incl. GST. Pre-authorized debit from the strata&rsquo;s bank account is
-            recommended: signing in to your bank is quickest, while typed-in account numbers are confirmed with two small
-            deposits first (a business day or two). Processed securely by Stripe for {COMPANY_LEGAL_NAME} (shown as{" "}
-            {COMPANY_NAME}). Nothing is charged until you click Subscribe.
+            {fmt(chosen.total)} {perPeriod(chosen.period)} incl. GST.{" "}
+            {bankDebit
+              ? "Pre-authorized debit from the strata’s bank account is recommended: signing in to your bank is quickest, while typed-in account numbers are confirmed with two small deposits first (a business day or two)."
+              : "Paid by card: one charge this size is over the limit for a bank debit."}{" "}
+            Processed securely by Stripe for {COMPANY_LEGAL_NAME} (shown as {COMPANY_NAME}). Nothing is charged until you click Subscribe.
           </p>
           <BillingPayStep
             corpId={corpId}

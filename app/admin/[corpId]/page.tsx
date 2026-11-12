@@ -10,6 +10,8 @@ import { signAvatarPaths } from "@/lib/data/avatars";
 import { getAllCorporations } from "@/lib/data/admin";
 import { getStrataDashboard } from "@/lib/data/admin-dashboard";
 import { ComplimentarySwitch } from "@/components/ComplimentarySwitch";
+import { EnterprisePanel } from "@/components/EnterprisePanel";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { StripeModeSwitch } from "@/components/StripeModeSwitch";
 import { folderLabel } from "@/lib/documents";
 import { getCurrentProfile } from "@/lib/data/profile";
@@ -42,6 +44,17 @@ export default async function AdminCorporationDetailPage({
   const corporation = (await getAllCorporations()).find((c) => c.id === corpId);
   if (!corporation) notFound();
   const dash = await getStrataDashboard(corpId);
+  // Enterprise (0091): server-only tables, read after the Super Admin check above.
+  const admin = createAdminClient();
+  const [{ data: entPrice }, { data: entRequests }] = await Promise.all([
+    admin.from("enterprise_prices").select("billing_interval, amount, note, set_at").eq("corporation_id", corpId).maybeSingle(),
+    admin
+      .from("enterprise_requests")
+      .select("id, reason, message, created_at, user:profiles(full_name, email)")
+      .eq("corporation_id", corpId)
+      .is("handled_at", null)
+      .order("created_at", { ascending: false }),
+  ]);
 
   const supabase = await createClient();
   const [{ data: members }, { data: roleRows }, { data: decisionRows, error: decisionsError }] = await Promise.all([
@@ -140,6 +153,25 @@ export default async function AdminCorporationDetailPage({
               since={dash.subscription.complimentaryAt}
               by={dash.subscription.complimentaryBy}
               hasStripeSubscription={dash.stripe.hasSubscription && dash.subscription.status === "active"}
+            />
+            <EnterprisePanel
+              corpId={corpId}
+              lots={corporation.unitCount}
+              price={
+                entPrice
+                  ? { amount: Number(entPrice.amount), interval: entPrice.billing_interval as "monthly" | "annual", note: entPrice.note ?? "", setAt: entPrice.set_at as string }
+                  : null
+              }
+              requests={(entRequests ?? []).map((r) => {
+                const u = (Array.isArray(r.user) ? r.user[0] : r.user) as { full_name: string | null; email: string | null } | null;
+                return {
+                  id: r.id as string,
+                  reason: r.reason as "large" | "several",
+                  message: (r.message as string) ?? "",
+                  who: u?.full_name || u?.email || "Someone",
+                  createdAt: r.created_at as string,
+                };
+              })}
             />
             <div className="admin-stats" data-testid="admin-dashboard">
               <Stat title="People" main={`${dash.people.active} active`}>

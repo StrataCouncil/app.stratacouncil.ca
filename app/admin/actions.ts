@@ -240,3 +240,55 @@ export async function setComplimentary(corpId: string, on: boolean): Promise<{ o
   revalidatePath("/admin", "layout");
   return { ok: true };
 }
+
+/**
+ * Enterprise (0091): the price agreed with one strata, per month or per
+ * year, before GST. Its billing page then offers only that plan. Changing
+ * it doesn't touch a subscription already running: that keeps the price it
+ * was started with, until it's cancelled and started again.
+ */
+export async function setEnterprisePrice(
+  corpId: string,
+  interval: "monthly" | "annual",
+  amount: number,
+  note: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const auth = await requireSuperAdmin();
+  if (!auth) return { ok: false, error: "Super Admins only." };
+  if (interval !== "monthly" && interval !== "annual") return { ok: false, error: "Choose monthly or yearly." };
+  const value = Math.round(Number(amount) * 100) / 100;
+  if (!Number.isFinite(value) || value <= 0 || value > 100000) return { ok: false, error: "Enter the price before GST, more than $0 and up to $100,000." };
+  const { error } = await createAdminClient()
+    .from("enterprise_prices")
+    .upsert(
+      { corporation_id: corpId, billing_interval: interval, amount: value, note: String(note ?? "").trim().slice(0, 500), set_by: auth.user.id, set_at: new Date().toISOString() },
+      { onConflict: "corporation_id" }
+    );
+  if (error) {
+    console.error("[setEnterprisePrice]", error.message);
+    return { ok: false, error: "Couldn't save the price." };
+  }
+  await createAdminClient().from("enterprise_requests").update({ handled_at: new Date().toISOString() }).eq("corporation_id", corpId).is("handled_at", null);
+  revalidatePath(`/admin/${corpId}`);
+  return { ok: true };
+}
+
+/** Back to the standard plans (for a new subscription; one running keeps its price). */
+export async function clearEnterprisePrice(corpId: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  const auth = await requireSuperAdmin();
+  if (!auth) return { ok: false, error: "Super Admins only." };
+  const { error } = await createAdminClient().from("enterprise_prices").delete().eq("corporation_id", corpId);
+  if (error) return { ok: false, error: "Couldn't remove the price." };
+  revalidatePath(`/admin/${corpId}`);
+  return { ok: true };
+}
+
+/** Mark this strata's open "Talk to us" requests as dealt with. */
+export async function closeEnterpriseRequests(corpId: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  const auth = await requireSuperAdmin();
+  if (!auth) return { ok: false, error: "Super Admins only." };
+  const { error } = await createAdminClient().from("enterprise_requests").update({ handled_at: new Date().toISOString() }).eq("corporation_id", corpId).is("handled_at", null);
+  if (error) return { ok: false, error: "Couldn't update the requests." };
+  revalidatePath(`/admin/${corpId}`);
+  return { ok: true };
+}

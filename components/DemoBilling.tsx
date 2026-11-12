@@ -25,7 +25,7 @@ export function DemoBilling({
   visitorEmail: string;
   now?: Date;
 }) {
-  const { subtotal, gst, total } = calculateBilling(unitCount, "annual");
+  const { subtotal, gst, total } = calculateBilling(unitCount, "monthly");
   const fmt = (n: number) => n.toLocaleString("en-CA", { style: "currency", currency: "CAD" });
   const fmtDate = (d: Date) => d.toLocaleDateString("en-CA", { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" });
 
@@ -33,10 +33,9 @@ export function DemoBilling({
   const month = (offset: number) => new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + offset, 1));
   const activated = month(-5);
   const nextBilling = month(1);
-  const termEnd = month(7);
   const statements = Array.from({ length: 6 }, (_, i) => month(-i)).map((d) => ({
     date: d.toISOString().slice(0, 10),
-    description: `Stratasphere™ annual plan, ${unitCount} lots, ${d.toLocaleDateString("en-CA", { month: "long", year: "numeric", timeZone: "UTC" })}`,
+    description: `Stratasphere™ monthly plan, ${unitCount} lots, ${d.toLocaleDateString("en-CA", { month: "long", year: "numeric", timeZone: "UTC" })}`,
     amount: total,
   }));
   const contacts = `${visitorEmail}, ${MANAGEMENT.assistant.email}`;
@@ -94,7 +93,7 @@ export function DemoBilling({
             <h3>Stratasphere&trade; subscription</h3>
             <span className="billing-tag billing-tag--ok">Active</span>
           </div>
-          <p>$82.50/mo base + $2.08/lot/mo, 12-month commitment, {unitCount} lots.</p>
+          <p>Monthly: $30 a month per strata + $3 per lot, cancel any month, {unitCount} lots.</p>
           <div className="billing-lines">
             <div className="billing-line billing-line--subtotal">
               <span>Subtotal</span>
@@ -110,20 +109,19 @@ export function DemoBilling({
             </div>
           </div>
           <p className="card__meta">
-            Next billing date: {fmtDate(nextBilling)}. Active since {fmtDate(activated)}. Current 12-month term ends{" "}
-            {fmtDate(termEnd)}.
+            Next billing date: {fmtDate(nextBilling)}. Active since {fmtDate(activated)}.
           </p>
           <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
             <DemoLimitButton reason="billing" className="button button-secondary">
-              Switch to monthly
+              Switch to yearly
             </DemoLimitButton>
             <DemoLimitButton reason="billing" className="button button-secondary">
               Cancel subscription
             </DemoLimitButton>
           </div>
           <p className="card__meta" style={{ marginTop: "0.6rem" }}>
-            A switch or cancellation takes effect on {fmtDate(termEnd)}, the end of your 12-month term. Until then, billing and
-            access continue on the annual plan.
+            A switch to yearly takes effect on {fmtDate(nextBilling)}, your next billing date, with the first yearly charge. A
+            cancellation ends the subscription on that date.
           </p>
         </div>
       </div>
