@@ -11110,3 +11110,55 @@ button.design-editor__swatch {
     grid-template-columns: 1fr;
   }
 }
+
+/* Enterprise (0091): billing plan step and the Super Admin panel */
+.billing-enterprise {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem;
+  display: grid;
+  gap: 0.6rem;
+  justify-items: start;
+}
+.billing-enterprise h3 {
+  margin: 0;
+}
+.billing-enterprise p {
+  margin: 0;
+}
+.billing-plans__more {
+  margin-top: 0.75rem;
+}
+.enterprise-requests {
+  margin: 0.75rem 0;
+}
+.enterprise-requests ul {
+  margin: 0.35rem 0 0.4rem;
+  padding-left: 1.1rem;
+}
+.enterprise-form {
+  display: grid;
+  grid-template-columns: 10rem 10rem 1fr;
+  gap: 0.75rem;
+  align-items: end;
+  margin-top: 0.75rem;
+}
+.enterprise-form .field {
+  margin: 0;
+}
+.enterprise-form__actions {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}
+.enterprise-form > p {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+@media (max-width: 700px) {
+  .enterprise-form {
+    grid-template-columns: 1fr;
+  }
+}

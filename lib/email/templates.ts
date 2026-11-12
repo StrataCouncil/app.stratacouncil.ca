@@ -482,3 +482,29 @@ export function meetingStartedEmail(params: {
   }`;
   return { subject: `${params.meetingLabel} has started: ${params.corporationName}`, html, text };
 }
+
+/**
+ * To the Super Admins: a strata asked about Enterprise (0091), from its
+ * billing page. Their name and email are included so a Super Admin can
+ * reply directly; the strata's console page has the request too.
+ */
+export function enterpriseRequestEmail(params: {
+  corporationName: string;
+  strataPlanNumber: string;
+  lots: number;
+  reason: "large" | "several";
+  requesterName: string | null;
+  requesterEmail: string;
+  message: string;
+  consoleUrl: string;
+}) {
+  const why = params.reason === "large" ? `a strata of ${params.lots} lots` : "managing several stratas";
+  const who = params.requesterName ? `${params.requesterName} (${params.requesterEmail})` : params.requesterEmail;
+  const html = wrap(`
+    <p style="margin:0 0 16px;font-size:16px;color:${INK};">${escapeHtml(who)} asked about Enterprise for <strong>${escapeHtml(params.corporationName)}</strong> (${escapeHtml(params.strataPlanNumber)}): ${escapeHtml(why)}.</p>
+    ${params.message ? `<p style="margin:0 0 16px;font-size:14px;color:${INK};white-space:pre-wrap;">${escapeHtml(params.message)}</p>` : ""}
+    ${button(params.consoleUrl, "Open the strata in the console")}
+  `);
+  const text = `${who} asked about Enterprise for ${params.corporationName} (${params.strataPlanNumber}): ${why}.\n\n${params.message ? `${params.message}\n\n` : ""}${params.consoleUrl}`;
+  return { subject: `Enterprise enquiry: ${params.corporationName} (${params.strataPlanNumber})`, html, text };
+}
