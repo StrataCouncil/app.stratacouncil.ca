@@ -4,7 +4,6 @@ import { notFound } from "next/navigation";
 import { AdminCorporationSearch } from "@/components/AdminCorporationSearch";
 import { AdminTabs } from "@/components/AdminTabs";
 import { AppShell } from "@/components/AppShell";
-import { DeleteAccountCard } from "@/components/AdminDangerDelete";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { getAllCorporations, getPendingCreationRequests } from "@/lib/data/admin";
 import { getCurrentProfile } from "@/lib/data/profile";
@@ -14,6 +13,10 @@ import { getCurrentProfile } from "@/lib/data/profile";
  * corporations (nothing is created until a request here is approved,
  * doc01 §4), and search across every corporation regardless of
  * membership.
+ *
+ * No deletes here (2026-11-12): a strata corporation is permanent. A
+ * person's account is deleted from their page under Users; a strata, only
+ * in an edge case, from the bottom of its own page.
  */
 export default async function AdminStratasPage({ searchParams }: { searchParams: Promise<{ deleted?: string }> }) {
   const { deleted } = await searchParams;
@@ -80,8 +83,6 @@ export default async function AdminStratasPage({ searchParams }: { searchParams:
 
         <h2 style={{ marginBottom: "1rem" }}>Corporations</h2>
         <AdminCorporationSearch corporations={corporations} />
-
-        <DeleteAccountCard />
       </div>
     </AppShell>
   );
