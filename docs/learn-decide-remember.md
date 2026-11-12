@@ -171,7 +171,7 @@ Within a strata, the second-level nav is grouped by section:
 | **Free, forever** | $0 | Learn and Decide (section 3) |
 | **Stratasphere, Monthly** | **$30 a month per strata + $3 per strata lot.** Cancel any month. | Any strata, self-serve |
 | **Stratasphere, Yearly** | **$25 a month per strata + $2.50 per lot**, a 12-month commitment, billed monthly (two months free over the year). | Any strata, self-serve |
-| **Enterprise** | Talk to us | Strata management companies, and stratas over 100 lots |
+| **Enterprise** | Talk to us | Strata management companies, and stratas whose monthly charge would be over $3,000 (over 1,132 lots) |
 
 GST (5%) on top. No cap: a strata pays its lot count. Both plans bill
 monthly, so no single charge comes near Stripe's limit for one bank debit.
@@ -188,7 +188,9 @@ monthly, so no single charge comes near Stripe's limit for one bank debit.
   budget (the budget pack, section 10, later). We never say a subscription is
   automatically within anyone's spending limit.
 - **Enterprise:** the billing page offers "Talk to us" instead of self-serve
-  checkout for stratas over 100 lots (`ENTERPRISE_LOTS`), and to anyone who asks
+  checkout when a plan's monthly charge, GST included, is over Stripe's $3,000
+  limit on one payment (`MONTHLY_CHARGE_LIMIT`: Monthly fits up to 942 lots,
+  Yearly up to 1,132), and to anyone who asks
   about several stratas. The request goes to the Super Admin console and emails
   the Super Admins. The Super Admin sets a monthly price for that strata, month
   to month or on a 12-month commitment, or marks it complimentary.
@@ -558,8 +560,10 @@ and "Free: Learn and Decide. Paid: Remember."
    admins named on the Council page. Never owners.
 2. **Reading the strata plan when a strata is created:** stays free.
 3. **The top-bar labels:** Learn / Decide / Remember.
-4. **No price cap.** Stratasphere is $30 + $3 per lot. Management companies and
-   stratas over 100 lots go to Enterprise ("Talk to us").
+4. **No price cap, and no lot limit (2026-11-12).** Stratasphere is $30 + $3 per
+   lot, for any strata. Council works out its own spending limits. Only a
+   monthly charge over Stripe's $3,000 a payment goes to Enterprise ("Talk to
+   us"), as do management companies.
 
 ---
 

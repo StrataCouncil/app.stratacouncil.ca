@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { stripeFor, stripeModeFor } from "@/lib/stripe/client";
-import { annualTermEnd, ENTERPRISE_LOTS, getPriceIds, type BillingInterval } from "@/lib/stripe/prices";
+import { annualTermEnd, getPriceIds, planFits, type BillingInterval } from "@/lib/stripe/prices";
 import { parseCivicAddress, readBillingAddress, toStripeAddress, type BillingAddress } from "@/lib/billing-address";
 import { recordPaymentMethodUpdate, recordSubscriptionPayment } from "@/lib/stripe/payment-results";
 import type Stripe from "stripe";
@@ -240,6 +240,9 @@ export async function changePlan(corporationId: string, newInterval: BillingInte
     .eq("strata_plan_number", corporationId)
     .single();
   if (!corp) throw new Error("Corporation not found.");
+  if (!planFits(corp.unit_count, newInterval)) {
+    throw new Error("That plan's monthly charge is over the $3,000 we can take in one payment, so it can't be switched to.");
+  }
 
   const stripe = await stripeFor(corporationId);
   const current = await stripe.subscriptions.retrieve(sub.stripe_subscription_id);
@@ -468,8 +471,8 @@ export async function startSubscriptionPayment(
       .maybeSingle(),
   ]);
   if (!corp) return { error: "Corporation not found." };
-  if (!enterprise && corp.unit_count > ENTERPRISE_LOTS) {
-    return { error: `For stratas over ${ENTERPRISE_LOTS} lots, we set the price with you. Use Talk to us on the plan step.` };
+  if (!enterprise && !planFits(corp.unit_count, interval)) {
+    return { error: "This plan's monthly charge is over the $3,000 we can take in one payment. Choose another plan, or use Talk to us on the plan step." };
   }
   if (sub?.status === "active") return { error: "This strata is already subscribed." };
   if (sub?.stripe_subscription_id && sub.stripe_status === "incomplete") {

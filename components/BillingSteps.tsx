@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { calculateBilling, customBilling, ENTERPRISE_LOTS, PLAN_RATES, type BillingInterval } from "@/lib/stripe/prices";
+import { calculateBilling, customBilling, PLAN_RATES, planFits, type BillingInterval } from "@/lib/stripe/prices";
 import { EnterpriseRequestButton } from "@/components/EnterpriseRequestButton";
 import { BillingContactForm, BillingPayStep } from "@/components/BillingStepForms";
 import { COMPANY_LEGAL_NAME, COMPANY_NAME, STATEMENT_DESCRIPTOR } from "@/lib/company";
@@ -58,8 +58,11 @@ export function BillingSteps({
   const monthly = calculateBilling(unitCount, "monthly");
   const annual = calculateBilling(unitCount, "annual");
   const yearlySaving = (monthly.total - annual.total) * 12;
-  // Over ENTERPRISE_LOTS lots, self-serve plans aren't offered: Talk to us.
-  const enterpriseOnly = !enterprise && unitCount > ENTERPRISE_LOTS;
+  // Any size can subscribe, within Stripe's $3,000 limit on one payment
+  // (MONTHLY_CHARGE_LIMIT). Yearly is the cheaper plan, so if it doesn't
+  // fit, neither does Monthly: Talk to us.
+  const monthlyFits = planFits(unitCount, "monthly");
+  const enterpriseOnly = !enterprise && !planFits(unitCount, "annual");
   const chosen = enterprise ? customBilling(enterprise.amount) : interval === "annual" ? annual : monthly;
   // The Yearly plan (and an Enterprise one agreed for a year) is a 12-month commitment, billed monthly.
   const yearly = (enterprise ? enterprise.interval : interval) === "annual";
@@ -115,8 +118,8 @@ export function BillingSteps({
             <div className="billing-enterprise" data-testid="plan-enterprise-only">
               <h3>Enterprise</h3>
               <p>
-                For stratas over {ENTERPRISE_LOTS} lots, we set the price with you. Tell us a little about your strata and we&rsquo;ll
-                be in touch.
+                At {unitCount} lots, the monthly charge is over the $3,000 we can take in one payment, so we set the price with
+                you. Tell us a little about your strata and we&rsquo;ll be in touch.
               </p>
               <EnterpriseRequestButton corpId={corpId} reason="large" primary />
             </div>
@@ -139,10 +142,18 @@ export function BillingSteps({
                   <span className="card__meta">
                     {fmt(PLAN_RATES.monthly.base)} a month per strata + {fmt(PLAN_RATES.monthly.perLot)} per lot. Cancel any month.
                   </span>
-                  <span className="billing-plan__saving" aria-hidden="true" />
-                  <Link href={href("contact", "monthly")} className="button button-secondary billing-plan__choose" data-testid="choose-monthly">
-                    Monthly plan
-                  </Link>
+                  {monthlyFits ? (
+                    <>
+                      <span className="billing-plan__saving" aria-hidden="true" />
+                      <Link href={href("contact", "monthly")} className="button button-secondary billing-plan__choose" data-testid="choose-monthly">
+                        Monthly plan
+                      </Link>
+                    </>
+                  ) : (
+                    <span className="card__meta" data-testid="monthly-over-limit">
+                      Over the $3,000 we can take in one payment. Choose Yearly, or talk to us.
+                    </span>
+                  )}
                 </div>
                 <div className="billing-plan billing-plan--recommended" data-selected={interval === "annual"} data-testid="plan-annual">
                   <span className="billing-plan__badge">Recommended &middot; two months free</span>

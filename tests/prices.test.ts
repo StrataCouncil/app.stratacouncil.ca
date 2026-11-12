@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { calculateBilling, customBilling, ENTERPRISE_LOTS, PLAN_RATES } from "../lib/stripe/prices.ts";
+import { calculateBilling, customBilling, MONTHLY_CHARGE_LIMIT, PLAN_RATES, planFits } from "../lib/stripe/prices.ts";
 
 test("monthly: $30 a strata plus $3 a lot a month, GST on top", () => {
   assert.deepEqual(PLAN_RATES.monthly, { base: 30, perLot: 3 });
@@ -33,5 +33,11 @@ test("the $2,000 a year line: monthly passes it at 43 lots, yearly at 54", () =>
 
 test("Enterprise prices are an agreed monthly amount", () => {
   assert.equal(customBilling(400).total, 420);
-  assert.equal(ENTERPRISE_LOTS, 100);
+});
+
+test("any size subscribes, within Stripe's $3,000 a payment (GST included)", () => {
+  assert.equal(MONTHLY_CHARGE_LIMIT, 3000);
+  assert.ok(planFits(101, "monthly") && planFits(500, "monthly"));
+  assert.ok(planFits(942, "monthly") && !planFits(943, "monthly"));
+  assert.ok(planFits(1132, "annual") && !planFits(1133, "annual"));
 });
