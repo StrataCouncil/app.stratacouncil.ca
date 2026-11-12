@@ -48,7 +48,8 @@ export interface StrataProfileData {
   platformRoles: Array<{ role: string; count: number }>;
   members: { active: number; invited: number };
   meetings: ProfileMeeting[];
-  documents: Array<{ title: string; category: string | null; uploadedAt: string; current: boolean }>;
+  /** status: the document's indexing_status (null when unknown). */
+  documents: Array<{ title: string; category: string | null; uploadedAt: string; current: boolean; status?: string | null }>;
   announcements: Array<{ title: string; body: string; publishedAt: string }>;
   library: Array<{ title: string; kind: string; summary: string }>;
 }
@@ -210,10 +211,13 @@ export function buildStrataProfile(d: StrataProfileData, strip: (s: string) => s
     ],
     ["MEETINGS ON THE PLATFORM (newest first)", meetingsSection(d.meetings, strip)],
     [
-      "DOCUMENTS ON FILE (title, folder, upload date; the text of each is searched separately)",
+      "DOCUMENTS ON FILE (title, folder, upload date; the text of each is searched separately, except those marked as not read)",
       d.documents.length
         ? d.documents
-            .map((doc) => `- ${strip(doc.title)} | ${doc.category ?? "no folder"} | uploaded ${doc.uploadedAt.slice(0, 10)}${doc.current ? "" : " | superseded by a newer version"}`)
+            .map(
+              (doc) =>
+                `- ${strip(doc.title)} | ${doc.category ?? "no folder"} | uploaded ${doc.uploadedAt.slice(0, 10)}${doc.current ? "" : " | superseded by a newer version"}${readability(doc.status)}`
+            )
             .join("\n")
         : "No documents uploaded.",
     ],
@@ -227,4 +231,26 @@ export function buildStrataProfile(d: StrataProfileData, strip: (s: string) => s
     ],
   ];
   return sections.map(([title, body]) => `=== ${title} ===\n${body}`).join("\n\n");
+}
+
+/**
+ * A document Stratasphere can't search, marked in the list (PR 5, §7 gap 5),
+ * so an answer can say "There's a document called X on file that I couldn't
+ * read" instead of missing it in silence.
+ */
+export function readability(status: string | null | undefined): string {
+  switch (status) {
+    case "pending":
+    case "processing":
+    case "waiting":
+      return " | on file, not read yet (its text isn't searchable yet)";
+    case "needs_text":
+      return " | on file, not readable (a scan or image with no readable text)";
+    case "not_indexable":
+      return " | on file, not readable (a file type that can't be read)";
+    case "failed":
+      return " | on file, not readable (reading it failed)";
+    default:
+      return "";
+  }
 }

@@ -97,3 +97,13 @@ test("a company owner is replaced by its code in full, never word by word", () =
   // Its words on their own are left to the usual rules, not taken as a person's name.
   assert.equal(stripPII("the Selkirks building", people), "the Selkirks building");
 });
+
+test("documents Stratasphere can't read are marked in the list", async () => {
+  const { readability } = await import("../lib/ai/strata-profile.ts");
+  assert.equal(readability("indexed"), "");
+  assert.equal(readability(null), "");
+  assert.match(readability("needs_text"), /not readable \(a scan or image/);
+  assert.match(readability("failed"), /not readable/);
+  assert.match(readability("waiting"), /not read yet/);
+  assert.match(readability("processing"), /not read yet/);
+});
