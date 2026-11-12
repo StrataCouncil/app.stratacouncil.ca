@@ -24,6 +24,10 @@ for pass in 1 2; do
     fi
   done
   if [ "$pass" = 1 ]; then echo "Migrations applied"; else echo "Migrations from $RERUN_FROM re-run safely"; fi
+  # Column grants, checked after each pass: the first is how production runs.
+  if ! out=$("${PSQL[@]}" -d "$TEMPLATE" -f supabase/tests/setup/column-grants.sql 2>&1); then
+    echo "FAIL column grants (run $pass)"; echo "$out" | grep -iE "error|FAILED" | head -5; exit 1
+  fi
 done
 if ! out=$("${PSQL[@]}" -d "$TEMPLATE" -f supabase/tests/setup/seed.sql 2>&1); then
   echo "FAIL seed"; echo "$out" | grep -iE "error|FAILED" | head -5; exit 1
