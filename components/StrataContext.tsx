@@ -11,6 +11,8 @@ import { createContext, useContext } from "react";
 export interface StrataContextValue {
   corpId: string;
   subscribed: boolean;
+  /** May use Stratasphere: subscribed, and on council, a manager, or an admin (0090). */
+  stratasphere: boolean;
   /** Subscribed, with Stripe still confirming the first payment. */
   pending: boolean;
   isAdmin: boolean;

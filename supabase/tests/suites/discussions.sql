@@ -53,8 +53,9 @@ select pg_temp.expect('four voters, the council when it opened',
   (select count(*) = 4 from discussion_voters where discussion_id = (select id from d1)));
 select pg_temp.expect('the author''s name is kept', (select author_name = 'Tess Treasurer' from discussions where id = (select id from d1)));
 
--- The free one is used; a second needs a subscription.
-select pg_temp.expect_error($q$select create_discussion('BCS-1234', 'Second', '', '', '', 'THAT x.')$q$, 'free_discussion_used');
+-- Discussions are free and unlimited (0090).
+select pg_temp.expect('a second discussion without a subscription', (select create_discussion('BCS-1234', 'Second', '', '', '', 'THAT x.') is not null));
+reset role; delete from discussions where title = 'Second'; set role authenticated;
 
 -- Nobody off council sees it, Super Admins included.
 set test.uid = '70000000-0000-0000-0000-000000000005';

@@ -63,8 +63,10 @@
  * `isTemplateLocked()` below and the `--locked` card treatment in
  * `KnowledgeLibrary`/the detail page.
  */
-export function isTemplateLocked(resource: Pick<KnowledgeResource, "kind">, subscribed: boolean) {
-  return isDownloadableKind(resource.kind) && !subscribed;
+export function isTemplateLocked(_resource: Pick<KnowledgeResource, "kind">, _subscribed: boolean) {
+  // Templates and forms are free since 2026-11-12 (Learn is free:
+  // docs/learn-decide-remember.md). Kept so the lock can return if needed.
+  return false;
 }
 
 /** The kinds a subscriber downloads as Word, filled in for their strata: policy templates and forms. */

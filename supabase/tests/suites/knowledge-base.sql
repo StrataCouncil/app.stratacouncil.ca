@@ -34,6 +34,14 @@ reset role;
 insert into subscriptions (corporation_id, status) values ('BCS-1234', 'active')
   on conflict (corporation_id) do update set status = 'active';
 set role authenticated;
+-- Stratasphere is for council, managers, and admins only, never owners (0090).
+select pg_temp.expect_error($q$select * from match_knowledge_chunks('BCS-1234', pg_temp.vec(1))$q$, 'not allowed');
+select pg_temp.expect('a member off council has no Stratasphere', not has_stratasphere_access('BCS-1234') and stratasphere_allowed('BCS-1234') = 'subscription');
+reset role;
+insert into corporation_role_assignments (corporation_id, user_id, role) values ('BCS-1234', '00000000-0000-0000-0000-00000000000c', 'secretary')
+  on conflict do nothing;
+set role authenticated;
+select pg_temp.expect('on council, subscribed: allowed', has_stratasphere_access('BCS-1234') and stratasphere_allowed('BCS-1234') = 'ok');
 select pg_temp.expect('subscribed member matches own + others precedent + legislation, not other corp or own precedent copy',
   (select array_agg(chunk_text order by chunk_text) = array['own chunk','precedent from elsewhere']::text[] from match_knowledge_chunks('BCS-1234', pg_temp.vec(1), 12, 0.9)));
 select pg_temp.expect('legislation comes back at a lower threshold',

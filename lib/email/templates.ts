@@ -159,11 +159,11 @@ export function creationRequestApprovedEmail(params: {
     <ol style="margin:0 0 8px;padding-left:20px;">
       <li style="${li}"><strong>Invite your council</strong> and give each person their role.</li>
       <li style="${li}"><strong>Upload your governing documents:</strong> bylaws, rules, recent minutes, the budget, and the depreciation report.</li>
-      <li style="${li}"><strong>Prepare your first meeting.</strong> It&rsquo;s free, including Meeting Mode and up to ten Stratasphere&trade; questions. After that, both need a subscription.</li>
+      <li style="${li}"><strong>Prepare your first meeting.</strong> Council meetings, Meeting Mode, and minutes are free, as many as you like.</li>
     </ol>
     ${button(params.openUrl, "Open your strata")}
   `);
-  const text = `${params.corporationName} (${params.strataPlanNumber}) is now set up on StrataCouncil.ca, and you're its admin. Three good next steps:\n\n1. Invite your council and give each person their role.\n2. Upload your governing documents: bylaws, rules, recent minutes, the budget, and the depreciation report.\n3. Prepare your first meeting. It's free, including Meeting Mode and up to ten Stratasphere questions. After that, both need a subscription.\n\nOpen your strata: ${params.openUrl}`;
+  const text = `${params.corporationName} (${params.strataPlanNumber}) is now set up on StrataCouncil.ca, and you're its admin. Three good next steps:\n\n1. Invite your council and give each person their role.\n2. Upload your governing documents: bylaws, rules, recent minutes, the budget, and the depreciation report.\n3. Prepare your first meeting. Council meetings, Meeting Mode, and minutes are free, as many as you like.\n\nOpen your strata: ${params.openUrl}`;
   return { subject: `${params.strataPlanNumber} is set up on StrataCouncil.ca`, html, text };
 }
 
@@ -245,11 +245,11 @@ export function subscriptionRequestEmail(params: {
   const who = escapeHtml(params.requesterName ? `${params.requesterName} (${params.requesterEmail})` : params.requesterEmail);
   const html = wrap(`
     <p style="margin:0 0 16px;font-size:16px;color:${INK};">${who} would like <strong>${name}</strong> to subscribe to Stratasphere&trade;.</p>
-    <p style="margin:0 0 8px;font-size:14px;color:${INK};">A subscription unlocks the Stratasphere&trade; AI assistant, which answers questions from your strata&rsquo;s own records and BC strata law, plus Meeting Mode for every meeting after your free one. As this strata&rsquo;s admin, you can see the plans and subscribe from Billing.</p>
+    <p style="margin:0 0 8px;font-size:14px;color:${INK};">A subscription adds Stratasphere&trade;: the AI assistant, which answers questions from your strata&rsquo;s own records and BC strata law, document search, the decision ledger, built-in meeting video, and general meetings. As this strata&rsquo;s admin, you can see the plans and subscribe from Billing.</p>
     ${button(params.billingUrl, "See plans")}
   `);
   const whoText = params.requesterName ? `${params.requesterName} (${params.requesterEmail})` : params.requesterEmail;
-  const text = `${whoText} would like ${params.corporationName} to subscribe to Stratasphere.\n\nA subscription unlocks the Stratasphere AI assistant, which answers questions from your strata's own records and BC strata law, plus Meeting Mode for every meeting after your free one. As this strata's admin, you can see the plans and subscribe from Billing:\n\n${params.billingUrl}`;
+  const text = `${whoText} would like ${params.corporationName} to subscribe to Stratasphere.\n\nA subscription adds Stratasphere: the AI assistant, which answers questions from your strata's own records and BC strata law, document search, the decision ledger, built-in meeting video, and general meetings. As this strata's admin, you can see the plans and subscribe from Billing:\n\n${params.billingUrl}`;
   return { subject: `${whoText} asked about a Stratasphere subscription for ${params.corporationName}`, html, text };
 }
 

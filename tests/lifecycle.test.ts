@@ -129,11 +129,12 @@ test("the footer says why the person got the email", () => {
   assert.match(setupFooter("u").text, /because you created a StrataCouncil\.ca account/);
 });
 
-test("the strata-ready email gives three next steps and explains the free first meeting once", () => {
+test("the strata-ready email gives three next steps and says council meetings are free", () => {
   const e = creationRequestApprovedEmail({ corporationName: "Larchwood Commons", strataPlanNumber: "EPS1234", openUrl: "https://x" });
   assert.match(e.text, /Invite your council/);
   assert.match(e.text, /bylaws, rules, recent minutes, the budget, and the depreciation report/);
-  assert.match(e.text, /It's free, including Meeting Mode and up to ten Stratasphere questions\. After that, both need a subscription\./);
+  assert.match(e.text, /Council meetings, Meeting Mode, and minutes are free, as many as you like\./);
+  assert.doesNotMatch(e.html + e.text, /ten Stratasphere|After that, both need/);
 });
 
 test("the request-denied email doesn't ask anyone to reply to a no-reply address", () => {

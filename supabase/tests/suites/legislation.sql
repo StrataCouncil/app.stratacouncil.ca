@@ -37,8 +37,11 @@ insert into knowledge_chunks (scope, legislation_document_id, source_act, title,
 insert into knowledge_chunks (scope, corporation_id, title, chunk_text, embedding, chunk_index) values
   ('corporation', 'BCS-1234', 'bylaws', 'own bylaw text', pg_temp.vec(5), 0);
 
+-- Stratasphere is for council (0090): Cara joins council.
+insert into corporation_role_assignments (corporation_id, user_id, role) values ('BCS-1234', '00000000-0000-0000-0000-00000000000c', 'secretary')
+  on conflict do nothing;
 set role authenticated;
-set test.uid = '00000000-0000-0000-0000-00000000000c';  -- Cara, member of a subscribed strata
+set test.uid = '00000000-0000-0000-0000-00000000000c';  -- Cara, on council of a subscribed strata
 select pg_temp.expect('legislation-only search returns only legislation',
   (select bool_and(scope = 'legislation') and count(*) >= 1 from match_knowledge_chunks('BCS-1234', pg_temp.vec(5), 12, 0.0, array['legislation'])));
 select pg_temp.expect('records search excludes legislation',

@@ -26,6 +26,7 @@ const statusLabels: Record<IndexingStatus, string> = {
   failed: "Indexing failed",
   not_indexable: "Stored for reference",
   needs_text: "Couldn’t read this scan",
+  waiting: "Stored (searchable with Stratasphere)",
 };
 
 function formatDate(iso: string) {

@@ -392,21 +392,24 @@ type PrepareInput = {
 /**
  * Everything up to the model call: the allowance check, then the request.
  * `supabase` is the signed-in user's client — every read goes through RLS,
- * and the per-call allowance (subscription, or the free meeting's ten
- * calls) is checked and counted first.
+ * and the allowance (stratasphere_allowed, 0090: subscribed, council,
+ * manager, or admin, and under 30 questions in the hour) is checked first.
  */
 async function prepareStratasphere(input: PrepareInput): Promise<Prepared> {
   if (!input.question.trim()) return { ok: false, error: "Ask a question." };
-  const { data: allowed, error: allowError } = await input.supabase.rpc("consume_stratasphere_request", { p_corporation_id: input.corpId });
+  const { data: allowed, error: allowError } = await input.supabase.rpc("stratasphere_allowed", { p_corporation_id: input.corpId });
   if (allowError) {
     console.error("[askStratasphere] allowance", allowError.message);
     return { ok: false, error: "Stratasphere isn't available right now." };
   }
-  if (!allowed) {
+  if (allowed === "limit") {
+    return { ok: false, limit: true, error: "That's 30 questions in the last hour. Please wait a few minutes, then ask again." };
+  }
+  if (allowed !== "ok") {
     return {
       ok: false,
       limit: true,
-      error: "Stratasphere needs a subscription. (Your free meeting includes ten questions, and they've been used.)",
+      error: "Stratasphere comes with a subscription, and is for council members, managers, and admins.",
     };
   }
   return assembleStratasphere(input);

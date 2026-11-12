@@ -358,7 +358,7 @@ export default async function BillingPage({
           <p>{STRATASPHERE_PITCH}</p>
           <p className="card__meta">
             From {fmt(calculateBilling(unitCount, "annual").total)} a month incl. GST for {unitCount} lots.{" "}
-            {deactivated ? "Your strata's records are all still here." : "Every strata's first meeting is free."}
+            {deactivated ? "Your strata's records are all still here." : "Council meetings and Discussions stay free either way."}
           </p>
           <Link href={`/strata/${corpId}/billing?step=plan`} className="button button-primary" data-testid="open-subscribe">
             Subscribe

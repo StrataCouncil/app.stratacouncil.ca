@@ -52,6 +52,9 @@ export async function POST(request: NextRequest) {
   if (!access.subscribed) {
     return NextResponse.json({ error: "The Stratasphere assistant needs an active subscription." }, { status: 402 });
   }
+  if (!access.stratasphere) {
+    return NextResponse.json({ error: "Stratasphere is for council members, managers, and admins." }, { status: 403 });
+  }
   // The demo: three questions per visitor (lib/demo.ts DEMO_LIMITS).
   if (IS_DEMO && !(await takeDemoAllowance("chat"))) {
     await logDemoActivity({ kind: "limit", path: `/strata/${corpId}/assistant`, detail: { reason: "Stratasphere questions", question } });

@@ -1,3 +1,4 @@
+import { queueWaitingDocuments } from "@/lib/kb/queue";
 import type Stripe from "stripe";
 import { getStripe, stripeModeFor, type StripeMode } from "@/lib/stripe/client";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -144,14 +145,7 @@ export async function syncSubscription(sub: Stripe.Subscription, mode: StripeMod
     return false;
   }
 
-  // doc01 §4/§4b: the free trial meeting expires the instant a
-  // subscription is ever activated, whether or not it was ever used.
-  if (status === "active") {
-    await admin
-      .from("strata_corporations")
-      .update({ free_meeting_used: true, free_meeting_used_at: new Date().toISOString() })
-      .eq("strata_plan_number", corporationId)
-      .eq("free_meeting_used", false);
-  }
+  // Files stored before subscribing are read and indexed now (0090).
+  if (status === "active") await queueWaitingDocuments(corporationId);
   return true;
 }

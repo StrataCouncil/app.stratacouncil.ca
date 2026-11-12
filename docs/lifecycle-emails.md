@@ -107,7 +107,6 @@ the email for the next thing they haven't done:
 | Finished a module, no strata | Straight to Connect your strata |
 | Asked to join a strata | No connect email |
 | Connected a strata | Setup tips stop; the strata-ready email takes over |
-| Used Meeting Mode | No mention of the free first meeting |
 
 | Earliest | Email | Purpose |
 |---|---|---|
@@ -119,8 +118,8 @@ the email for the next thing they haven't done:
 Copy rules for setup tips:
 
 - Factual and helpful: no prices, discounts, urgency, or calls to
-  subscribe. The free first meeting is explained once, where it matters
-  (the strata-ready email), and never to someone who's used Meeting Mode.
+  subscribe. (Since 2026-11-12, council meetings are free for good; see
+  docs/learn-decide-remember.md.)
 - Document search is described as it really works: "including scans of
   typed or printed pages" (OCR reads typed and printed pages well, not
   handwriting or very faint scans).
@@ -131,8 +130,8 @@ Copy rules for setup tips:
 (`creationRequestApprovedEmail`) becomes "what's next": invite your
 council and set their roles, upload your governing documents (bylaws,
 rules, recent minutes, budget, depreciation report), and prepare your
-first meeting, which is free, including Meeting Mode and up to ten
-Stratasphere questions; after that, both need a subscription. It's a
+first meeting (council meetings are free; Stratasphere is the paid
+tier, docs/learn-decide-remember.md). It's a
 transactional email, sent to every new admin.
 
 Footer link: "Stop setup tips". Wording matches the in-app Getting

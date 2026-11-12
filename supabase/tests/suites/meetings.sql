@@ -40,15 +40,15 @@ select pg_temp.expect('switch holder sees notes on unlaunched meeting', (select 
 update meetings set location = 'Lobby' where id = 'aaaaaaaa-0000-0000-0000-000000000001';
 select pg_temp.expect('switch holder edits a draft someone else created', (select location = 'Lobby' from meetings where id = 'aaaaaaaa-0000-0000-0000-000000000001'));
 
--- Bob launches: trial consumed
+-- Bob launches: council meetings are free, every time (0090)
 set test.uid = '00000000-0000-0000-0000-00000000000b';
-select pg_temp.expect('first launch uses the trial', launch_meeting('aaaaaaaa-0000-0000-0000-000000000001') = 'launched_trial');
+select pg_temp.expect('launching without a subscription', launch_meeting('aaaaaaaa-0000-0000-0000-000000000001') = 'launched');
 reset role;
-select pg_temp.expect('trial flagged on corp and meeting', (select free_meeting_used from strata_corporations where strata_plan_number='BCS-1234') and (select is_trial from meetings where id='aaaaaaaa-0000-0000-0000-000000000001'));
+select pg_temp.expect('nothing is marked as a free meeting', not (select free_meeting_used from strata_corporations where strata_plan_number='BCS-1234') and not (select is_trial from meetings where id='aaaaaaaa-0000-0000-0000-000000000001'));
 set role authenticated;
 select pg_temp.expect('relaunch by the launcher resumes', launch_meeting('aaaaaaaa-0000-0000-0000-000000000001') = 'resumed');
-select pg_temp.expect('trial gives stratasphere access', has_stratasphere_access('BCS-1234'));
-select pg_temp.expect_error($q$select launch_meeting('aaaaaaaa-0000-0000-0000-000000000002')$q$, 'free meeting has been used');
+select pg_temp.expect('a meeting gives no Stratasphere access', not has_stratasphere_access('BCS-1234'));
+select pg_temp.expect('and no AI either', stratasphere_allowed('BCS-1234') = 'subscription');
 
 -- Cara: one launch — she can't take over, edit, or see its notes
 set test.uid = '00000000-0000-0000-0000-00000000000c';

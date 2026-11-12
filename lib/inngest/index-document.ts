@@ -56,6 +56,19 @@ export const indexDocument = inngest.createFunction(
   async ({ event, step }) => {
     const documentId = (event.data as { documentId: string }).documentId;
 
+    // Reading and indexing come with Stratasphere (0090): an unsubscribed
+    // strata's files are kept, marked waiting, and queued when it subscribes.
+    const gate = await step.run("subscription", async () => {
+      const admin = createAdminClient();
+      const { data: doc } = await admin.from("documents").select("corporation_id").eq("id", documentId).maybeSingle();
+      if (!doc?.corporation_id) return "gone" as const;
+      const { data: sub } = await admin.from("subscriptions").select("status").eq("corporation_id", doc.corporation_id).maybeSingle();
+      if (sub?.status === "active") return "go" as const;
+      await admin.from("documents").update({ indexing_status: "waiting", indexing_error: null }).eq("id", documentId);
+      return "waiting" as const;
+    });
+    if (gate !== "go") return { status: gate };
+
     const extracted = await step.run("extract", async () => {
       const admin = createAdminClient();
       const loaded = await loadDocument(documentId);

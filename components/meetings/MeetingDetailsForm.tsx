@@ -1,6 +1,7 @@
 "use client";
 
 import { useDemoRestricted } from "@/components/DemoContext";
+import { useOptionalStrata } from "@/components/StrataContext";
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -35,6 +36,8 @@ export function MeetingDetailsForm({
 }) {
   // The demo's restrictions, lifted in a Super Admin's sandbox (lib/demo-sandbox.ts).
   const demoRestricted = useDemoRestricted();
+  // Subscribed stratas have built-in video, so no link to type in.
+  const subscribed = useOptionalStrata()?.subscribed ?? false;
   const router = useRouter();
   const [form, setForm] = useState<MeetingDetailsInput>(
     initial ?? {
@@ -44,6 +47,7 @@ export function MeetingDetailsForm({
       timezone: "America/Vancouver",
       format: "in_person",
       location: "",
+      videoLink: "",
       chairName: chairOptions[0]?.label ?? "",
     }
   );
@@ -150,6 +154,20 @@ export function MeetingDetailsForm({
               placeholder="e.g. Amenity room"
               maxLength={500}
               data-testid="meeting-location"
+            />
+          </label>
+        )}
+        {/* Without built-in video (it comes with Stratasphere), the council's own link (0090). */}
+        {form.format !== "in_person" && !subscribed && (
+          <label className="field field--wide">
+            <span>Video link (optional)</span>
+            <input
+              type="url"
+              value={form.videoLink ?? ""}
+              onChange={set("videoLink")}
+              placeholder="Your council's Zoom, Teams, or Google Meet link"
+              maxLength={500}
+              data-testid="meeting-video-link"
             />
           </label>
         )}

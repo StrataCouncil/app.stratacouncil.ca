@@ -83,8 +83,8 @@ export async function analyzeHistoricMinutes(corpId: string, file: UploadedFile)
   if (await demoRestricted()) return demoLimitFail();
   const access = await getStrataAccess(corpId);
   if (!access?.canRunMeetings) return { ok: false, error: "Historic minutes are added by your secretary, admin, or whoever runs meetings." };
-  if (!access.subscribed && access.freeMeetingUsed) {
-    return { ok: false, error: "Reading decisions out of minutes uses Stratasphere AI, which needs a subscription. You can still upload them under Documents." };
+  if (!access.subscribed) {
+    return { ok: false, error: "Reading decisions out of past minutes with AI comes with a Stratasphere subscription." };
   }
   const parts = file.path.split("/");
   if (parts.length !== 3 || parts[0] !== access.corpId || parts.some((x) => !x || x === "..")) {

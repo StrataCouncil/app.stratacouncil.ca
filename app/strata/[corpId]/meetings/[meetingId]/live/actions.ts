@@ -1,5 +1,6 @@
 "use server";
 
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { conflictedLots, motionCounts, parseLiveState, parsePresenting, STEPPED_OUT_VIDEO, type Choice, type LiveState, type Presenting } from "@/lib/meetings/live";
 import { logDemoActivity } from "@/lib/demo-usage";
@@ -257,6 +258,8 @@ export type VideoJoin =
   | { kind: "none" }
   | { kind: "demo" }
   | { kind: "message"; tone: "info" | "error"; message: string }
+  /** No built-in video (it comes with Stratasphere, 0090): the council's own link, if it set one. */
+  | { kind: "link"; url: string | null }
   | {
       kind: "join";
       /** The session (one per meeting) and this person's token for it (lib/zoom/video-sdk.ts). */
@@ -283,7 +286,7 @@ export async function getVideoJoin(meetingId: string): Promise<VideoJoin> {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { kind: "none" };
-  const { data: m } = await supabase.from("meetings").select("format, launched_by, status").eq("id", meetingId).maybeSingle();
+  const { data: m } = await supabase.from("meetings").select("corporation_id, format, launched_by, status, video_link").eq("id", meetingId).maybeSingle();
   if (!m || m.format === "in_person" || !m.launched_by || m.status === "ADJOURNED") return { kind: "none" };
   // Demo visitors get tiles; a Super Admin's sandbox gets real video, for testing off the live site.
   if (await demoRestricted()) return { kind: "demo" };
@@ -295,6 +298,10 @@ export async function getVideoJoin(meetingId: string): Promise<VideoJoin> {
   if (live.myLot && live.currentItemId && conflictedLots(live.conflicts, live.currentItemId).includes(live.myLot)) {
     return { kind: "message", tone: "info", message: STEPPED_OUT_VIDEO };
   }
+
+  // Built-in video comes with Stratasphere (0090); without it, the council's own link.
+  const { data: sub } = await createAdminClient().from("subscriptions").select("status").eq("corporation_id", m.corporation_id).maybeSingle();
+  if (sub?.status !== "active") return { kind: "link", url: (m.video_link as string | null) ?? null };
 
   const config = videoSdkConfig();
   if (!config) return { kind: "message", tone: "info", message: "Video isn't set up for StrataCouncil yet. The meeting works without it." };

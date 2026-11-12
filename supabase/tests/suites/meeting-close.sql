@@ -20,8 +20,7 @@ insert into meetings (id, corporation_id, type, meeting_date, created_by, agenda
 select pg_temp.expect('AI refused before launch (no subscription, no trial running)', not consume_stratasphere_request('BCS-1234'));
 select launch_meeting('bbbbbbbb-0000-0000-0000-000000000001');
 insert into meeting_item_notes (meeting_id, item_id, body) values ('bbbbbbbb-0000-0000-0000-000000000001','i2','private');
-select pg_temp.expect('10 trial AI calls allowed', (select bool_and(consume_stratasphere_request('BCS-1234')) from generate_series(1,10)));
-select pg_temp.expect('11th refused', not consume_stratasphere_request('BCS-1234'));
+select pg_temp.expect('no AI during a meeting without a subscription (0090)', not consume_stratasphere_request('BCS-1234') and stratasphere_allowed('BCS-1234') = 'subscription');
 select call_meeting_to_order('bbbbbbbb-0000-0000-0000-000000000001', '{"SL001":"present","SL002":"present"}', '["SL001","SL002"]');
 
 select pg_temp.expect_error($q$select adjourn_meeting('bbbbbbbb-0000-0000-0000-000000000001', '[{"id":"i1","text":"Call to Order","done":true},{"id":"i2","text":"Roof","done":false}]', '{}')$q$, 'decided or deferred');

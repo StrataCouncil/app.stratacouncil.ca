@@ -8,25 +8,22 @@ import { meetingTypeLabels, missingMotions } from "@/lib/meetings/agenda";
 import { LaunchMeetingButton } from "@/components/meetings/MeetingActions";
 import { formatMeetingWhen } from "@/lib/meetings/format";
 import { meetingStatus } from "@/lib/meetings/status";
-import { RequestSubscriptionButton } from "@/components/RequestSubscriptionButton";
 import { councilRoles } from "@/lib/strata";
-import { SubscriptionPendingNote } from "@/components/SubscriptionPendingNote";
 import { DemoLimitButton } from "@/components/DemoLimitButton";
 import { IS_DEMO } from "@/lib/demo";
 import { demoAllowanceLeft } from "@/lib/demo-usage";
 
 /**
- * Meetings. Before the free meeting is used, the first-meeting checklist
- * (doc03 Stage 5a) leads: roster, council roles, documents, create a meeting, review its
- * agenda, launch. Draft meetings are unlimited; launching one is what uses
- * the free meeting.
+ * Meetings. Until the first meeting has run, the first-meeting checklist
+ * (doc03 Stage 5a) leads: roster, council roles, documents, create a
+ * meeting, review its agenda, launch. Council and committee meetings are
+ * free and unlimited (0090); general meetings come with Stratasphere.
  */
 export default async function MeetingsPage({ params }: { params: Promise<{ corpId: string }> }) {
   const { corpId } = await params;
   const access = await getStrataAccess(corpId);
   if (!access) notFound();
   const meetings = await listMeetings(corpId);
-  const trialAvailable = !access.freeMeetingUsed;
   // The demo: one meeting per visitor (lib/demo.ts DEMO_LIMITS).
   const demoMeetingUsed = IS_DEMO && (await demoAllowanceLeft())?.meetings === 0;
 
@@ -49,10 +46,10 @@ export default async function MeetingsPage({ params }: { params: Promise<{ corpI
       href: `/strata/${corpId}/council#roster`,
       hint: "President, Vice President, Treasurer, Secretary, Members at Large, each tied to their strata lot.",
     },
-    { label: "Upload your governance documents", done: (documents ?? 0) > 0, href: `/strata/${corpId}/documents`, hint: "Bylaws, rules, past minutes, financials — so Stratasphere has real material to work with." },
+    { label: "Upload your governance documents", done: (documents ?? 0) > 0, href: `/strata/${corpId}/documents`, hint: "Bylaws, rules, past minutes, and financials." },
     { label: "Create your first meeting", done: meetings.length > 0, href: access.canRunMeetings ? `/strata/${corpId}/meetings/new` : undefined },
     { label: "Review the agenda", done: meetings.some((m) => m.agenda.length > 0), href: meetings[0] ? `/strata/${corpId}/meetings/${meetings[0].id}` : undefined },
-    { label: "Launch Meeting Mode", done: meetings.some((m) => m.launchedAt), hint: "This uses your one free meeting." },
+    { label: "Launch Meeting Mode", done: meetings.some((m) => m.launchedAt) },
   ];
 
   // Gone once every step is done.
@@ -72,9 +69,7 @@ export default async function MeetingsPage({ params }: { params: Promise<{ corpI
           <p className="card__meta">
             {access.subscribed
               ? "Council meetings, AGMs, SGMs, and committee meetings."
-              : trialAvailable
-                ? "Your first meeting is free: the full product, no card needed."
-                : "Your free meeting has been used. Everything from it stays here."}
+              : "Council and committee meetings are free, as many as you like."}
           </p>
         </div>
         <div className="meetings-actions">
@@ -96,7 +91,7 @@ export default async function MeetingsPage({ params }: { params: Promise<{ corpI
         </div>
       </div>
 
-      {!access.subscribed && trialAvailable && !checklistDone && (
+      {!checklistDone && (
         <section className="card checklist" data-testid="first-meeting-checklist">
           <h3>Your first meeting</h3>
           <ol className="checklist__steps">
@@ -119,26 +114,7 @@ export default async function MeetingsPage({ params }: { params: Promise<{ corpI
         </section>
       )}
 
-      {!access.subscribed && !trialAvailable && (
-        <div className="lock-panel" style={{ marginBottom: "2rem" }}>
-          <h2>Run your next meeting with Stratasphere&trade;</h2>
-          <p>
-            You can keep setting up draft meetings and agendas. Launching one needs a subscription. Documents, finalized
-            minutes, and everything from your free meeting stay fully accessible either way.
-          </p>
-          {access.pending ? (
-            <SubscriptionPendingNote />
-          ) : access.canBill ? (
-            <Link href={`/strata/${corpId}/billing`} className="button button-primary" data-testid="meetings-subscribe-cta">
-              See plans
-            </Link>
-          ) : (
-            <RequestSubscriptionButton corpId={corpId} />
-          )}
-        </div>
-      )}
-
-      <MeetingSection title="Upcoming and in progress" meetings={upcoming} corpId={corpId} userId={access.userId} seesDrafts={access.isCouncil || access.canRunMeetings} canFollow={access.isCouncil || access.canRunMeetings || access.roles.includes("manager")} launch={access.canRunMeetings ? { subscribed: access.subscribed, trialAvailable, isAdmin: access.isAdmin } : null} empty={IS_DEMO ? "No meetings scheduled. Press New meeting: the agenda is written for you, ready to run in Meeting Mode." : "No meetings scheduled."} />
+      <MeetingSection title="Upcoming and in progress" meetings={upcoming} corpId={corpId} userId={access.userId} seesDrafts={access.isCouncil || access.canRunMeetings} canFollow={access.isCouncil || access.canRunMeetings || access.roles.includes("manager")} launch={access.canRunMeetings ? { isAdmin: access.isAdmin } : null} empty={IS_DEMO ? "No meetings scheduled. Press New meeting: the agenda is written for you, ready to run in Meeting Mode." : "No meetings scheduled."} />
       {past.length > 0 && <MeetingSection title="Past meetings" meetings={past} corpId={corpId} userId={access.userId} seesDrafts={access.isCouncil || access.canRunMeetings} canFollow={access.isCouncil || access.canRunMeetings || access.roles.includes("manager")} launch={null} />}
     </>
   );
@@ -163,7 +139,7 @@ function MeetingSection({
   /** Can follow a live meeting (0073): council, the manager, anyone who runs meetings. */
   canFollow: boolean;
   /** Can run meetings: draft rows get Edit agenda and Launch meeting. */
-  launch: { subscribed: boolean; trialAvailable: boolean; isAdmin: boolean } | null;
+  launch: { isAdmin: boolean } | null;
   empty?: string;
 }) {
   return (
@@ -184,7 +160,6 @@ function MeetingSection({
                 </div>
                 <div className="module-row__meta">
                   {formatMeetingWhen(m)} &middot; {statusLabel(m)}
-                  {m.isTrial ? " · Free meeting" : ""}
                 </div>
               </div>
               <div className="meeting-row__actions">

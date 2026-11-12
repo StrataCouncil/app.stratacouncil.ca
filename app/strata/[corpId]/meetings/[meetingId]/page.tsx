@@ -45,7 +45,6 @@ export default async function MeetingPage({
   const [notes, chairOptions] = canEdit
     ? await Promise.all([getMeetingNotes(meetingId), chairCandidates(corpId)])
     : [{}, []];
-  const trialAvailable = !access.freeMeetingUsed;
 
   return (
     <>
@@ -80,6 +79,7 @@ export default async function MeetingPage({
                 timezone: meeting.timezone,
                 format: meeting.format,
                 location: meeting.location ?? "",
+                videoLink: meeting.videoLink ?? "",
                 chairName: meeting.chairName ?? "",
               }}
               chairOptions={chairOptions}
@@ -97,8 +97,6 @@ export default async function MeetingPage({
                 agendaSaved
                 missingMotions={missingMotions(meeting.agenda)}
                 editHref={`/strata/${corpId}/meetings/${meetingId}?edit=1`}
-                subscribed={access.subscribed}
-                trialAvailable={trialAvailable}
                 isAdmin={access.isAdmin}
               />
             </>
@@ -150,7 +148,7 @@ export default async function MeetingPage({
               initialAgenda={meeting.agenda}
               initialVersion={agendaVersion(meeting.agenda)}
               initialNotes={notes}
-              aiAvailable={access.subscribed || trialAvailable}
+              aiAvailable={access.subscribed}
               ratifications={meeting.type === "council" ? await ratificationCandidates(corpId, meetingId) : []}
             />
           }
