@@ -463,7 +463,7 @@ behaviour as the baseline.
 
 ---
 
-## 8. Database changes (migration 0089)
+## 8. Database changes (migration 0090; the recall check is 0089)
 
 Safe to re-run, with grants stated, as always.
 
@@ -487,8 +487,6 @@ Safe to re-run, with grants stated, as always.
 - `decisions`: a full-text search column and index (for the ledger page and
   keyword search).
 - `knowledge_chunks`: a full-text search column and index (for keyword search).
-- `stratasphere_recall_cases`: server-only (RLS on, no client grants). The
-  service role only.
 - **Unused columns kept for history:** `free_meeting_used`,
   `free_meeting_used_at`, `free_meeting_ai_requests_used`, `meetings.is_trial`.
 
@@ -530,7 +528,7 @@ database tests, build, browser test), and you run the migration and merge.
    baseline.
 2. **Free, paid, and price.**
    - Enterprise: "Talk to us" requests, and custom prices from the Super Admin console.
-   - Migration 0089.
+   - Migration 0090.
    - Server-side gates, the indexing gate, and backfill on subscribing.
    - Unlimited council meetings and Discussions; free templates.
    - The own-video-link field.

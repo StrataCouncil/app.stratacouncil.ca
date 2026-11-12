@@ -11009,3 +11009,104 @@ button.design-editor__swatch {
 .turnstile:not(:empty) {
   margin: 0 0 0.9rem;
 }
+
+/* Stratasphere recall check (Super Admin, /admin/recall) */
+.recall__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+.recall__filter {
+  min-width: 16rem;
+  margin: 0;
+}
+.recall__filter select,
+.recall-form select,
+.recall-form textarea,
+.recall-form__pick input {
+  width: 100%;
+}
+.recall__buttons,
+.recall-form__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.recall-form__actions {
+  justify-content: flex-end;
+}
+.recall__table td {
+  vertical-align: top;
+}
+.recall__question {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+}
+.recall__question:hover {
+  text-decoration: underline;
+}
+.recall__details {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  padding: 0.5rem 0;
+}
+.recall__details h3 {
+  font-size: 1rem;
+  margin: 0 0 0.5rem;
+}
+.recall__list {
+  margin: 0 0 0.75rem;
+  padding-left: 1.1rem;
+}
+.recall__list li[data-found="false"] strong {
+  color: var(--danger);
+}
+.recall__answer {
+  margin: 0 0 0.5rem;
+  padding: 0.6rem 0.8rem;
+  border-left: 3px solid var(--line);
+  white-space: pre-wrap;
+}
+.recall-form {
+  display: grid;
+  gap: 0.9rem;
+}
+.recall-form__pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+.recall-form__pick {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 0.6rem 0.8rem;
+  margin: 0;
+}
+.recall-form__options {
+  max-height: 11rem;
+  overflow: auto;
+  margin-top: 0.5rem;
+  display: grid;
+  gap: 0.2rem;
+}
+.recall-form__options label {
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+}
+@media (max-width: 800px) {
+  .recall__details,
+  .recall-form__pair {
+    grid-template-columns: 1fr;
+  }
+}
