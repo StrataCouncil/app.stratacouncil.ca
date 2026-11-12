@@ -24,7 +24,8 @@ export default async function DiscussionPage({ params }: { params: Promise<{ cor
   if (!d) notFound();
 
   const open = d.storedStatus === "open";
-  const isAuthor = d.createdBy === access.userId;
+  // Whoever started it runs it (edit, attach, close) while they still run meetings (0093); an Admin can close it.
+  const isAuthor = d.createdBy === access.userId && access.canRunMeetings;
   const anyVotes = d.voterList.some((v) => v.vote);
   const fileLink = (f: DiscussionFile) => (
     <a href={`/strata/${corpId}/discussions/${d.id}/files/${f.id}`} data-testid={`discussion-file-${f.id}`}>

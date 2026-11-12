@@ -35,9 +35,12 @@ export default async function DiscussionsPage({
             those who run meetings see these.
           </p>
         </div>
-        <Link href={`/strata/${corpId}/discussions/new`} className="button button-primary" data-testid="new-discussion">
-          New discussion
-        </Link>
+        {/* Started by those who run meetings (0093); council reads, comments, and votes. */}
+        {access.canRunMeetings && (
+          <Link href={`/strata/${corpId}/discussions/new`} className="button button-primary" data-testid="new-discussion">
+            New discussion
+          </Link>
+        )}
       </div>
 
       {(() => {
@@ -52,7 +55,9 @@ export default async function DiscussionsPage({
 
       {discussions.length === 0 ? (
         <p className="card__meta" data-testid="discussions-empty">
-          No discussions yet. Start one when something needs council&rsquo;s decision before the next meeting.
+          {access.canRunMeetings
+            ? "No discussions yet. Start one when something needs council’s decision before the next meeting."
+            : "No discussions yet. Whoever runs your meetings can start one when something needs council’s decision before the next meeting."}
         </p>
       ) : (
         <DiscussionTable corpId={corpId} discussions={discussions} />

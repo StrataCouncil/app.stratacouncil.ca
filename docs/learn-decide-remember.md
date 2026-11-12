@@ -332,10 +332,16 @@ tool, not an owner portal.
   their role ends.
 - **Owners appear only as roster entries,** used for lots, entitlement, quorum
   and vote counts, and, later, notices such as AGM notices sent by council.
-- **Building PR 3, I'll audit every way a person who isn't council, a manager,
-  or an admin can hold a membership today** (for example an old owner invite),
-  and close each one, with a database test for each. Existing memberships like
-  that get a one-off script you can run.
+- **Joining and leaving (PR 3b, 2026-11-12):** invites and Request to join work
+  as before; a new member has no role until the admin assigns one. When the
+  admin removes someone, they keep their account and Council Training, and
+  lose everything of the strata's at once, their own Stratasphere
+  conversations included (supabase/tests/suites/removal.sql checks every
+  table). An old invite doesn't bring them back; a new one does.
+- **Discussions (0093):** started, edited, and given attachments only by
+  those who run meetings. The person who started one (while they still run
+  meetings) or an Admin closes it. Council reads, comments, and votes, as
+  before.
 
 ---
 
