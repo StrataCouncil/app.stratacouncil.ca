@@ -170,8 +170,7 @@ export default async function AdminCorporationDetailPage({
                 main={dash.subscription.complimentaryAt ? "Complimentary" : dash.subscription.status === "active" ? "Active" : dash.subscription.status === "deactivated" ? "Deactivated" : "Not subscribed"}
               >
                 {dash.subscription.interval ? `${dash.subscription.interval === "annual" ? "Annual" : "Monthly"} · ` : ""}
-                {dash.subscription.activatedAt ? `since ${day(dash.subscription.activatedAt)} · ` : ""}
-                Free meeting {dash.subscription.freeMeetingUsed ? "used" : "not yet used"}
+                {dash.subscription.activatedAt ? `since ${day(dash.subscription.activatedAt)}` : ""}
               </Stat>
               <Stat title="Stratasphere, last 30 days" main={`${dash.usage.questions30} questions`}>
                 {usd(dash.usage.cost30Usd)} estimated · {dash.usage.users30} {dash.usage.users30 === 1 ? "person" : "people"}

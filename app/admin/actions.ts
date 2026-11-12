@@ -1,5 +1,6 @@
 "use server";
 
+import { queueWaitingDocuments } from "@/lib/kb/queue";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { APP_URL } from "@/lib/app-url";
@@ -220,6 +221,8 @@ export async function setComplimentary(corpId: string, on: boolean): Promise<{ o
       console.error("[setComplimentary] on", error.message);
       return { ok: false, error: "Couldn't switch on complimentary access." };
     }
+    // Files stored before (0090) are read and indexed now.
+    await queueWaitingDocuments(corpId);
   } else {
     if (!sub?.complimentary_at) return { ok: true };
     const { error } = await admin

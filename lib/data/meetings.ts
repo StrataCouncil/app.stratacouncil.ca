@@ -12,6 +12,8 @@ export interface MeetingRecord {
   timezone: string;
   format: MeetingFormat;
   location: string | null;
+  /** The council's own video link (0090), for stratas without built-in video. */
+  videoLink: string | null;
   chairName: string | null;
   agenda: AgendaItem[];
   attendance: Record<string, AttendanceStatus>;
@@ -34,7 +36,7 @@ export interface MeetingRecord {
 }
 
 const COLUMNS =
-  "id, corporation_id, type, status, meeting_date, start_time, timezone, format, location, chair_name, agenda, attendance, attendees, agenda_approved, launched_by, launched_at, actual_start_at, adjourned_at, is_trial, minutes_state, updated_at, launcher:profiles!meetings_launched_by_fkey(full_name)";
+  "id, corporation_id, type, status, meeting_date, start_time, timezone, format, location, video_link, chair_name, agenda, attendance, attendees, agenda_approved, launched_by, launched_at, actual_start_at, adjourned_at, is_trial, minutes_state, updated_at, launcher:profiles!meetings_launched_by_fkey(full_name)";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function toMeeting(r: any): MeetingRecord {
@@ -48,6 +50,7 @@ function toMeeting(r: any): MeetingRecord {
     timezone: r.timezone,
     format: r.format,
     location: r.location,
+    videoLink: r.video_link ?? null,
     chairName: r.chair_name,
     agenda: normalizeAgenda(r.agenda),
     attendance: (r.attendance ?? {}) as Record<string, AttendanceStatus>,

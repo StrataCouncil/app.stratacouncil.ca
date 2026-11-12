@@ -291,8 +291,8 @@ export async function draftDiscussionMotion(
 ): Promise<Ok<{ motionText: string }> | Fail | DemoLimitFail> {
   const access = await getStrataAccess(corpId);
   if (!access?.seesDiscussions) return { ok: false, error: "Only council members and those who run meetings can start a discussion." };
-  if (!access.subscribed && access.freeMeetingUsed) {
-    return { ok: false, error: "Drafting a motion uses Stratasphere AI, which needs a subscription." };
+  if (!access.subscribed) {
+    return { ok: false, error: "Drafting a motion with AI comes with a Stratasphere subscription." };
   }
   if (!String(input.title ?? "").trim()) return { ok: false, error: "Give the discussion a title first." };
   if (IS_DEMO && !(await takeDemoAllowance("motions"))) {

@@ -168,7 +168,6 @@ function meetingsSection(meetings: ProfileMeeting[], strip: (s: string) => strin
         m.chair ? `chair ${strip(m.chair)}` : null,
         m.status === "ADJOURNED" ? `${m.presentLots} lots present` : null,
         m.minutesState ? `minutes ${m.minutesState === "FINAL" ? "final" : "draft"}` : null,
-        m.trial ? "trial meeting" : null,
       ]
         .filter(Boolean)
         .join(", ");

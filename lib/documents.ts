@@ -77,7 +77,8 @@ export function isIndexableFile(name: string) {
   return (indexableExtensions as readonly string[]).includes(fileExtension(name));
 }
 
-export type IndexingStatus = "pending" | "processing" | "indexed" | "failed" | "not_indexable" | "needs_text";
+/** "waiting": stored, read and indexed once the strata subscribes (0090). */
+export type IndexingStatus = "pending" | "processing" | "indexed" | "failed" | "not_indexable" | "needs_text" | "waiting";
 
 /** Private Storage bucket for corporation documents; paths are `<corp>/<uuid>/<file>`. */
 export const DOCUMENTS_BUCKET = "corporation-documents";

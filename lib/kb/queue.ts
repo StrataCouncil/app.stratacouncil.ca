@@ -1,3 +1,4 @@
+import { createAdminClient } from "@/lib/supabase/admin";
 import {
   CORPORATION_FINGERPRINT_EVENT,
   DOCUMENT_FINGERPRINT_EVENT,
@@ -17,6 +18,26 @@ export async function queueDocumentIndexing(documentIds: string[]) {
     await inngest.send(documentIds.map((documentId) => ({ name: DOCUMENT_INDEX_EVENT, data: { documentId } })));
   } catch (err) {
     console.error("[queueDocumentIndexing]", err instanceof Error ? err.message : err);
+  }
+}
+
+/**
+ * A strata just subscribed (0090): its files stored while it wasn't
+ * (indexing_status 'waiting') go to the indexer now. Logged, never thrown:
+ * the Index button retries any that stay waiting.
+ */
+export async function queueWaitingDocuments(corporationId: string) {
+  try {
+    const { data, error } = await createAdminClient()
+      .from("documents")
+      .update({ indexing_status: "pending" })
+      .eq("corporation_id", corporationId)
+      .eq("indexing_status", "waiting")
+      .select("id");
+    if (error) throw new Error(error.message);
+    await queueDocumentIndexing((data ?? []).map((d) => d.id as string));
+  } catch (err) {
+    console.error("[queueWaitingDocuments]", err instanceof Error ? err.message : err);
   }
 }
 

@@ -66,7 +66,16 @@ export interface MeetingDetailsInput {
   timezone: string;
   format: string;
   location: string;
+  /** The council's own video link (0090). Optional. */
+  videoLink?: string;
   chairName: string;
+}
+
+const VIDEO_LINK_RE = /^https?:\/\/\S+$/i;
+/** A web link, or nothing; in-person meetings have none. */
+function cleanVideoLink(input: MeetingDetailsInput): string | null {
+  const v = (input.videoLink ?? "").trim();
+  return input.format === "in_person" || !v ? null : v;
 }
 
 function validateDetails(input: MeetingDetailsInput): string | null {
@@ -76,6 +85,8 @@ function validateDetails(input: MeetingDetailsInput): string | null {
   if (!(meetingFormats as readonly string[]).includes(input.format)) return "Choose a format.";
   if (!/^[A-Za-z_]+\/[A-Za-z_]+$/.test(input.timezone)) return "Choose a time zone.";
   if (input.location.length > 500 || input.chairName.length > 200) return "That's too long.";
+  const link = (input.videoLink ?? "").trim();
+  if (link && (link.length > 500 || !VIDEO_LINK_RE.test(link))) return "The video link should be a web address starting with https://.";
   return null;
 }
 
@@ -108,6 +119,7 @@ export async function createMeeting(corpId: string, input: MeetingDetailsInput):
       format: input.format,
       // Electronic meetings have no location: they happen in Meeting Mode.
       location: input.format === "virtual" ? null : input.location.trim() || null,
+      video_link: cleanVideoLink(input),
       chair_name: chair,
       created_by: access.userId,
       // The demo's agenda, already written: locked in a visitor's demo,
@@ -151,6 +163,7 @@ export async function updateMeetingDetails(
       format: input.format,
       // Electronic meetings have no location: they happen in Meeting Mode.
       location: input.format === "virtual" ? null : input.location.trim() || null,
+      video_link: cleanVideoLink(input),
       chair_name: input.chairName.trim() || null,
     })
     .eq("id", meetingId)
@@ -393,8 +406,8 @@ export async function draftMotion(
 ): Promise<Ok<{ motionText: string }> | Fail | DemoLimitFail> {
   const access = await runner(corpId);
   if (!access) return { ok: false, error: "You can't edit this agenda." };
-  if (!access.subscribed && access.freeMeetingUsed) {
-    return { ok: false, error: "Drafting a motion uses Stratasphere AI, which needs a subscription." };
+  if (!access.subscribed) {
+    return { ok: false, error: "Drafting a motion with AI comes with a Stratasphere subscription." };
   }
   if (!input.text.trim()) return { ok: false, error: "Give the item a title first." };
   if (IS_DEMO && !(await takeDemoAllowance("motions"))) {

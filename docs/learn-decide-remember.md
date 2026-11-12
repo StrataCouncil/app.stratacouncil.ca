@@ -322,8 +322,8 @@ The page tells the panel what's on screen as a small reference, never as text:
   logins, or loops. When hit, the message says when they can ask again. No real
   person should ever see it.
 - `consume_stratasphere_request` is replaced by
-  `stratasphere_allowed(corp)`: member, subscribed, and under the hourly limit,
-  counted from that person's saved questions in the last hour.
+  `stratasphere_allowed(corp)`: subscribed, council, manager, or admin, and
+  under the hourly limit, counted from that person's answers in the last hour.
 
 ### For unsubscribed stratas
 
@@ -463,7 +463,7 @@ behaviour as the baseline.
 
 ---
 
-## 8. Database changes (migration 0090; the recall check is 0089)
+## 8. Database changes (migration 0090, PR 2a; the recall check is 0089)
 
 Safe to re-run, with grants stated, as always.
 
@@ -471,9 +471,11 @@ Safe to re-run, with grants stated, as always.
   manager, or an admin of that strata. The trial-meeting clause goes. This one
   function already guards `decisions`, `match_knowledge_chunks`, and document
   search, so the rule is enforced in the database, not only in the pages.
-- `stratasphere_allowed(corp)`: replaces `consume_stratasphere_request`
-  (subscription, access, and the 30-an-hour limit). `execute` for
-  `authenticated`.
+- `stratasphere_allowed(corp)`: returns `ok`, `subscription`, or `limit`. The app
+  calls it before every question. `consume_stratasphere_request` stays, as a
+  wrapper over it, for pages still on the previous release during a deploy.
+  The limit counts that person's answers in `stratasphere_usage` over the last
+  hour (both the assistant and Meeting Mode). `execute` for `authenticated`.
 - `launch_meeting`: no trial check. Council and committee meetings launch free.
   AGM and SGM launches need a subscription, for when they're built.
 - **Discussions:** the "first one free" check is removed.

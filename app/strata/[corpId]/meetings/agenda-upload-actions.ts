@@ -62,8 +62,8 @@ export async function parseUploadedAgenda(corpId: string, formData: FormData): P
   if (await demoRestricted()) return demoLimitFail();
   const access = await runner(corpId);
   if (!access) return { ok: false, error: "You can't edit this agenda." };
-  if (!access.subscribed && access.freeMeetingUsed) {
-    return { ok: false, error: "Reading an uploaded agenda uses Stratasphere AI, which needs a subscription." };
+  if (!access.subscribed) {
+    return { ok: false, error: "Reading an uploaded agenda with AI comes with a Stratasphere subscription. You can still build the agenda here." };
   }
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) return { ok: false, error: "Choose an agenda file." };

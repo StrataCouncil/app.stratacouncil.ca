@@ -2,9 +2,8 @@ import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 
 /**
- * The signed-in user's access to one corporation: is StrataSphere
- * subscribed, is the trial meeting still available, and which roles do
- * they hold. `cache()` makes this one set of queries per request, however
+ * The signed-in user's access to one corporation: is it subscribed, may
+ * this person use Stratasphere, and which roles do they hold. `cache()` makes this one set of queries per request, however
  * many server components under `/strata/[corpId]` ask for it — the layout
  * and the page both do.
  *
@@ -20,6 +19,13 @@ export interface StrataAccess {
   subscribed: boolean;
   /** Subscribed, with Stripe still confirming the first payment (0030). */
   pending: boolean;
+  /**
+   * May use Stratasphere (the assistant, document search, the ledger):
+   * subscribed, and on council, a manager, or an admin (0090,
+   * has_stratasphere_access). Never owners.
+   */
+  stratasphere: boolean;
+  /** History only: the one-free-meeting trial ended with 0090. */
   freeMeetingUsed: boolean;
   roles: string[];
   isAdmin: boolean;
@@ -71,9 +77,14 @@ export const getStrataAccess = cache(async (corpId: string): Promise<StrataAcces
   if (!corp) return null;
 
   const roles = (roleRows ?? []).map((r) => r.role as string);
+  const subscribed = sub?.status === "active";
+  // The same rule as has_stratasphere_access (0090), which the database enforces.
+  const stratasphere =
+    subscribed && (superAdmin === true || (Boolean(membership) && (onCouncil === true || roles.includes("admin") || roles.includes("manager"))));
   return {
     corpId: corp.strata_plan_number,
-    subscribed: sub?.status === "active",
+    subscribed,
+    stratasphere,
     pending: sub?.status !== "active" && Boolean(sub?.stripe_subscription_id) && sub?.stripe_status === "incomplete",
     freeMeetingUsed: corp.free_meeting_used,
     roles,

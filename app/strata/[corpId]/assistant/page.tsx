@@ -7,9 +7,8 @@ import { createClient } from "@/lib/supabase/server";
 import { demoAllowanceLeft } from "@/lib/demo-usage";
 
 /**
- * Standalone Stratasphere assistant: never free, not even during the
- * trial window (doc01 §4b). Only the embedded Meeting Mode assistant is
- * ever free. Conversations are the signed-in person's own (0033).
+ * The Stratasphere assistant: paid, and for council members, managers, and
+ * admins only (0090). Conversations are the signed-in person's own (0033).
  */
 export default async function AssistantPage({
   params,
@@ -18,21 +17,25 @@ export default async function AssistantPage({
 }) {
   const { corpId } = await params;
   const access = await getStrataAccess(corpId);
-  const subscribed = access?.subscribed ?? false;
 
-  if (!subscribed) {
+  if (!access?.stratasphere) {
     return (
       <>
         <StrataSphereNav active="assistant" />
         <h2 style={{ marginBottom: "1rem" }}>Stratasphere&trade;</h2>
         <div className="lock-panel">
-          <h2>Ask questions about your strata&rsquo;s documents</h2>
-          <p>
-            The standalone Stratasphere&trade; assistant requires an active
-            subscription &mdash; it&rsquo;s never part of the free tier, even
-            during your one free meeting.
-          </p>
-          <SubscribeCta testId="assistant-subscribe-cta" />
+          <h2>Ask questions about your strata&rsquo;s records</h2>
+          {access?.subscribed ? (
+            <p>Stratasphere&trade; is for council members, managers, and admins.</p>
+          ) : (
+            <>
+              <p>
+                Stratasphere&trade; answers from your strata&rsquo;s bylaws, minutes, documents, and decisions, with
+                its sources, and from BC strata legislation. It comes with a subscription.
+              </p>
+              <SubscribeCta testId="assistant-subscribe-cta" />
+            </>
+          )}
         </div>
       </>
     );

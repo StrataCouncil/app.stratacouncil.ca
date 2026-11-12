@@ -120,6 +120,7 @@ export default async function StrataSphereLayout({
             value={{
               corpId: currentCorporation.id,
               subscribed,
+              stratasphere: access?.stratasphere ?? false,
               pending,
               isAdmin: access?.isAdmin ?? false,
               canManage: Boolean(access?.isAdmin || access?.roles.includes("manager")),

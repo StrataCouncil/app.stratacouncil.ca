@@ -105,7 +105,7 @@ export default async function DocumentCategoryPage({
       </div>
 
       {folder === "meetings_records" && access.canRunMeetings && (
-        <HistoricMinutesUpload corpId={corpId} aiAvailable={access.subscribed || !access.freeMeetingUsed} />
+        <HistoricMinutesUpload corpId={corpId} aiAvailable={access.subscribed} />
       )}
 
       {documents.length === 0 ? (

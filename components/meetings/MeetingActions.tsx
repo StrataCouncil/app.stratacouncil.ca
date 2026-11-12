@@ -29,14 +29,13 @@ function Dialog({ title, onClose, children, wide }: { title: string; onClose: ()
 }
 
 /**
- * Launch: the one launch. A subscribed corporation just launches; an
- * unsubscribed one is told this uses its free meeting first.
+ * Launch. Council and committee meetings are free (0090); a general
+ * meeting without a subscription is refused by launch_meeting, and the
+ * dialog then offers subscribing.
  */
 export function LaunchMeetingButton({
   corpId,
   meetingId,
-  subscribed,
-  trialAvailable,
   isAdmin,
   agendaSaved = true,
   missingMotions = [],
@@ -45,8 +44,6 @@ export function LaunchMeetingButton({
 }: {
   corpId: string;
   meetingId: string;
-  subscribed: boolean;
-  trialAvailable: boolean;
   isAdmin: boolean;
   agendaSaved?: boolean;
   /** Decision items with no motion yet: a warning, not a block. */
@@ -73,7 +70,6 @@ export function LaunchMeetingButton({
     });
   }
 
-  const blocked = !subscribed && !trialAvailable;
   const subscriptionPending = useOptionalStrata()?.pending ?? false;
   return (
     <>
@@ -89,27 +85,11 @@ export function LaunchMeetingButton({
       </button>
       {open && (
         <Dialog title="Launch the meeting?" onClose={() => setOpen(false)}>
-          {blocked && subscriptionPending ? (
-            <>
-              <p>Your free meeting has been used. You can launch this one as soon as your subscription goes through.</p>
-              <SubscriptionPendingNote />
-            </>
-          ) : blocked ? (
-            <p>
-              Your free meeting has been used. Running another meeting needs a Stratasphere&trade; subscription.
-            </p>
-          ) : subscribed ? (
-            <p>
-              You&rsquo;ll run this meeting from here on. While it&rsquo;s launched, only you can change the agenda or see the Meeting Runner Notes.
-            </p>
-          ) : (
-            <p>
-              This uses your strata&rsquo;s <strong>one free meeting</strong>. It&rsquo;s the full product, with Stratasphere&trade;
-              AI and every document you&rsquo;ve uploaded. You can set up as many draft meetings as you like, but only one can be
-              launched before subscribing. While it&rsquo;s launched, only you can change the agenda or see the Meeting Runner Notes.
-            </p>
-          )}
-          {!blocked && missingMotions.length > 0 && (
+          <p>
+            You&rsquo;ll run this meeting from here on. While it&rsquo;s launched, only you can change the agenda or see the Meeting Runner Notes.
+          </p>
+          {needsSubscription && subscriptionPending && <SubscriptionPendingNote />}
+          {missingMotions.length > 0 && (
             <div className="form-alert" role="status" data-testid="launch-missing-motions">
               {missingMotions.length === 1 ? "This decision item has" : "These decision items have"} no motion yet. You can write it during the meeting; no vote
               can open without one.
@@ -122,7 +102,7 @@ export function LaunchMeetingButton({
           )}
           {error && <p className="form-error" role="alert">{error}</p>}
           <div className="role-editor__actions">
-            {!blocked && missingMotions.length > 0 && editHref ? (
+            {missingMotions.length > 0 && editHref ? (
               <Link href={editHref} className="button button-secondary" data-testid="launch-edit-agenda">
                 Edit agenda
               </Link>
@@ -131,7 +111,7 @@ export function LaunchMeetingButton({
                 Not now
               </button>
             )}
-            {(blocked || needsSubscription) && subscriptionPending ? null : blocked || needsSubscription ? (
+            {needsSubscription && subscriptionPending ? null : needsSubscription ? (
               isAdmin ? (
                 <Link href={`/strata/${corpId}/billing`} className="button button-primary">
                   See plans
@@ -141,7 +121,7 @@ export function LaunchMeetingButton({
               )
             ) : (
               <button type="button" className="button button-primary" onClick={launch} disabled={pending} data-testid="launch-confirm">
-                {pending ? "Launching…" : subscribed ? "Launch meeting" : "Use my free meeting"}
+                {pending ? "Launching…" : "Launch meeting"}
               </button>
             )}
           </div>

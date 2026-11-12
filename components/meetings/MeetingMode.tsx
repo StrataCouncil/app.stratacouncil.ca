@@ -743,7 +743,6 @@ export function MeetingMode(props: {
           <strong>{meetingTypeLabels[type]}</strong>
           <span>
             {props.planNumber} &middot; {props.corpName}
-            {props.isTrial ? " · Free meeting" : ""}
           </span>
         </div>
         <div className="mm__clock" aria-live="off">
@@ -1886,11 +1885,9 @@ export function Assistant(props: {
               ? `Ask about this item, your bylaws, past decisions, or meeting procedure.${
                   props.demoLeft != null
                     ? ` The demo includes ${DEMO_LIMITS.meeting} questions in Meeting Mode. ${props.demoLeft} left.`
-                    : props.isTrial
-                      ? " Your free meeting includes ten questions."
-                      : ""
+                    : ""
                 }`
-              : "The assistant needs a Stratasphere subscription."}
+              : "The assistant comes with a Stratasphere subscription."}
           </p>
         )}
         {log.map((t, i) => (

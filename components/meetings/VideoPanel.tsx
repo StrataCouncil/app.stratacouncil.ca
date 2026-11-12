@@ -470,6 +470,28 @@ export function VideoPanel(props: {
     );
   }
 
+  if (join.kind === "link") {
+    return (
+      <section className="mm-video mm-video--message" aria-label="Meeting video" data-testid="video-link">
+        {join.url ? (
+          <>
+            <p className="mm-video__msg">This meeting&rsquo;s video is on the council&rsquo;s own link.</p>
+            <div className="mm-video__join">
+              <a href={join.url} target="_blank" rel="noopener noreferrer" className="button button-primary button-small" data-testid="video-own-link">
+                Open the video link
+              </a>
+            </div>
+          </>
+        ) : (
+          <p className="mm-video__msg">
+            Built-in video comes with Stratasphere&trade;. The meeting works without it; whoever runs meetings can add the
+            council&rsquo;s own video link to the meeting&rsquo;s details.
+          </p>
+        )}
+      </section>
+    );
+  }
+
   if (join.kind === "message") {
     return (
       <section className="mm-video mm-video--message" aria-label="Meeting video" data-testid="video-message">
