@@ -10,8 +10,8 @@ import { sectionFor } from "@/lib/navigation";
  *   Resources     Council Training and the Library. Belongs to the person;
  *                 no strata needed.
  *   Your Strata   The strata's own pages: Overview, Meetings, Discussions,
- *                 Council, Owners, Management, Billing.
- *   Stratasphere  Ask and Documents: the strata's memory.
+ *                 Documents, Council, Owners, Management, Billing.
+ *   Stratasphere  Ask: the assistant that reads the strata's records.
  *
  * Inside a strata, both strata links stay on that strata (the one in the
  * URL), so switching sections never switches stratas. Elsewhere they go to
