@@ -8,7 +8,7 @@ import { IS_DEMO } from "@/lib/demo";
 import { getStripe, publishableKeyFor, stripeModeFor, type StripeMode } from "@/lib/stripe/client";
 import { settlePaymentMethodUpdate } from "@/lib/stripe/payment-results";
 import { UpdatePaymentMethod } from "@/components/UpdatePaymentMethod";
-import { annualTermEnd, calculateBilling, customBilling, perPeriod, type BillingInterval } from "@/lib/stripe/prices";
+import { annualTermEnd, calculateBilling, customBilling, type BillingInterval } from "@/lib/stripe/prices";
 import { StatementsPeriodSelect } from "@/components/StatementsPeriodSelect";
 import { BillingDialog } from "@/components/BillingDialog";
 import { StrataSphereNav } from "@/components/StrataSphereNav";
@@ -181,7 +181,7 @@ export default async function BillingPage({
   const deactivated = sub?.status === "deactivated" && Boolean(sub.activated_at);
   const interval = (sub?.billing_interval as "monthly" | "annual" | undefined) ?? "monthly";
   const unitCount = corp.unit_count;
-  const price = enterprise ? customBilling(enterprise.amount, enterprise.interval) : calculateBilling(unitCount, interval);
+  const price = enterprise ? customBilling(enterprise.amount) : calculateBilling(unitCount, interval);
   const { subtotal, gst, total } = price;
   const planLabel = (i: BillingInterval) => (i === "annual" ? "yearly" : "monthly");
   const billingEmail = sub?.billing_email ?? "";
@@ -266,8 +266,7 @@ export default async function BillingPage({
         lots: c.unit_count as number,
         status: comp ? "Complimentary" : active ? "Active" : cPending ? "Pending" : s?.status === "deactivated" && s.activated_at ? "Deactivated" : "Not subscribed",
         activated: active && s?.activated_at ? (s.activated_at as string).slice(0, 10) : null,
-        // Each strata's charge as a monthly amount, so they add up (yearly is spread over 12).
-        monthly: active && !comp ? calculateBilling(c.unit_count, cInterval).monthlySubtotal : null,
+        monthly: active && !comp ? calculateBilling(c.unit_count, cInterval).subtotal : null,
       };
     });
   const totalMonthly = corpRows.reduce((sum, r) => sum + (r.monthly ?? 0), 0);
@@ -364,8 +363,8 @@ export default async function BillingPage({
           <p>{STRATASPHERE_PITCH}</p>
           <p className="card__meta">
             {enterprise
-              ? `${fmt(price.total)} ${perPeriod(price.period)} incl. GST, the price we agreed.`
-              : `${fmt(calculateBilling(unitCount, "monthly").total)} a month, or ${fmt(calculateBilling(unitCount, "annual").total)} a year, incl. GST for ${unitCount} lots.`}{" "}
+              ? `${fmt(price.total)} a month incl. GST, the price we agreed.`
+              : `From ${fmt(calculateBilling(unitCount, "annual").total)} a month incl. GST for ${unitCount} lots.`}{" "}
             {deactivated ? "Your strata's records are all still here." : "Council meetings and Discussions stay free either way."}
           </p>
           <Link href={`/strata/${corpId}/billing?step=plan`} className="button button-primary" data-testid="open-subscribe">
@@ -514,9 +513,9 @@ export default async function BillingPage({
           </div>
           <p>
             {enterprise
-              ? `Enterprise, charged ${enterprise.interval === "annual" ? "once a year" : "monthly"}, ${unitCount} lots.`
+              ? `Enterprise, billed monthly${enterprise.interval === "annual" ? ", 12-month commitment" : ", cancel any month"}, ${unitCount} lots.`
               : interval === "annual"
-                ? `Yearly: $300 a year per strata + $30 per lot, charged once a year, ${unitCount} lots.`
+                ? `Yearly: $25 a month per strata + $2.50 per lot, 12-month commitment, ${unitCount} lots.`
                 : `Monthly: $30 a month per strata + $3 per lot, cancel any month, ${unitCount} lots.`}
           </p>
 
@@ -525,7 +524,7 @@ export default async function BillingPage({
               <div className="billing-line billing-line--subtotal">
                 <span>Subtotal</span>
                 <span>
-                  {fmt(subtotal)}/{price.period === "year" ? "yr" : "mo"}
+                  {fmt(subtotal)}/mo
                 </span>
               </div>
               <div className="billing-line">
@@ -533,7 +532,7 @@ export default async function BillingPage({
                 <span>{fmt(gst)}</span>
               </div>
               <div className="billing-line billing-line--total">
-                <span>Total / {price.period}</span>
+                <span>Total / month</span>
                 <span>{fmt(total)}</span>
               </div>
             </div>
@@ -547,7 +546,7 @@ export default async function BillingPage({
                   ? `Next billing date: ${fmtDate(sub.current_period_end)}.`
                   : null}{" "}
               {sub?.activated_at ? `Active since ${fmtDate(sub.activated_at)}.` : null}
-              {termEnd && !sub?.cancel_at ? ` The year you've paid for ends ${fmtDate(termEnd)}.` : null}
+              {termEnd && !sub?.cancel_at ? ` Current 12-month term ends ${fmtDate(termEnd)}.` : null}
             </p>
           ) : deactivated ? (
             <p className="card__meta">
@@ -568,8 +567,8 @@ export default async function BillingPage({
               <p>
                 <strong>Switching to {planLabel(pendingInterval)} on {fmtDate(sub?.pending_interval_at ?? null)}.</strong>{" "}
                 {interval === "annual"
-                  ? "Until then, the year you've paid for continues."
-                  : "Until then, the monthly plan continues. The first yearly charge is on that date."}
+                  ? "Until then, the yearly rate and 12-month commitment continue."
+                  : "Until then, the monthly rate continues. The 12-month term starts on that date."}
               </p>
               <form action={keepCurrentPlan.bind(null, corpId)}>
                 <button className="button button-secondary button-small" data-testid="keep-plan-cta">
@@ -598,8 +597,8 @@ export default async function BillingPage({
               {nextAnniversary && (
                 <p className="card__meta" style={{ marginTop: "0.6rem" }}>
                   {interval === "annual"
-                    ? `A switch or cancellation takes effect on ${fmtDate(nextAnniversary)}, the end of the year you've paid for. Until then, access continues.`
-                    : `A switch to yearly takes effect on ${fmtDate(nextAnniversary)}, your next billing date, with the first yearly charge. A cancellation ends the subscription on that date.`}
+                    ? `A switch or cancellation takes effect on ${fmtDate(nextAnniversary)}, the end of your 12-month term. Until then, billing and access continue on the yearly plan.`
+                    : `A switch to yearly takes effect on ${fmtDate(nextAnniversary)}, your next billing date, and starts a 12-month term. A cancellation ends the subscription on that date.`}
                   {pendingInterval ? " Cancelling also drops the scheduled switch." : ""}
                 </p>
               )}

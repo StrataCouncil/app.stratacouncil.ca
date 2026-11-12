@@ -169,56 +169,38 @@ Within a strata, the second-level nav is grouped by section:
 | Plan | Price | For |
 |---|---|---|
 | **Free, forever** | $0 | Learn and Decide (section 3) |
-| **Stratasphere** | **$30 a month per strata, plus $3 per strata lot.** Yearly: $300 plus $30 per lot, charged once a year. GST (5%) is added. | Any strata, self-serve |
+| **Stratasphere, Monthly** | **$30 a month per strata + $3 per strata lot.** Cancel any month. | Any strata, self-serve |
+| **Stratasphere, Yearly** | **$25 a month per strata + $2.50 per lot**, a 12-month commitment, billed monthly (two months free over the year). | Any strata, self-serve |
 | **Enterprise** | Talk to us | Strata management companies, and stratas over 100 lots |
 
-There's no cap. A strata pays its lot count.
+GST (5%) on top. No cap: a strata pays its lot count. Both plans bill
+monthly, so no single charge comes near Stripe's limit for one bank debit.
 
-| Lots | Monthly | Yearly | Yearly, with GST |
+| Lots | Monthly | Yearly (per month) | Yearly plan, a year with GST |
 |---|---|---|---|
-| 6 | $48 | $480 | $504 |
-| 20 | $90 | $900 | $945 |
-| 40 | $150 | $1,500 | $1,575 |
-| 45 | $165 | $1,650 | $1,733 |
-| 100 | $330 | $3,300 | $3,465 |
+| 6 | $48 | $40 | $504 |
+| 20 | $90 | $75 | $945 |
+| 45 | $165 | $137.50 | $1,733 |
+| 100 | $330 | $275 | $3,465 |
 
-- **The $2,000 threshold:** monthly billing passes $2,000 a year with GST at 43
-  lots, and yearly billing at 54 lots. Above that, councils put it in the
-  approved budget, which the budget pack (section 10, later) helps with. We
-  never say a subscription is automatically within anyone's spending limit.
+- **The $2,000 a year line:** the Monthly plan passes $2,000 a year with GST at
+  43 lots, the Yearly plan at 54. Above that, councils put it in the approved
+  budget (the budget pack, section 10, later). We never say a subscription is
+  automatically within anyone's spending limit.
 - **Enterprise:** the billing page offers "Talk to us" instead of self-serve
-  checkout for stratas over 100 lots (`ENTERPRISE_LOTS`, one constant), and for
-  anyone who asks about several stratas.
-  - The request goes to the Super Admin console and emails the Super Admins.
-  - The Super Admin sets that strata's price (a custom monthly or yearly
-    amount), or marks it complimentary, from the strata's console page.
-  - Portfolio billing for management companies comes later. For now each strata
-    is billed on its own, at the agreed price.
-- **The yearly plan** is two months free, now charged **once a year**. Today
-  "annual" is a cheaper monthly rate because of Stripe's CA$3,000 limit per
-  pre-authorized debit (see `lib/stripe/prices.ts`). Self-serve yearly stays
-  under that limit up to 85 lots with GST; between 86 and 100 lots, yearly is
-  charged by card or split into two charges, and Enterprise prices are set case
-  by case.
-- **Lot count** comes from `strata_corporations.unit_count`, which is verified
-  from the strata plan at Super Admin review. When it changes, the price changes
-  the same way it does today.
+  checkout for stratas over 100 lots (`ENTERPRISE_LOTS`), and to anyone who asks
+  about several stratas. The request goes to the Super Admin console and emails
+  the Super Admins. The Super Admin sets a monthly price for that strata, month
+  to month or on a 12-month commitment, or marks it complimentary.
+- **Lot count** comes from `strata_corporations.unit_count`, verified from the
+  strata plan at Super Admin review.
 
 ### In Stripe
 
-- **Today's structure stays:** a base Price plus a per-lot Price for each plan,
-  with new amounts. You create the new Prices in the Stripe dashboard (I'll give
-  exact steps) and put their IDs in Vercel, in the same env vars as now
-  (`STRIPE_PRICE_MONTHLY_BASE`/`_UNIT`, `STRIPE_PRICE_ANNUAL_BASE`/`_UNIT`,
-  and the `STRIPE_TEST_PRICE_*` set for sandbox stratas).
-- **The annual Prices become yearly** (`interval=year`).
-- **Enterprise:** custom Prices are created from the Super Admin console for
-  that one subscription.
-- **The display price** is calculated by one function, shared by the billing
-  page, the marketing site, and the tests.
-- **Existing subscriptions** (complimentary and sandbox ones today) are left as
-  they are. Complimentary stays complimentary. Any real subscription before this
-  change keeps its price until you choose to move it.
+Two Prices per plan, both billed monthly: a flat base and a per-lot price
+(`STRIPE_PRICE_MONTHLY_BASE`/`_UNIT`, `STRIPE_PRICE_ANNUAL_BASE`/`_UNIT`, and the
+`STRIPE_TEST_PRICE_*` set for sandbox stratas). An Enterprise subscription gets
+a monthly Price made for it, on the same product.
 
 ### Unit economics
 
@@ -535,7 +517,7 @@ database tests, build, browser test), and you run the migration and merge.
    - Unlimited council meetings and Discussions; free templates.
    - The own-video-link field.
    - The new Stripe Prices, the price function, and the billing page,
-     including the yearly plan charged once a year.
+     with the Yearly plan billed monthly on a 12-month commitment.
    - Removing the trial everywhere, in all copy and lifecycle emails.
 3. **Learn, Decide, Remember navigation.**
    - The top bar, grouped second-level nav, and the Library moved to Learn.

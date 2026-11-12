@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { calculateBilling, customBilling, ENTERPRISE_LOTS, padAllowed, perPeriod, PLAN_RATES, type BillingInterval } from "@/lib/stripe/prices";
+import { calculateBilling, customBilling, ENTERPRISE_LOTS, PLAN_RATES, type BillingInterval } from "@/lib/stripe/prices";
 import { EnterpriseRequestButton } from "@/components/EnterpriseRequestButton";
 import { BillingContactForm, BillingPayStep } from "@/components/BillingStepForms";
 import { COMPANY_LEGAL_NAME, COMPANY_NAME, STATEMENT_DESCRIPTOR } from "@/lib/company";
@@ -57,12 +57,12 @@ export function BillingSteps({
 
   const monthly = calculateBilling(unitCount, "monthly");
   const annual = calculateBilling(unitCount, "annual");
-  const yearlySaving = monthly.total * 12 - annual.total;
+  const yearlySaving = (monthly.total - annual.total) * 12;
   // Over ENTERPRISE_LOTS lots, self-serve plans aren't offered: Talk to us.
   const enterpriseOnly = !enterprise && unitCount > ENTERPRISE_LOTS;
-  const chosen = enterprise ? customBilling(enterprise.amount, enterprise.interval) : interval === "annual" ? annual : monthly;
-  const yearly = chosen.period === "year";
-  const bankDebit = padAllowed(chosen);
+  const chosen = enterprise ? customBilling(enterprise.amount) : interval === "annual" ? annual : monthly;
+  // The Yearly plan (and an Enterprise one agreed for a year) is a 12-month commitment, billed monthly.
+  const yearly = (enterprise ? enterprise.interval : interval) === "annual";
 
   const cancel = (
     <Link href={cancelHref} className="button button-secondary" data-testid="billing-cancel">
@@ -100,10 +100,10 @@ export function BillingSteps({
                   <strong>{enterprise.interval === "annual" ? "Yearly" : "Monthly"}</strong>
                   <span className="billing-plan__price">
                     {fmt(chosen.total)}
-                    <small>/{chosen.period} incl. GST</small>
+                    <small>/month incl. GST</small>
                   </span>
                   <span className="card__meta">
-                    {fmt(chosen.subtotal)} {perPeriod(chosen.period)} plus GST.
+                    {fmt(chosen.subtotal)} a month plus GST{yearly ? ", for a 12-month commitment" : ", cancel any month"}.
                   </span>
                   <Link href={href("contact", enterprise.interval)} className="button button-primary billing-plan__choose" data-testid="choose-enterprise">
                     Continue
@@ -123,8 +123,7 @@ export function BillingSteps({
           ) : (
             <>
               <p className="card__meta">
-                {unitCount} strata lots. Monthly is charged each month, yearly once a year, by pre-authorized debit or card.
-                {!padAllowed(annual) && " The yearly plan is paid by card: one charge that size is over the limit for a bank debit."}
+                {unitCount} strata lots. Both plans are billed monthly, by pre-authorized debit or card.
               </p>
               <div className="billing-plans">
                 <div className="billing-plan" data-selected={interval === "monthly"} data-testid="plan-monthly">
@@ -150,10 +149,10 @@ export function BillingSteps({
                   <strong>Yearly</strong>
                   <span className="billing-plan__price">
                     {fmt(annual.total)}
-                    <small>/year incl. GST</small>
+                    <small>/month incl. GST</small>
                   </span>
                   <span className="card__meta">
-                    {fmt(PLAN_RATES.annual.base)} a year per strata + {fmt(PLAN_RATES.annual.perLot)} per lot. Charged once a year.
+                    {fmt(PLAN_RATES.annual.base)} a month per strata + {fmt(PLAN_RATES.annual.perLot)} per lot, for a 12-month commitment.
                   </span>
                   <span className="billing-plan__saving">Saves {fmt(yearlySaving)} a year over monthly</span>
                   <Link href={href("contact", "annual")} className="button button-primary billing-plan__choose" data-testid="choose-annual">
@@ -193,7 +192,11 @@ export function BillingSteps({
             <div>
               <dt>Plan</dt>
               <dd>
-                {enterprise ? `Enterprise, charged ${yearly ? "once a year" : "monthly"}` : yearly ? "Yearly: charged once a year" : "Monthly: month to month"}{" "}
+                {enterprise
+                  ? `Enterprise, billed monthly${yearly ? " for a 12-month commitment" : ""}`
+                  : yearly
+                    ? "Yearly: a 12-month commitment, billed monthly"
+                    : "Monthly: month to month"}{" "}
                 {!enterprise && <Link href={href("plan")}>Change</Link>}
               </dd>
             </div>
@@ -202,7 +205,7 @@ export function BillingSteps({
               <dd>{unitCount}</dd>
             </div>
             <div>
-              <dt>{yearly ? "Yearly charge" : "Monthly charge"}</dt>
+              <dt>Monthly charge</dt>
               <dd>
                 {fmt(chosen.subtotal)} + {fmt(chosen.gst)} GST = <strong>{fmt(chosen.total)}</strong>
                 <span className="billing-review__note">
@@ -225,7 +228,7 @@ export function BillingSteps({
           </dl>
           <p className="card__meta">
             {yearly
-              ? "You are subscribing to a year of Stratasphere™, charged once a year. You may cancel at any time: it won't renew, and you will have access to Stratasphere™ until the end of the year you have paid for."
+              ? "You are subscribing to a full year of Stratasphere™, billed monthly. You may cancel at any time during your subscription period, but your payment method will be billed monthly until the expiration date. If you do cancel prior to the expiration date, you will have access to Stratasphere™ until it expires."
               : "You are subscribing month to month, billed monthly. You may cancel at any time; you will have access to Stratasphere™ until the end of the month you have paid for."}
           </p>
           <div className="billing-step__nav">
@@ -244,11 +247,9 @@ export function BillingSteps({
         <div className="billing-step">
           <h3>Payment</h3>
           <p className="card__meta">
-            {fmt(chosen.total)} {perPeriod(chosen.period)} incl. GST.{" "}
-            {bankDebit
-              ? "Pre-authorized debit from the strata’s bank account is recommended: signing in to your bank is quickest, while typed-in account numbers are confirmed with two small deposits first (a business day or two)."
-              : "Paid by card: one charge this size is over the limit for a bank debit."}{" "}
-            Processed securely by Stripe for {COMPANY_LEGAL_NAME} (shown as {COMPANY_NAME}). Nothing is charged until you click Subscribe.
+            {fmt(chosen.total)} a month incl. GST. Pre-authorized debit from the strata&rsquo;s bank account is recommended:
+            signing in to your bank is quickest, while typed-in account numbers are confirmed with two small deposits first (a
+            business day or two). Processed securely by Stripe for {COMPANY_LEGAL_NAME} (shown as {COMPANY_NAME}). Nothing is charged until you click Subscribe.
           </p>
           <BillingPayStep
             corpId={corpId}

@@ -120,7 +120,7 @@ export function DemoBilling({
             </DemoLimitButton>
           </div>
           <p className="card__meta" style={{ marginTop: "0.6rem" }}>
-            A switch to yearly takes effect on {fmtDate(nextBilling)}, your next billing date, with the first yearly charge. A
+            A switch to yearly takes effect on {fmtDate(nextBilling)}, your next billing date, and starts a 12-month term. A
             cancellation ends the subscription on that date.
           </p>
         </div>
