@@ -55,9 +55,13 @@ export type LibraryCard = Pick<KnowledgeResource, "id" | "kind" | "title" | "sum
 
 export function KnowledgeLibrary({
   resources,
+  placeholder = "Search playbooks, guides, legislation…",
 }: {
   resources: LibraryCard[];
+  placeholder?: string;
 }) {
+  // Filter pills only for the kinds on this page (the Library, or Forms & Templates).
+  const shownKinds = kinds.filter((k) => resources.some((r) => r.kind === k));
   const [query, setQuery] = useState("");
   const [activeKind, setActiveKind] = useState<KnowledgeResourceKind | "all">("all");
 
@@ -79,7 +83,7 @@ export function KnowledgeLibrary({
       <input
         type="search"
         className="kb-search"
-        placeholder="Search playbooks, templates, guides, legislation…"
+        placeholder={placeholder}
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         data-testid="knowledge-search"
@@ -93,7 +97,7 @@ export function KnowledgeLibrary({
         >
           All <span className="kb-filter-pill__count">{countFor("all")}</span>
         </button>
-        {kinds.map((kind) => (
+        {shownKinds.map((kind) => (
           <button
             key={kind}
             className="kb-filter-pill"

@@ -6,6 +6,7 @@ test("each page lights its top-bar section: Resources, Your Strata, Stratasphere
   assert.equal(sectionFor("/training"), "resources");
   assert.equal(sectionFor("/training/strata-basics/m1"), "resources");
   assert.equal(sectionFor("/library"), "resources");
+  assert.equal(sectionFor("/templates"), "resources");
   assert.equal(sectionFor("/library/f977ccaa"), "resources");
   assert.equal(sectionFor("/strata"), "strata");
   assert.equal(sectionFor("/strata/EPS9048"), "strata");
