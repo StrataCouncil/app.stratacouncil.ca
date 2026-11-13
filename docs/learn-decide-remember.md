@@ -53,7 +53,7 @@ plainer words; they can change again later (lib/navigation.ts).
 
 | Top bar | Holds | Price | Strata needed? | Phones |
 |---|---|---|---|---|
-| **Resources** | Council Training, the Library (`/library`) | Free | No | Yes |
+| **Resources** | Council Training, the Library (`/library`), Forms & Templates (`/templates`) | Free | No | Yes |
 | **Your Strata** | Overview, Meetings, Discussions, Documents, Council, Owners, Management, Billing | Free (some features paid, shown locked); storing documents is free | Yes | Desktop (as today) |
 | **Stratasphere** | Ask | Paid | Yes | Ask works on phones |
 
@@ -63,6 +63,10 @@ plainer words; they can change again later (lib/navigation.ts).
   today. Inside a strata, both top-bar links stay on that strata.
 - **The Library** belongs to the person, not a strata: anyone signed in, with
   or without a strata. Templates and forms download blank.
+- **Forms & Templates** (2026-11-13): the Library's policy templates and
+  forms have their own page in Resources. They're published the same way
+  (Super Admin); only where they're listed differs. Each still opens at
+  `/library/[id]`, with Forms & Templates lit in the menu.
 - **The decision ledger has no page.** Every carried motion is in it, and
   Stratasphere reads it behind the scenes; councils see each decision in
   its meeting's minutes. (Decided 2026-11-12.)

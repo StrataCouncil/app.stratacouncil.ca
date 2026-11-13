@@ -61,11 +61,17 @@ async function LibraryItemPage({ item }: { item: PublishedLibraryEntry }) {
   return (
     <AppShell>
       <div className="wrap page">
-      <ResourcesNav active="library" />
+      <ResourcesNav active={isDownloadableKind(item.kind) ? "templates" : "library"} />
 
-      <Link href="/library" className="kb-article__back">
-        &larr; Library
-      </Link>
+      {isDownloadableKind(item.kind) ? (
+        <Link href="/templates" className="kb-article__back">
+          &larr; Forms &amp; Templates
+        </Link>
+      ) : (
+        <Link href="/library" className="kb-article__back">
+          &larr; Library
+        </Link>
+      )}
 
       <div className="kb-article">
         <article className="kb-article__main" data-testid="library-item">

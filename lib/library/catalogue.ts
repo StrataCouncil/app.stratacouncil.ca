@@ -73,6 +73,15 @@ export function isTemplateLocked(_resource: Pick<KnowledgeResource, "kind">, _su
 export function isDownloadableKind(kind: KnowledgeResourceKind) {
   return kind === "policy_template" || kind === "form";
 }
+/**
+ * Forms & Templates (2026-11-13): policy templates and forms have their own
+ * page in Resources (/templates); everything else is the Library. Published
+ * the same way (Super Admin); only where they're listed differs.
+ */
+export function isFormOrTemplate(kind: KnowledgeResourceKind) {
+  return isDownloadableKind(kind);
+}
+
 export type KnowledgeResourceKind =
   | "playbook"
   | "emergency_playbook"

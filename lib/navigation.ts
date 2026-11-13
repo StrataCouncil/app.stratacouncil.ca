@@ -10,7 +10,7 @@ export type TopSection = "resources" | "strata" | "stratasphere" | "admin";
 /** Which top-bar section a path belongs to. */
 export function sectionFor(pathname: string): TopSection | null {
   if (pathname === "/admin" || pathname.startsWith("/admin/")) return "admin";
-  if (pathname === "/training" || pathname.startsWith("/training/") || pathname === "/library" || pathname.startsWith("/library/")) {
+  if (pathname === "/training" || pathname.startsWith("/training/") || pathname === "/library" || pathname.startsWith("/library/") || pathname === "/templates") {
     return "resources";
   }
   const strata = /^\/strata\/[^/]+(\/[^/]+)?/.exec(pathname);
