@@ -8,7 +8,7 @@ import { formatMinutes, lockedBehind, minutesLeft, nextModule, trackStatus, type
  * Council Training overview (0035). The core (Strata Basics, then Council
  * Ready) and the specialty tracks (Treasurer, Secretary, Privacy Officer, after Council
  * Ready), with the next module up front and the learner's progress beside
- * it. A finished track appears as a certification on the learner's profile in the Stratasphere.
+ * it. A finished track is marked as complete beside the learner's name on their strata's roster (RosterTable). Training is not part of Stratasphere, and completing a track is not a certification.
  */
 /** The overview itself, from the learner's tracks (also used by previews). */
 export function TrainingOverview({
@@ -104,7 +104,7 @@ export function TrainingOverview({
               </div>
             </dl>
             <p className="training-panel__note">
-              A filled circle means the track is complete. Your certification appears on your profile in the Stratasphere.
+              A filled circle means the track is complete. It&rsquo;s also marked as complete beside your name on your strata&rsquo;s roster.
             </p>
           </section>
 
