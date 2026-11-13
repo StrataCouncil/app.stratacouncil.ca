@@ -1,6 +1,7 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { IS_DEMO } from "@/lib/demo";
+import { MFA_BACKUP_COOKIE_NAME, verifyMfaBackupCookieValue } from "@/lib/auth/mfa-session";
 
 // Reachable without a session. Everything else redirects to /login.
 // /start and /demo: the demo site's personal links and the page that
@@ -25,32 +26,11 @@ function isPublicPath(pathname: string) {
  * a signed-in user hitting /login or /signup is sent straight to the
  * dashboard instead of being shown the form again.
  *
- * 2FA is enforced here for Super Admins only (0053, 2026-10-14): their
- * account reaches every strata, so it needs an authenticator app (free;
- * no SMS). For everyone else it was reversed 2026-09-29 (doc00 changelog, doc01
- * §2, doc03 Stage 2/2a): a magic-link session is sufficient on its own.
- * This is a deliberate, temporary call: 2FA (TOTP, built and working —
- * lib/auth/mfa.ts, the enroll/challenge screens, backup codes, all of it)
- * adds real setup friction to a free-tier signup funnel with zero revenue
- * to justify it yet, and this audience (a first-time volunteer council
- * member) is judged unlikely to get through an authenticator-app setup
- * step unassisted. The gate is commented out, not deleted, and the whole
- * TOTP implementation stays in the codebase, reachable by visiting
- * /auth/mfa/enroll directly — re-enabling 2FA later is uncommenting the
- * block below (and deciding whether to also require it retroactively for
- * already-signed-up accounts), not rebuilding anything. See doc01 §2 for
- * the full reasoning and the plan to revisit once there's a paying
- * customer base to justify the added friction (and, separately, once SMS
- * via Twilio is worth its own cost — doc04 §7b).
- *
- * Kept for later, not wired in:
- *   const { data: factorsData } = await supabase.auth.mfa.listFactors();
- *   const hasVerifiedTotpFactor = Boolean(
- *     factorsData?.totp?.some((f) => f.status === "verified")
- *   );
- *   if (!hasVerifiedTotpFactor) redirect to /auth/mfa/enroll
- *   const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
- *   if (aal?.currentLevel !== "aal2" && no valid backup-code cookie) redirect to /auth/mfa/challenge
+ * Two-step verification is optional, and set up from Account Settings
+ * (authenticator app, free; no SMS). Anyone who has set it up is asked for
+ * the code at sign-in; Super Admins must set it up (0053). It was made
+ * optional for everyone else 2026-09-29 (doc01 §2) so a first-time
+ * volunteer can sign up and sign in with an email code alone.
  */
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request });
@@ -98,23 +78,45 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/", request.url));
   }
 
-  // Two-step verification for platform staff (0053). Everyone else goes
-  // straight through, as above. A Super Admin is sent to set up an
-  // authenticator app, then asked for its code each sign-in; the database
-  // also withholds Super Admin powers until the session has it (aal2).
-  if (user && !pathname.startsWith("/auth/")) {
+  // Two-step verification (0053; everyone, 2026-11-13). Anyone who has set
+  // up an authenticator app is asked for its code once per sign-in, then
+  // goes through as normal; a backup code (lib/auth/mfa-session.ts) also
+  // counts. Without this, Supabase's "Limit duration of AAL1 sessions"
+  // would sign them out after 15 minutes. Setting one up stays optional,
+  // except for Super Admins: their account reaches every strata, so they're
+  // sent to set one up, and the database withholds their powers until the
+  // session has the code (aal2). Public pages (an email's link, say) never
+  // ask.
+  if (user && !publicPath && !pathname.startsWith("/auth/")) {
     const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
     if (aal?.currentLevel !== "aal2") {
-      const { data: profile } = await supabase.from("profiles").select("is_super_admin").eq("id", user.id).maybeSingle();
-      if (profile?.is_super_admin) {
-        const to = NextResponse.redirect(new URL(aal?.nextLevel === "aal2" ? "/auth/mfa/challenge" : "/auth/mfa/enroll", request.url));
+      const redirectTo = (path: string) => {
+        const url = new URL(path, request.url);
+        if (pathname !== "/") url.searchParams.set("next", `${pathname}${request.nextUrl.search}`);
+        const to = NextResponse.redirect(url);
         response.cookies.getAll().forEach((c) => to.cookies.set(c));
         return to;
+      };
+      if (aal?.nextLevel === "aal2") {
+        if (!(await hasBackupClearance(request, user.id))) return redirectTo("/auth/mfa/challenge");
+      } else {
+        const { data: profile } = await supabase.from("profiles").select("is_super_admin").eq("id", user.id).maybeSingle();
+        if (profile?.is_super_admin) return redirectTo("/auth/mfa/enroll");
       }
     }
   }
 
   return response;
+}
+
+/** A backup code used this session (never issued to Super Admins). */
+async function hasBackupClearance(request: NextRequest, userId: string) {
+  try {
+    return await verifyMfaBackupCookieValue(request.cookies.get(MFA_BACKUP_COOKIE_NAME)?.value, userId);
+  } catch {
+    // No signing secret configured: no backup code could have been accepted.
+    return false;
+  }
 }
 
 /**

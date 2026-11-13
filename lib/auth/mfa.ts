@@ -239,6 +239,19 @@ export async function verifyBackupCode(rawCode: string): Promise<MfaActionResult
     return { status: "error", message: "That backup code isn't valid, or has already been used." };
   }
 
+  // A backup code means the authenticator is lost, so it's removed with
+  // the rest of the codes: the session then stands on the email sign-in
+  // alone, as for anyone without two-step verification, instead of an
+  // unverified one Supabase cuts off after 15 minutes. They can set up
+  // a new authenticator from Account Settings.
+  const { data: factors } = await admin.auth.admin.mfa.listFactors({ userId: user.id });
+  for (const factor of factors?.factors ?? []) {
+    await admin.auth.admin.mfa.deleteFactor({ id: factor.id, userId: user.id });
+  }
+  await admin.from("mfa_backup_codes").delete().eq("user_id", user.id);
+  await supabase.auth.refreshSession();
+
+  // Belt and braces, should removing the authenticator not have taken.
   const cookieValue = await createMfaBackupCookieValue(user.id);
   const cookieStore = await cookies();
   cookieStore.set(MFA_BACKUP_COOKIE_NAME, cookieValue, {
