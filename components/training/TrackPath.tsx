@@ -95,7 +95,7 @@ export function TrackPath({
               <div className="path__title">{track.title} Complete</div>
               <div className="path__meta">
                 {track.credential
-                  ? `Completed ${new Date(track.credential.issuedAt).toLocaleDateString("en-CA", { timeZone: tz("America/Vancouver", track.credential.issuedAt), year: "numeric", month: "long", day: "numeric" })}. Your certification appears on your profile in the Stratasphere.`
+                  ? `Completed ${new Date(track.credential.issuedAt).toLocaleDateString("en-CA", { timeZone: tz("America/Vancouver", track.credential.issuedAt), year: "numeric", month: "long", day: "numeric" })}. It's marked as complete beside your name on your strata's roster.`
                   : `Complete all modules in this track to finish ${track.title}.`}
               </div>
             </div>
