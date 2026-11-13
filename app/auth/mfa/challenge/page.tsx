@@ -9,6 +9,7 @@ import {
   verifyTotpChallenge,
   verifyBackupCode,
 } from "@/lib/auth/mfa";
+import { signOut } from "@/lib/auth/actions";
 
 /**
  * Doc03 Stage 2a, "Verification" — shown on every subsequent new session
@@ -31,6 +32,12 @@ import {
  */
 type Mode = "totp" | "backup";
 
+/** Where they were going when asked for the code (middleware.ts), on this site only. */
+function nextPath() {
+  const next = new URLSearchParams(window.location.search).get("next");
+  return next && next.startsWith("/") && !next.startsWith("//") ? next : "/";
+}
+
 export default function MfaChallengePage() {
   const router = useRouter();
   const [mode, setMode] = useState<Mode>("totp");
@@ -41,6 +48,7 @@ export default function MfaChallengePage() {
   const [pending, setPending] = useState(false);
   const [preparing, setPreparing] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [usedBackup, setUsedBackup] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -88,7 +96,7 @@ export default function MfaChallengePage() {
       setError(result.message);
       return;
     }
-    router.push("/");
+    router.push(nextPath());
   }
 
   async function handleBackupSubmit(e: React.FormEvent) {
@@ -101,7 +109,7 @@ export default function MfaChallengePage() {
       setError(result.message);
       return;
     }
-    router.push("/");
+    setUsedBackup(true);
   }
 
   return (
@@ -115,7 +123,21 @@ export default function MfaChallengePage() {
             <span className="auth-card__wordmark">StrataCouncil.ca</span>
         </Link>
 
-        {mode === "totp" && (
+        {usedBackup && (
+          <>
+            <h1>You&rsquo;re signed in</h1>
+            <p>
+              That backup code has been used, and your authenticator app has been removed from your account, along
+              with your other backup codes. You can set up two-step verification again at any time in Account
+              Settings.
+            </p>
+            <button type="button" className="button button-primary" onClick={() => router.push(nextPath())} data-testid="mfa-challenge-continue">
+              Continue
+            </button>
+          </>
+        )}
+
+        {!usedBackup && mode === "totp" && (
           <>
             <h1>Enter your code</h1>
             <p>
@@ -184,7 +206,7 @@ export default function MfaChallengePage() {
           </>
         )}
 
-        {mode === "backup" && (
+        {!usedBackup && mode === "backup" && (
           <>
             <h1>Use a backup code</h1>
             <p>Enter one of the backup codes you saved when you set up 2FA.</p>
@@ -236,6 +258,14 @@ export default function MfaChallengePage() {
               </button>
             </div>
           </>
+        )}
+
+        {!usedBackup && (
+          <form action={signOut} className="auth-card__footer">
+            <button type="submit" className="link-button" data-testid="mfa-challenge-sign-out">
+              Sign out
+            </button>
+          </form>
         )}
       </div>
     </div>

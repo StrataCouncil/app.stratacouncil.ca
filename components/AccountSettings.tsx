@@ -251,8 +251,8 @@ export function AccountSettings({ profile, emails }: { profile: CurrentProfile; 
             <strong>Two-factor authentication</strong>
             <p className="card__meta" style={{ marginTop: "0.2rem" }}>
               {profile.twoFactorEnabled
-                ? "Enabled — verified TOTP factor on file."
-                : "Not enabled yet. Enforcement is currently off platform-wide (doc01 §7 item 28), but you can still enroll."}
+                ? "On. You enter a code from your authenticator app when you sign in."
+                : "Optional. Adds a code from an authenticator app (such as Google Authenticator or 1Password) to your sign-in."}
             </p>
           </div>
           <span className={`pill${profile.twoFactorEnabled ? "" : " pill--locked"}`}>
