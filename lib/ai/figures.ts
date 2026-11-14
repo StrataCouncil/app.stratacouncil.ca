@@ -100,3 +100,28 @@ export function figureLines(v: string): string[] {
     .slice(0, 100)
     .map((l) => l.slice(0, 200));
 }
+
+const MONTH_RE = "(January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\\.?";
+
+/**
+ * The figures an answer states: amounts of money, percentages, dates, and
+ * counts of days, months, or years, each written so figureFound can look
+ * for it in another answer. Used to compare a new answer with the one
+ * marked Right.
+ */
+export function extractFigures(text: string): string[] {
+  const out: string[] = [];
+  const add = (f: string) => {
+    const t = f.trim();
+    if (t && !out.includes(t)) out.push(t);
+  };
+  for (const m of text.matchAll(/\$\s?\d{1,3}(?:,\d{3})+(?:\.\d+)?|\$\s?\d+(?:\.\d+)?/g)) add(m[0].replace(/\s/g, ""));
+  for (const m of text.matchAll(/\b\d+(?:\.\d+)?\s?%/g)) add(m[0].replace(/\s/g, ""));
+  for (const m of text.matchAll(/\b(\d{4})-(\d{2})-(\d{2})\b/g)) add(m[0]);
+  for (const m of text.matchAll(new RegExp(`\\b${MONTH_RE}\\s+(\\d{1,2}),?\\s+(\\d{4})\\b`, "g"))) {
+    const month = MONTHS.findIndex((x) => x.startsWith(m[1].toLowerCase().slice(0, 3))) + 1;
+    if (month > 0) add(`${m[3]}-${String(month).padStart(2, "0")}-${String(Number(m[2])).padStart(2, "0")}`);
+  }
+  for (const m of text.matchAll(/\b(\d+(?:\.\d+)?)\s+(days?|months?|years?)\b/gi)) add(`${m[1]} ${m[2].toLowerCase()}`);
+  return out;
+}

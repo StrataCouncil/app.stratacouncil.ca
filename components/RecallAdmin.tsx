@@ -5,27 +5,28 @@ import { useRouter } from "next/navigation";
 import { Modal } from "@/components/Modal";
 import {
   deleteRecallCase,
-  getKnowledgeEntries,
-  getKnowledgeSections,
   getStrataRecords,
   markRecallAnswer,
   runAnswerCheck,
-  runFindCheck,
   saveRecallCase,
-  type KnowledgeEntry,
   type StrataRecords,
 } from "@/app/admin/recall/actions";
+import { getDocumentDownloadUrl } from "@/app/strata/[corpId]/documents/actions";
+import { answerSegments } from "@/lib/ai/answer-text";
+import { KIND_LABELS, type CitedRecord } from "@/lib/ai/citations";
+import type { ReferenceComparison } from "@/lib/ai/recall";
 import { tz } from "@/lib/time-zone";
 
 /**
  * The recall check (docs/learn-decide-remember.md §7). A case is a question
- * and the answer expected, with its key figures. Check answer asks
- * Stratasphere, checks the key figures automatically, and shows what was
- * sent with it; a person marks the answer Right, Partly, or Wrong. The
- * records that hold the answer (documents, decisions, Knowledge Base
- * sections) are optional: name them to see whether they reached the AI when
- * an answer goes wrong. Checks run one case at a time from here, so a long
- * list never runs into a server time limit.
+ * a council member would ask. Ask puts it to Stratasphere exactly as a
+ * member would; the answer comes with how it got there (each record it
+ * cited, with the passage that was sent, its calculations, and what it
+ * looked at but didn't use), and a person checks it and marks it Right,
+ * Partly, or Wrong. Once an answer is marked Right, each new answer is
+ * compared with it: the same figures, from the same records. Checks run one
+ * case at a time from here, so a long list never runs into a server time
+ * limit.
  */
 
 type Verdict = "right" | "partly" | "wrong";
@@ -56,6 +57,8 @@ export interface RecallCaseView {
   note: string;
   find: Run;
   answer: Run;
+  /** The newest answer marked Right, and how the latest answer compares (null when the latest is that one). */
+  reference: { at: string; comparison: ReferenceComparison | null } | null;
 }
 
 type Corp = { id: string; name: string };
@@ -72,35 +75,17 @@ const VERDICTS: Array<{ value: Verdict; label: string; tag: string }> = [
   { value: "wrong", label: "Wrong", tag: "billing-tag--bad" },
 ];
 
-function FindStatus({ c }: { c: RecallCaseView }) {
-  const run = c.find;
-  const named = c.expectDocuments.length + c.expectDecisions.length + c.expectPhrases.length + c.expectLegislationDocuments.length + c.expectLegislationSections.length;
-  if (!named) return <span className="card__meta" data-testid="recall-find-status">Nothing named</span>;
-  if (!run) return <span className="card__meta" data-testid="recall-find-status">Not run</span>;
-  return (
-    <span className="recall__status" data-testid="recall-find-status">
-      <span className={`billing-tag ${run.passed ? "billing-tag--ok" : "billing-tag--warn"}`}>{run.passed ? "All sent" : "Missing"}</span>
-      <span className="roster-table__meta">{when(run.at)}</span>
-    </span>
-  );
-}
-
-function AnswerStatus({ run }: { run: Run }) {
-  if (!run) return <span className="card__meta" data-testid="recall-answer-status">Not run</span>;
+function AnswerStatus({ c }: { c: RecallCaseView }) {
+  const run = c.answer;
+  if (!run) return <span className="card__meta" data-testid="recall-answer-status">Not asked</span>;
   const v = VERDICTS.find((x) => x.value === run.verdict);
-  const checked = Number((run.details as { checked?: number }).checked ?? 0);
-  const figures = (run.details as { figures?: Array<{ found: boolean }>; phrases?: Array<{ found: boolean }> });
-  const stated = [...(figures.figures ?? []), ...(figures.phrases ?? [])].filter((x) => x.found).length;
+  const cmp = c.reference?.comparison;
   return (
     <span className="recall__status" data-testid="recall-answer-status">
-      {v ? (
-        <span className={`billing-tag ${v.tag}`}>{v.label}</span>
-      ) : (
-        <span className="billing-tag billing-tag--off">To mark</span>
-      )}
-      {checked > 0 && (
-        <span className={`roster-table__meta ${stated < checked ? "recall__short" : ""}`}>
-          Key figures {stated} of {checked}
+      {v ? <span className={`billing-tag ${v.tag}`}>{v.label}</span> : <span className="billing-tag billing-tag--off">To check</span>}
+      {!v && cmp && (
+        <span className={`roster-table__meta ${cmp.same ? "" : "recall__short"}`} data-testid="recall-compare">
+          {cmp.same ? "Same as the Right answer" : "Differs from the Right answer"}
         </span>
       )}
       <span className="roster-table__meta">{when(run.at)}</span>
@@ -112,13 +97,12 @@ export function RecallAdmin({
   cases,
   corporations,
   costPerQuestion,
-  knowledgeLabels,
 }: {
   cases: RecallCaseView[];
   corporations: Corp[];
   costPerQuestion: number;
-  /** Titles of the Knowledge Base entries and sections the cases name. */
-  knowledgeLabels: Record<string, string>;
+  /** Titles of Knowledge Base entries named by older cases (kept, not shown). */
+  knowledgeLabels?: Record<string, string>;
 }) {
   const router = useRouter();
   const [strata, setStrata] = useState("");
@@ -131,10 +115,8 @@ export function RecallAdmin({
 
   const shown = strata ? cases.filter((c) => c.corporationId === strata) : cases;
   const corpName = useMemo(() => new Map(corporations.map((c) => [c.id, c.name])), [corporations]);
-  const right = shown.filter((c) => c.answer?.verdict === "right").length;
-  const partly = shown.filter((c) => c.answer?.verdict === "partly").length;
-  const wrong = shown.filter((c) => c.answer?.verdict === "wrong").length;
-  const toMark = shown.filter((c) => c.answer && !c.answer.verdict).length;
+  const count = (v: Verdict) => shown.filter((c) => c.answer?.verdict === v).length;
+  const toCheck = shown.filter((c) => c.answer && !c.answer.verdict).length;
   const notRight = shown.filter((c) => c.answer?.verdict !== "right");
 
   async function loadRecords(corpId: string) {
@@ -148,34 +130,27 @@ export function RecallAdmin({
     return r;
   }
 
-  async function runAll(kind: "find" | "answer", list: RecallCaseView[]) {
+  async function ask(list: RecallCaseView[]) {
     if (!list.length) return;
-    if (kind === "answer") {
-      const estimate = list.length * costPerQuestion;
-      const ok = window.confirm(
-        `This asks Stratasphere ${plural(list.length, "question")}, at about ${usd(costPerQuestion)} each: about ${usd(estimate)} in all. Go ahead?`
-      );
-      if (!ok) return;
-    }
+    const ok = window.confirm(
+      `This asks Stratasphere ${plural(list.length, "question")}, at about ${usd(costPerQuestion)} each: about ${usd(list.length * costPerQuestion)} in all. Go ahead?`
+    );
+    if (!ok) return;
     setError(null);
-    setBusy(kind);
+    setBusy("ask");
     let spent = 0;
     let problems = 0;
     for (let i = 0; i < list.length; i++) {
-      setProgress(`${kind === "find" ? "Checking what's sent" : "Asking"}: ${i + 1} of ${list.length}${kind === "answer" && spent ? `, ${usd(spent)} so far` : ""}`);
-      const r = kind === "find" ? await runFindCheck(list[i].id) : await runAnswerCheck(list[i].id);
+      setProgress(`Asking ${i + 1} of ${list.length}${spent ? `, ${usd(spent)} so far` : ""}`);
+      const r = await runAnswerCheck(list[i].id);
       if (!r.ok) {
         problems++;
         setError(r.error);
         continue;
       }
-      if ("costUsd" in r) spent += r.costUsd;
+      spent += r.costUsd;
     }
-    setProgress(
-      kind === "find"
-        ? `Checked what's sent for ${plural(list.length, "case")}.`
-        : `Asked ${plural(list.length - problems, "question")}. Cost ${usd(spent)}. Mark each answer Right, Partly, or Wrong.`
-    );
+    setProgress(`Asked ${plural(list.length - problems, "question")}. Cost ${usd(spent)}. Open each to check it.`);
     setBusy(null);
     router.refresh();
   }
@@ -187,12 +162,6 @@ export function RecallAdmin({
     setBusy(null);
     if (!r.ok) return setError(r.error);
     router.refresh();
-  }
-
-  async function toggle(c: RecallCaseView) {
-    if (open === c.id) return setOpen(null);
-    setOpen(c.id);
-    await loadRecords(c.corporationId);
   }
 
   return (
@@ -212,31 +181,22 @@ export function RecallAdmin({
           </select>
         </div>
         <div className="recall__buttons">
-          <button type="button" className="button button-secondary" disabled={busy !== null || !shown.length} onClick={() => runAll("find", shown)} data-testid="recall-find-all">
-            Check what&rsquo;s sent ({shown.length})
-          </button>
-          <button
-            type="button"
-            className="button button-secondary"
-            disabled={busy !== null || !notRight.length}
-            onClick={() => runAll("answer", notRight)}
-            data-testid="recall-answer-not-right"
-          >
+          <button type="button" className="button button-secondary" disabled={busy !== null || !notRight.length} onClick={() => ask(notRight)} data-testid="recall-answer-not-right">
             Ask the ones not Right ({notRight.length})
           </button>
-          <button type="button" className="button button-secondary" disabled={busy !== null || !shown.length} onClick={() => runAll("answer", shown)} data-testid="recall-answer-all">
+          <button type="button" className="button button-secondary" disabled={busy !== null || !shown.length} onClick={() => ask(shown)} data-testid="recall-answer-all">
             Ask all ({shown.length})
           </button>
           <button type="button" className="button button-primary" disabled={busy !== null} onClick={() => setEditing("new")} data-testid="recall-add">
-            Add a case
+            Add a question
           </button>
         </div>
       </div>
 
       {shown.length > 0 && (
         <p className="card__meta" data-testid="recall-summary">
-          Answers: {right} Right, {partly} Partly, {wrong} Wrong{toMark ? `, ${toMark} to mark` : ""}. Asking costs about {usd(costPerQuestion)} a case (the average of
-          recent Stratasphere questions). Checking what&rsquo;s sent costs nothing.
+          {count("right")} Right, {count("partly")} Partly, {count("wrong")} Wrong{toCheck ? `, ${toCheck} to check` : ""}. Asking costs about{" "}
+          {usd(costPerQuestion)} a question (the average of recent Stratasphere questions).
         </p>
       )}
       {progress && (
@@ -253,9 +213,9 @@ export function RecallAdmin({
       {shown.length === 0 ? (
         <div className="card">
           <p className="card__meta">
-            No cases yet. A case is a question a council member would ask, with the answer you expect and its key figures. Add one for each kind of
-            question Stratasphere must get right: bylaw questions worded nothing like the bylaw, exact lot and bylaw numbers, old decisions, sums and
-            prorating, the Strata Property Act, and something that truly isn&rsquo;t on file.
+            No questions yet. Add the questions council members really ask: bylaws worded nothing like the question, exact lot and bylaw numbers, old
+            decisions, sums and prorating, the Strata Property Act, and something that truly isn&rsquo;t on file. Then ask, and check each answer
+            and where it came from.
           </p>
         </div>
       ) : (
@@ -265,7 +225,6 @@ export function RecallAdmin({
               <tr>
                 <th>Question</th>
                 <th>Answer</th>
-                <th>What&rsquo;s sent</th>
                 <th />
               </tr>
             </thead>
@@ -276,12 +235,9 @@ export function RecallAdmin({
                   c={c}
                   corpName={corpName.get(c.corporationId) ?? c.corporationId}
                   open={open === c.id}
-                  records={records[c.corporationId] ?? null}
-                  knowledgeLabels={knowledgeLabels}
                   busy={busy}
-                  onToggle={() => toggle(c)}
-                  onFind={() => runAll("find", [c])}
-                  onAnswer={() => runAll("answer", [c])}
+                  onToggle={() => setOpen(open === c.id ? null : c.id)}
+                  onAsk={() => ask([c])}
                   onEdit={async () => {
                     await loadRecords(c.corporationId);
                     setEditing(c);
@@ -301,7 +257,6 @@ export function RecallAdmin({
           corporations={corporations}
           defaultStrata={strata}
           loadRecords={loadRecords}
-          knowledgeLabels={knowledgeLabels}
           onClose={() => setEditing(null)}
           onSaved={() => {
             setEditing(null);
@@ -317,12 +272,9 @@ function RecallRow({
   c,
   corpName,
   open,
-  records,
-  knowledgeLabels,
   busy,
   onToggle,
-  onFind,
-  onAnswer,
+  onAsk,
   onEdit,
   onDelete,
   onMarked,
@@ -330,12 +282,9 @@ function RecallRow({
   c: RecallCaseView;
   corpName: string;
   open: boolean;
-  records: StrataRecords | null;
-  knowledgeLabels: Record<string, string>;
   busy: string | null;
   onToggle: () => void;
-  onFind: () => void;
-  onAnswer: () => void;
+  onAsk: () => void;
   onEdit: () => void;
   onDelete: () => void;
   onMarked: () => void;
@@ -349,23 +298,16 @@ function RecallRow({
           </button>
           <div className="roster-table__meta">
             {c.corporationId}, {corpName}
-            {c.itemId ? ", about an agenda item" : ""}
-            {c.keyFigures.length ? `. Key figures: ${c.keyFigures.join(", ")}` : ""}
+            {c.itemId ? ", asked about an agenda item" : ""}
             {c.note ? `. ${c.note}` : ""}
           </div>
         </td>
         <td>
-          <AnswerStatus run={c.answer} />
-        </td>
-        <td>
-          <FindStatus c={c} />
+          <AnswerStatus c={c} />
         </td>
         <td className="demo-links__actions">
-          <button type="button" className="button button-primary button-small" disabled={busy !== null} onClick={onAnswer} data-testid="recall-answer">
+          <button type="button" className="button button-primary button-small" disabled={busy !== null} onClick={onAsk} data-testid="recall-answer">
             Ask
-          </button>
-          <button type="button" className="button button-secondary button-small" disabled={busy !== null} onClick={onFind} data-testid="recall-find">
-            Check what&rsquo;s sent
           </button>
           <button type="button" className="button button-secondary button-small" disabled={busy !== null} onClick={onEdit}>
             Edit
@@ -377,8 +319,8 @@ function RecallRow({
       </tr>
       {open && (
         <tr className="recall__details-row">
-          <td colSpan={4}>
-            <RecallDetails c={c} records={records} knowledgeLabels={knowledgeLabels} onMarked={onMarked} />
+          <td colSpan={3}>
+            <RecallDetails c={c} onMarked={onMarked} />
           </td>
         </tr>
       )}
@@ -386,18 +328,14 @@ function RecallRow({
   );
 }
 
-type Finding = { id?: string; phrase?: string; figure?: string; kind?: string; found: boolean; where?: string };
-type FindDetails = {
-  problem?: string;
-  documents?: Finding[];
-  decisions?: Finding[];
-  phrases?: Finding[];
-  knowledge?: Finding[];
-  searchFailed?: boolean;
-  contextChars?: number;
-  sizes?: Record<string, number>;
-  searchResults?: Array<{ rank: number; documentId: string | null; title: string | null; similarity: number }>;
-  legislationResults?: Array<{ rank: number; id: string | null; title: string | null; similarity: number }>;
+type AnswerDetails = {
+  answer?: string;
+  rawAnswer?: string;
+  cited?: CitedRecord[];
+  unused?: CitedRecord[];
+  calculations?: Array<{ name: string; input: unknown; result: string }>;
+  find?: { sizes?: Record<string, number>; contextChars?: number };
+  usage?: unknown;
 };
 
 const SIZE_LABELS: Array<[string, string]> = [
@@ -405,99 +343,83 @@ const SIZE_LABELS: Array<[string, string]> = [
   ["ledger", "decision ledger"],
   ["bylaws", "bylaws"],
   ["platform", "platform records"],
-  ["legislation", "legislation"],
+  ["legislation", "Knowledge Base"],
   ["precedent", "precedent"],
   ["otherForQuestion", "attachments and other records"],
   ["rules", "instructions"],
 ];
 
-function WhatWasSent({ f, docTitle, decisionTitle, knowledgeLabels }: { f: FindDetails; docTitle: (id: string) => string; decisionTitle: (id: string) => string; knowledgeLabels: Record<string, string> }) {
-  const mark = (x: Finding) => (x.found ? "Sent" : "Not sent");
-  const named = [...(f.documents ?? []), ...(f.decisions ?? []), ...(f.phrases ?? []), ...(f.knowledge ?? [])];
+/** The answer, with a numbered reference after each fact pointing to the record below that backs it. */
+function NumberedAnswer({ a }: { a: AnswerDetails }) {
+  const cited = a.cited ?? [];
+  if (!a.rawAnswer || !cited.length) return <blockquote className="recall__answer" data-testid="recall-answer-text">{a.answer}</blockquote>;
+  const number = new Map(cited.map((r, i) => [r.tag, i + 1]));
+  const segments = answerSegments(a.rawAnswer, new Set(number.keys()));
   return (
-    <>
-      {f.searchFailed && <p className="form-alert">The search failed, so only the bylaws, ledger, and platform records were sent.</p>}
-      {named.length > 0 && (
-        <ul className="recall__list">
-          {(f.documents ?? []).map((d) => (
-            <li key={`d${d.id}`} data-found={d.found}>
-              <strong>{mark(d)}</strong> {docTitle(d.id!)} <span className="card__meta">({d.where})</span>
-            </li>
-          ))}
-          {(f.decisions ?? []).map((d) => (
-            <li key={`x${d.id}`} data-found={d.found}>
-              <strong>{mark(d)}</strong> {decisionTitle(d.id!)}
-            </li>
-          ))}
-          {(f.knowledge ?? []).map((k) => (
-            <li key={`k${k.id}`} data-found={k.found}>
-              <strong>{mark(k)}</strong> {knowledgeLabels[k.id!] ?? (k.kind === "entry" ? "A Knowledge Base entry" : "A Knowledge Base section")}
-              {k.kind === "entry" ? " (any section)" : ""} <span className="card__meta">({k.where})</span>
-            </li>
-          ))}
-          {(f.phrases ?? []).map((p) => (
-            <li key={`p${p.phrase}`} data-found={p.found}>
-              <strong>{mark(p)}</strong> &ldquo;{p.phrase}&rdquo;
-            </li>
-          ))}
-        </ul>
+    <blockquote className="recall__answer" data-testid="recall-answer-text">
+      {segments.map((s, i) =>
+        "text" in s ? (
+          <span key={i}>{s.text}</span>
+        ) : (
+          <sup key={i} className="recall__ref">
+            {s.tags
+              .map((t) => number.get(t))
+              .filter(Boolean)
+              .map((n, j) => (
+                <a key={j} href={`#src-${n}`}>
+                  {j ? "," : ""}
+                  {n}
+                </a>
+              ))}
+          </sup>
+        )
       )}
-      {f.sizes ? (
-        <p className="card__meta" data-testid="recall-sizes">
-          {kChars(f.sizes.total)} characters sent:{" "}
-          {SIZE_LABELS.filter(([k]) => (f.sizes?.[k] ?? 0) > 0)
-            .map(([k, label]) => `${label} ${kChars(f.sizes?.[k])}`)
-            .join(", ")}
-          .{(f.sizes.savedByJoining ?? 0) > 0 ? ` ${kChars(f.sizes.savedByJoining)} not repeated (overlapping passages joined, identical copies once).` : ""}
-        </p>
-      ) : (
-        <p className="card__meta">{kChars(f.contextChars)} characters sent.</p>
-      )}
-      <p className="card__meta">
-        The strata&rsquo;s own passages:{" "}
-        {(f.searchResults ?? []).length
-          ? (f.searchResults ?? []).map((r) => `${r.rank}. ${r.documentId ? docTitle(r.documentId) : (r.title ?? "?")} (${r.similarity})`).join("; ")
-          : "none"}
-        .
-      </p>
-      <p className="card__meta">
-        Knowledge Base sections:{" "}
-        {(f.legislationResults ?? []).length ? (f.legislationResults ?? []).map((r) => `${r.rank}. ${r.title ?? "?"} (${r.similarity})`).join("; ") : "none"}.
-      </p>
-    </>
+    </blockquote>
   );
 }
 
-function RecallDetails({
-  c,
-  records,
-  knowledgeLabels,
-  onMarked,
-}: {
-  c: RecallCaseView;
-  records: StrataRecords | null;
-  knowledgeLabels: Record<string, string>;
-  onMarked: () => void;
-}) {
-  const docTitle = (id: string) => records?.documents.find((d) => d.id === id)?.title ?? "A document no longer on file";
-  const decisionTitle = (id: string) => {
-    const d = records?.decisions.find((x) => x.id === id);
-    return d ? `${d.decidedAt}: ${d.title}` : "A decision no longer in the ledger";
-  };
-  const a = c.answer?.details as
-    | {
-        answer?: string;
-        figures?: Finding[];
-        phrases?: Finding[];
-        cited?: Finding[];
-        calculations?: Array<{ name: string; input: unknown; result: string }>;
-        find?: FindDetails;
-      }
-    | undefined;
-  const f = (a?.find ?? c.find?.details) as FindDetails | undefined;
+function SourceItem({ r, n, corpId }: { r: CitedRecord; n?: number; corpId: string }) {
+  const [problem, setProblem] = useState<string | null>(null);
+  async function openDoc() {
+    if (!r.documentId) return;
+    setProblem(null);
+    const res = await getDocumentDownloadUrl(corpId, r.documentId, { view: true });
+    if (!res.ok) return setProblem(res.error);
+    window.open(res.url, "_blank", "noopener");
+  }
+  return (
+    <li id={n ? `src-${n}` : undefined} className="recall__source">
+      <div>
+        {n ? <strong>{n}. </strong> : null}
+        <span className="card__meta">{KIND_LABELS[r.kind] ?? r.kind}: </span>
+        {r.kind === "legislation" && r.sourceAct && r.sourceAct !== r.title ? `${r.sourceAct}, ${r.title}` : r.title}
+        {r.documentId && (
+          <>
+            {" "}
+            <button type="button" className="link-button" onClick={openDoc}>
+              Open
+            </button>
+          </>
+        )}
+      </div>
+      {r.excerpt && (
+        <details>
+          <summary>The text that was sent</summary>
+          <pre className="recall__excerpt">{r.excerpt}</pre>
+        </details>
+      )}
+      {problem && <p className="form-alert">{problem}</p>}
+    </li>
+  );
+}
+
+function RecallDetails({ c, onMarked }: { c: RecallCaseView; onMarked: () => void }) {
+  const a = c.answer?.details as AnswerDetails | undefined;
   const [note, setNote] = useState(c.answer?.verdictNote ?? "");
   const [saving, setSaving] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  const cmp = c.reference?.comparison;
+  const sizes = a?.find?.sizes;
 
   async function mark(verdict: Verdict | null) {
     if (!c.answer) return;
@@ -509,199 +431,108 @@ function RecallDetails({
     onMarked();
   }
 
+  if (!a) return <p className="card__meta recall__details">Not asked yet. Press Ask to put this question to Stratasphere.</p>;
+
   return (
     <div className="recall__details" data-testid="recall-details">
       <div>
-        <h3>Expected</h3>
-        {c.expectedAnswer ? <blockquote className="recall__answer">{c.expectedAnswer}</blockquote> : <p className="card__meta">No answer written; key figures only.</p>}
         <h3>Stratasphere&rsquo;s answer</h3>
-        {!a ? (
-          <p className="card__meta">Not asked yet.</p>
-        ) : (
+        <NumberedAnswer a={a} />
+        {cmp && !cmp.same && (
+          <div className="recall__compare" data-testid="recall-compare-details">
+            <strong>Compared with the answer marked Right ({when(c.reference!.at)}):</strong>
+            <ul className="recall__list">
+              {cmp.figuresMissing.map((f) => (
+                <li key={`m${f}`} data-found="false">
+                  <strong>No longer states</strong> {f}
+                </li>
+              ))}
+              {cmp.figuresNew.map((f) => (
+                <li key={`n${f}`}>
+                  <strong>Now states</strong> {f}
+                </li>
+              ))}
+              {cmp.sourcesDropped.map((s) => (
+                <li key={s.key} data-found="false">
+                  <strong>No longer uses</strong> {s.title}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {cmp?.same && <p className="card__meta">Same figures, from the same records, as the answer marked Right ({when(c.reference!.at)}).</p>}
+        {c.expectedAnswer && (
           <>
-            <blockquote className="recall__answer" data-testid="recall-answer-text">
-              {a.answer}
-            </blockquote>
-            {(a.figures?.length || a.phrases?.length) ? (
-              <ul className="recall__list">
-                {(a.figures ?? []).map((x) => (
-                  <li key={`af${x.figure}`} data-found={x.found}>
-                    <strong>{x.found ? "Stated" : "Not stated"}</strong> {x.figure}
-                  </li>
-                ))}
-                {(a.phrases ?? []).map((p) => (
-                  <li key={`ap${p.phrase}`} data-found={p.found}>
-                    <strong>{p.found ? "Stated" : "Not stated"}</strong> &ldquo;{p.phrase}&rdquo;
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-            {(a.calculations ?? []).length > 0 && (
-              <details className="recall__calc">
-                <summary>Calculations ({(a.calculations ?? []).length})</summary>
-                <pre>{(a.calculations ?? []).map((x) => x.result).join("\n\n")}</pre>
-              </details>
-            )}
-            {(a.cited ?? []).length > 0 && (
-              <p className="card__meta">
-                Cited:{" "}
-                {(a.cited ?? []).map((d) => `${docTitle(d.id!)} ${d.found ? "(cited)" : "(not cited)"}`).join("; ")}.
-              </p>
-            )}
-            <p className="card__meta">Cost {usd(c.answer?.costUsd ?? 0)}.</p>
-
-            <div className="recall__verdict" data-testid="recall-verdict">
-              <label htmlFor={`note-${c.id}`}>What was right or wrong (optional)</label>
-              <textarea id={`note-${c.id}`} rows={2} maxLength={4000} value={note} onChange={(e) => setNote(e.target.value)} />
-              <div className="recall__buttons">
-                {VERDICTS.map((v) => (
-                  <button
-                    key={v.value}
-                    type="button"
-                    className={`button button-small ${c.answer?.verdict === v.value ? "button-primary" : "button-secondary"}`}
-                    disabled={saving}
-                    onClick={() => mark(v.value)}
-                    data-testid={`recall-mark-${v.value}`}
-                  >
-                    {v.label}
-                  </button>
-                ))}
-                {c.answer?.verdict && (
-                  <button type="button" className="link-button" disabled={saving} onClick={() => mark(null)}>
-                    Clear
-                  </button>
-                )}
-              </div>
-              {problem && <p className="form-alert">{problem}</p>}
-            </div>
+            <h3>What you expected</h3>
+            <blockquote className="recall__answer">{c.expectedAnswer}</blockquote>
           </>
         )}
+        <p className="card__meta">Cost {usd(c.answer?.costUsd ?? 0)}.</p>
+
+        <div className="recall__verdict" data-testid="recall-verdict">
+          <label htmlFor={`note-${c.id}`}>What was right or wrong, and anything it should have used (optional)</label>
+          <textarea id={`note-${c.id}`} rows={3} maxLength={4000} value={note} onChange={(e) => setNote(e.target.value)} />
+          <div className="recall__buttons">
+            {VERDICTS.map((v) => (
+              <button
+                key={v.value}
+                type="button"
+                className={`button button-small ${c.answer?.verdict === v.value ? "button-primary" : "button-secondary"}`}
+                disabled={saving}
+                onClick={() => mark(v.value)}
+                data-testid={`recall-mark-${v.value}`}
+              >
+                {v.label}
+              </button>
+            ))}
+            {c.answer?.verdict && (
+              <button type="button" className="link-button" disabled={saving} onClick={() => mark(null)}>
+                Clear
+              </button>
+            )}
+          </div>
+          {problem && <p className="form-alert">{problem}</p>}
+        </div>
       </div>
+
       <div>
-        <h3>What was sent{a?.find ? " with this answer" : ""}</h3>
-        {!f ? (
-          <p className="card__meta">Not checked yet.</p>
-        ) : f.problem ? (
-          <p className="form-alert">{f.problem}</p>
+        <h3>How it got the answer</h3>
+        {(a.cited ?? []).length ? (
+          <ol className="recall__sources" data-testid="recall-cited">
+            {(a.cited ?? []).map((r, i) => (
+              <SourceItem key={r.tag} r={r} n={i + 1} corpId={c.corporationId} />
+            ))}
+          </ol>
         ) : (
-          <WhatWasSent f={f} docTitle={docTitle} decisionTitle={decisionTitle} knowledgeLabels={knowledgeLabels} />
+          <p className="card__meta">This answer didn&rsquo;t cite any record.</p>
+        )}
+        {(a.calculations ?? []).length > 0 && (
+          <details className="recall__calc" open>
+            <summary>Calculations ({(a.calculations ?? []).length})</summary>
+            <pre>{(a.calculations ?? []).map((x) => x.result).join("\n\n")}</pre>
+          </details>
+        )}
+        {(a.unused ?? []).length > 0 && (
+          <details className="recall__unused" data-testid="recall-unused">
+            <summary>Looked at but didn&rsquo;t use ({(a.unused ?? []).length})</summary>
+            <ul className="recall__sources">
+              {(a.unused ?? []).map((r) => (
+                <SourceItem key={r.tag} r={r} corpId={c.corporationId} />
+              ))}
+            </ul>
+          </details>
+        )}
+        {sizes && (
+          <p className="card__meta" data-testid="recall-sizes">
+            {kChars(sizes.total)} characters sent:{" "}
+            {SIZE_LABELS.filter(([k]) => (sizes[k] ?? 0) > 0)
+              .map(([k, label]) => `${label} ${kChars(sizes[k])}`)
+              .join(", ")}
+            .
+          </p>
         )}
       </div>
     </div>
-  );
-}
-
-function KnowledgePicker({
-  entries,
-  docs,
-  sections,
-  labels,
-  onDocs,
-  onSections,
-}: {
-  entries: KnowledgeEntry[] | null;
-  docs: Set<string>;
-  sections: Set<string>;
-  labels: Record<string, string>;
-  onDocs: (s: Set<string>) => void;
-  onSections: (s: Set<string>) => void;
-}) {
-  const [entry, setEntry] = useState("");
-  const [list, setList] = useState<Array<{ id: string; title: string }> | null>(null);
-  const [filter, setFilter] = useState("");
-  const [known, setKnown] = useState<Record<string, string>>(labels);
-  const [problem, setProblem] = useState<string | null>(null);
-
-  useEffect(() => {
-    let gone = false;
-    setList(null);
-    setFilter("");
-    if (!entry) return;
-    void getKnowledgeSections(entry).then((r) => {
-      if (gone) return;
-      if (!r.ok) return setProblem(r.error);
-      const title = entries?.find((e) => e.id === entry)?.title ?? "";
-      setKnown((k) => ({ ...k, ...Object.fromEntries(r.sections.map((s) => [s.id, `${title}, ${s.title}`])) }));
-      setList(r.sections);
-    });
-    return () => {
-      gone = true;
-    };
-  }, [entry, entries]);
-
-  const flip = (set: Set<string>, id: string, update: (s: Set<string>) => void) => {
-    const next = new Set(set);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
-    update(next);
-  };
-  const entryTitle = (id: string) => entries?.find((e) => e.id === id)?.title ?? labels[id] ?? "An entry";
-  const q = filter.trim().toLowerCase();
-
-  return (
-    <fieldset className="recall-form__pick" data-testid="rc-knowledge">
-      <legend>
-        Knowledge Base: Acts, regulations, and guidance that hold the answer ({docs.size + sections.size} chosen)
-      </legend>
-      {(docs.size > 0 || sections.size > 0) && (
-        <div className="recall__chips">
-          {[...docs].map((id) => (
-            <button key={id} type="button" className="recall__chip" onClick={() => flip(docs, id, onDocs)} title="Remove">
-              {entryTitle(id)} (any section) &times;
-            </button>
-          ))}
-          {[...sections].map((id) => (
-            <button key={id} type="button" className="recall__chip" onClick={() => flip(sections, id, onSections)} title="Remove">
-              {known[id] ?? "A section"} &times;
-            </button>
-          ))}
-        </div>
-      )}
-      {entries === null ? (
-        <p className="card__meta">Loading the Knowledge Base&hellip;</p>
-      ) : entries.length === 0 ? (
-        <p className="card__meta">Nothing in the Knowledge Base is indexed yet.</p>
-      ) : (
-        <>
-          <select value={entry} onChange={(e) => setEntry(e.target.value)} aria-label="Knowledge Base entry" data-testid="rc-knowledge-entry">
-            <option value="">Choose an entry</option>
-            {entries.map((e) => (
-              <option key={e.id} value={e.id}>
-                {e.title}
-              </option>
-            ))}
-          </select>
-          {entry && (
-            <div className="recall-form__options">
-              <label className="field--checkbox">
-                <input type="checkbox" checked={docs.has(entry)} onChange={() => flip(docs, entry, onDocs)} />
-                Any section of this entry
-              </label>
-              {list === null ? (
-                <p className="card__meta">Loading its sections&hellip;</p>
-              ) : (
-                <>
-                  <input placeholder="Filter sections, e.g. 45 or quorum" value={filter} onChange={(e) => setFilter(e.target.value)} aria-label="Filter sections" />
-                  {list
-                    .filter((s) => sections.has(s.id) || !q || s.title.toLowerCase().includes(q))
-                    .slice(0, 300)
-                    .map((s) => (
-                      <label key={s.id} className="field--checkbox">
-                        <input type="checkbox" checked={sections.has(s.id)} onChange={() => flip(sections, s.id, onSections)} />
-                        {s.title}
-                      </label>
-                    ))}
-                  {list.filter((s) => !q || s.title.toLowerCase().includes(q)).length > 300 && (
-                    <p className="card__meta">Showing the first 300: filter to find the rest.</p>
-                  )}
-                </>
-              )}
-            </div>
-          )}
-        </>
-      )}
-      {problem && <p className="form-alert">{problem}</p>}
-    </fieldset>
   );
 }
 
@@ -710,7 +541,6 @@ function CaseForm({
   corporations,
   defaultStrata,
   loadRecords,
-  knowledgeLabels,
   onClose,
   onSaved,
 }: {
@@ -718,28 +548,17 @@ function CaseForm({
   corporations: Corp[];
   defaultStrata: string;
   loadRecords: (corpId: string) => Promise<StrataRecords | null>;
-  knowledgeLabels: Record<string, string>;
   onClose: () => void;
   onSaved: () => void;
 }) {
   const [corpId, setCorpId] = useState(initial?.corporationId ?? defaultStrata);
   // Undefined while loading, null if it couldn't load.
   const [records, setRecords] = useState<StrataRecords | null | undefined>(undefined);
-  const [entries, setEntries] = useState<KnowledgeEntry[] | null>(null);
   const [question, setQuestion] = useState(initial?.question ?? "");
   const [expectedAnswer, setExpectedAnswer] = useState(initial?.expectedAnswer ?? "");
-  const [keyFigures, setKeyFigures] = useState((initial?.keyFigures ?? []).join("\n"));
   const [meetingId, setMeetingId] = useState(initial?.meetingId ?? "");
   const [itemId, setItemId] = useState(initial?.itemId ?? "");
-  const [docs, setDocs] = useState<Set<string>>(new Set(initial?.expectDocuments ?? []));
-  const [decisions, setDecisions] = useState<Set<string>>(new Set(initial?.expectDecisions ?? []));
-  const [lawDocs, setLawDocs] = useState<Set<string>>(new Set(initial?.expectLegislationDocuments ?? []));
-  const [lawSections, setLawSections] = useState<Set<string>>(new Set(initial?.expectLegislationSections ?? []));
-  const [phrases, setPhrases] = useState((initial?.expectPhrases ?? []).join("\n"));
-  const [answerPhrases, setAnswerPhrases] = useState((initial?.answerPhrases ?? []).join("\n"));
   const [note, setNote] = useState(initial?.note ?? "");
-  const [docFilter, setDocFilter] = useState("");
-  const [decisionFilter, setDecisionFilter] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -754,18 +573,8 @@ function CaseForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [corpId]);
 
-  useEffect(() => {
-    void getKnowledgeEntries().then((r) => setEntries(r.ok ? r.entries : []));
-  }, []);
-
   const meeting = records?.meetings.find((m) => m.id === meetingId);
-  const match = (q: string, s: string) => !q.trim() || s.toLowerCase().includes(q.trim().toLowerCase());
-  const toggle = (set: Set<string>, id: string, update: (s: Set<string>) => void) => {
-    const next = new Set(set);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
-    update(next);
-  };
+  const sameStrata = initial?.corporationId === corpId;
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
@@ -778,13 +587,14 @@ function CaseForm({
       meetingId: meetingId || null,
       itemId: itemId || null,
       expectedAnswer,
-      keyFigures,
-      expectDocuments: [...docs],
-      expectDecisions: [...decisions],
-      expectLegislationDocuments: [...lawDocs],
-      expectLegislationSections: [...lawSections],
-      expectPhrases: phrases,
-      answerPhrases,
+      // Records named by older cases are kept as they were (for the same strata).
+      keyFigures: (initial?.keyFigures ?? []).join("\n"),
+      expectDocuments: sameStrata ? (initial?.expectDocuments ?? []) : [],
+      expectDecisions: sameStrata ? (initial?.expectDecisions ?? []) : [],
+      expectLegislationDocuments: initial?.expectLegislationDocuments ?? [],
+      expectLegislationSections: initial?.expectLegislationSections ?? [],
+      expectPhrases: (initial?.expectPhrases ?? []).join("\n"),
+      answerPhrases: (initial?.answerPhrases ?? []).join("\n"),
       note,
     });
     setSaving(false);
@@ -793,7 +603,7 @@ function CaseForm({
   }
 
   return (
-    <Modal title={initial ? "Edit case" : "Add a case"} onClose={onClose} wide closeOnBackdrop={false} testId="recall-form">
+    <Modal title={initial ? "Edit question" : "Add a question"} onClose={onClose} wide closeOnBackdrop={false} testId="recall-form">
       <form className="recall-form" onSubmit={save}>
         <div className="field">
           <label htmlFor="rc-strata">Strata</label>
@@ -804,8 +614,6 @@ function CaseForm({
               setCorpId(e.target.value);
               setMeetingId("");
               setItemId("");
-              setDocs(new Set());
-              setDecisions(new Set());
             }}
             required
             data-testid="rc-strata"
@@ -818,138 +626,63 @@ function CaseForm({
             ))}
           </select>
           {records && !records.subscribed && (
-            <p className="form-alert">This strata isn&rsquo;t subscribed, so Stratasphere can&rsquo;t answer for it. Its checks will fail until it is (complimentary works).</p>
+            <p className="form-alert">This strata isn&rsquo;t subscribed, so Stratasphere can&rsquo;t answer for it until it is (complimentary works).</p>
           )}
         </div>
         <div className="field">
           <label htmlFor="rc-question">Question, as a council member would ask it</label>
-          <textarea id="rc-question" rows={2} maxLength={4000} value={question} onChange={(e) => setQuestion(e.target.value)} required data-testid="rc-question" />
+          <textarea id="rc-question" rows={3} maxLength={4000} value={question} onChange={(e) => setQuestion(e.target.value)} required data-testid="rc-question" />
         </div>
-        <div className="recall-form__pair">
-          <div className="field">
-            <label htmlFor="rc-expected">The answer you expect</label>
-            <textarea
-              id="rc-expected"
-              rows={5}
-              maxLength={8000}
-              value={expectedAnswer}
-              onChange={(e) => setExpectedAnswer(e.target.value)}
-              placeholder="e.g. $23,333.33: the new policy's premium for September to January, 5 of its 18 months. The previous policy's premium for February to July is on the financial statements."
-              data-testid="rc-expected"
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="rc-figures">Key figures, one per line</label>
-            <textarea
-              id="rc-figures"
-              rows={5}
-              value={keyFigures}
-              onChange={(e) => setKeyFigures(e.target.value)}
-              placeholder={"$23,333.33\n5 months\n2027-01-31"}
-              data-testid="rc-figures"
-            />
-            <p className="card__meta">Checked in each answer automatically, by value: $23,333.33 matches 23333.33; 2027-01-31 matches January 31, 2027.</p>
-          </div>
-        </div>
-
-        <p className="card__meta recall-form__divider">
-          Optional, for finding out why an answer went wrong: the records that hold the answer. Each run shows whether they reached the AI.
-        </p>
-        <KnowledgePicker entries={entries} docs={lawDocs} sections={lawSections} labels={knowledgeLabels} onDocs={setLawDocs} onSections={setLawSections} />
-
-        {corpId && records === undefined && <p className="card__meta">Loading this strata&rsquo;s records&hellip;</p>}
-        {corpId && records === null && <p className="form-alert">This strata&rsquo;s records couldn&rsquo;t be loaded. Close this and try again.</p>}
-        {records && (
-          <>
-            <div className="recall-form__pair">
+        {records && records.meetings.length > 0 && (
+          <div className="recall-form__pair">
+            <div className="field">
+              <label htmlFor="rc-meeting">Asked during a meeting (optional)</label>
+              <select
+                id="rc-meeting"
+                value={meetingId}
+                onChange={(e) => {
+                  setMeetingId(e.target.value);
+                  setItemId("");
+                }}
+              >
+                <option value="">No: the Stratasphere window</option>
+                {records.meetings.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {meeting && (
               <div className="field">
-                <label htmlFor="rc-meeting">Asked during a meeting</label>
-                <select
-                  id="rc-meeting"
-                  value={meetingId}
-                  onChange={(e) => {
-                    setMeetingId(e.target.value);
-                    setItemId("");
-                  }}
-                >
-                  <option value="">No: the Stratasphere window</option>
-                  {records.meetings.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.label}
+                <label htmlFor="rc-item">About this agenda item</label>
+                <select id="rc-item" value={itemId} onChange={(e) => setItemId(e.target.value)} required>
+                  <option value="">Choose an item</option>
+                  {meeting.items.map((i) => (
+                    <option key={i.id} value={i.id}>
+                      {i.label}
                     </option>
                   ))}
                 </select>
               </div>
-              {meeting && (
-                <div className="field">
-                  <label htmlFor="rc-item">About this agenda item</label>
-                  <select id="rc-item" value={itemId} onChange={(e) => setItemId(e.target.value)} required>
-                    <option value="">Choose an item</option>
-                    {meeting.items.map((i) => (
-                      <option key={i.id} value={i.id}>
-                        {i.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-            </div>
-
-            <fieldset className="recall-form__pick">
-              <legend>The strata&rsquo;s documents ({docs.size} chosen)</legend>
-              <input placeholder="Filter documents" value={docFilter} onChange={(e) => setDocFilter(e.target.value)} aria-label="Filter documents" />
-              <div className="recall-form__options" data-testid="rc-documents">
-                {records.documents
-                  .filter((d) => docs.has(d.id) || match(docFilter, d.title))
-                  .map((d) => (
-                    <label key={d.id} className="field--checkbox">
-                      <input type="checkbox" checked={docs.has(d.id)} onChange={() => toggle(docs, d.id, setDocs)} />
-                      {d.title}{" "}
-                      <span className="card__meta">
-                        ({d.uploadedAt}
-                        {d.status !== "indexed" ? `, ${d.status.replace("_", " ")}` : ""}
-                        {d.copyOf ? `, identical copy of "${d.copyOf}"` : ""})
-                      </span>
-                    </label>
-                  ))}
-                {records.documents.length === 0 && <p className="card__meta">No documents on file.</p>}
-              </div>
-            </fieldset>
-
-            <fieldset className="recall-form__pick">
-              <legend>Ledger decisions ({decisions.size} chosen)</legend>
-              <input placeholder="Filter decisions" value={decisionFilter} onChange={(e) => setDecisionFilter(e.target.value)} aria-label="Filter decisions" />
-              <div className="recall-form__options">
-                {records.decisions
-                  .filter((d) => decisions.has(d.id) || match(decisionFilter, `${d.decidedAt} ${d.title}`))
-                  .map((d) => (
-                    <label key={d.id} className="field--checkbox">
-                      <input type="checkbox" checked={decisions.has(d.id)} onChange={() => toggle(decisions, d.id, setDecisions)} />
-                      {d.decidedAt}: {d.title}
-                    </label>
-                  ))}
-                {records.decisions.length === 0 && <p className="card__meta">No decisions in the ledger.</p>}
-              </div>
-            </fieldset>
-          </>
-        )}
-        <details className="recall-form__more" open={Boolean(phrases || answerPhrases)}>
-          <summary>Exact wording (optional)</summary>
-          <div className="recall-form__pair">
-            <div className="field">
-              <label htmlFor="rc-phrases">Wording that must reach the AI, one per line</label>
-              <textarea id="rc-phrases" rows={3} value={phrases} onChange={(e) => setPhrases(e.target.value)} placeholder={"e.g. no more than two pets\nbylaw 3.1"} data-testid="rc-phrases" />
-              <p className="card__meta">Short wording from the record itself. Avoid names: they&rsquo;re replaced before anything is sent.</p>
-            </div>
-            <div className="field">
-              <label htmlFor="rc-answer">Wording the answer must use, one per line</label>
-              <textarea id="rc-answer" rows={3} value={answerPhrases} onChange={(e) => setAnswerPhrases(e.target.value)} placeholder="e.g. two pets" />
-            </div>
+            )}
           </div>
-        </details>
+        )}
+        <div className="field">
+          <label htmlFor="rc-expected">The answer you expect (optional)</label>
+          <textarea
+            id="rc-expected"
+            rows={3}
+            maxLength={8000}
+            value={expectedAnswer}
+            onChange={(e) => setExpectedAnswer(e.target.value)}
+            placeholder="Shown beside Stratasphere's answer, for comparing. Leave it blank to judge the answer as it comes."
+            data-testid="rc-expected"
+          />
+        </div>
         <div className="field">
           <label htmlFor="rc-note">Note (optional)</label>
-          <input id="rc-note" maxLength={1000} value={note} onChange={(e) => setNote(e.target.value)} placeholder="What this case tests, e.g. prorating across two policies" />
+          <input id="rc-note" maxLength={1000} value={note} onChange={(e) => setNote(e.target.value)} placeholder="What this question tests, e.g. prorating across two policies" />
         </div>
         {error && (
           <p className="form-alert" role="alert">
@@ -961,7 +694,7 @@ function CaseForm({
             Cancel
           </button>
           <button type="submit" className="button button-primary" disabled={saving} data-testid="rc-save">
-            {saving ? "Saving…" : "Save case"}
+            {saving ? "Saving…" : "Save question"}
           </button>
         </div>
       </form>

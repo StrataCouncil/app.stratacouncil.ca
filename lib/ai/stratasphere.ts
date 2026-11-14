@@ -9,6 +9,8 @@ import { exactStrings, lineScore, mergeHits, searchWords } from "@/lib/kb/keywor
 import { buildStrataProfile, type ProfileMeeting } from "@/lib/ai/strata-profile";
 import { arrangePassages, passagesText } from "@/lib/kb/passages";
 import { ledgerLine } from "@/lib/ai/ledger-line";
+import { sourcesFromCitations, untagContext, type CitedRecord } from "@/lib/ai/citations";
+import { answerCleaner, citedTags, cleanAnswer } from "@/lib/ai/answer-text";
 import { listPublishedLibrary } from "@/lib/data/library";
 import { knowledgeResourceKindLabels } from "@/lib/library/catalogue";
 import { meetingFormatLabels, meetingTypeLabels, type MeetingFormat, type MeetingType } from "@/lib/meetings/agenda";
@@ -49,7 +51,7 @@ LEGISLATION IS PERMITTED, ADVICE IS NOT: May explain what legislation says, but 
 
 NO OPINIONS: Report what the sources say. Never offer opinions, judgments, predictions, or recommendations on what anyone should do, and never speculate about why something happened.
 
-CITE YOUR SOURCE: Every factual claim names its source — document title, decision date and meeting type, agenda item title, or legislation section. If a source can't be named, the claim can't be made.
+CITE YOUR SOURCE: Every fact and figure is followed by the tag of each record it comes from, in square brackets: [D2], or [L1, E14] for more than one. Every record sent is tagged: D a document's passages, B the bylaws, A an agenda item's attachment, F the record the person is looking at, E and W decisions in the ledger, M decisions made so far in this meeting, L a Knowledge Base section (Acts, regulations, guidance), P precedent from other stratas, R the platform records. Cite only the records you actually used, and only tags given with this question or with the standing records; a record shown with an earlier question has no tag now, so name it in words. The tags are taken out before the person reads the answer and become its list of sources, so the text must read well without them. Still name an Act's section, a document, or a decision in words where the reader needs it (for example "Strata Property Regulation section 6.21(4)"). If a source can't be cited, the claim can't be made.
 
 IF YOU DON'T KNOW, SAY SO PRECISELY: If nothing in the context answers the question, say what you looked through and that you don't see it there, for example: "I don't see this in {CORP}'s bylaws, decision ledger, documents and minutes on file, or BC strata legislation." Never say "there is no record" or that something never happened or doesn't exist: say only that you don't see it in what you looked through. If the DOCUMENTS ON FILE list marks a document as not read or not readable and it could hold the answer (judge by its title and folder), name it: "There's a document called [title] on file that I couldn't read." Then give one concrete direction: the specific document type to check, or the strata manager. If only cross-platform precedent is relevant, answer from it and label it unmistakably as precedent from other strata corporations, never as this corporation's own data. For anything out of scope, say: "I can only answer questions about {CORP}'s own records and BC strata legislation. I'm not able to [look that up online / advise on what you should do legally / access another corporation's records]." Cross-platform precedent is not "another corporation's records": it is anonymized and included by design.
 
@@ -67,7 +69,7 @@ const PERMITTED = `PERMITTED KNOWLEDGE: Only what is in the context blocks below
 
 PIPA: Refer to owners who are people by strata lot number only (e.g. SL061), never by name. Text in the context has already had names and personal details replaced with lot numbers or placeholders such as [name redacted]; never try to guess what a placeholder stands for. Owners are never named on the roster, whether people or companies: an "Owner A" or "Company A" code marks the lots one owner holds. Use the codes to count and group lots, and never guess who an owner is. If asked who owns a lot, say the platform doesn't share owners' names and point to the roster in the app.
 
-FORMAT: Plain prose only — no markdown, no **, no #, no bullet dashes, no emoji, no preamble, no sign-off, no unsolicited recommendations. Numbered lists as "1. 2. 3." only when listing is genuinely needed.`;
+FORMAT: Plain text, as a careful person would write it. The first paragraph is the answer itself. Then short paragraphs, separated by a blank line. No markdown or other markup of any kind: no asterisks, no pound signs, no headings, no bold, no bullet dashes. No emoji. No preamble, no sign-off, no unsolicited recommendations. When working or a list is genuinely needed, number the lines "1." "2." "3.", one per line.`;
 
 const MAX_CONTEXT_CHARS = 400_000;
 const MAX_ATTACHMENT_CHARS = 150_000;
@@ -107,6 +109,8 @@ type Prepared =
       maxTokens: number;
       /** Tools Claude may call while answering (the calculator). */
       tools: ClientTool[];
+      /** What each citation tag stands for (lib/ai/citations.ts). */
+      records: CitedRecord[];
       sources: StratasphereSource[];
       /** The full bylaws given as context: listed as sources only when the answer draws on them. */
       bylawSources: StratasphereSource[];
@@ -201,7 +205,8 @@ async function attachmentsBlock(supabase: SupabaseClient, corpId: string, item: 
   const read: string[] = [];
   /** Sent in full: their search passages would only repeat them. */
   const whole: string[] = [];
-  if (!ids.length) return { text: "", disclosures, read, whole };
+  const records: CitedRecord[] = [];
+  if (!ids.length) return { text: "", disclosures, read, whole, records };
   const { data } = await supabase
     .from("documents")
     .select("id, title, source_type, url, indexing_status, document_text, uploaded_at")
@@ -226,7 +231,9 @@ async function attachmentsBlock(supabase: SupabaseClient, corpId: string, item: 
         whole.push(d.id as string);
       }
       budget -= text.length;
-      parts.push(`[ATTACHMENT: ${title}, added ${String(d.uploaded_at).slice(0, 10)}]\n${text}\n[END ATTACHMENT]`);
+      const tag = `A${records.length + 1}`;
+      records.push({ tag, kind: "attachment", title: d.title || "Attachment", documentId: d.id as string, excerpt: text.slice(0, 4000) });
+      parts.push(`[${tag} ATTACHMENT: ${title}, added ${String(d.uploaded_at).slice(0, 10)}]\n${text}\n[END ATTACHMENT]`);
     } else if (d.indexing_status === "pending" || d.indexing_status === "processing") {
       disclosures.push(`The attachment "${title}" is still being processed and is not yet searchable. Say so before answering if it matters.`);
     } else if (d.source_type === "link") {
@@ -235,7 +242,7 @@ async function attachmentsBlock(supabase: SupabaseClient, corpId: string, item: 
       disclosures.push(`The attachment "${title}" couldn't be read (it may be an image or a scanned document with no text). Say so if the question is about it.`);
     }
   }
-  return { text: parts.join("\n\n"), disclosures, read, whole };
+  return { text: parts.join("\n\n"), disclosures, read, whole, records };
 }
 
 const MAX_BYLAWS_CHARS = 150_000;
@@ -266,6 +273,7 @@ async function bylawsBlock(supabase: SupabaseClient, corpId: string, ctx: StripC
   const sources: StratasphereSource[] = [];
   const disclosures: string[] = [];
   const whole: string[] = [];
+  const records: CitedRecord[] = [];
   // The same file on record twice is read once (documents.content_sha256, 0065).
   const seen = new Map<string, number>();
   for (const d of data ?? []) {
@@ -274,7 +282,7 @@ async function bylawsBlock(supabase: SupabaseClient, corpId: string, ctx: StripC
     const fingerprint = (d.content_sha256 as string | null) ?? null;
     if (fingerprint && seen.has(fingerprint)) {
       const at = seen.get(fingerprint)!;
-      parts[at] = parts[at].replace(/^\[BYLAWS: ([^\]\n]*)\]/, (_m, head: string) => `[BYLAWS: ${head}; identical copy also filed as "${title}"]`);
+      parts[at] = parts[at].replace(/^\[(B\d+) BYLAWS: ([^\]\n]*)\]/, (_m, tag: string, head: string) => `[${tag} BYLAWS: ${head}; identical copy also filed as "${title}"]`);
       whole.push(d.id as string);
       continue;
     }
@@ -291,10 +299,12 @@ async function bylawsBlock(supabase: SupabaseClient, corpId: string, ctx: StripC
     }
     budget -= text.length;
     if (fingerprint) seen.set(fingerprint, parts.length);
-    parts.push(`[BYLAWS: ${title}, uploaded ${String(d.uploaded_at).slice(0, 10)}]\n${text}\n[END BYLAWS]`);
+    const tag = `B${parts.length + 1}`;
+    parts.push(`[${tag} BYLAWS: ${title}, uploaded ${String(d.uploaded_at).slice(0, 10)}]\n${text}\n[END BYLAWS]`);
     sources.push({ kind: "document", title: d.title || "Bylaws", documentId: d.id });
+    records.push({ tag, kind: "bylaws", title: d.title || "Bylaws", documentId: d.id as string });
   }
-  return { text: parts.join("\n\n"), sources, disclosures, whole };
+  return { text: parts.join("\n\n"), sources, disclosures, whole, records };
 }
 
 const MAX_PROFILE_CHARS = 80000;
@@ -424,7 +434,7 @@ const MAX_LEDGER_ROWS = 10_000;
 /** Older decisions past the limit that match a question, sent with it. */
 const MAX_OLDER_DECISIONS = 15;
 
-type LedgerLine = { id: string; line: string };
+type LedgerLine = { id: string; tag: string; date: string; line: string };
 
 async function ledgerBlock(supabase: SupabaseClient, corpId: string, ctx: StripContext) {
   // Every decision, in pages (the API returns at most 1,000 rows at a time).
@@ -444,7 +454,13 @@ async function ledgerBlock(supabase: SupabaseClient, corpId: string, ctx: StripC
     rows.push(...(data ?? []));
     if (!data || data.length < 1000) break;
   }
-  const lines: LedgerLine[] = rows.map((d) => ({ id: d.id as string, line: stripForCorporation(ledgerLine(d), ctx) }));
+  // Each decision is tagged E1, E2, ... (newest first) so an answer can cite it.
+  const lines: LedgerLine[] = rows.map((d, i) => ({
+    id: d.id as string,
+    tag: `E${i + 1}`,
+    date: String(d.decided_at).slice(0, 10),
+    line: `E${i + 1} ${stripForCorporation(ledgerLine(d), ctx)}`,
+  }));
   // Newest first, as many as fit; the rest are searched for each question.
   let used = 0;
   let cut = 0;
@@ -454,7 +470,7 @@ async function ledgerBlock(supabase: SupabaseClient, corpId: string, ctx: StripC
   const text = [
     ...sent.map((l) => l.line),
     older.length
-      ? `[The ${older.length} oldest decisions, from ${older[older.length - 1].line.slice(1, 11)} to ${older[0].line.slice(1, 11)}, aren't listed here: those that match a question are sent with it, under OLDER DECISIONS.]`
+      ? `[The ${older.length} oldest decisions, from ${older[older.length - 1].date} to ${older[0].date}, aren't listed here: those that match a question are sent with it, under OLDER DECISIONS.]`
       : "",
   ]
     .filter(Boolean)
@@ -475,15 +491,17 @@ async function ledgerBlock(supabase: SupabaseClient, corpId: string, ctx: StripC
     .eq("vote_required", true)
     .order("closed_at", { ascending: false })
     .limit(20);
+  const awaitingRecords: CitedRecord[] = [];
   const awaiting = (pending ?? [])
-    .map((d) =>
-      stripForCorporation(
+    .map((d, i) => {
+      awaitingRecords.push({ tag: `W${i + 1}`, kind: "between_meetings", title: `${String(d.closed_at).slice(0, 10)}: ${d.title}` });
+      return `W${i + 1} ${stripForCorporation(
         `[${String(d.closed_at).slice(0, 10)}, council Discussion between meetings, awaiting ratification at the next council meeting] ${d.title} (${d.votes_for ?? 0}-${d.votes_against ?? 0}-${d.votes_abstain ?? 0}). Motion: ${d.motion}`,
         ctx
-      )
-    )
+      )}`;
+    })
     .join("\n");
-  return { text: [awaiting, text].filter(Boolean).join("\n"), ids: sent.map((l) => l.id), older };
+  return { text: [awaiting, text].filter(Boolean).join("\n"), ids: sent.map((l) => l.id), sent, older, awaitingRecords };
 }
 
 function liveDecisionsBlock(agenda: AgendaItem[], ctx: StripContext) {
@@ -562,13 +580,25 @@ function focusBlock(f: ResolvedFocus, ctx: StripContext): { text: string; disclo
 /** Legislation sections: each once (a section's text already names its Act and number). */
 function legislationBlock(hits: KnowledgeHit[]) {
   const { groups, charsSaved } = arrangePassages(hits.map((h) => ({ ...h, documentId: null, title: null, sourceAct: null })));
-  return { text: passagesText(groups, "L"), charsSaved };
+  const byId = new Map(hits.map((h) => [h.id, h]));
+  const records: CitedRecord[] = groups.map((g, i) => {
+    const h = byId.get(g.passageIds[0]);
+    return { tag: `L${i + 1}`, kind: "legislation", title: h?.title || h?.sourceAct || "Knowledge Base", sourceAct: h?.sourceAct ?? undefined, chunkId: h?.id, excerpt: g.segments.join("\n[...]\n") };
+  });
+  return { text: passagesText(groups, "L"), charsSaved, records };
 }
 
 /** A document's passages under one heading, neighbours joined, identical copies once (lib/kb/passages.ts). */
-function hitsBlock(hits: KnowledgeHit[]) {
+function hitsBlock(hits: KnowledgeHit[], prefix: "D" | "P", titles: Map<string, string> = new Map()) {
   const { groups, charsSaved } = arrangePassages(hits);
-  return { text: passagesText(groups), charsSaved };
+  const records: CitedRecord[] = groups.map((g, i) => ({
+    tag: `${prefix}${i + 1}`,
+    kind: prefix === "D" ? "document" : "precedent",
+    title: prefix === "D" ? (g.documentId && titles.get(g.documentId)) || g.title || "Untitled document" : "Precedent from another strata",
+    documentId: prefix === "D" ? (g.documentId ?? undefined) : undefined,
+    excerpt: g.segments.join("\n[...]\n"),
+  }));
+  return { text: passagesText(groups, prefix), charsSaved, records };
 }
 
 type PrepareInput = {
@@ -683,7 +713,7 @@ export async function assembleStratasphere({
       ? attachmentsBlock(supabase, corpId, meeting.item, ctx)
       : focus?.kind === "agenda_item"
         ? attachmentsBlock(supabase, corpId, focus.item, ctx)
-        : Promise.resolve({ text: "", disclosures: [] as string[], read: [] as string[], whole: [] as string[] }),
+        : Promise.resolve({ text: "", disclosures: [] as string[], read: [] as string[], whole: [] as string[], records: [] as CitedRecord[] }),
     ledgerBlock(supabase, corpId, ctx),
     bylawsBlock(supabase, corpId, ctx),
     withTimeout(searchKnowledge(supabase, corpId, strippedQuestion), SEARCH_TIMEOUT_MS).catch((err) => {
@@ -739,8 +769,9 @@ export async function assembleStratasphere({
   const local = hits.filter((h) => h.scope === "corporation" && !(h.documentId && inFull.has(h.documentId))).filter(fresh);
   const global = hits.filter((h) => h.scope === "global_precedent").filter(fresh);
   const legislation = hits.filter((h) => h.scope === "legislation").filter(fresh);
-  const localBlock = hitsBlock(local);
-  const globalBlock = hitsBlock(global);
+  const titles = await documentTitles(supabase, corpId, hits);
+  const localBlock = hitsBlock(local, "D", titles);
+  const globalBlock = hitsBlock(global, "P");
   const legislationText = legislationBlock(legislation);
 
   // The request is laid out for the prompt cache: what's the same for every
@@ -764,7 +795,7 @@ export async function assembleStratasphere({
     .filter(Boolean)
     .join("\n");
   const platform = block(
-    `${corpName.toUpperCase()} ON STRATACOUNCIL.CA (live platform records: the roster, council, meetings, documents on file, management, announcements, and the Library)`,
+    `${corpName.toUpperCase()} ON STRATACOUNCIL.CA (live platform records: the roster, council, meetings, documents on file, management, announcements, and the Library) (cite as R)`,
     profile
   );
 
@@ -783,17 +814,17 @@ export async function assembleStratasphere({
     block("TODAY", todayLine()),
     // What the person is looking at goes first and in full (PR 4a). Search
     // below still runs across everything, so it adds context, never narrows it.
-    looking ? block("THE RECORD THE PERSON IS LOOKING AT (highest priority)", looking.text) : "",
+    looking ? block("THE RECORD THE PERSON IS LOOKING AT (highest priority) (cite as F)", looking.text) : "",
     focus?.kind === "agenda_item" ? block("THAT AGENDA ITEM'S ATTACHMENTS (HIGHEST PRIORITY, verbatim)", attachments.text) : "",
     meeting
       ? block(
-          "CURRENT AGENDA ITEM",
+          "CURRENT AGENDA ITEM (cite as F)",
           `"${stripForCorporation(meeting.item.text, ctx)}" (${stripForCorporation(meeting.item.cat, ctx)})`
         )
       : "",
     disclosures.length ? block("DISCLOSURES REQUIRED FOR THIS ANSWER", disclosures.join("\n")) : "",
     meeting ? block("CURRENT AGENDA ITEM ATTACHMENTS (HIGHEST PRIORITY, verbatim)", attachments.text) : "",
-    meeting ? block("DECISIONS MADE SO FAR IN THIS MEETING (not yet in the ledger)", liveDecisionsBlock(meeting.agenda, ctx)) : "",
+    meeting ? block("DECISIONS MADE SO FAR IN THIS MEETING (not yet in the ledger) (cite as M)", liveDecisionsBlock(meeting.agenda, ctx)) : "",
     olderDecisions.length
       ? block(
           "OLDER DECISIONS (carried motions from the decision ledger, older than those listed in full, that match this question; votes are for-against-abstain)",
@@ -829,7 +860,7 @@ export async function assembleStratasphere({
     role: t.role,
     content:
       t.role === "user"
-        ? composeUserTurn(t.context ?? null, stripForCorporation(t.content.slice(0, 8000), ctx))
+        ? composeUserTurn(t.context ? untagContext(t.context) : null, stripForCorporation(t.content.slice(0, 8000), ctx))
         : stripForCorporation(
             `${t.content.slice(0, 8000)}${t.sources?.length ? `\n[Sources for this answer: ${t.sources.join("; ")}]` : ""}`,
             ctx
@@ -853,7 +884,31 @@ export async function assembleStratasphere({
     effort: meeting ? "low" : "medium",
     maxTokens: meeting ? 4000 : 8000,
     tools: [calculatorTool],
-    sources: withFocusSource(focus, sourcesFrom(hits, Boolean(ledger.trim()), await documentTitles(supabase, corpId, hits))),
+    sources: withFocusSource(focus, sourcesFrom(hits, Boolean(ledger.trim()), titles)),
+    records: [
+      ...(looking || meeting
+        ? [
+            {
+              tag: "F",
+              kind: "focus" as const,
+              title: focus?.kind === "document" ? focus.title : meeting ? meeting.item.text || "The agenda item" : "The record being looked at",
+              documentId: focus?.kind === "document" ? focus.documentId : undefined,
+              excerpt: (looking?.text ?? "").slice(0, 4000) || undefined,
+            },
+          ]
+        : []),
+      ...attachments.records,
+      ...(meeting ? [{ tag: "M", kind: "meeting" as const, title: `Decisions made so far in this ${meeting.meetingLabel}` }] : []),
+      ...bylaws.records,
+      ...ledgerResult.awaitingRecords,
+      ...[...ledgerResult.sent, ...olderDecisions].map(
+        (l): CitedRecord => ({ tag: l.tag, kind: "decision", title: l.line.replace(/^E\d+ /, "").slice(0, 160), decisionId: l.id, excerpt: l.line.replace(/^E\d+ /, "") })
+      ),
+      ...localBlock.records,
+      ...globalBlock.records,
+      ...legislationText.records,
+      ...(platform ? [{ tag: "R", kind: "platform" as const, title: "The strata's records on StrataCouncil.ca" }] : []),
+    ],
     bylawSources: bylaws.sources,
     diagnostics: {
       bylawDocumentIds: bylaws.sources.flatMap((b) => (b.kind === "document" ? [b.documentId] : [])),
@@ -954,6 +1009,21 @@ export function finalSources(prepared: Extract<Prepared, { ok: true }>, text: st
   return [...prepared.bylawSources.filter((b) => b.kind === "document" && !have.has(b.documentId)), ...prepared.sources].slice(0, 12);
 }
 
+/**
+ * The answer as the person reads it, and its sources: the records it cited
+ * (lib/ai/citations.ts), or, if it cited none, those found for it as before.
+ */
+export function finishAnswer(prepared: Extract<Prepared, { ok: true }>, raw: string, text = cleanAnswer(raw, tagSet(prepared))) {
+  const records = new Map(prepared.records.map((r) => [r.tag, r]));
+  const tags = citedTags(raw, tagSet(prepared));
+  const cited = sourcesFromCitations(tags, records);
+  return { text, tags, cited: tags.map((t) => records.get(t)!).filter(Boolean), sources: tags.length ? cited : finalSources(prepared, text) };
+}
+
+export function tagSet(prepared: Extract<Prepared, { ok: true }>) {
+  return new Set(prepared.records.map((r) => r.tag));
+}
+
 /** Answer one question in full (Meeting Mode). */
 export async function askStratasphere(input: AskInput): Promise<AskResult> {
   const prepared = await prepareStratasphere(input);
@@ -968,8 +1038,9 @@ export async function askStratasphere(input: AskInput): Promise<AskResult> {
       cache: true,
     });
     await logUsage(input, usage);
-    if (!text) return { ok: false, error: "Stratasphere didn't return an answer. Please try again." };
-    return { ok: true, text: truncated ? `${text}\n[Answer cut short.]` : text, sources: finalSources(prepared, text), context: prepared.turnContext };
+    const done = finishAnswer(prepared, text);
+    if (!done.text) return { ok: false, error: "Stratasphere didn't return an answer. Please try again." };
+    return { ok: true, text: truncated ? `${done.text}\n[Answer cut short.]` : done.text, sources: done.sources, context: prepared.turnContext };
   } catch (err) {
     if (err instanceof ClaudeRefusalError) return { ok: false, error: "Stratasphere can't help with that question." };
     console.error("[askStratasphere]", err instanceof Error ? err.message : err);
@@ -985,14 +1056,18 @@ export async function streamStratasphere(input: AskInput, onText: (delta: string
   const prepared = await prepareStratasphere(input);
   if (!prepared.ok) return prepared;
   try {
-    const { text, truncated, usage } = await streamClaudeText(
+    // Only clean text reaches the person: no citation tags, markup symbols, or emoji.
+    const cleaner = answerCleaner(tagSet(prepared), onText);
+    const { truncated, usage } = await streamClaudeText(
       { system: prepared.system, messages: prepared.messages, effort: prepared.effort, maxTokens: prepared.maxTokens, tools: prepared.tools, cache: true },
-      onText
+      (delta) => cleaner.push(delta)
     );
+    const shown = cleaner.finish();
     await logUsage(input, usage);
-    if (!text) return { ok: false, error: "Stratasphere didn't return an answer. Please try again." };
+    const done = finishAnswer(prepared, cleaner.raw(), shown);
+    if (!done.text) return { ok: false, error: "Stratasphere didn't return an answer. Please try again." };
     if (truncated) onText("\n[Answer cut short.]");
-    return { ok: true, text: truncated ? `${text}\n[Answer cut short.]` : text, sources: finalSources(prepared, text), context: prepared.turnContext };
+    return { ok: true, text: truncated ? `${done.text}\n[Answer cut short.]` : done.text, sources: done.sources, context: prepared.turnContext };
   } catch (err) {
     if (err instanceof ClaudeRefusalError) return { ok: false, error: "Stratasphere can't help with that question." };
     console.error("[streamStratasphere]", err instanceof Error ? err.message : err);
