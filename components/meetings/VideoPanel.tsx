@@ -7,6 +7,7 @@ import { bestGrid } from "@/lib/meetings/video-grid";
 import { STEPPED_OUT_VIDEO } from "@/lib/meetings/live";
 import { helpFor, type DeviceHelp, type DeviceTrouble } from "@/lib/meetings/device-help";
 import { videoIdentity } from "@/lib/zoom/video-identity";
+import { demoClip, nextSpeaker } from "@/lib/demo-video";
 
 type Phase = "loading" | "ready" | "joining" | "joined" | "reconnecting" | "ended" | "failed" | "out";
 
@@ -421,26 +422,7 @@ export function VideoPanel(props: {
 
   if (!join || join.kind === "none") return null;
 
-  if (join.kind === "demo") {
-    return (
-      <section className="mm-video" aria-label="Meeting video" data-testid="video-demo">
-        <div className="mm-video__tiles">
-          {props.people.slice(0, 9).map((p) => (
-            <div key={p.key} className="mm-video__tile">
-              <span className="mm-video__initials" aria-hidden="true">
-                {initials(p.name)}
-              </span>
-              <span className="mm-video__name">{p.lot ? `${p.name}, ${p.lot}` : p.name}</span>
-            </div>
-          ))}
-          {props.people.length === 0 && <div className="mm-video__tile mm-video__tile--empty">Nobody has joined yet</div>}
-        </div>
-        <p className="mm-video__note">
-          <CameraIcon /> Video appears here
-        </p>
-      </section>
-    );
-  }
+  if (join.kind === "demo") return <DemoTiles people={props.people} />;
 
   if (join.kind === "join" && phase === "ready") {
     if (props.ended) return null;
@@ -656,6 +638,104 @@ async function deviceProblem(err: unknown, kind: "camera" | "microphone", otherw
     return `Your ${kind} is in use by another app or browser tab (Zoom, FaceTime, or another meeting window). Close it there, then try again.`;
   }
   return `The browser blocked the ${kind}. Allow it for this site (the icon in the address bar), then try again.`;
+}
+
+/**
+ * The demo site's video (lib/demo-video.ts): the fictional council's
+ * cameras as short silent loops, with whoever seems to be speaking outlined,
+ * as Zoom does. A loop that can't play shows its still; with reduced motion
+ * only the stills show. Everyone else gets their initials.
+ */
+export function DemoTiles({ people }: { people: Array<{ key: string; name: string; lot: string | null }> }) {
+  const shown = people.slice(0, 9);
+  const withClip = shown.filter((p) => demoClip(p.name)).map((p) => p.key);
+  const clipKeys = withClip.join("|");
+  const [speaker, setSpeaker] = useState<string | null>(null);
+  const [still, setStill] = useState(false);
+  const [broken, setBroken] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)");
+    setStill(Boolean(reduce?.matches));
+  }, []);
+
+  useEffect(() => {
+    const keys = clipKeys ? clipKeys.split("|") : [];
+    if (!keys.length || still) {
+      setSpeaker(null);
+      return;
+    }
+    setSpeaker((cur) => (cur && keys.includes(cur) ? cur : nextSpeaker(keys, null)));
+    const timer = setInterval(() => setSpeaker((cur) => nextSpeaker(keys, cur)), 5200);
+    return () => clearInterval(timer);
+  }, [clipKeys, still]);
+
+  return (
+    <section className="mm-video" aria-label="Meeting video" data-testid="video-demo">
+      <div className="mm-video__tiles">
+        {shown.map((p) => {
+          const clip = demoClip(p.name);
+          const label = p.lot ? `${p.name}, ${p.lot}` : p.name;
+          if (!clip) {
+            return (
+              <div key={p.key} className="mm-video__tile">
+                <span className="mm-video__initials" aria-hidden="true">
+                  {initials(p.name)}
+                </span>
+                <span className="mm-video__name">{label}</span>
+              </div>
+            );
+          }
+          const speaking = speaker === p.key;
+          return (
+            <div key={p.key} className={`mm-video__tile mm-video__tile--media${speaking ? " mm-video__tile--speaking" : ""}`} data-testid="video-demo-camera">
+              {still || broken[p.key] ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img className="mm-video__media" src={clip.poster} alt="" />
+              ) : (
+                <video
+                  className="mm-video__media"
+                  poster={clip.poster}
+                  autoPlay
+                  muted
+                  loop
+                  playsInline
+                  preload="auto"
+                  aria-hidden="true"
+                >
+                  <source src={clip.webm} type="video/webm" />
+                  <source
+                    src={clip.video}
+                    type="video/mp4"
+                    // The last source failing means none could play.
+                    onError={() => setBroken((b) => ({ ...b, [p.key]: true }))}
+                  />
+                </video>
+              )}
+              <span className="mm-video__label">
+                <DemoMicIcon on={speaking} />
+                <span>{label}</span>
+              </span>
+            </div>
+          );
+        })}
+        {people.length === 0 && <div className="mm-video__tile mm-video__tile--empty">Nobody has joined yet</div>}
+      </div>
+      <p className="mm-video__note">
+        <CameraIcon /> Sample video. In a real meeting, each person&rsquo;s own camera appears here.
+      </p>
+    </section>
+  );
+}
+
+function DemoMicIcon({ on }: { on: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="9" y="3" width="6" height="11" rx="3" />
+      <path d="M5 11a7 7 0 0 0 14 0M12 18v3" />
+      {!on && <path d="M4 4l16 16" />}
+    </svg>
+  );
 }
 
 function initials(name: string) {

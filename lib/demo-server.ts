@@ -85,7 +85,7 @@ export async function openDemoLink(token: string): Promise<OpenDemoResult> {
         });
         if (error || !data) throw new Error(error?.message ?? "no strata");
         corporationId = data as string;
-        await buildDemoStrata(admin, corporationId);
+        await buildDemoStrata(admin, corporationId, new Date(), undefined, userId);
         await admin.from("demo_visitors").update({ setup_started_at: null }).eq("id", visitor.id);
         ready = { ...visitor, user_id: userId, corporation_id: corporationId, setup_started_at: null };
       } catch (err) {

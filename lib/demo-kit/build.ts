@@ -11,7 +11,9 @@ import { chunkText } from "@/lib/kb/chunk";
 import { embed, toVectorLiteral } from "@/lib/kb/embed";
 import { loadStripContext, stripForCorporation } from "@/lib/kb/privacy";
 import { queueDocumentIndexing } from "@/lib/kb/queue";
+import { fileDiscussionRecord } from "@/lib/discussions/server";
 import { kitMinutesTitle } from "./agenda";
+import { seedDiscussions } from "./discussions";
 import { kitDates, longDate, type KitDates } from "./dates";
 import { kitDocuments, type KitDoc } from "./documents";
 import { HARBOURLINE_LOGO_PNG_BASE64 } from "./logo";
@@ -45,7 +47,13 @@ export async function buildDemoStrata(
    * SANDBOX_PERSONAS), by CAST key, used instead of the shared fictional
    * accounts, which belong to every visitor's strata.
    */
-  people?: Map<string, string>
+  people?: Map<string, string>,
+  /**
+   * A visitor's own account, which takes the president's seat (SL012) in
+   * place of the fictional Margaret Chen-Whitford, so the visitor is on
+   * council and votes. Not for sandboxes, where someone plays Margaret.
+   */
+  president?: string
 ) {
   const d = kitDates(now);
   const { data: corp } = await admin
@@ -57,17 +65,31 @@ export async function buildDemoStrata(
   const legalName = corp.legal_name as string;
 
   const cast = await ensureCast(admin);
-  const id = (key: string) => people?.get(key) ?? cast.get(key)!;
+  const seat = president ? new Map([...(people ?? []), ["margaret", president]]) : people;
+  const id = (key: string) => seat?.get(key) ?? cast.get(key)!;
+  // The visitor's name and address, for their strata lot on the roster.
+  const { data: presidentProfile } = president
+    ? await admin.from("profiles").select("full_name, email").eq("id", president).single()
+    : { data: null };
   const dev = id("dev");
   const secretary = id("liam");
 
   await check(
     admin.from("corporation_memberships").insert([
-      ...council().map((c) => ({ user_id: id(c.key), corporation_id: corpId, status: "active", joined_at: at(d.agm, "21:00"), lot_number: c.lot })),
+      // The visitor is already a member (demo_create_strata); their lot is set below.
+      ...council()
+        .filter((c) => !(president && c.key === "margaret"))
+        .map((c) => ({ user_id: id(c.key), corporation_id: corpId, status: "active", joined_at: at(d.agm, "21:00"), lot_number: c.lot })),
       { user_id: dev, corporation_id: corpId, status: "active", joined_at: at(d.previousFiscalStart, "09:00") },
     ]),
     "council"
   );
+  if (president) {
+    await check(
+      admin.from("corporation_memberships").update({ lot_number: "SL012", joined_at: at(d.agm, "21:00") }).eq("corporation_id", corpId).eq("user_id", president),
+      "president's lot"
+    );
+  }
   await check(
     admin.from("corporation_role_assignments").insert([
       ...council().map((c) => ({ corporation_id: corpId, role: c.role!, user_id: id(c.key) })),
@@ -81,8 +103,8 @@ export async function buildDemoStrata(
       OWNERS.map((o) => ({
         corporation_id: corpId,
         lot_number: o.lot,
-        full_name: o.name,
-        email: ownerEmail(o.name),
+        full_name: presidentProfile && o.lot === "SL012" ? presidentProfile.full_name : o.name,
+        email: presidentProfile && o.lot === "SL012" ? presidentProfile.email : ownerEmail(o.name),
         unit_number: o.unit,
         unit_entitlement: o.entitlement,
         owner_type: o.type,
@@ -310,6 +332,18 @@ export async function buildDemoStrata(
     });
   }
   await check(admin.from("decisions").insert(decisions, { defaultToNull: false }), "decisions");
+
+  // Sample Discussions: one waiting for ratification at the next meeting, one open for the visitor's vote.
+  const { data: councilProfiles } = await admin.from("profiles").select("id, full_name").in("id", council().map((c) => id(c.key)));
+  const nameOf = new Map((councilProfiles ?? []).map((p) => [p.id as string, (p.full_name as string) ?? ""]));
+  const closedDiscussions = await seedDiscussions(
+    admin,
+    corpId,
+    council().map((c) => ({ key: c.key, userId: id(c.key), name: nameOf.get(id(c.key)) || c.fullName, lot: c.lot! })),
+    now
+  );
+  // Filed in Meetings & Records, as closing one does.
+  for (const discussionId of closedDiscussions) await fileDiscussionRecord(discussionId).catch(() => null);
 
   // Someone asking to join: the new owner of unit 305.
   await check(

@@ -25,8 +25,17 @@ and its own Supabase project. See `lib/demo.ts`.
 Their own copy of Larchwood Commons (`lib/demo-kit/`), built when the link is
 first opened and dated from that day:
 
-- 24 owners on the roster, a five-member council, Harbourline Strata
-  Management (manager, logo, letterhead), and Marisol Ortega's request to join.
+- 24 owners on the roster, a five-member council with the visitor as its
+  president (strata lot SL012, as well as the strata's admin, since
+  2026-11-14), Harbourline Strata Management (manager, logo, letterhead), and
+  Marisol Ortega's request to join. The kit's documents name council members
+  by strata lot, so they read the same for every visitor and keep sharing
+  search vectors. In a sandbox, someone plays the fictional president,
+  Margaret Chen-Whitford, instead.
+- Two Discussions (`lib/demo-kit/discussions.ts`): the lobby carpet, closed
+  and carried 4 to 1, waiting for ratification at the visitor's next meeting
+  (its vote record filed in Meetings & Records), and a bike room camera, open,
+  with three votes in and the visitor's still to come.
 - The Library: bylaws, rules, budget, depreciation report summary, insurance
   summary, AGM minutes, roof assessment, contracts, letters and an incident
   report, already indexed (PII-stripped, as usual) for the Stratasphere.
@@ -40,6 +49,21 @@ first opened and dated from that day:
 - Running stories to ask about: the roof replacement levy and contract, a
   visitor-parking dispute, a water leak and its deductible, an EV charger
   request and a barking dog.
+
+The fictional council takes part (`lib/demo-council.ts`, background jobs in
+`lib/inngest/demo-council.ts`, database functions in `supabase/demo/demo.sql`):
+when a visitor opens a Discussion, the other four members vote over the next
+minute or two; when they launch a meeting, the members (and the manager)
+arrive within a few seconds; and when they open a vote, each member present
+votes a few seconds apart. Votes are random: mostly For, sometimes Against,
+now and then an abstention, and the first Against sometimes says why. Never in
+a sandbox, where real people play the council.
+
+Meeting video in the demo is sample video: a short silent loop for each
+fictional person, with whoever seems to be speaking outlined
+(`public/demo/council`, where `CREDITS.md` lists the Mixkit clips;
+`lib/demo-video.ts`). With reduced motion, or if a loop can't play, the
+still shows instead.
 
 Search vectors for the documents are kept (`demo_kit_embeddings`), so only the
 first visitor's strata calls the embeddings service.

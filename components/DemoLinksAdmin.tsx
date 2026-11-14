@@ -15,7 +15,7 @@ const time = (iso: string) =>
 /**
  * Super Admin console: personal links to the demo site
  * (demo.stratacouncil.ca, lib/demo.ts). Each person gets their own copy of
- * the fictional strata, as its admin, until the link ends (midnight
+ * the fictional strata, as its admin and president, until the link ends (midnight
  * Pacific, three days after the day it's made). The link is shown here,
  * and emailed to them too unless staff choose Create link to send it
  * themselves.
@@ -112,7 +112,7 @@ export function DemoLinksAdmin({ list }: { list: DemoVisitorList }) {
       <h2>Demo links</h2>
       <p className="card__meta">
         A personal link to demo.stratacouncil.ca, opening on the Stratasphere or Council Training. Either way the person gets
-        their own fictional strata, as its admin, with nothing emailed and no billing. Each link works until midnight (Pacific) three days after the day you make it (one
+        their own fictional strata, as its admin and council president, with nothing emailed and no billing. Each link works until midnight (Pacific) three days after the day you make it (one
         made Monday works until Thursday ends), and their strata is cleared overnight then. Names, emails and activity are deleted 30
         days later. Choose Create link to send the link from your own email; nothing is emailed from the app.
       </p>

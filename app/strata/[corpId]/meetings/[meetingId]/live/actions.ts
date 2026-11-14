@@ -1,5 +1,6 @@
 "use server";
 
+import { nudgeDemoCouncil } from "@/lib/demo-council";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { conflictedLots, motionCounts, parseLiveState, parsePresenting, STEPPED_OUT_VIDEO, type Choice, type LiveState, type Presenting } from "@/lib/meetings/live";
@@ -78,6 +79,7 @@ export async function openVote(meetingId: string, itemId: string, motion: string
   });
   if (error || !data) return failFrom(error, "Couldn't open the vote. Try again.");
   await logDemoActivity({ kind: "meeting.vote_opened", detail: { meetingId, itemId } });
+  await nudgeDemoCouncil("voteOpened", { voteId: data as string });
   return { ok: true, voteId: data as string };
 }
 

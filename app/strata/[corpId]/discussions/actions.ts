@@ -1,5 +1,6 @@
 "use server";
 
+import { nudgeDemoCouncil } from "@/lib/demo-council";
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { acceptedExtensions, fileExtension, MAX_DOCUMENT_BYTES } from "@/lib/documents";
@@ -114,6 +115,7 @@ export async function createDiscussion(corpId: string, input: DiscussionInput): 
     return { ok: false, error: await explain(error?.message ?? "", "Couldn't start the discussion.") };
   }
   await emailCouncil(data as string, "opened", user.id);
+  await nudgeDemoCouncil("discussionOpened", { discussionId: data as string });
   refresh(corpId);
   return { ok: true, id: data as string };
 }

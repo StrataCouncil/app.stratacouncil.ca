@@ -2,7 +2,7 @@
  * The demo site (demo.stratacouncil.ca): this same app, deployed a second
  * time with DEMO_MODE=true and its own Supabase project. Each visitor
  * arrives through a personal link made in the live site's Super Admin
- * console, gets their own copy of a fictional strata as its admin, and
+ * console, gets their own copy of a fictional strata as its admin and president, and
  * loses it when the link stops working: midnight Pacific, three days after
  * the day it was made (DEMO_LINK_DAYS).
  *
