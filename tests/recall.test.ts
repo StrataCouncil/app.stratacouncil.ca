@@ -107,3 +107,23 @@ test("phraseLines keeps up to 20 trimmed lines", () => {
   assert.deepEqual(phraseLines(" a \n\n b\n"), ["a", "b"]);
   assert.equal(phraseLines(Array.from({ length: 30 }, (_, i) => `p${i}`).join("\n")).length, 20);
 });
+
+test("a new answer is compared with the one marked Right: figures and sources", async () => {
+  const { compareWithReference } = await import("../lib/ai/recall.ts");
+  const reference = {
+    answer: "Your first depreciation report must be obtained by January 19, 2028, 2 years after the first AGM. It costs $8,500 plus 5% GST.",
+    cited: [
+      { kind: "legislation", title: "s. 6.21", chunkId: "k621" },
+      { kind: "document", title: "AGM minutes", documentId: "agm" },
+    ],
+  };
+  const same = compareWithReference(
+    { answer: "Obtain it by 2028-01-19 (2 years after the AGM). $8,500 plus 5% GST.", cited: [{ kind: "document", title: "AGM", documentId: "agm" }, { kind: "legislation", title: "s. 6.21", chunkId: "k621" }] },
+    reference
+  );
+  assert.equal(same.same, true);
+  const changed = compareWithReference({ answer: "Obtain it by January 19, 2029. It costs $8,500.", cited: [{ kind: "document", title: "AGM", documentId: "agm" }] }, reference);
+  assert.deepEqual(changed.figuresMissing, ["5%", "2028-01-19", "2 years"]);
+  assert.deepEqual(changed.figuresNew, ["2029-01-19"]);
+  assert.deepEqual(changed.sourcesDropped, [{ key: "kb:k621", title: "s. 6.21" }]);
+});

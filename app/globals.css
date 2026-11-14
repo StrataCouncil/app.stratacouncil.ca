@@ -11216,6 +11216,45 @@ button.design-editor__swatch {
   font-size: 0.8rem;
   margin: 0.4rem 0 0;
 }
+.recall__sources {
+  margin: 0 0 0.75rem;
+  padding-left: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.5rem;
+}
+.recall__source {
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.recall__source:target {
+  border-color: var(--accent, #b4602f);
+}
+.recall__source summary,
+.recall__unused summary {
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.recall__excerpt {
+  white-space: pre-wrap;
+  font: inherit;
+  font-size: 0.82rem;
+  max-height: 18rem;
+  overflow: auto;
+  margin: 0.4rem 0 0;
+}
+.recall__ref {
+  margin-left: 0.1rem;
+  font-size: 0.7rem;
+}
+.recall__ref a {
+  text-decoration: none;
+}
+.recall__compare {
+  margin: 0 0 0.75rem;
+}
 .recall__chips {
   display: flex;
   flex-wrap: wrap;

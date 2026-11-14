@@ -18,7 +18,7 @@
  * phrases. Which documents it cited is shown, for diagnosis, but doesn't
  * decide anything: a person marks each answer Right, Partly, or Wrong.
  */
-import { figureFound } from "./figures.ts";
+import { extractFigures, figureFound } from "./figures.ts";
 
 export interface RecallCase {
   expectDocuments: string[];
@@ -180,4 +180,41 @@ export function phraseLines(v: string): string[] {
     .filter(Boolean)
     .slice(0, 20)
     .map((l) => l.slice(0, 300));
+}
+
+/** A record an answer cited, keyed so two runs can be compared. */
+export function sourceKey(r: { kind: string; title: string; documentId?: string; decisionId?: string; chunkId?: string }): string {
+  return r.documentId ? `doc:${r.documentId}` : r.chunkId ? `kb:${r.chunkId}` : r.decisionId ? `decision:${r.decisionId}` : `${r.kind}:${r.title}`;
+}
+
+export interface ReferenceComparison {
+  /** Figures the Right answer stated that this one doesn't. */
+  figuresMissing: string[];
+  /** Records the Right answer cited that this one doesn't. */
+  sourcesDropped: Array<{ key: string; title: string }>;
+  /** Figures this answer states that the Right one didn't. */
+  figuresNew: string[];
+  same: boolean;
+}
+
+/**
+ * A new answer against the one marked Right: the same figures, from the
+ * same records? Only a difference needs reading again.
+ */
+export function compareWithReference(
+  current: { answer: string; cited: Array<{ kind: string; title: string; documentId?: string; decisionId?: string; chunkId?: string }> },
+  reference: { answer: string; cited: Array<{ kind: string; title: string; documentId?: string; decisionId?: string; chunkId?: string }> }
+): ReferenceComparison {
+  const figuresMissing = extractFigures(reference.answer).filter((f) => !figureFound(current.answer, f));
+  const figuresNew = extractFigures(current.answer).filter((f) => !figureFound(reference.answer, f));
+  const now = new Set(current.cited.map(sourceKey));
+  const seen = new Set<string>();
+  const sourcesDropped: Array<{ key: string; title: string }> = [];
+  for (const r of reference.cited) {
+    const key = sourceKey(r);
+    if (seen.has(key) || now.has(key)) continue;
+    seen.add(key);
+    sourcesDropped.push({ key, title: r.title });
+  }
+  return { figuresMissing, figuresNew, sourcesDropped, same: !figuresMissing.length && !figuresNew.length && !sourcesDropped.length };
 }

@@ -5,6 +5,7 @@ import { RecallAdmin, type RecallCaseView } from "@/components/RecallAdmin";
 import { requireSuperAdmin } from "@/lib/data/admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { knowledgeLabels } from "@/app/admin/recall/actions";
+import { compareWithReference } from "@/lib/ai/recall";
 
 /** Answering checks call the AI once per case; leave room for one slow answer. */
 export const maxDuration = 300;
@@ -31,8 +32,14 @@ export default async function RecallPage() {
     admin.from("stratasphere_usage").select("cost_usd").eq("surface", "assistant").order("created_at", { ascending: false }).limit(200),
   ]);
 
-  // The newest run of each kind, per case.
+  // The newest run of each kind, per case; and the newest answer marked Right.
   const latest = new Map<string, RecallCaseView["find"]>();
+  const rightRun = new Map<string, { id: string; at: string; details: Record<string, unknown> }>();
+  for (const r of runs.data ?? []) {
+    if (r.kind === "answer" && r.verdict === "right" && !rightRun.has(r.case_id)) {
+      rightRun.set(r.case_id, { id: r.id, at: r.created_at, details: r.details as Record<string, unknown> });
+    }
+  }
   for (const r of runs.data ?? []) {
     const key = `${r.case_id}:${r.kind}`;
     if (!latest.has(key)) {
@@ -64,6 +71,15 @@ export default async function RecallPage() {
     note: c.note ?? "",
     find: latest.get(`${c.id}:find`) ?? null,
     answer: latest.get(`${c.id}:answer`) ?? null,
+    reference: (() => {
+      const ref = rightRun.get(c.id);
+      const now = latest.get(`${c.id}:answer`);
+      if (!ref) return null;
+      if (!now || now.id === ref.id) return { at: ref.at, comparison: null };
+      type Cited = { kind: string; title: string; documentId?: string; decisionId?: string; chunkId?: string };
+      const shape = (d: Record<string, unknown>) => ({ answer: String(d.answer ?? ""), cited: (Array.isArray(d.cited) ? d.cited : []) as Cited[] });
+      return { at: ref.at, comparison: compareWithReference(shape(now.details), shape(ref.details)) };
+    })(),
   }));
   const labels = await knowledgeLabels(
     [...new Set(view.flatMap((c) => c.expectLegislationDocuments))],
@@ -79,11 +95,10 @@ export default async function RecallPage() {
         <div className="page-header">
           <h1>Stratasphere recall</h1>
           <p>
-            Questions with the answers you expect. <strong>Ask</strong> puts the question to Stratasphere exactly as a
-            council member would, checks the key figures in its answer, and shows what was sent with it; you mark the
-            answer Right, Partly, or Wrong. <strong>Check what&rsquo;s sent</strong> builds the request without asking,
-            so it costs nothing: use it after a change to how Stratasphere finds records, for every case that names
-            them.
+            Questions a council member would ask. <strong>Ask</strong> puts each one to Stratasphere exactly as a member
+            would. Its answer comes with how it got there: each record it used, with the passage itself, and its
+            calculations. Check them, then mark the answer Right, Partly, or Wrong. Once an answer is marked Right,
+            each new answer is compared with it, so only one that changes needs reading again.
           </p>
         </div>
         <RecallAdmin

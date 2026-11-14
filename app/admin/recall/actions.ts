@@ -5,7 +5,7 @@ import { requireSuperAdmin } from "@/lib/data/admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { askClaudeText, ClaudeRefusalError } from "@/lib/ai/claude";
 import { estimateCostUsd } from "@/lib/ai/pricing";
-import { assembleStratasphere, finalSources, type MeetingScope } from "@/lib/ai/stratasphere";
+import { assembleStratasphere, finishAnswer, type MeetingScope } from "@/lib/ai/stratasphere";
 import { answerCheck, findCheck, phraseLines, sentText, type AnswerResult, type FindResult, type RecallCase } from "@/lib/ai/recall";
 import { figureLines } from "@/lib/ai/figures";
 import { meetingTypeLabels, normalizeAgenda, type MeetingType } from "@/lib/meetings/agenda";
@@ -71,9 +71,6 @@ export async function saveRecallCase(input: RecallCaseInput): Promise<{ ok: true
     note: String(input.note ?? "").trim().slice(0, 1000),
     updated_at: new Date().toISOString(),
   };
-  if (!row.expected_answer && !row.key_figures.length && !row.answer_phrases.length) {
-    return { ok: false, error: "Write the answer you expect, or at least its key figures, so the answer can be judged." };
-  }
   const admin = createAdminClient();
   const { data, error } = input.id
     ? await admin.from("stratasphere_recall_cases").update(row).eq("id", input.id).select("id").single()
@@ -337,12 +334,25 @@ export async function runAnswerCheck(caseId: string): Promise<AnswerRun | Fail> 
       onToolCall: (call) => calculations.push(call),
     });
     const cost = estimateCostUsd(usage);
-    const answer = truncated ? `${text}\n[Answer cut short.]` : text;
-    const sources = finalSources(prepared, text);
-    const result = answerCheck(toCase(c), answer, sources);
+    const done = finishAnswer(prepared, text);
+    const answer = truncated ? `${done.text}\n[Answer cut short.]` : done.text;
+    const result = answerCheck(toCase(c), answer, done.sources);
+    // How it got the answer: each record it cited, with the text that was
+    // sent, in the order it cited them; and the search results it didn't use.
+    const cited = done.cited.map((r) => ({ ...r, excerpt: r.excerpt?.slice(0, 6000) }));
+    const unused = prepared.records
+      .filter((r) => !done.tags.includes(r.tag) && ["document", "legislation", "precedent", "attachment"].includes(r.kind))
+      .map((r) => ({ ...r, excerpt: r.excerpt?.slice(0, 1500) }));
     // What was sent with it, so a wrong answer can be traced to a missing record.
     const find = findCheck(toCase(c), prepared.diagnostics, sentText(prepared.system, prepared.messages), await entriesOf(prepared.diagnostics.hits));
-    await saveRun(c.id, "answer", result.passed, { ...result, answer, sources, usage, calculations, find }, who.user.id, cost);
+    await saveRun(
+      c.id,
+      "answer",
+      result.passed,
+      { ...result, answer, rawAnswer: text, sources: done.sources, cited, unused, usage, calculations, find },
+      who.user.id,
+      cost
+    );
     revalidatePath("/admin/recall");
     return { ok: true, passed: result.passed, answer, result, costUsd: cost, problem: null };
   } catch (err) {

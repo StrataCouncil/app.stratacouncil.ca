@@ -47,3 +47,11 @@ test("figures parse with their decimals and unit", () => {
   assert.equal(parseNumericFigure("about 18"), null);
   assert.deepEqual(figureLines(" $1\n\n 2 months \n"), ["$1", "2 months"]);
 });
+
+test("figures are pulled out of an answer", async () => {
+  const { extractFigures } = await import("../lib/ai/figures.ts");
+  assert.deepEqual(
+    extractFigures("By January 19, 2028 (2 years after 2026-01-19), budget $8,500.00 and $ 120 at 5 % over 18 months."),
+    ["$8,500.00", "$120", "5%", "2026-01-19", "2028-01-19", "2 years", "18 months"]
+  );
+});

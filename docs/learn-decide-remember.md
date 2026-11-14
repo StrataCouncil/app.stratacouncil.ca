@@ -468,19 +468,16 @@ behaviour as the baseline.
 - **Where it lives:** a Super Admin page, "Stratasphere recall", holding test
   cases in a server-only table. The cases contain real strata records, so they
   live in the production database, never in the code repository.
-- **A case is (since 0096, 2026-11-14):** a strata, a question, the answer you
-  expect, and its key figures. The records that hold the answer (documents,
-  ledger decisions, Knowledge Base entries or sections down to the section, and
-  exact wording) are optional, for finding out why an answer went wrong.
-- **Ask:** puts the question to Stratasphere exactly as a member would (the
-  calculator included), checks each key figure by value (lib/ai/figures.ts:
-  $23,333.33 matches 23333.33; 2027-01-31 matches January 31, 2027), and keeps
-  what was sent with it (the records found, and the characters by part). A
-  person marks the answer Right, Partly, or Wrong, with a note. "Ask the ones
-  not Right" re-runs only those. About $0.27 a case, shown before it runs.
-- **Check what's sent:** builds the request without asking the AI, so it costs
-  nothing; for every case that names records, after any change to how records
-  are found.
+- **A case is a question** (2026-11-14), as a council member would ask it,
+  with an optional expected answer. Nobody tells Stratasphere where to look.
+- **Ask:** puts the question to Stratasphere exactly as a member would. The
+  answer comes with how it got there: each record it cited (every record sent
+  is tagged, and the answer cites the tags it used), with the passage that
+  was sent and a link to open the document; its calculations; and what it
+  looked at but didn't use. A person checks it and marks it Right, Partly, or
+  Wrong, with a note. About $0.30 a question, shown before it runs.
+- **Re-runs compare with the answer marked Right:** the same figures, from the
+  same records. Only an answer that differs needs reading again.
 - **The starting set is about 40 cases on EPS9048,** written with you,
   deliberately covering:
   - Bylaw questions worded nothing like the bylaw.
@@ -492,7 +489,7 @@ behaviour as the baseline.
   - Counting questions.
   - Things truly not on file, to check the honest miss.
 - **The rule:** no change to records, context, or caching merges unless every
-  named record is still sent, and no answer marked Right gets worse.
+  answer marked Right still matches.
 
 ### Cost, without reading less
 
