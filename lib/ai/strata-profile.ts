@@ -1,3 +1,4 @@
+import { fiscalYearLabel } from "../strata-details.ts";
 /**
  * The strata profile Stratasphere reads with every question: everything
  * the asking member can see on the platform about their strata (Jeremy,
@@ -42,7 +43,16 @@ export interface ProfileMeeting {
 }
 
 export interface StrataProfileData {
-  corp: { planNumber: string; legalName: string; buildingName: string | null; address: string; unitCount: number; jurisdiction: string };
+  corp: {
+    planNumber: string;
+    legalName: string;
+    buildingName: string | null;
+    address: string;
+    unitCount: number;
+    jurisdiction: string;
+    /** 1-12, or null when it isn't set (0096). */
+    fiscalYearStartMonth?: number | null;
+  };
   management: { company: string | null; website: string | null; managers: number } | null;
   lots: ProfileLot[];
   platformRoles: Array<{ role: string; count: number }>;
@@ -190,6 +200,9 @@ export function buildStrataProfile(d: StrataProfileData, strip: (s: string) => s
       [
         `Strata Plan ${c.planNumber}. Legal name: ${c.legalName}.${c.buildingName ? ` Building name: ${c.buildingName}.` : ""}`,
         `Address: ${c.address}. ${c.unitCount} strata lots. Jurisdiction: ${c.jurisdiction}.`,
+        fiscalYearLabel(c.fiscalYearStartMonth)
+          ? `Fiscal year: ${fiscalYearLabel(c.fiscalYearStartMonth)} (set on StrataCouncil.ca).`
+          : "Fiscal year: not set on StrataCouncil.ca.",
         d.management?.company
           ? `Strata management company: ${d.management.company}${d.management.website ? ` (${d.management.website})` : ""}, ${d.management.managers} strata manager${d.management.managers === 1 ? "" : "s"} listed.`
           : "Self-managed: no strata management company on file.",

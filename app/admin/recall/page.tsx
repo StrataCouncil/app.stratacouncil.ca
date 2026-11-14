@@ -4,6 +4,7 @@ import { AppShell } from "@/components/AppShell";
 import { RecallAdmin, type RecallCaseView } from "@/components/RecallAdmin";
 import { requireSuperAdmin } from "@/lib/data/admin";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { knowledgeLabels } from "@/app/admin/recall/actions";
 
 /** Answering checks call the AI once per case; leave room for one slow answer. */
 export const maxDuration = 300;
@@ -22,10 +23,10 @@ export default async function RecallPage() {
   const [cases, runs, corps, usage] = await Promise.all([
     admin
       .from("stratasphere_recall_cases")
-      .select("id, corporation_id, question, meeting_id, item_id, expect_documents, expect_decisions, expect_phrases, answer_phrases, note, created_at")
+      .select("id, corporation_id, question, meeting_id, item_id, expect_documents, expect_decisions, expect_phrases, answer_phrases, expected_answer, key_figures, expect_legislation_documents, expect_legislation_sections, note, created_at")
       .order("corporation_id")
       .order("created_at"),
-    admin.from("stratasphere_recall_runs").select("case_id, kind, passed, details, cost_usd, created_at").order("created_at", { ascending: false }).limit(3000),
+    admin.from("stratasphere_recall_runs").select("id, case_id, kind, passed, details, cost_usd, created_at, verdict, verdict_note").order("created_at", { ascending: false }).limit(3000),
     admin.from("strata_corporations").select("strata_plan_number, building_name, legal_name").order("strata_plan_number"),
     admin.from("stratasphere_usage").select("cost_usd").eq("surface", "assistant").order("created_at", { ascending: false }).limit(200),
   ]);
@@ -34,7 +35,17 @@ export default async function RecallPage() {
   const latest = new Map<string, RecallCaseView["find"]>();
   for (const r of runs.data ?? []) {
     const key = `${r.case_id}:${r.kind}`;
-    if (!latest.has(key)) latest.set(key, { passed: r.passed, at: r.created_at, details: r.details as Record<string, unknown>, costUsd: Number(r.cost_usd) });
+    if (!latest.has(key)) {
+      latest.set(key, {
+        id: r.id,
+        passed: r.passed,
+        at: r.created_at,
+        details: r.details as Record<string, unknown>,
+        costUsd: Number(r.cost_usd),
+        verdict: (r.verdict as "right" | "partly" | "wrong" | null) ?? null,
+        verdictNote: r.verdict_note ?? "",
+      });
+    }
   }
   const view: RecallCaseView[] = (cases.data ?? []).map((c) => ({
     id: c.id,
@@ -46,10 +57,18 @@ export default async function RecallPage() {
     expectDecisions: c.expect_decisions ?? [],
     expectPhrases: c.expect_phrases ?? [],
     answerPhrases: c.answer_phrases ?? [],
+    expectedAnswer: c.expected_answer ?? "",
+    keyFigures: c.key_figures ?? [],
+    expectLegislationDocuments: c.expect_legislation_documents ?? [],
+    expectLegislationSections: c.expect_legislation_sections ?? [],
     note: c.note ?? "",
     find: latest.get(`${c.id}:find`) ?? null,
     answer: latest.get(`${c.id}:answer`) ?? null,
   }));
+  const labels = await knowledgeLabels(
+    [...new Set(view.flatMap((c) => c.expectLegislationDocuments))],
+    [...new Set(view.flatMap((c) => c.expectLegislationSections))]
+  );
   const costs = (usage.data ?? []).map((u) => Number(u.cost_usd)).filter((n) => n > 0);
   const costPerQuestion = costs.length ? costs.reduce((a, b) => a + b, 0) / costs.length : FALLBACK_COST_USD;
 
@@ -60,17 +79,18 @@ export default async function RecallPage() {
         <div className="page-header">
           <h1>Stratasphere recall</h1>
           <p>
-            Questions with the records that answer them. <strong>Check finding</strong> builds the request exactly as
-            Stratasphere would and checks that each record reaches the AI. It doesn&rsquo;t call the AI, so it costs
-            nothing. <strong>Check answer</strong> also asks the AI and checks the answer states what it should and
-            cites the records. No change to how Stratasphere finds records ships unless every case passes the finding
-            check.
+            Questions with the answers you expect. <strong>Ask</strong> puts the question to Stratasphere exactly as a
+            council member would, checks the key figures in its answer, and shows what was sent with it; you mark the
+            answer Right, Partly, or Wrong. <strong>Check what&rsquo;s sent</strong> builds the request without asking,
+            so it costs nothing: use it after a change to how Stratasphere finds records, for every case that names
+            them.
           </p>
         </div>
         <RecallAdmin
           cases={view}
           corporations={(corps.data ?? []).map((c) => ({ id: c.strata_plan_number, name: c.building_name || c.legal_name || c.strata_plan_number }))}
           costPerQuestion={costPerQuestion}
+          knowledgeLabels={labels}
         />
       </div>
     </AppShell>

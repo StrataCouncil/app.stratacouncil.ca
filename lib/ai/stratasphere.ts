@@ -7,6 +7,8 @@ import { loadStripContext, stripForCorporation, type StripContext } from "@/lib/
 import { searchKeywords, searchKnowledge, type KnowledgeHit } from "@/lib/kb/search";
 import { exactStrings, lineScore, mergeHits, searchWords } from "@/lib/kb/keywords";
 import { buildStrataProfile, type ProfileMeeting } from "@/lib/ai/strata-profile";
+import { arrangePassages, passagesText } from "@/lib/kb/passages";
+import { ledgerLine } from "@/lib/ai/ledger-line";
 import { listPublishedLibrary } from "@/lib/data/library";
 import { knowledgeResourceKindLabels } from "@/lib/library/catalogue";
 import { meetingFormatLabels, meetingTypeLabels, type MeetingFormat, type MeetingType } from "@/lib/meetings/agenda";
@@ -14,6 +16,9 @@ import type { AgendaItem } from "@/lib/meetings/agenda";
 import type { ResolvedFocus } from "@/lib/ai/focus";
 import { clockTime } from "@/lib/meetings/minutes";
 import { HOURLY_LIMIT, nextAskAt } from "@/lib/ai/hourly-limit";
+import { calculatorTool } from "@/lib/ai/calculator-tool";
+import type { ClientTool } from "@/lib/ai/claude";
+import { tz } from "@/lib/time-zone";
 
 /**
  * Stratasphere, the AI governance assistant (doc02 §3–§5). One system for
@@ -26,7 +31,13 @@ import { HOURLY_LIMIT, nextAskAt } from "@/lib/ai/hourly-limit";
  * everything else is stripped here.
  */
 
-const CARDINAL_RULES = `FABRICATION IS PROHIBITED: Never invent, estimate, extrapolate, or assume any corporation-specific fact — names, lot numbers, dollar amounts, dates, vote counts, bylaw sections, motion text, or any other data. If it is not in the context provided, it does not exist for the purpose of this answer.
+const CARDINAL_RULES = `ANSWER THE QUESTION THAT IS ASKED: Before answering, work out exactly what is being asked: the period (which fiscal year, which months, as of when), the scope (which lot, policy, fund, or decision), and the basis (charged, accrued, budgeted, or paid; one figure or a total). Then answer that question in the first sentence, with the figure or the fact itself. The working and the sources follow. Never substitute an easier or nearby question, never answer only part of it, and never stop short of the final figure when the records hold what's needed to reach it. If the question can reasonably be read two ways and the readings give different answers (for example, FY27 could mean the year ending in 2027 or the year starting in 2027), give both answers, each with the reading it rests on, rather than asking first. Raise an ambiguity only when the readings actually differ.
+
+CALCULATION RULE: Never do arithmetic or count days or months in your head. Every sum, difference, share, proration, percentage, average, and count of days or months goes through the calculate tool, with each figure taken from the records and its source named in the step's label. In the answer, show the working: each figure with its source, each step, and the result exactly as the tool gave it, and state the basis (for example, "the premium charged to this fiscal year, spread evenly by month" or "the instalments paid in this fiscal year"). If a figure the calculation needs isn't in the records, say which one is missing and don't calculate around it. Dates in the records are the source for periods: a policy term, a fiscal year, a financing schedule.
+
+FISCAL YEAR: The strata's fiscal year is in the platform records (STRATA CORPORATION). If it isn't set there and the question depends on it, use the fiscal year the financial statements or budget in the records show, and say where you found it; if they don't show it, say the fiscal year isn't set and that the strata's Admin can add it with Edit details on the Overview, then answer for the reading you think most likely and say which one you used. "This fiscal year" is the one that includes today's date, given with each question.
+
+FABRICATION IS PROHIBITED: Never invent, estimate, extrapolate, or assume any corporation-specific fact — names, lot numbers, dollar amounts, dates, vote counts, bylaw sections, motion text, or any other data. If it is not in the context provided, it does not exist for the purpose of this answer.
 
 WHEN DATA IS MISSING: If the answer isn't present in any context block, say so clearly in one sentence — do not apologize at length, do not fill the gap with general knowledge — then give one concrete direction for where the answer may be found: the specific document type to look in (for example the registered bylaws, the most recent AGM minutes, the depreciation report), the person to ask (the strata manager, council's secretary or treasurer), or, for questions of law, the Act and section to read or a lawyer, the Civil Resolution Tribunal, or the Condominium Home Owners Association of BC.
 
@@ -44,7 +55,7 @@ IF YOU DON'T KNOW, SAY SO PRECISELY: If nothing in the context answers the quest
 
 RECENCY RULE: When multiple documents or decisions address the same topic, treat the most recently uploaded one as the most authoritative — documents are sorted with the most recent first and their upload date is stamped in the content header. For financial statements, always use the most recently uploaded version for current figures while referencing older statements for trends or year-over-year context. For bylaws or policies, the most recently uploaded version governs. Acknowledge older records where relevant but base your answer on the most recent.
 
-COUNTING AND ENUMERATION RULE: When any question requires counting, filtering, or summing data — roster entries, decisions, meetings, documents, votes, fees, or any other records — you must work through every single entry systematically before giving a final answer. List each matching entry explicitly, then state the total. Never give a count or sum without showing the entries you counted. If you find yourself uncertain about a count, recount from the beginning. A wrong number with confidence is worse than a correct number with visible working.
+COUNTING AND ENUMERATION RULE: When any question requires counting, filtering, or summing data — roster entries, decisions, meetings, documents, votes, fees, or any other records — you must work through every single entry systematically before giving a final answer. List each matching entry explicitly, then state the total, summing amounts with the calculate tool. Never give a count or sum without showing the entries you counted. If you find yourself uncertain about a count, recount from the beginning. A wrong number with confidence is worse than a correct number with visible working.
 
 CONFLICT DISCLOSURE RULE: If sources disagree — a corporation's bylaws say one thing while BC legislation, global precedent, or another local document says another — do not silently pick one or reconcile them yourself. State plainly what each source says and that they conflict. For example: "Your bylaws state [X]. The Strata Property Act states [Y]. These appear to conflict." Do not resolve which one governs, do not soften the discrepancy, and do not guess at an explanation. Report only what each source explicitly states.
 
@@ -52,7 +63,7 @@ EARLIER ANSWERS RULE: The records found for each earlier question in this conver
 
 DISPUTED-FACT RULE: If a user says a cited fact is wrong, do not concede the point or change the answer — you have no way to independently verify a claim made in conversation. State exactly which document, section, and upload date the fact came from, and note that an updated version of that document can be uploaded if it's outdated or incorrect. Never revise a factual claim based on a user's assertion alone; only a new document in context can change what you cite.`;
 
-const PERMITTED = `PERMITTED KNOWLEDGE: Only what is in the context blocks below: this corporation's live records on StrataCouncil.ca (its owner roster, council, meetings and agendas, the list of documents on file, its management company, platform announcements and the Library), its documents and minutes, its decision ledger, the legislation excerpts, and anonymized precedent from other strata corporations on the platform. The platform records are current as of this question: use them for counts and lists (lots, owners, council, meetings, documents), and say they come from the platform's records. Precedent is always framed explicitly as cross-platform precedent, never presented as if it were this corporation's own data. General knowledge may be used only to read and understand those sources (plain meaning of words, arithmetic), never as a source of facts.
+const PERMITTED = `PERMITTED KNOWLEDGE: Only what is in the context blocks below: this corporation's live records on StrataCouncil.ca (its owner roster, council, meetings and agendas, the list of documents on file, its management company, platform announcements and the Library), its documents and minutes, its decision ledger, the legislation excerpts, and anonymized precedent from other strata corporations on the platform. The platform records are current as of this question: use them for counts and lists (lots, owners, council, meetings, documents), and say they come from the platform's records. Precedent is always framed explicitly as cross-platform precedent, never presented as if it were this corporation's own data. General knowledge may be used only to read and understand those sources (plain meaning of words), never as a source of facts. Arithmetic is done with the calculate tool.
 
 PIPA: Refer to owners who are people by strata lot number only (e.g. SL061), never by name. Text in the context has already had names and personal details replaced with lot numbers or placeholders such as [name redacted]; never try to guess what a placeholder stands for. Owners are never named on the roster, whether people or companies: an "Owner A" or "Company A" code marks the lots one owner holds. Use the codes to count and group lots, and never guess who an owner is. If asked who owns a lot, say the platform doesn't share owners' names and point to the roster in the app.
 
@@ -94,6 +105,8 @@ type Prepared =
       turnContext: string;
       effort: "low" | "medium";
       maxTokens: number;
+      /** Tools Claude may call while answering (the calculator). */
+      tools: ClientTool[];
       sources: StratasphereSource[];
       /** The full bylaws given as context: listed as sources only when the answer draws on them. */
       bylawSources: StratasphereSource[];
@@ -102,13 +115,35 @@ type Prepared =
     }
   | { ok: false; error: string; limit?: boolean };
 
+export interface ContextSizes {
+  /** The instructions. */
+  rules: number;
+  bylaws: number;
+  ledger: number;
+  /** The platform records (roster, meetings, documents on file, and so on). */
+  platform: number;
+  /** Earlier questions and answers, with the records found for them. */
+  history: number;
+  /** The strata's document passages found for this question. */
+  passages: number;
+  precedent: number;
+  legislation: number;
+  /** Everything else sent with this question (attachments, the record being looked at, older decisions, notes). */
+  otherForQuestion: number;
+  total: number;
+  /** Characters not sent because neighbouring passages were joined and identical copies sent once. */
+  savedByJoining: number;
+}
+
 /** Which records a request carried: read by the recall check, never by the model. */
 export interface ContextDiagnostics {
   bylawDocumentIds: string[];
   attachmentDocumentIds: string[];
   ledgerDecisionIds: string[];
   /** Search results in the order they were given, with their scores. */
-  hits: Array<{ scope: KnowledgeHit["scope"]; documentId: string | null; title: string | null; similarity: number }>;
+  hits: Array<{ id: string; scope: KnowledgeHit["scope"]; documentId: string | null; title: string | null; similarity: number }>;
+  /** Characters sent, by part, so the cost of each part can be seen. */
+  sizes?: ContextSizes;
   searchFailed: boolean;
 }
 
@@ -219,7 +254,7 @@ function unreadPart(title: string, what: string) {
 async function bylawsBlock(supabase: SupabaseClient, corpId: string, ctx: StripContext) {
   const { data } = await supabase
     .from("documents")
-    .select("id, title, uploaded_at, document_text")
+    .select("id, title, uploaded_at, document_text, content_sha256")
     .eq("corporation_id", corpId)
     .eq("indexing_status", "indexed")
     .eq("is_current", true)
@@ -231,9 +266,18 @@ async function bylawsBlock(supabase: SupabaseClient, corpId: string, ctx: StripC
   const sources: StratasphereSource[] = [];
   const disclosures: string[] = [];
   const whole: string[] = [];
+  // The same file on record twice is read once (documents.content_sha256, 0065).
+  const seen = new Map<string, number>();
   for (const d of data ?? []) {
     if (!d.document_text) continue;
     const title = stripForCorporation(d.title ?? "Bylaws", ctx);
+    const fingerprint = (d.content_sha256 as string | null) ?? null;
+    if (fingerprint && seen.has(fingerprint)) {
+      const at = seen.get(fingerprint)!;
+      parts[at] = parts[at].replace(/^\[BYLAWS: ([^\]\n]*)\]/, (_m, head: string) => `[BYLAWS: ${head}; identical copy also filed as "${title}"]`);
+      whole.push(d.id as string);
+      continue;
+    }
     if (budget <= 0) {
       disclosures.push(unreadPart(title, "none of it was read: the bylaws before it filled the space"));
       continue;
@@ -246,6 +290,7 @@ async function bylawsBlock(supabase: SupabaseClient, corpId: string, ctx: StripC
       whole.push(d.id as string);
     }
     budget -= text.length;
+    if (fingerprint) seen.set(fingerprint, parts.length);
     parts.push(`[BYLAWS: ${title}, uploaded ${String(d.uploaded_at).slice(0, 10)}]\n${text}\n[END BYLAWS]`);
     sources.push({ kind: "document", title: d.title || "Bylaws", documentId: d.id });
   }
@@ -263,7 +308,7 @@ const MAX_PROFILE_CHARS = 80000;
  */
 async function profileBlock(supabase: SupabaseClient, corpId: string, ctx: StripContext) {
   const [corp, mgmt, lots, roles, members, meetings, docs, announcements, library] = await Promise.all([
-    supabase.from("strata_corporations").select("strata_plan_number, legal_name, building_name, address, unit_count, jurisdiction").eq("strata_plan_number", corpId).maybeSingle(),
+    supabase.from("strata_corporations").select("strata_plan_number, legal_name, building_name, address, unit_count, jurisdiction, fiscal_year_start_month").eq("strata_plan_number", corpId).maybeSingle(),
     supabase.from("strata_management").select("company_name, website, managers").eq("corporation_id", corpId).maybeSingle(),
     supabase
       .from("owners_and_council")
@@ -309,6 +354,7 @@ async function profileBlock(supabase: SupabaseClient, corpId: string, ctx: Strip
         address: corp.data.address,
         unitCount: corp.data.unit_count,
         jurisdiction: corp.data.jurisdiction,
+        fiscalYearStartMonth: corp.data.fiscal_year_start_month ?? null,
       },
       management: mgmt.data
         ? { company: mgmt.data.company_name, website: mgmt.data.website, managers: Array.isArray(mgmt.data.managers) ? mgmt.data.managers.length : 0 }
@@ -398,13 +444,7 @@ async function ledgerBlock(supabase: SupabaseClient, corpId: string, ctx: StripC
     rows.push(...(data ?? []));
     if (!data || data.length < 1000) break;
   }
-  const lines: LedgerLine[] = rows.map((d) => {
-    const votes = d.votes_for != null ? ` (${d.votes_for} for / ${d.votes_against ?? 0} against / ${d.votes_abstain ?? 0} abstain)` : "";
-    const who = d.mover ? ` Moved ${d.mover}${d.seconder ? `, seconded ${d.seconder}` : ""}.` : "";
-    const where = `${String(d.decided_at).slice(0, 10)}, ${d.meeting_type ?? "meeting"}${d.source === "historic_minutes" ? " (from uploaded past minutes)" : ""}`;
-    const motion = d.motion_text ? ` Motion: ${d.motion_text}` : "";
-    return { id: d.id as string, line: stripForCorporation(`[${where}] ${d.title} — CARRIED${votes}.${who}${motion}`, ctx) };
-  });
+  const lines: LedgerLine[] = rows.map((d) => ({ id: d.id as string, line: stripForCorporation(ledgerLine(d), ctx) }));
   // Newest first, as many as fit; the rest are searched for each question.
   let used = 0;
   let cut = 0;
@@ -438,7 +478,7 @@ async function ledgerBlock(supabase: SupabaseClient, corpId: string, ctx: StripC
   const awaiting = (pending ?? [])
     .map((d) =>
       stripForCorporation(
-        `[${String(d.closed_at).slice(0, 10)}, council Discussion between meetings, awaiting ratification at the next council meeting] ${d.title} — CARRIED by council vote (${d.votes_for ?? 0} for / ${d.votes_against ?? 0} against / ${d.votes_abstain ?? 0} abstain). Motion: ${d.motion}`,
+        `[${String(d.closed_at).slice(0, 10)}, council Discussion between meetings, awaiting ratification at the next council meeting] ${d.title} (${d.votes_for ?? 0}-${d.votes_against ?? 0}-${d.votes_abstain ?? 0}). Motion: ${d.motion}`,
         ctx
       )
     )
@@ -519,14 +559,16 @@ function focusBlock(f: ResolvedFocus, ctx: StripContext): { text: string; disclo
 }
 
 /** Legislation chunks already open with their citation line (Act, current-to date, section). */
+/** Legislation sections: each once (a section's text already names its Act and number). */
 function legislationBlock(hits: KnowledgeHit[]) {
-  return hits.map((h, i) => `[L${i + 1} | relevance ${h.similarity.toFixed(2)}]\n${h.text}`).join("\n\n");
+  const { groups, charsSaved } = arrangePassages(hits.map((h) => ({ ...h, documentId: null, title: null, sourceAct: null })));
+  return { text: passagesText(groups, "L"), charsSaved };
 }
 
+/** A document's passages under one heading, neighbours joined, identical copies once (lib/kb/passages.ts). */
 function hitsBlock(hits: KnowledgeHit[]) {
-  return hits
-    .map((h, i) => `[${i + 1}${h.title ? ` | ${h.title}` : ""}${h.sourceAct ? ` | ${h.sourceAct}` : ""} | relevance ${h.similarity.toFixed(2)}]\n${h.text}`)
-    .join("\n\n");
+  const { groups, charsSaved } = arrangePassages(hits);
+  return { text: passagesText(groups), charsSaved };
 }
 
 type PrepareInput = {
@@ -697,14 +739,17 @@ export async function assembleStratasphere({
   const local = hits.filter((h) => h.scope === "corporation" && !(h.documentId && inFull.has(h.documentId))).filter(fresh);
   const global = hits.filter((h) => h.scope === "global_precedent").filter(fresh);
   const legislation = hits.filter((h) => h.scope === "legislation").filter(fresh);
+  const localBlock = hitsBlock(local);
+  const globalBlock = hitsBlock(global);
+  const legislationText = legislationBlock(legislation);
 
   // The request is laid out for the prompt cache: what's the same for every
   // question (rules, bylaws, ledger) first, then the conversation, where
   // each question carries the records found for it. Only the newest turn is
   // new to the cache, so remembering earlier records costs little.
   const preamble = meeting
-    ? `You are Stratasphere, the AI governance assistant for Strata Plan ${corpId} (${corpName}), operating inside a live ${meeting.meetingLabel}. Answer in 2–4 sentences.`
-    : `You are Stratasphere, the AI governance assistant for Strata Plan ${corpId} (${corpName}). Answer in up to a short paragraph.`;
+    ? `You are Stratasphere, the AI governance assistant for Strata Plan ${corpId} (${corpName}), operating inside a live ${meeting.meetingLabel}. Answer in 2–4 sentences; when a figure is calculated, add the working briefly after them.`
+    : `You are Stratasphere, the AI governance assistant for Strata Plan ${corpId} (${corpName}). Lead with the answer in a sentence or two, then give the working and sources, as briefly as they allow.`;
 
   // Cached for an hour (PR 5, §7 "Cost"): the bylaws and ledger, which
   // change only when a document is uploaded or a meeting adjourns, then the
@@ -714,7 +759,7 @@ export async function assembleStratasphere({
   // one question to the next.
   const records = [
     block(`${corpName.toUpperCase()} BYLAWS (full text of the current bylaws, most recent first)`, bylaws.text),
-    block("DECISION LEDGER (carried motions, newest first)", ledger),
+    block("DECISION LEDGER (every entry is a carried motion, newest first; votes are for-against-abstain)", ledger),
   ]
     .filter(Boolean)
     .join("\n");
@@ -735,6 +780,7 @@ export async function assembleStratasphere({
   ];
 
   let turnContext = [
+    block("TODAY", todayLine()),
     // What the person is looking at goes first and in full (PR 4a). Search
     // below still runs across everything, so it adds context, never narrows it.
     looking ? block("THE RECORD THE PERSON IS LOOKING AT (highest priority)", looking.text) : "",
@@ -750,15 +796,18 @@ export async function assembleStratasphere({
     meeting ? block("DECISIONS MADE SO FAR IN THIS MEETING (not yet in the ledger)", liveDecisionsBlock(meeting.agenda, ctx)) : "",
     olderDecisions.length
       ? block(
-          "OLDER DECISIONS (from the decision ledger, older than those listed in full, that match this question)",
+          "OLDER DECISIONS (carried motions from the decision ledger, older than those listed in full, that match this question; votes are for-against-abstain)",
           olderDecisions.map((l) => l.line).join("\n")
         )
       : "",
-    block(`${corpName.toUpperCase()} DOCUMENT EXCERPTS (most relevant to this question)`, hitsBlock(local)),
-    block("CROSS-PLATFORM PRECEDENT (anonymized, from other strata corporations — never this corporation's own data)", hitsBlock(global)),
+    block(
+      `${corpName.toUpperCase()} DOCUMENT EXCERPTS (most relevant to this question; a document's passages are under one heading, with [...] between parts that aren't next to each other)`,
+      localBlock.text
+    ),
+    block("CROSS-PLATFORM PRECEDENT (anonymized, from other strata corporations — never this corporation's own data)", globalBlock.text),
     block(
       "LEGISLATION EXCERPTS (verbatim text from the Knowledge Base: BC Acts, regulations, and official guidance. Cite the Act and section, or the guidance document's title)",
-      legislationBlock(legislation)
+      legislationText.text
     ),
   ]
     .filter(Boolean)
@@ -803,6 +852,7 @@ export async function assembleStratasphere({
     turnContext,
     effort: meeting ? "low" : "medium",
     maxTokens: meeting ? 4000 : 8000,
+    tools: [calculatorTool],
     sources: withFocusSource(focus, sourcesFrom(hits, Boolean(ledger.trim()), await documentTitles(supabase, corpId, hits))),
     bylawSources: bylaws.sources,
     diagnostics: {
@@ -810,8 +860,33 @@ export async function assembleStratasphere({
       attachmentDocumentIds: attachments.read,
       ledgerDecisionIds: [...ledgerResult.ids, ...olderDecisions.map((l) => l.id)],
       // Every passage found, including those already shown with an earlier question.
-      hits: hits.map((h) => ({ scope: h.scope, documentId: h.documentId, title: h.title, similarity: h.similarity })),
+      hits: hits.map((h) => ({ id: h.id, scope: h.scope, documentId: h.documentId, title: h.title, similarity: h.similarity })),
       searchFailed,
+      sizes: (() => {
+        const textOf = (c: Anthropic.Beta.BetaMessageParam["content"]) => (typeof c === "string" ? c : JSON.stringify(c));
+        const historyChars = messages.slice(0, -1).reduce((n, m) => n + textOf(m.content).length, 0);
+        const turnChars = textOf(messages[messages.length - 1].content).length;
+        const passages = localBlock.text.length;
+        const precedent = globalBlock.text.length;
+        const legislationChars = legislationText.text.length;
+        const rules = system[0].text.length;
+        const platformChars = system[2].text.length;
+        const recordsChars = system[1].text.length;
+        const ledgerChars = ledger.length;
+        return {
+          rules,
+          bylaws: Math.max(0, recordsChars - ledgerChars),
+          ledger: ledgerChars,
+          platform: platformChars,
+          history: historyChars,
+          passages,
+          precedent,
+          legislation: legislationChars,
+          otherForQuestion: Math.max(0, turnChars - passages - precedent - legislationChars),
+          total: rules + recordsChars + platformChars + historyChars + turnChars,
+          savedByJoining: localBlock.charsSaved + globalBlock.charsSaved + legislationText.charsSaved,
+        };
+      })(),
     },
   };
 }
@@ -822,6 +897,19 @@ function withFocusSource(focus: ResolvedFocus | null | undefined, sources: Strat
   const rest = sources.filter((x) => !(x.kind === "document" && x.documentId === focus.documentId));
   const lead: StratasphereSource = { kind: "document", title: focus.title, documentId: focus.documentId };
   return [lead, ...rest].slice(0, 12);
+}
+
+/** Today's date in Pacific time, for "this fiscal year", "last month", and the like. */
+function todayLine(now = new Date()) {
+  const day = new Intl.DateTimeFormat("en-CA", {
+    timeZone: tz("America/Vancouver", now),
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  }).format(now);
+  const iso = new Intl.DateTimeFormat("en-CA", { timeZone: tz("America/Vancouver", now), year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
+  return `Today is ${day} (${iso}), Pacific time.`;
 }
 
 /** A question as the model sees it: the records found for it, then the question. Must stay byte-stable (cache). */
@@ -876,6 +964,7 @@ export async function askStratasphere(input: AskInput): Promise<AskResult> {
       messages: prepared.messages,
       effort: prepared.effort,
       maxTokens: prepared.maxTokens,
+      tools: prepared.tools,
       cache: true,
     });
     await logUsage(input, usage);
@@ -897,7 +986,7 @@ export async function streamStratasphere(input: AskInput, onText: (delta: string
   if (!prepared.ok) return prepared;
   try {
     const { text, truncated, usage } = await streamClaudeText(
-      { system: prepared.system, messages: prepared.messages, effort: prepared.effort, maxTokens: prepared.maxTokens, cache: true },
+      { system: prepared.system, messages: prepared.messages, effort: prepared.effort, maxTokens: prepared.maxTokens, tools: prepared.tools, cache: true },
       onText
     );
     await logUsage(input, usage);

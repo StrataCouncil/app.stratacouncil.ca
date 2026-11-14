@@ -107,3 +107,11 @@ test("documents Stratasphere can't read are marked in the list", async () => {
   assert.match(readability("waiting"), /not read yet/);
   assert.match(readability("processing"), /not read yet/);
 });
+
+test("the fiscal year is stated, or said to be unset", () => {
+  const unset = buildStrataProfile(data([lot(1, null)]), stripPII);
+  assert.match(unset, /Fiscal year: not set on StrataCouncil\.ca\./);
+  const d = data([lot(1, null)]);
+  d.corp.fiscalYearStartMonth = 2;
+  assert.match(buildStrataProfile(d, stripPII), /Fiscal year: February 1 to January 31 \(set on StrataCouncil\.ca\)\./);
+});

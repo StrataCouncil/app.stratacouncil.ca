@@ -10,44 +10,72 @@
  *   - a decision: its ledger line was sent;
  *   - a phrase: it appears in what was sent, ignoring case, spacing, and
  *     curly quotes. What was sent has had names and personal details
- *     replaced, so phrases shouldn't contain names.
+ *     replaced, so phrases shouldn't contain names;
+ *   - a Knowledge Base entry: a passage from it was sent; a section: that
+ *     section's passage was.
+ *
+ * The answer is checked for the case's key figures (lib/ai/figures.ts) and
+ * phrases. Which documents it cited is shown, for diagnosis, but doesn't
+ * decide anything: a person marks each answer Right, Partly, or Wrong.
  */
+import { figureFound } from "./figures.ts";
 
 export interface RecallCase {
   expectDocuments: string[];
   expectDecisions: string[];
   expectPhrases: string[];
   answerPhrases: string[];
+  /** Figures the answer must state (matched by value). */
+  keyFigures?: string[];
+  /** Knowledge Base entries (legislation_documents) a passage should come from. */
+  expectLegislationDocuments?: string[];
+  /** Knowledge Base sections (knowledge_chunks) that should be sent. */
+  expectLegislationSections?: string[];
 }
 
 export interface RecallDiagnostics {
   bylawDocumentIds: string[];
   attachmentDocumentIds: string[];
   ledgerDecisionIds: string[];
-  hits: Array<{ scope: "corporation" | "global_precedent" | "legislation"; documentId: string | null; title: string | null; similarity: number }>;
+  hits: Array<{ id?: string; scope: "corporation" | "global_precedent" | "legislation"; documentId: string | null; title: string | null; similarity: number }>;
   searchFailed: boolean;
+  /** Characters sent, by part (ContextSizes in lib/ai/stratasphere.ts). */
+  sizes?: object;
 }
 
 export type DocumentFinding = { id: string; found: boolean; where: string };
 export type DecisionFinding = { id: string; found: boolean };
 export type PhraseFinding = { phrase: string; found: boolean };
+export type KnowledgeFinding = { id: string; kind: "entry" | "section"; found: boolean; where: string };
+export type FigureFinding = { figure: string; found: boolean };
 
 export interface FindResult {
   passed: boolean;
   documents: DocumentFinding[];
   decisions: DecisionFinding[];
   phrases: PhraseFinding[];
+  knowledge: KnowledgeFinding[];
+  /** False when the case names nothing to look for (it checks only the answer). */
+  checked: boolean;
   searchFailed: boolean;
   /** Size of what was sent, in characters. */
   contextChars: number;
+  /** Characters by part (rules, bylaws, ledger, passages, ...). */
+  sizes?: object;
+  /** The Knowledge Base sections sent, in order. */
+  legislationResults?: Array<{ rank: number; id: string | null; title: string | null; similarity: number }>;
   /** The strata's own search results, in order: what search returned, for reading a miss. */
   searchResults: Array<{ rank: number; documentId: string | null; title: string | null; similarity: number }>;
 }
 
 export interface AnswerResult {
+  /** Every key figure and phrase stated (true when there are none: then only a person's marking says). */
   passed: boolean;
+  /** How many figures and phrases were checked. */
+  checked: number;
+  figures: FigureFinding[];
   phrases: PhraseFinding[];
-  /** Expected documents the answer listed as a source. */
+  /** Expected documents the answer listed as a source: for diagnosis only. */
   cited: DocumentFinding[];
 }
 
@@ -68,7 +96,11 @@ function contains(haystack: string, phrase: string) {
   return p.length > 0 && haystack.includes(p);
 }
 
-export function findCheck(c: RecallCase, d: RecallDiagnostics, sentText: string): FindResult {
+/**
+ * `entryOf` maps each Knowledge Base passage sent (knowledge_chunks.id) to
+ * its entry (legislation_documents.id); the caller looks them up.
+ */
+export function findCheck(c: RecallCase, d: RecallDiagnostics, sentText: string, entryOf: Map<string, string> = new Map()): FindResult {
   const sent = normalizeText(sentText);
   const own = d.hits
     .map((h, i) => ({ ...h, rank: i + 1 }))
@@ -86,15 +118,31 @@ export function findCheck(c: RecallCase, d: RecallDiagnostics, sentText: string)
   });
   const decisions = c.expectDecisions.map((id): DecisionFinding => ({ id, found: ledger.has(id) }));
   const phrases = c.expectPhrases.map((phrase): PhraseFinding => ({ phrase, found: contains(sent, phrase) }));
+  const law = d.hits.filter((h) => h.scope === "legislation").map((h, i) => ({ ...h, rank: i + 1 }));
+  const knowledge: KnowledgeFinding[] = [
+    ...(c.expectLegislationDocuments ?? []).map((id): KnowledgeFinding => {
+      const ranks = law.filter((h) => h.id && entryOf.get(h.id) === id).map((h) => h.rank);
+      return { id, kind: "entry", found: ranks.length > 0, where: ranks.length ? `Sections sent: ${ranks.join(", ")}` : "Not sent" };
+    }),
+    ...(c.expectLegislationSections ?? []).map((id): KnowledgeFinding => {
+      const hit = law.find((h) => h.id === id);
+      return { id, kind: "section", found: Boolean(hit), where: hit ? `Sent, result ${hit.rank}` : "Not sent" };
+    }),
+  ];
+  const all = [...documents, ...decisions, ...phrases, ...knowledge];
 
   return {
-    passed: !d.searchFailed && [...documents, ...decisions, ...phrases].every((x) => x.found),
+    passed: !d.searchFailed && all.every((x) => x.found),
     documents,
     decisions,
     phrases,
+    knowledge,
+    checked: all.length > 0,
     searchFailed: d.searchFailed,
     contextChars: sentText.length,
+    sizes: d.sizes,
     searchResults: own.map((h) => ({ rank: h.rank, documentId: h.documentId, title: h.title, similarity: Number(h.similarity.toFixed(3)) })),
+    legislationResults: law.map((h) => ({ rank: h.rank, id: h.id ?? null, title: h.title, similarity: Number(h.similarity.toFixed(3)) })),
   };
 }
 
@@ -104,10 +152,12 @@ export function answerCheck(
   sources: Array<{ kind: string; documentId?: string }>
 ): AnswerResult {
   const text = normalizeText(answer);
+  const figures = (c.keyFigures ?? []).map((figure): FigureFinding => ({ figure, found: figureFound(answer, figure) }));
   const phrases = c.answerPhrases.map((phrase): PhraseFinding => ({ phrase, found: contains(text, phrase) }));
   const citedIds = new Set(sources.flatMap((s) => (s.kind === "document" && s.documentId ? [s.documentId] : [])));
   const cited = c.expectDocuments.map((id): DocumentFinding => ({ id, found: citedIds.has(id), where: citedIds.has(id) ? "Cited" : "Not cited" }));
-  return { passed: [...phrases, ...cited].every((x) => x.found), phrases, cited };
+  const checks = [...figures, ...phrases];
+  return { passed: checks.every((x) => x.found), checked: checks.length, figures, phrases, cited };
 }
 
 /** Everything the model was sent, as one string: the system blocks, then each message. */

@@ -5484,6 +5484,37 @@ abbr.role-tag--short {
 .overview-details dd {
   margin: 0;
 }
+.overview-details__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.details-changes {
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0;
+  display: grid;
+  gap: 0.6rem;
+}
+.details-changes li {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--line, #e3dfd5);
+  border-radius: 8px;
+}
+.details-super {
+  border: 1px solid var(--line, #e3dfd5);
+  border-radius: 8px;
+  padding: 0.75rem 1rem 0.25rem;
+  margin: 0 0 1rem;
+}
+.details-super legend {
+  font-size: 0.85rem;
+  color: var(--muted);
+  padding: 0 0.3rem;
+}
 
 /* Subscription pending: in place of Subscribe/Request while Stripe confirms the first payment. */
 .subscription-pending {
@@ -11153,6 +11184,65 @@ button.design-editor__swatch {
 .recall-form__options input[type="checkbox"] {
   flex: none;
   width: auto;
+}
+.billing-tag--bad {
+  background: rgba(180, 35, 24, 0.12);
+  color: var(--danger, #b42318);
+}
+.recall__short {
+  color: var(--danger, #b42318);
+}
+.recall__verdict {
+  display: grid;
+  gap: 0.4rem;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--line);
+}
+.recall__verdict textarea {
+  width: 100%;
+  font: inherit;
+}
+.recall__status {
+  display: grid;
+  justify-items: start;
+  gap: 0.2rem;
+}
+.recall__calc {
+  margin: 0 0 0.6rem;
+}
+.recall__calc pre {
+  white-space: pre-wrap;
+  font-size: 0.8rem;
+  margin: 0.4rem 0 0;
+}
+.recall__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0.25rem 0 0.5rem;
+}
+.recall__chip {
+  border: 1px solid var(--line);
+  background: var(--surface, #fff);
+  border-radius: 999px;
+  padding: 0.15rem 0.6rem;
+  font: inherit;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+.recall-form__pick > select,
+.recall-form__options > input:not([type="checkbox"]) {
+  width: 100%;
+}
+.recall-form__divider {
+  margin: 0.25rem 0 0;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--line);
+}
+.recall-form__more summary {
+  cursor: pointer;
+  margin-bottom: 0.5rem;
 }
 @media (max-width: 800px) {
   .recall__details,
