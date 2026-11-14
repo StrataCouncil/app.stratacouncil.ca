@@ -22,13 +22,3 @@ export const LEGISLATION_INDEX_EVENT = `${EVENT_PREFIX}legislation/index.request
 export const DOCUMENT_FINGERPRINT_EVENT = `${EVENT_PREFIX}documents/fingerprint.requested`;
 export const CORPORATION_FINGERPRINT_EVENT = `${EVENT_PREFIX}documents/fingerprint-all.requested`;
 
-/**
- * The demo's fictional council taking part (lib/demo-council.ts). Demo
- * site only: the live site never sends these, and only the demo app runs
- * the functions that handle them.
- */
-export const DEMO_COUNCIL_EVENTS = {
-  discussionOpened: "demo/council.discussion-opened",
-  meetingLaunched: "demo/council.meeting-launched",
-  voteOpened: "demo/council.vote-opened",
-} as const;

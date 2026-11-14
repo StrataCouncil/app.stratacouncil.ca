@@ -50,14 +50,16 @@ first opened and dated from that day:
   visitor-parking dispute, a water leak and its deductible, an EV charger
   request and a barking dog.
 
-The fictional council takes part (`lib/demo-council.ts`, background jobs in
-`lib/inngest/demo-council.ts`, database functions in `supabase/demo/demo.sql`):
-when a visitor opens a Discussion, the other four members vote over the next
-minute or two; when they launch a meeting, the members (and the manager)
-arrive within a few seconds; and when they open a vote, each member present
-votes a few seconds apart. Votes are random: mostly For, sometimes Against,
-now and then an abstention, and the first Against sometimes says why. Never in
-a sandbox, where real people play the council.
+The fictional council takes part, straight away (`lib/demo-council.ts`, run
+just after the visitor's action with next/server `after()`, and database
+functions in `supabase/demo/demo.sql`): when a visitor opens a Discussion,
+the other four members vote within a few seconds; when they launch a meeting,
+the members (and the manager) arrive a moment apart; and when they open a
+vote, each member present votes within a second or so of the last. Votes are
+random: mostly For, sometimes Against, now and then an abstention, and the
+first Against sometimes says why. Never in a sandbox, where real people play
+the council. (2026-11-14: this ran on Inngest at first, with longer pauses;
+nothing arrived on the demo, and visitors expect it at once.)
 
 Meeting video in the demo is sample video: a short silent loop for each
 fictional person, with whoever seems to be speaking outlined
