@@ -7,6 +7,7 @@ import { askClaudeText, ClaudeRefusalError } from "@/lib/ai/claude";
 import { estimateCostUsd } from "@/lib/ai/pricing";
 import { assembleStratasphere, finalSources, type MeetingScope } from "@/lib/ai/stratasphere";
 import { answerCheck, findCheck, phraseLines, sentText, type AnswerResult, type FindResult, type RecallCase } from "@/lib/ai/recall";
+import { figureLines } from "@/lib/ai/figures";
 import { meetingTypeLabels, normalizeAgenda, type MeetingType } from "@/lib/meetings/agenda";
 
 /**
@@ -34,11 +35,16 @@ export interface RecallCaseInput {
   expectDecisions: string[];
   expectPhrases: string;
   answerPhrases: string;
+  expectedAnswer: string;
+  /** One per line. */
+  keyFigures: string;
+  expectLegislationDocuments: string[];
+  expectLegislationSections: string[];
   note: string;
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const uuids = (v: unknown) => (Array.isArray(v) ? [...new Set(v.filter((x): x is string => typeof x === "string" && UUID.test(x)))].slice(0, 50) : []);
+const uuids = (v: unknown, max = 50) => (Array.isArray(v) ? [...new Set(v.filter((x): x is string => typeof x === "string" && UUID.test(x)))].slice(0, max) : []);
 
 export async function saveRecallCase(input: RecallCaseInput): Promise<{ ok: true; id: string } | Fail> {
   const who = await requireSuperAdmin();
@@ -58,11 +64,15 @@ export async function saveRecallCase(input: RecallCaseInput): Promise<{ ok: true
     expect_decisions: uuids(input.expectDecisions),
     expect_phrases: phraseLines(String(input.expectPhrases ?? "")),
     answer_phrases: phraseLines(String(input.answerPhrases ?? "")),
+    expected_answer: String(input.expectedAnswer ?? "").trim().slice(0, 8000),
+    key_figures: figureLines(String(input.keyFigures ?? "")),
+    expect_legislation_documents: uuids(input.expectLegislationDocuments),
+    expect_legislation_sections: uuids(input.expectLegislationSections, 200),
     note: String(input.note ?? "").trim().slice(0, 1000),
     updated_at: new Date().toISOString(),
   };
-  if (!row.expect_documents.length && !row.expect_decisions.length && !row.expect_phrases.length) {
-    return { ok: false, error: "Name at least one record that holds the answer: a document, a decision, or a phrase." };
+  if (!row.expected_answer && !row.key_figures.length && !row.answer_phrases.length) {
+    return { ok: false, error: "Write the answer you expect, or at least its key figures, so the answer can be judged." };
   }
   const admin = createAdminClient();
   const { data, error } = input.id
@@ -85,7 +95,7 @@ export async function deleteRecallCase(id: string): Promise<{ ok: true } | Fail>
 }
 
 export interface StrataRecords {
-  documents: Array<{ id: string; title: string; category: string | null; status: string; uploadedAt: string }>;
+  documents: Array<{ id: string; title: string; category: string | null; status: string; uploadedAt: string; copyOf: string | null }>;
   decisions: Array<{ id: string; title: string; decidedAt: string; meetingType: string | null }>;
   meetings: Array<{ id: string; label: string; items: Array<{ id: string; label: string }> }>;
   subscribed: boolean;
@@ -98,7 +108,7 @@ export async function getStrataRecords(corporationId: string): Promise<({ ok: tr
   const [docs, decisions, meetings, sub] = await Promise.all([
     admin
       .from("documents")
-      .select("id, title, category, indexing_status, uploaded_at")
+      .select("id, title, category, indexing_status, uploaded_at, content_sha256")
       .eq("corporation_id", corporationId)
       .order("uploaded_at", { ascending: false })
       .limit(1000),
@@ -110,13 +120,25 @@ export async function getStrataRecords(corporationId: string): Promise<({ ok: tr
   return {
     ok: true,
     subscribed: sub.data?.status === "active",
-    documents: (docs.data ?? []).map((d) => ({
-      id: d.id as string,
-      title: (d.title as string) || "Untitled",
-      category: (d.category as string | null) ?? null,
-      status: String(d.indexing_status ?? ""),
-      uploadedAt: String(d.uploaded_at).slice(0, 10),
-    })),
+    documents: (() => {
+      // Identical copies (the same file uploaded twice) are marked, oldest first.
+      const firstTitle = new Map<string, string>();
+      const sorted = [...(docs.data ?? [])].sort((a, b) => String(a.uploaded_at).localeCompare(String(b.uploaded_at)));
+      for (const d of sorted) if (d.content_sha256 && !firstTitle.has(d.content_sha256 as string)) firstTitle.set(d.content_sha256 as string, (d.title as string) || "Untitled");
+      const firstId = new Map<string, string>();
+      for (const d of sorted) if (d.content_sha256 && !firstId.has(d.content_sha256 as string)) firstId.set(d.content_sha256 as string, d.id as string);
+      return (docs.data ?? []).map((d) => {
+        const sha = (d.content_sha256 as string | null) ?? null;
+        return {
+          id: d.id as string,
+          title: (d.title as string) || "Untitled",
+          category: (d.category as string | null) ?? null,
+          status: String(d.indexing_status ?? ""),
+          uploadedAt: String(d.uploaded_at).slice(0, 10),
+          copyOf: sha && firstId.get(sha) !== d.id ? (firstTitle.get(sha) ?? null) : null,
+        };
+      });
+    })(),
     decisions: (decisions.data ?? []).map((d) => ({
       id: d.id as string,
       title: (d.title as string) || "Untitled decision",
@@ -131,6 +153,73 @@ export async function getStrataRecords(corporationId: string): Promise<({ ok: tr
   };
 }
 
+export interface KnowledgeEntry {
+  id: string;
+  title: string;
+  kind: string;
+}
+
+/** The Knowledge Base's indexed entries (Acts, regulations, guidance), to name in a case. */
+export async function getKnowledgeEntries(): Promise<({ ok: true; entries: KnowledgeEntry[] }) | Fail> {
+  if (!(await requireSuperAdmin())) return notAllowed;
+  const { data, error } = await createAdminClient()
+    .from("legislation_documents")
+    .select("id, title, short_name, kind")
+    .eq("indexing_status", "indexed")
+    .order("title");
+  if (error) return { ok: false, error: "Couldn't load the Knowledge Base." };
+  return {
+    ok: true,
+    entries: (data ?? []).map((e) => ({ id: e.id as string, title: e.short_name ? `${e.title} (${e.short_name})` : (e.title as string), kind: e.kind as string })),
+  };
+}
+
+/** One Knowledge Base entry's sections, in order. */
+export async function getKnowledgeSections(entryId: string): Promise<({ ok: true; sections: Array<{ id: string; title: string }> }) | Fail> {
+  if (!(await requireSuperAdmin())) return notAllowed;
+  if (!UUID.test(entryId)) return { ok: false, error: "Choose an entry." };
+  const sections: Array<{ id: string; title: string }> = [];
+  // Large Acts and codes run to thousands of sections: read them all, a page at a time.
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await createAdminClient()
+      .from("knowledge_chunks")
+      .select("id, title, chunk_index")
+      .eq("legislation_document_id", entryId)
+      .order("chunk_index")
+      .range(from, from + 999);
+    if (error) return { ok: false, error: "Couldn't load that entry's sections." };
+    sections.push(...(data ?? []).map((c) => ({ id: c.id as string, title: (c.title as string) || `Part ${Number(c.chunk_index) + 1}` })));
+    if (!data || data.length < 1000) break;
+  }
+  return { ok: true, sections };
+}
+
+/** Labels for Knowledge Base entries and sections named in cases, for showing them. */
+export async function knowledgeLabels(entryIds: string[], sectionIds: string[]): Promise<Record<string, string>> {
+  if (!(await requireSuperAdmin())) return {};
+  entryIds = uuids(entryIds, 1000);
+  sectionIds = uuids(sectionIds, 5000);
+  const admin = createAdminClient();
+  const out: Record<string, string> = {};
+  const [entries, sections] = await Promise.all([
+    entryIds.length ? admin.from("legislation_documents").select("id, title, short_name").in("id", entryIds) : Promise.resolve({ data: [] as Array<Record<string, unknown>> }),
+    sectionIds.length ? admin.from("knowledge_chunks").select("id, title, source_act").in("id", sectionIds) : Promise.resolve({ data: [] as Array<Record<string, unknown>> }),
+  ]);
+  for (const e of entries.data ?? []) out[e.id as string] = (e.short_name as string) || (e.title as string);
+  for (const c of sections.data ?? []) out[c.id as string] = [c.source_act, c.title].filter(Boolean).join(", ");
+  return out;
+}
+
+/** Which Knowledge Base entry each passage sent belongs to. */
+async function entriesOf(hits: Array<{ id?: string; scope: string }>) {
+  const ids = hits.filter((h) => h.scope === "legislation" && h.id).map((h) => h.id!);
+  const map = new Map<string, string>();
+  if (!ids.length) return map;
+  const { data } = await createAdminClient().from("knowledge_chunks").select("id, legislation_document_id").in("id", ids);
+  for (const r of data ?? []) if (r.legislation_document_id) map.set(r.id as string, r.legislation_document_id as string);
+  return map;
+}
+
 type CaseRow = {
   id: string;
   corporation_id: string;
@@ -141,6 +230,9 @@ type CaseRow = {
   expect_decisions: string[];
   expect_phrases: string[];
   answer_phrases: string[];
+  key_figures: string[];
+  expect_legislation_documents: string[];
+  expect_legislation_sections: string[];
 };
 
 const toCase = (r: CaseRow): RecallCase => ({
@@ -148,6 +240,9 @@ const toCase = (r: CaseRow): RecallCase => ({
   expectDecisions: r.expect_decisions ?? [],
   expectPhrases: r.expect_phrases ?? [],
   answerPhrases: r.answer_phrases ?? [],
+  keyFigures: r.key_figures ?? [],
+  expectLegislationDocuments: r.expect_legislation_documents ?? [],
+  expectLegislationSections: r.expect_legislation_sections ?? [],
 });
 
 /** The request for a case, built exactly as Stratasphere builds it for a question (no history). */
@@ -168,7 +263,7 @@ async function buildRequest(supabase: Parameters<typeof assembleStratasphere>[0]
 async function loadCase(id: string) {
   const { data } = await createAdminClient()
     .from("stratasphere_recall_cases")
-    .select("id, corporation_id, question, meeting_id, item_id, expect_documents, expect_decisions, expect_phrases, answer_phrases")
+    .select("id, corporation_id, question, meeting_id, item_id, expect_documents, expect_decisions, expect_phrases, answer_phrases, key_figures, expect_legislation_documents, expect_legislation_sections")
     .eq("id", id)
     .maybeSingle();
   return (data as CaseRow | null) ?? null;
@@ -205,7 +300,12 @@ export async function runFindCheck(caseId: string): Promise<FindRun | Fail> {
     await saveRun(c.id, "find", false, { problem: built.error }, who.user.id);
     return { ok: true, passed: false, result: null, problem: built.error };
   }
-  const result = findCheck(toCase(c), built.prepared.diagnostics, sentText(built.prepared.system, built.prepared.messages));
+  const result = findCheck(
+    toCase(c),
+    built.prepared.diagnostics,
+    sentText(built.prepared.system, built.prepared.messages),
+    await entriesOf(built.prepared.diagnostics.hits)
+  );
   await saveRun(c.id, "find", result.passed, { ...result }, who.user.id);
   revalidatePath("/admin/recall");
   return { ok: true, passed: result.passed, result, problem: null };
@@ -225,19 +325,24 @@ export async function runAnswerCheck(caseId: string): Promise<AnswerRun | Fail> 
   const built = await buildRequest(who.supabase, c);
   if (!built.ok) return { ok: false, error: built.error };
   const { prepared } = built;
+  const calculations: Array<{ name: string; input: unknown; result: string }> = [];
   try {
     const { text, truncated, usage } = await askClaudeText({
       system: prepared.system,
       messages: prepared.messages,
       effort: prepared.effort,
       maxTokens: prepared.maxTokens,
+      tools: prepared.tools,
       cache: true,
+      onToolCall: (call) => calculations.push(call),
     });
     const cost = estimateCostUsd(usage);
     const answer = truncated ? `${text}\n[Answer cut short.]` : text;
     const sources = finalSources(prepared, text);
     const result = answerCheck(toCase(c), answer, sources);
-    await saveRun(c.id, "answer", result.passed, { ...result, answer, sources, usage }, who.user.id, cost);
+    // What was sent with it, so a wrong answer can be traced to a missing record.
+    const find = findCheck(toCase(c), prepared.diagnostics, sentText(prepared.system, prepared.messages), await entriesOf(prepared.diagnostics.hits));
+    await saveRun(c.id, "answer", result.passed, { ...result, answer, sources, usage, calculations, find }, who.user.id, cost);
     revalidatePath("/admin/recall");
     return { ok: true, passed: result.passed, answer, result, costUsd: cost, problem: null };
   } catch (err) {
@@ -245,4 +350,28 @@ export async function runAnswerCheck(caseId: string): Promise<AnswerRun | Fail> 
     console.error("[recall] answer", err instanceof Error ? err.message : err);
     return { ok: false, error: "The AI couldn't answer right now. Try again." };
   }
+}
+
+/** A person's verdict on an answering run: Right, Partly, or Wrong, with a note. */
+export async function markRecallAnswer(runId: string, verdict: "right" | "partly" | "wrong" | null, note: string): Promise<{ ok: true } | Fail> {
+  const who = await requireSuperAdmin();
+  if (!who) return notAllowed;
+  if (!UUID.test(runId)) return { ok: false, error: "That result no longer exists." };
+  if (verdict !== null && !["right", "partly", "wrong"].includes(verdict)) return { ok: false, error: "Choose Right, Partly, or Wrong." };
+  const { error } = await createAdminClient()
+    .from("stratasphere_recall_runs")
+    .update({
+      verdict,
+      verdict_note: String(note ?? "").trim().slice(0, 4000),
+      verdict_by: verdict ? who.user.id : null,
+      verdict_at: verdict ? new Date().toISOString() : null,
+    })
+    .eq("id", runId)
+    .eq("kind", "answer");
+  if (error) {
+    console.error("[recall] verdict", error.message);
+    return { ok: false, error: "Couldn't save the marking." };
+  }
+  revalidatePath("/admin/recall");
+  return { ok: true };
 }

@@ -14,6 +14,8 @@ import { corporationRoleLabels, councilRoles, jurisdictions } from "@/lib/strata
 import { meetingTypeLabels } from "@/lib/meetings/agenda";
 import { formatMeetingWhen } from "@/lib/meetings/format";
 import { meetingStatus } from "@/lib/meetings/status";
+import { StrataDetailsEditor } from "@/components/StrataDetailsEditor";
+import { fiscalYearLabel } from "@/lib/strata-details";
 
 /**
  * Overview: the strata's landing page, a dashboard for the council. News
@@ -34,7 +36,7 @@ export default async function OverviewPage({ params }: { params: Promise<{ corpI
     getCurrentAnnouncements("overview", 5),
     supabase
       .from("strata_corporations")
-      .select("strata_plan_number, legal_name, building_name, address, unit_count, jurisdiction")
+      .select("strata_plan_number, legal_name, building_name, address, unit_count, jurisdiction, fiscal_year_start_month")
       .eq("strata_plan_number", corpId)
       .maybeSingle(),
     supabase.from("owners_and_council").select("id", { count: "exact", head: true }).eq("corporation_id", corpId).not("full_name", "is", null),
@@ -245,7 +247,24 @@ export default async function OverviewPage({ params }: { params: Promise<{ corpI
         </section>
 
         <section className="card" data-testid="overview-details">
-          <h3>Strata details</h3>
+          <div className="overview-details__head">
+            <h3>Strata details</h3>
+            {/* Only the strata's Admin and Super Admins (0096 checks again). */}
+            {access.isAdmin && (
+              <StrataDetailsEditor
+                corpId={corpId}
+                superAdmin={access.isSuperAdmin}
+                details={{
+                  buildingName: corp.building_name,
+                  address: corp.address,
+                  fiscalYearStartMonth: corp.fiscal_year_start_month,
+                  legalName: corp.legal_name,
+                  jurisdiction: corp.jurisdiction,
+                  unitCount: corp.unit_count,
+                }}
+              />
+            )}
+          </div>
           <dl className="overview-details">
             <div>
               <dt>Strata plan</dt>
@@ -268,6 +287,12 @@ export default async function OverviewPage({ params }: { params: Promise<{ corpI
             <div>
               <dt>Jurisdiction</dt>
               <dd>{jurisdiction}</dd>
+            </div>
+            <div>
+              <dt>Fiscal year</dt>
+              <dd data-testid="overview-fiscal-year">
+                {fiscalYearLabel(corp.fiscal_year_start_month) ?? <span className="card__meta">Not set{access.isAdmin ? ": add it with Edit details" : ""}</span>}
+              </dd>
             </div>
             <div>
               <dt>Stratasphere&trade;</dt>

@@ -468,15 +468,19 @@ behaviour as the baseline.
 - **Where it lives:** a Super Admin page, "Stratasphere recall", holding test
   cases in a server-only table. The cases contain real strata records, so they
   live in the production database, never in the code repository.
-- **A case is:** a strata, a question, optionally a focus (for example an agenda
-  item), the record(s) that hold the answer, and optionally the fact the answer
-  must state.
-- **Check 1, finding:** does each expected record reach the model? It builds the
-  request exactly as Stratasphere would and checks it, without calling the AI.
-  It costs nothing, so it runs on every change.
-- **Check 2, answering:** does the answer state the fact and cite the record? It
-  calls the AI, at about $0.27 a case. It runs only when you press the button,
-  showing the estimated cost first.
+- **A case is (since 0096, 2026-11-14):** a strata, a question, the answer you
+  expect, and its key figures. The records that hold the answer (documents,
+  ledger decisions, Knowledge Base entries or sections down to the section, and
+  exact wording) are optional, for finding out why an answer went wrong.
+- **Ask:** puts the question to Stratasphere exactly as a member would (the
+  calculator included), checks each key figure by value (lib/ai/figures.ts:
+  $23,333.33 matches 23333.33; 2027-01-31 matches January 31, 2027), and keeps
+  what was sent with it (the records found, and the characters by part). A
+  person marks the answer Right, Partly, or Wrong, with a note. "Ask the ones
+  not Right" re-runs only those. About $0.27 a case, shown before it runs.
+- **Check what's sent:** builds the request without asking the AI, so it costs
+  nothing; for every case that names records, after any change to how records
+  are found.
 - **The starting set is about 40 cases on EPS9048,** written with you,
   deliberately covering:
   - Bylaw questions worded nothing like the bylaw.
@@ -487,8 +491,8 @@ behaviour as the baseline.
   - Follow-up questions.
   - Counting questions.
   - Things truly not on file, to check the honest miss.
-- **The rule:** no change to records, context, or caching merges unless Check 1
-  passes every case, and Check 2 is no worse than the baseline.
+- **The rule:** no change to records, context, or caching merges unless every
+  named record is still sent, and no answer marked Right gets worse.
 
 ### Cost, without reading less
 
@@ -504,6 +508,15 @@ behaviour as the baseline.
 - **No duplicates within a request:** if a passage is already in an earlier
   question's records in the same conversation, it isn't added again. The text is
   still in front of the model, so nothing is lost.
+- **Each piece of text once (0096):** identical copies of a document (the same
+  file uploaded twice, documents.content_sha256) are sent once, with the copy's
+  title noted; a document's passages go under one heading, and neighbouring
+  passages are joined, so the 200-character overlap between them isn't repeated
+  (lib/kb/passages.ts). The ledger keeps every decision, without repeating a
+  title its motion already states. Nothing found is dropped.
+- **Arithmetic by code (0096):** a calculate tool (lib/ai/calculator.ts) does
+  every sum, share, proration, and count of days or months; the answer shows
+  the working with a source for each figure, and states its basis.
 - **Measured, not assumed:** before and after, compare average cost and cache
   reads per question in `stratasphere_usage`.
 - **Target:** the first question in a session costs about the same as today

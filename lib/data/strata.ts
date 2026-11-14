@@ -36,6 +36,8 @@ export interface StrataAccess {
   /** Discussions (0078): council, or anyone who runs meetings (a Super Admin included). */
   seesDiscussions: boolean;
   userId: string;
+  /** A Super Admin (two-step verified), member of this strata or not. */
+  isSuperAdmin: boolean;
   /** A Super Admin managing a strata they aren't a member of. */
   superAdminOnly: boolean;
   /** An active member holding a council role (0070): sees Discussions. */
@@ -94,6 +96,7 @@ export const getStrataAccess = cache(async (corpId: string): Promise<StrataAcces
     canRunMeetings: canRun === true,
     seesDiscussions: onCouncil === true || canRun === true,
     userId: user.id,
+    isSuperAdmin: superAdmin === true,
     superAdminOnly: superAdmin === true && !membership,
     isCouncil: onCouncil === true,
   };

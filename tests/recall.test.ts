@@ -59,14 +59,43 @@ test("a case passes only when everything is found, and never when search failed"
   assert.equal(findCheck(base, diag(), "").passed, true);
 });
 
-test("the answer must state its phrases and cite the expected documents", () => {
-  const c = { ...base, expectDocuments: ["bylaws", "depreciation"], answerPhrases: ["two pets", "Bylaw 3.1"] };
+test("the answer must state its key figures and phrases; citations are shown, not scored", () => {
+  const c = { ...base, expectDocuments: ["bylaws", "depreciation"], answerPhrases: ["two pets", "Bylaw 3.1"], keyFigures: ["$23,333.33", "2027-01-31"] };
   const sources = [{ kind: "document", documentId: "bylaws" }, { kind: "decisions" }];
-  const r = answerCheck(c, "Under bylaw 3.1, each lot may keep two pets.", sources);
+  const r = answerCheck(c, "Under bylaw 3.1, each lot may keep two pets. FY2027 bears $23,333.33, to January 31, 2027.", sources);
   assert.deepEqual(r.phrases.map((p) => p.found), [true, true]);
+  assert.deepEqual(r.figures.map((f) => f.found), [true, true]);
   assert.deepEqual(r.cited.map((x) => x.found), [true, false]);
+  assert.equal(r.passed, true, "a document not cited doesn't fail the answer");
+  assert.equal(r.checked, 4);
+  assert.equal(answerCheck(c, "Under bylaw 3.1, each lot may keep two pets. FY2027 bears $23,333.", sources).passed, false);
+  const none = answerCheck(base, "Anything.", []);
+  assert.equal(none.checked, 0, "nothing to check: a person marks it");
+});
+
+test("Knowledge Base entries and sections are found among the passages sent", () => {
+  const d = diag({
+    hits: [
+      { id: "s45", scope: "legislation", documentId: null, title: "s. 45", similarity: 0.7 },
+      { id: "s46", scope: "legislation", documentId: null, title: "s. 46", similarity: 0.6 },
+    ],
+  });
+  const entryOf = new Map([
+    ["s45", "spa"],
+    ["s46", "spa"],
+  ]);
+  const r = findCheck({ ...base, expectLegislationDocuments: ["spa", "regulation"], expectLegislationSections: ["s46", "s99"] }, d, "", entryOf);
+  assert.deepEqual(
+    r.knowledge.map((k) => [k.kind, k.found, k.where]),
+    [
+      ["entry", true, "Sections sent: 1, 2"],
+      ["entry", false, "Not sent"],
+      ["section", true, "Sent, result 2"],
+      ["section", false, "Not sent"],
+    ]
+  );
   assert.equal(r.passed, false);
-  assert.equal(answerCheck({ ...c, expectDocuments: ["bylaws"] }, "Under bylaw 3.1, each lot may keep two pets.", sources).passed, true);
+  assert.equal(findCheck(base, d, "").checked, false, "a case naming nothing checks only the answer");
 });
 
 test("sentText joins the system blocks and every message", () => {
