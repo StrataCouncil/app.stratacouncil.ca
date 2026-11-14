@@ -390,7 +390,7 @@ VOTE: 14 in favour, 3 opposed. CARRIED. The amendment will be filed at the Land 
 Moved by SL022, seconded by SL012: THAT the rules made by council during the year (amenity room, bike room, and e-bike charging) be ratified. CARRIED unanimously.
 
 ## 12. Election of council
-Five owners were nominated for five positions and were elected by acclamation: Margaret Chen-Whitford (SL012), Tomasz Kowalczyk (SL005), Adaeze Okafor (SL019), Liam Fraser (SL008), and Ruth Gallagher (SL022). Council will elect its officers at its first meeting.
+Five owners were nominated for five positions and were elected by acclamation: the owners of SL012, SL005, SL019, SL008, and SL022. Council will elect its officers at its first meeting.
 
 ## 13. New business
 An owner asked about electric vehicle charging in the parkade. Council will report on options during the year; any owner may apply under Bylaw 7.

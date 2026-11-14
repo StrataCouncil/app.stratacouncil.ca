@@ -1,5 +1,6 @@
 "use server";
 
+import { nudgeDemoCouncil } from "@/lib/demo-council";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -477,6 +478,7 @@ export async function launchMeeting(
     return { ok: false, error: known ? error.message : "Couldn't launch the meeting.", subscriptionRequired };
   }
   await logDemoActivity({ kind: "meeting.launched", detail: { meetingId } });
+  await nudgeDemoCouncil("meetingLaunched", { meetingId });
   // Launched (not resumed): council and the manager get a link to join (0074),
   // and the agenda is no longer anyone's to edit.
   if (data !== "resumed") {

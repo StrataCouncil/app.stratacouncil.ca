@@ -361,3 +361,85 @@ create index if not exists demo_activity_at_idx on public.demo_activity (at);
 alter table public.demo_activity enable row level security;
 revoke all on public.demo_activity from anon, authenticated;
 grant all on public.demo_activity to service_role;
+
+-- The fictional council takes part (lib/demo-council.ts): in a visitor's
+-- meeting, the fictional council members (demo_cast) arrive when it's
+-- launched and vote when a vote opens, as a member does from their own
+-- screen. Service role only, and only for demo_cast accounts on the
+-- meeting's own council. Safe to re-run.
+create or replace function public.demo_council_join(p_meeting_id uuid, p_user_id uuid, p_lot text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_meeting public.meetings;
+begin
+  select * into v_meeting from public.meetings where id = p_meeting_id for update;
+  if v_meeting.id is null or v_meeting.launched_by is null or v_meeting.status = 'ADJOURNED' then
+    return;
+  end if;
+  if not exists (select 1 from public.demo_cast where user_id = p_user_id) then
+    return;
+  end if;
+  -- The strata manager (no lot): joins, but isn't on the attendance.
+  if p_lot is null then
+    if not exists (select 1 from public.corporation_role_assignments r
+                   where r.corporation_id = v_meeting.corporation_id and r.user_id = p_user_id and r.role = 'manager')
+       or exists (select 1 from public.meeting_presence p where p.meeting_id = p_meeting_id and p.user_id = p_user_id) then
+      return;
+    end if;
+    insert into public.meeting_presence (meeting_id, user_id, lot_number, event, by_user)
+    values (p_meeting_id, p_user_id, null, 'joined', p_user_id);
+    return;
+  end if;
+  if not exists (select 1 from public.corporation_memberships m
+                 where m.corporation_id = v_meeting.corporation_id and m.user_id = p_user_id
+                   and m.status = 'active' and m.lot_number = p_lot) then
+    return;
+  end if;
+  if v_meeting.attendance ->> p_lot = 'present' then
+    return;
+  end if;
+  insert into public.meeting_presence (meeting_id, user_id, lot_number, event, by_user)
+  values (p_meeting_id, p_user_id, p_lot, 'joined', p_user_id);
+  perform public.set_meeting_attendance(p_meeting_id, p_lot, 'present');
+end;
+$$;
+revoke all on function public.demo_council_join(uuid, uuid, text) from public, anon, authenticated;
+grant execute on function public.demo_council_join(uuid, uuid, text) to service_role;
+
+create or replace function public.demo_council_ballot(p_vote_id uuid, p_user_id uuid, p_lot text, p_choice text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_vote public.meeting_votes;
+  v_corp text;
+begin
+  if p_choice not in ('for', 'against', 'abstain') then
+    return;
+  end if;
+  select * into v_vote from public.meeting_votes where id = p_vote_id for update;
+  if v_vote.id is null or v_vote.status <> 'open' or not (p_lot = any (v_vote.eligible_lots)) then
+    return;
+  end if;
+  select corporation_id into v_corp from public.meetings where id = v_vote.meeting_id;
+  if not exists (select 1 from public.demo_cast where user_id = p_user_id)
+     or not exists (select 1 from public.corporation_memberships m
+                    where m.corporation_id = v_corp and m.user_id = p_user_id and m.status = 'active' and m.lot_number = p_lot)
+     or exists (select 1 from public.meeting_ballots b where b.vote_id = p_vote_id and b.lot_number = p_lot)
+     or exists (select 1 from public.meeting_conflicts c where c.meeting_id = v_vote.meeting_id and c.item_id = v_vote.item_id and c.lot_number = p_lot) then
+    return;
+  end if;
+  insert into public.meeting_ballots (vote_id, lot_number, choice, cast_by, cast_for_other, cast_at)
+  values (p_vote_id, p_lot, p_choice, p_user_id, false, now());
+  insert into public.meeting_ballot_log (vote_id, lot_number, choice, cast_by, cast_for_other)
+  values (p_vote_id, p_lot, p_choice, p_user_id, false);
+end;
+$$;
+revoke all on function public.demo_council_ballot(uuid, uuid, text, text) from public, anon, authenticated;
+grant execute on function public.demo_council_ballot(uuid, uuid, text, text) to service_role;

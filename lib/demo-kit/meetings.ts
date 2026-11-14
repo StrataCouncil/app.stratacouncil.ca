@@ -34,7 +34,8 @@ export interface KitMeeting {
 }
 
 const LOCATION = "Amenity room, Larchwood Commons";
-const CHAIR = "Margaret Chen-Whitford";
+// By office and strata lot: the visitor holds this seat (lib/demo-kit/build.ts).
+const CHAIR = "President, SL012";
 
 interface ItemSpec {
   type?: ResolutionType;
