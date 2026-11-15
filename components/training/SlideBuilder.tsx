@@ -102,12 +102,15 @@ export function SlideBuilder({
   defaultVoice: initialDefaultVoice,
   canPublish,
   backHref,
+  canExport = false,
 }: {
   module: BuilderModule;
   me: string;
   defaultVoice: Voiced;
   canPublish: boolean;
   backHref: string;
+  /** Super Admin: Download as text (the whole module, for review). */
+  canExport?: boolean;
 }) {
   const router = useRouter();
   const [slides, setSlides] = useState<Slide[]>(initial.slides);
@@ -448,6 +451,11 @@ export function SlideBuilder({
           </span>
         )}
         <span className="pill">{initial.publishedVersion ? `Published v${initial.publishedVersion}` : "Not published"}</span>
+        {canExport && (
+          <a href={`/admin/training/${initial.id}/export`} className="button button-secondary button-small" download data-testid="builder-export">
+            Download as text
+          </a>
+        )}
         <div className="builder__mode" role="group" aria-label="Mode">
           <button type="button" data-active={mode === "edit"} onClick={() => setMode("edit")}>
             Slides
