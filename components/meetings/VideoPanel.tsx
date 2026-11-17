@@ -135,7 +135,8 @@ export function VideoPanel(props: {
     setPeople(
       all.map((u) => ({
         userId: u.userId,
-        identity: (u as { userIdentity?: string }).userIdentity ?? "",
+        // Who they are to us: the token's user_identity, or failing that its user_key (our user id).
+        identity: u.userIdentity || (u.userKey ? videoIdentity(u.userKey) : ""),
         name: u.displayName,
         video: Boolean(u.bVideoOn),
         muted: u.audio === "" || Boolean(u.muted),
