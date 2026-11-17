@@ -11,12 +11,13 @@ import { sameFocus, suggestionsFor, type FocusRef } from "@/lib/stratasphere-foc
 import { Sources } from "@/components/StratasphereChat";
 import { RequestSubscriptionButton } from "@/components/RequestSubscriptionButton";
 import { useStrata } from "@/components/StrataContext";
+import { FloatingWindow } from "@/components/FloatingWindow";
 
 /**
  * One Stratasphere assistant (PR 4a, docs/learn-decide-remember.md §5): a
  * button, bottom right, on every Your Strata and Stratasphere page, opening
- * a panel docked on the right (the page narrows; on a phone it's a full
- * sheet). The page says what it's showing with <LookingAt>; the panel sends
+ * a floating window (components/FloatingWindow.tsx) that can be moved and
+ * resized, and remembers where it was left; on a phone it fills the screen. The page says what it's showing with <LookingAt>; the panel sends
  * that as a reference, the server reads the record with the person's own
  * access, and the question is saved to their own conversations.
  *
@@ -24,8 +25,8 @@ import { useStrata } from "@/components/StrataContext";
  * not subscribed, it explains Stratasphere at no cost (no AI call).
  *
  * Not shown on Ask (that's the full page), or in Meeting Mode and the
- * members' live page, which have the same panel in their right column
- * (components/meetings/MeetingStratasphere.tsx).
+ * members' live page, which float their own meeting assistant the same way
+ * (components/meetings/MeetingStratasphere.tsx, about the agenda item).
  */
 
 export type PageFocus = { ref: FocusRef; label: string; title: string };
@@ -200,7 +201,7 @@ export function StratasphereDock({ mode, children }: { mode: "chat" | "pitch" | 
 
   return (
     <FocusContext.Provider value={mode === "chat" && !hidden ? api : null}>
-      <div className="dock-shell" data-open={open && !hidden ? "true" : undefined}>
+      <div className="dock-shell">
         {children}
       </div>
       {!hidden && !open && (
@@ -209,25 +210,25 @@ export function StratasphereDock({ mode, children }: { mode: "chat" | "pitch" | 
         </button>
       )}
       {!hidden && open && (
-        <aside className="dock-panel" role="complementary" aria-label="Stratasphere" data-testid="dock-panel">
-          <header className="dock-panel__head">
-            <strong>Stratasphere&trade;</strong>
-            <div className="dock-panel__actions">
-              {mode === "chat" && (
-                <>
-                  <button type="button" className="dock-panel__link" onClick={newConversation} disabled={streaming} aria-label="New conversation" data-testid="dock-new">
-                    New
-                  </button>
-                  <Link href={fullPage} className="dock-panel__link" aria-label="Open Stratasphere full page" data-testid="dock-full">
-                    Full page
-                  </Link>
-                </>
-              )}
-              <button type="button" className="dock-panel__close" onClick={() => setOpen(false)} aria-label="Close Stratasphere">
-                &times;
-              </button>
-            </div>
-          </header>
+        <FloatingWindow
+          storageKey="stratasphere-window"
+          label="Stratasphere"
+          title={<>Stratasphere&trade;</>}
+          onClose={() => setOpen(false)}
+          testId="dock-panel"
+          actions={
+            mode === "chat" ? (
+              <>
+                <button type="button" className="dock-panel__link" onClick={newConversation} disabled={streaming} aria-label="New conversation" data-testid="dock-new">
+                  New
+                </button>
+                <Link href={fullPage} className="dock-panel__link" aria-label="Open Stratasphere full page" data-testid="dock-full">
+                  Full page
+                </Link>
+              </>
+            ) : null
+          }
+        >
 
           {mode === "pitch" ? (
             <div className="dock-panel__body dock-pitch" data-testid="dock-pitch">
@@ -326,7 +327,7 @@ export function StratasphereDock({ mode, children }: { mode: "chat" | "pitch" | 
               </form>
             </>
           )}
-        </aside>
+        </FloatingWindow>
       )}
     </FocusContext.Provider>
   );

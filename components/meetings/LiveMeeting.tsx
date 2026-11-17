@@ -11,7 +11,7 @@ import { fetchLiveState } from "@/lib/meetings/live-client";
 import { getDocumentDownloadUrl } from "@/app/strata/[corpId]/documents/actions";
 import { openInNewTab } from "@/lib/open-in-tab";
 import { MemberVote } from "@/components/meetings/LiveVote";
-import { MeetingStratasphere } from "@/components/meetings/MeetingStratasphere";
+import { MeetingAssistant } from "@/components/meetings/MeetingStratasphere";
 import { videoPeople } from "@/lib/meetings/live";
 import { VideoPanel } from "@/components/meetings/VideoPanel";
 import { ConflictDialog, MeetingSide, MeetingUser, SharedViewer, TypedConfirm, useLeaveWarning } from "@/components/meetings/MeetingChrome";
@@ -341,18 +341,10 @@ export function LiveMeeting(props: {
           names={props.names}
           video={<VideoPanel meetingId={meetingId} isRunner={false} ended={adjourned} steppedOut={steppedOut} people={videoPeople(state.presence, props.names)} />}
           showHere={false}
-          assistant={
-            <MeetingStratasphere
-              corpId={corpId}
-              meetingId={meetingId}
-              item={item}
-              aiAvailable={props.aiAvailable}
-              demoLeft={demoLeft}
-              setDemoLeft={setDemoLeft}
-            />
-          }
         />
       </div>
+
+      <MeetingAssistant corpId={corpId} meetingId={meetingId} item={item} aiAvailable={props.aiAvailable} demoLeft={demoLeft} setDemoLeft={setDemoLeft} />
 
       {leaving && (
         <TypedConfirm

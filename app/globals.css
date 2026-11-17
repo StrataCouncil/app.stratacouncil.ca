@@ -11781,3 +11781,320 @@ button.design-editor__swatch {
   margin: 0.4rem 0 0;
   padding-left: 1.1rem;
 }
+
+/* A floating window (components/FloatingWindow.tsx): Stratasphere, site-wide.
+   Moved by its title bar, resized from the bottom-right corner. */
+.float-win {
+  position: fixed;
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  min-width: 320px;
+  min-height: 280px;
+  max-width: calc(100vw - 24px);
+  max-height: calc(100vh - 24px);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 18px 48px rgba(27, 42, 65, 0.22);
+  overflow: hidden;
+  resize: both;
+}
+.float-win[hidden] {
+  display: none;
+}
+.float-win__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.7rem 0.9rem;
+  border-bottom: 1px solid var(--line);
+  background: var(--paper);
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+.float-win__head:active {
+  cursor: grabbing;
+}
+.float-win__head:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.float-win__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.float-win__close {
+  background: none;
+  border: 0;
+  font-size: 1.4rem;
+  line-height: 1;
+  color: var(--muted);
+  cursor: pointer;
+}
+.float-win__close:hover {
+  color: var(--ink);
+}
+.float-win__body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.float-win__body > .mm-ai {
+  flex: 1;
+  min-height: 0;
+}
+.float-win[data-phone] {
+  inset: 0;
+  width: auto;
+  height: auto;
+  max-width: none;
+  max-height: none;
+  border-radius: 0;
+  resize: none;
+}
+.float-win[data-phone] .float-win__head {
+  cursor: default;
+}
+
+/* The meeting's right column (2026-11-17): People and Chat tabs under the video. */
+.mm-side__tabs {
+  display: flex;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.mm-side__tab {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.6rem 0.5rem;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+}
+.mm-side__tab[aria-selected="true"] {
+  color: var(--ink);
+  border-bottom-color: var(--accent);
+}
+.mm-side__badge {
+  padding: 0.05em 0.5em;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+.mm-here__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+}
+.mm-here li {
+  flex-direction: column;
+}
+.mm-here li[data-speaking] {
+  box-shadow: inset 3px 0 0 #2f7d4f;
+}
+.mm-here__side {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.35rem;
+}
+.mm-here__video {
+  font-size: 0.75rem;
+}
+.mm-here__more {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: var(--radius-sm);
+  padding: 0 0.45rem;
+  line-height: 1.4;
+  cursor: pointer;
+  color: var(--ink);
+}
+.mm-here__menu {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.45rem;
+}
+.mm-here__confirm {
+  font-size: 0.82rem;
+}
+.mm-hands {
+  margin-bottom: 0.75rem;
+}
+.mm-hands h3 {
+  margin: 0 0 0.35rem;
+  font-size: 0.9rem;
+}
+.mm-hands ol {
+  margin: 0;
+  padding-left: 1.2rem;
+  display: grid;
+  gap: 0.35rem;
+}
+.mm-hands li {
+  font-size: 0.88rem;
+}
+.mm-hands li > span:first-child {
+  display: block;
+  font-weight: 600;
+}
+.mm-hands__actions {
+  display: flex;
+  gap: 0.35rem;
+  margin-top: 0.2rem;
+}
+.mm-chair {
+  margin-bottom: 0.75rem;
+  font-size: 0.88rem;
+}
+.mm-chair summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.mm-chair__body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.5rem;
+}
+.mm-chair__body .card__meta {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 0.78rem;
+}
+.mm-chair__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.mm-chat {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0.6rem 0.9rem 0.8rem;
+  gap: 0.5rem;
+}
+.mm-chat__log {
+  flex: 1;
+  min-height: 120px;
+  overflow-y: auto;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.mm-chat__log li {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.88rem;
+}
+.mm-chat__who {
+  font-weight: 600;
+  font-size: 0.8rem;
+}
+.mm-chat__text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.mm-chat__log li[data-mine] .mm-chat__who {
+  color: var(--accent-dark);
+}
+.mm-chat__form {
+  display: flex;
+  gap: 0.4rem;
+  align-items: flex-end;
+}
+.mm-chat__form textarea {
+  flex: 1;
+  font: inherit;
+  font-size: 0.9rem;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  resize: none;
+}
+.mm-chat__note,
+.mm-chat__off,
+.mm-chat__empty {
+  margin: 0;
+  font-size: 0.76rem;
+}
+
+/* The video's new pieces (2026-11-17): speaker view, pinning, hands, the unmute prompt. */
+.mm-video__grid[data-view="speaker"] .mm-video__person[data-featured] {
+  grid-column: 1 / -1;
+}
+.mm-video__person[data-speaking] {
+  outline: 3px solid #3fae6a;
+  outline-offset: -3px;
+}
+.mm-video__pin {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 3;
+  padding: 0.1rem 0.45rem;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(17, 24, 39, 0.65);
+  color: #fff;
+  font: inherit;
+  font-size: 0.7rem;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.mm-video__person:hover .mm-video__pin,
+.mm-video__pin:focus-visible,
+.mm-video__pin[aria-pressed="true"] {
+  opacity: 1;
+}
+.mm-video__hand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  margin-right: 0.25rem;
+  color: #f4c46a;
+  font-weight: 700;
+}
+.mm-video__ask {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin: 0.5rem 0 0;
+  padding: 0.55rem 0.7rem;
+  border-radius: var(--radius-sm);
+  background: rgba(180, 96, 47, 0.12);
+  color: var(--ink);
+  font-size: 0.86rem;
+}
+.mm-video__ask-actions {
+  display: flex;
+  gap: 0.4rem;
+}
+/* In a meeting, the Stratasphere button sits left of the People and Chat column, clear of the chat box. */
+@media (min-width: 1281px) {
+  .dock-fab--meeting {
+    right: 384px;
+  }
+}

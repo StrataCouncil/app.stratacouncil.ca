@@ -9,11 +9,14 @@ import { DEMO_LIMITS, DEMO_LIMIT_MESSAGE, SIGNUP_URL } from "@/lib/demo";
 import { showDemoLimit } from "@/lib/demo-client";
 import { Sources } from "@/components/StratasphereChat";
 import { meetingConversation } from "@/app/strata/[corpId]/meetings/[meetingId]/run/actions";
+import { FloatingWindow } from "@/components/FloatingWindow";
 
 /**
  * Stratasphere in Meeting Mode and on the members' live page (PR 4b,
  * docs/learn-decide-remember.md §5): the same assistant as the floating
- * panel, in the meeting's right column, looking at the open agenda item.
+ * window elsewhere, looking at the open agenda item. It floats the same way
+ * (MeetingAssistant below): a button, bottom right, opening a window that
+ * moves and resizes; closing it keeps the conversation going.
  *
  * - The meeting is one saved conversation per person ("Strata Council
  *   Meeting, Nov 12, 2026"), on the full Ask page afterwards. Each question
@@ -218,5 +221,29 @@ export function MeetingStratasphere(props: {
         </form>
       )}
     </div>
+  );
+}
+
+/**
+ * The meeting's Stratasphere, floating: a button, bottom right, and a window
+ * that can be moved and resized (components/FloatingWindow.tsx), opening
+ * where it was left (the first time, left of the People and Chat column). Closed, it stays on the page, so an answer being
+ * written isn't lost. For council, the manager, and runners only, as the
+ * meeting screens are; owners never see Stratasphere.
+ */
+export function MeetingAssistant(props: React.ComponentProps<typeof MeetingStratasphere>) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      {!open && (
+        <button type="button" className="dock-fab dock-fab--meeting" onClick={() => setOpen(true)} aria-label="Ask Stratasphere" data-testid="assistant-toggle">
+          <span aria-hidden="true">&#10022;</span> Ask Stratasphere&trade;
+        </button>
+      )}
+      {/* Its own place in meetings: first to the left of the People and Chat column, so it never covers the runner's controls. */}
+      <FloatingWindow storageKey="stratasphere-window-meeting" rightGap={400} label="Stratasphere" title={<>Stratasphere&trade;</>} onClose={() => setOpen(false)} hidden={!open} testId="mm-ai-window">
+        <MeetingStratasphere {...props} />
+      </FloatingWindow>
+    </>
   );
 }
