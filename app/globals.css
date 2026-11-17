@@ -12092,9 +12092,8 @@ button.design-editor__swatch {
   display: flex;
   gap: 0.4rem;
 }
-/* In a meeting, the Stratasphere button sits left of the People and Chat column, clear of the chat box. */
-@media (min-width: 1281px) {
-  .dock-fab--meeting {
-    right: 384px;
-  }
+/* In a meeting, the Ask Stratasphere button stays bottom right, as on every page: the People and Chat
+   column leaves room under its chat box so nothing sits beneath the button. */
+.mm-side {
+  padding-bottom: 84px;
 }

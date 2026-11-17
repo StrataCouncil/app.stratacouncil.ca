@@ -236,7 +236,7 @@ export function MeetingAssistant(props: React.ComponentProps<typeof MeetingStrat
   return (
     <>
       {!open && (
-        <button type="button" className="dock-fab dock-fab--meeting" onClick={() => setOpen(true)} aria-label="Ask Stratasphere" data-testid="assistant-toggle">
+        <button type="button" className="dock-fab" onClick={() => setOpen(true)} aria-label="Ask Stratasphere" data-testid="assistant-toggle">
           <span aria-hidden="true">&#10022;</span> Ask Stratasphere&trade;
         </button>
       )}

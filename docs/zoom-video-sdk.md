@@ -47,7 +47,9 @@ rejoins, everyone with a hand up says so again and keeps their place.
 ## Stratasphere floats
 
 Stratasphere isn't in the meeting's column any more. A button, bottom
-right (left of the column in a meeting), opens a window that can be moved
+right as on every page, opens a window (in a meeting, first to the left of
+the People and Chat column, which leaves room under its chat box for the
+button) that can be moved
 by its title bar and resized from its corner, and remembers where it was
 left in that browser (components/FloatingWindow.tsx). The same window is
 used on every page of the site; on a phone it fills the screen. Owners
