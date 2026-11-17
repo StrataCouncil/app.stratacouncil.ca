@@ -16,6 +16,8 @@ export interface RoomPerson {
   /** Our user id without dashes (lib/zoom/video-identity.ts). */
   identity: string;
   name: string;
+  /** Their sound has started (Zoom's "computer audio"); until it has, they can't hear or be heard. */
+  audio: boolean;
   muted: boolean;
   video: boolean;
   isHost: boolean;

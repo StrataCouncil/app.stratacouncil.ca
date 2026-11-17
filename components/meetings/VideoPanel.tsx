@@ -14,7 +14,7 @@ import { useVideoRoomPublisher, type RoomActions } from "@/components/meetings/V
 type Phase = "loading" | "ready" | "joining" | "joined" | "reconnecting" | "ended" | "failed" | "out";
 
 /** One person in the video session, as the tiles need them. */
-type Person = { userId: number; identity: string; name: string; video: boolean; muted: boolean; reconnecting: boolean; isHost: boolean; isManager: boolean };
+type Person = { userId: number; identity: string; name: string; video: boolean; audio: boolean; muted: boolean; reconnecting: boolean; isHost: boolean; isManager: boolean };
 type Device = { id: string; label: string };
 
 /* The SDK is browser-only and large: loaded when a meeting's video opens, never on the server. */
@@ -139,7 +139,8 @@ export function VideoPanel(props: {
         identity: u.userIdentity || (u.userKey ? videoIdentity(u.userKey) : ""),
         name: u.displayName,
         video: Boolean(u.bVideoOn),
-        muted: u.audio === "" || Boolean(u.muted),
+        audio: Boolean(u.audio),
+        muted: !u.audio || Boolean(u.muted),
         reconnecting: Boolean(u.isInFailover),
         isHost: Boolean(u.isHost),
         isManager: Boolean(u.isManager),
@@ -220,6 +221,8 @@ export function VideoPanel(props: {
       setQueueIds(c.ids);
     } else if (c.t === "lower" && fromChair && myHandRef.current.up) {
       setOwnHand(false);
+    } else if (c.t === "unmute" && fromChair) {
+      setAskedToUnmute(true);
     } else if (c.t === "sync" && sender?.isHost && myHandRef.current.up) {
       // The host has (re)joined: say again that our hand is up, keeping its place.
       send({ t: "hand", up: true, at: myHandRef.current.at });
@@ -454,6 +457,7 @@ export function VideoPanel(props: {
         userId: p.userId,
         identity: p.identity,
         name: p.name,
+        audio: p.audio,
         muted: p.muted,
         video: p.video,
         isHost: p.isHost,
@@ -488,7 +492,18 @@ export function VideoPanel(props: {
           }
           send({ t: "lower" }, userId);
         }),
-      askUnmute: (userId) => run((s) => s.stream.unmuteAudio(userId)),
+      // Zoom's ask reaches only someone whose sound has started. For anyone
+      // else (their browser held it back, or they haven't turned it on), we
+      // ask over the command channel: their Unmute starts the sound too.
+      askUnmute: (userId) =>
+        run(async (s) => {
+          if (!s.client.getUser(userId)?.audio) return send({ t: "unmute" }, userId);
+          try {
+            await s.stream.unmuteAudio(userId);
+          } catch {
+            send({ t: "unmute" }, userId);
+          }
+        }),
       mute: (userId) => run((s) => s.stream.muteAudio(userId)),
       muteAll: () => run((s) => s.stream.muteAllAudio()),
       spotlight: (userId) => run((s) => (userId == null ? s.stream.removeAllSpotlightedVideos() : s.stream.spotlightVideo(userId, true))),
@@ -750,7 +765,7 @@ export function VideoPanel(props: {
                 }}
               />
               <span className="mm-video__label">
-                {p.muted && <MicOffIcon />}
+                {p.muted && <MicOffIcon title={p.audio ? "Muted" : "Sound not on yet"} />}
                 {showHand && (
                   <span className="mm-video__hand" title={p.userId === me ? "Your hand is raised" : `Hand raised, ${hand + 1} in line`}>
                     <HandIcon />
@@ -1084,9 +1099,10 @@ function MicIcon() {
   );
 }
 
-function MicOffIcon() {
+function MicOffIcon({ title }: { title?: string } = {}) {
   return (
-    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden={title ? undefined : true} role={title ? "img" : undefined}>
+      {title && <title>{title}</title>}
       <path d="M3 3l18 18" />
       <path d="M9 9v2a3 3 0 0 0 5 2.2M15 9.3V6a3 3 0 0 0-5.7-1.3" />
       <path d="M5 11a7 7 0 0 0 11.5 5.3M19 11a7 7 0 0 1-.6 2.8M12 18v3" />

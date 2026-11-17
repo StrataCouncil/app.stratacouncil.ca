@@ -3,7 +3,7 @@
 import { tz } from "@/lib/time-zone";
 import { useEffect, useRef, useState } from "react";
 import { useVideoRoom, VideoRoomProvider, type RoomPerson } from "@/components/meetings/VideoRoom";
-import { MAX_CHAT_LENGTH } from "@/lib/meetings/video-room";
+import { chatPieces, MAX_CHAT_LENGTH } from "@/lib/meetings/video-room";
 import { videoIdentity } from "@/lib/zoom/video-identity";
 import { MemberAvatar } from "@/components/MemberAvatar";
 import { inMeeting, type PresenceEvent, type Presenting } from "@/lib/meetings/live";
@@ -213,7 +213,7 @@ function PeoplePanel(props: { presence: PresenceEvent[]; names: Record<string, s
     ) : null;
 
   const videoState = (v: RoomPerson | undefined) =>
-    !room.joined ? null : !v ? "Not in the video" : [v.isHost ? "Running the meeting" : v.isManager ? "Co-host" : "", v.muted ? "Muted" : "Unmuted", v.spotlit ? "Spotlit" : ""].filter(Boolean).join(" · ");
+    !room.joined ? null : !v ? "Not in the video" : [v.isHost ? "Running the meeting" : v.isManager ? "Co-host" : "", !v.audio ? "Sound not on" : v.muted ? "Muted" : "Unmuted", v.spotlit ? "Spotlit" : ""].filter(Boolean).join(" · ");
 
   const menuButton = (v: RoomPerson | undefined) =>
     chair && v && v.userId !== room.me ? (
@@ -375,7 +375,17 @@ function ChatPanel() {
                 <span className="mm-chat__who">
                   {m.fromId === room.me ? "You" : m.fromName} <span className="card__meta">{chatTime(m.at)}</span>
                 </span>
-                <span className="mm-chat__text">{m.text}</span>
+                <span className="mm-chat__text">
+                  {chatPieces(m.text).map((piece, i) =>
+                    piece.href ? (
+                      <a key={i} href={piece.href} target="_blank" rel="noopener noreferrer nofollow">
+                        {piece.text}
+                      </a>
+                    ) : (
+                      piece.text
+                    )
+                  )}
+                </span>
               </li>
             ))}
           </ol>

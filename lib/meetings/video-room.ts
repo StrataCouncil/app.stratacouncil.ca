@@ -19,7 +19,12 @@ export type RoomCommand =
   /** The host or a co-host lowered this person's hand. */
   | { t: "lower" }
   /** The host has joined: everyone with a hand up, say so again. */
-  | { t: "sync" };
+  | { t: "sync" }
+  /**
+   * The host or a co-host asks this person to unmute, when their sound isn't
+   * on yet (Zoom's own ask only reaches people whose audio has started).
+   */
+  | { t: "unmute" };
 
 export function encodeCommand(c: RoomCommand): string {
   return JSON.stringify(c);
@@ -39,6 +44,7 @@ export function parseCommand(text: string): RoomCommand | null {
   if (c.t === "queue" && Array.isArray(c.ids) && c.ids.every((x) => Number.isInteger(x))) return { t: "queue", ids: (c.ids as number[]).slice(0, 2000) };
   if (c.t === "lower") return { t: "lower" };
   if (c.t === "sync") return { t: "sync" };
+  if (c.t === "unmute") return { t: "unmute" };
   return null;
 }
 
@@ -96,6 +102,37 @@ export function addChat(lines: ChatLine[], line: ChatLine): ChatLine[] {
   if (!line.text.trim() || lines.some((l) => l.id === line.id)) return lines;
   const next = [...lines, line].sort((a, b) => a.at - b.at);
   return next.length > MAX_CHAT ? next.slice(next.length - MAX_CHAT) : next;
+}
+
+/** A piece of a chat message: plain text, or a web address to link. */
+export type ChatPiece = { text: string; href?: string };
+
+/**
+ * A chat message split so its web addresses can be links: http and https
+ * addresses, and ones starting "www." (linked as https). Punctuation that
+ * ends a sentence stays out of the link. Nothing else becomes a link, so a
+ * "javascript:" address in chat stays plain text.
+ */
+export function chatPieces(text: string): ChatPiece[] {
+  const out: ChatPiece[] = [];
+  const re = /\b(?:https?:\/\/|www\.)[^\s<>"]+/gi;
+  let last = 0;
+  for (const m of text.matchAll(re)) {
+    let url = m[0];
+    // A closing bracket belongs to the address only if it opened one.
+    while (/[.,;:!?'")\]]$/.test(url)) {
+      const end = url[url.length - 1];
+      if (end === ")" && (url.match(/\(/g)?.length ?? 0) >= (url.match(/\)/g)?.length ?? 0)) break;
+      if (end === "]" && (url.match(/\[/g)?.length ?? 0) >= (url.match(/\]/g)?.length ?? 0)) break;
+      url = url.slice(0, -1);
+    }
+    const start = m.index ?? 0;
+    if (start > last) out.push({ text: text.slice(last, start) });
+    out.push({ text: url, href: /^www\./i.test(url) ? `https://${url}` : url });
+    last = start + url.length;
+  }
+  if (last < text.length) out.push({ text: text.slice(last) });
+  return out;
 }
 
 /** The longest chat message; Zoom's own limit is higher. */
