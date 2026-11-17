@@ -50,11 +50,12 @@ const clock = (iso: string) => new Date(iso).toLocaleTimeString("en-CA", { timeZ
  * The right-hand column: the meeting's video, then two tabs, one open at a
  * time (either can be closed, leaving the video):
  *
- *   People: who's in the meeting (replacing "In attendance"), for whoever
- *     runs it and their co-hosts. Raised hands at the top, in order, with
- *     Ask to unmute and Lower; a menu on each person (mute, ask to unmute,
- *     spotlight, co-host, remove from the video); and the meeting-wide
- *     settings (mute everyone, chat on or off).
+ *   People: for whoever runs it and their co-hosts, three sections, all
+ *     collapsed to start and one open at a time: Raised hands (in order,
+ *     with Ask to unmute and Lower), Meeting controls (mute everyone, chat
+ *     on or off), and In the meeting (replacing "In attendance"), with a
+ *     menu on each person (mute, ask to unmute, spotlight, co-host, remove
+ *     from the video).
  *   Chat: to everyone, never privately. Nothing is saved: it lives in the
  *     browser while the video does, and goes when the meeting adjourns.
  *
@@ -139,10 +140,15 @@ function PeoplePanel(props: { presence: PresenceEvent[]; names: Record<string, s
   const { state: room, actions } = useVideoRoom();
   const chair = room.amHost || room.amManager;
   const here = inMeeting(props.presence);
-  const byIdentity = new Map(room.people.map((p) => [p.identity, p]));
+  const byIdentity = new Map(room.people.filter((p) => p.identity).map((p) => [p.identity, p]));
   const matched = new Set<number>();
   const rows = here.map((p) => {
-    const v = p.userId ? byIdentity.get(videoIdentity(p.userId)) : undefined;
+    // By who they are; failing that, by the name the video shows ("Name, SL012", or the name alone).
+    let v = p.userId ? byIdentity.get(videoIdentity(p.userId)) : undefined;
+    if (!v) {
+      const shown = p.lot ? `${props.names[p.lot] || p.name}, ${p.lot}` : p.name;
+      v = room.people.find((x) => !matched.has(x.userId) && (x.name === shown || (p.lot ? x.name.endsWith(`, ${p.lot}`) : false)));
+    }
     if (v) matched.add(v.userId);
     return { p, v };
   });
@@ -154,6 +160,10 @@ function PeoplePanel(props: { presence: PresenceEvent[]; names: Record<string, s
   };
   const [menu, setMenu] = useState<number | null>(null);
   const [removing, setRemoving] = useState<number | null>(null);
+  // One section open at a time (raised hands, meeting controls, who's here), all closed to start;
+  // opening one closes the others. The counts in their headings show what's waiting.
+  const [showing, setShowing] = useState<"hands" | "controls" | "list" | null>(null);
+  const toggle = (s: "hands" | "controls" | "list") => setShowing((cur) => (cur === s ? null : s));
 
   const controls = (v: RoomPerson) =>
     chair && v.userId !== room.me && menu === v.userId ? (
@@ -225,9 +235,11 @@ function PeoplePanel(props: { presence: PresenceEvent[]; names: Record<string, s
   return (
     <div className="mm-side__here" data-testid="meeting-here" data-open="true">
       {chair && room.joined && (
-        <section className="mm-hands" aria-label="Raised hands" data-testid="hands-queue">
-          <h3>Raised hands</h3>
-          {room.queue.length === 0 ? (
+        <section className="mm-hands mm-fold" aria-label="Raised hands" data-testid="hands-queue" data-open={showing === "hands" || undefined}>
+          <button type="button" className="mm-fold__head" aria-expanded={showing === "hands"} onClick={() => toggle("hands")} data-testid="fold-hands">
+            <span aria-hidden="true">{showing === "hands" ? "−" : "+"}</span> Raised hands ({room.queue.length})
+          </button>
+          {showing !== "hands" ? null : room.queue.length === 0 ? (
             <p className="card__meta">No hands raised.</p>
           ) : (
             <ol>
@@ -254,8 +266,11 @@ function PeoplePanel(props: { presence: PresenceEvent[]; names: Record<string, s
         </section>
       )}
       {chair && room.joined && (
-        <details className="mm-chair">
-          <summary>Meeting controls</summary>
+        <section className="mm-chair mm-fold" data-open={showing === "controls" || undefined}>
+          <button type="button" className="mm-fold__head" aria-expanded={showing === "controls"} onClick={() => toggle("controls")} data-testid="fold-controls">
+            <span aria-hidden="true">{showing === "controls" ? "−" : "+"}</span> Meeting controls
+          </button>
+          {showing === "controls" && (
           <div className="mm-chair__body">
             <button type="button" className="button button-secondary button-small" onClick={() => actions.muteAll()} data-testid="mute-all">
               Mute everyone
@@ -267,9 +282,14 @@ function PeoplePanel(props: { presence: PresenceEvent[]; names: Record<string, s
             )}
             <p className="card__meta">Zoom doesn&rsquo;t let anyone unmute someone else: Ask to unmute sends them a prompt.</p>
           </div>
-        </details>
+          )}
+        </section>
       )}
-      {here.length === 0 && videoOnly.length === 0 ? (
+      <section className="mm-fold" data-open={showing === "list" || undefined}>
+      <button type="button" className="mm-fold__head" aria-expanded={showing === "list"} onClick={() => toggle("list")} data-testid="fold-list">
+        <span aria-hidden="true">{showing === "list" ? "−" : "+"}</span> In the meeting ({here.length + videoOnly.length})
+      </button>
+      {showing !== "list" ? null : here.length === 0 && videoOnly.length === 0 ? (
         <p className="card__meta mm-here__empty">Nobody has joined yet. Members join from the Meetings tab.</p>
       ) : (
         <>
@@ -313,6 +333,7 @@ function PeoplePanel(props: { presence: PresenceEvent[]; names: Record<string, s
           {here.some((p) => p.event === "marked_joined") && <p className="card__meta mm-here__note">* Marked present by the person running the meeting</p>}
         </>
       )}
+      </section>
     </div>
   );
 }

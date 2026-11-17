@@ -12097,3 +12097,34 @@ button.design-editor__swatch {
 .mm-side {
   padding-bottom: 84px;
 }
+/* People tab sections (2026-11-17): collapsed to start, one open at a time. */
+.mm-fold {
+  margin-bottom: 0.5rem;
+}
+.mm-fold__head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.35rem 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+}
+.mm-fold__head span {
+  display: inline-grid;
+  place-items: center;
+  width: 1.3rem;
+  height: 1.3rem;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  font-size: 0.95rem;
+  line-height: 1;
+}
+.mm-fold .mm-here {
+  margin-top: 0.25rem;
+}
