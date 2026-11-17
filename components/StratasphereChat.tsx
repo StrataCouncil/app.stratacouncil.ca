@@ -46,6 +46,7 @@ function dateGroup(iso: string, now: Date): string {
 function sourceLabel(s: StratasphereSource): string {
   if (s.kind === "document") return s.title;
   if (s.kind === "legislation") return s.title;
+  if (s.kind === "directives") return "Directives";
   return "Decision ledger";
 }
 

@@ -42,6 +42,13 @@ export interface StrataAccess {
   superAdminOnly: boolean;
   /** An active member holding a council role (0070): sees Discussions. */
   isCouncil: boolean;
+  /** An active member holding the manager role. */
+  isManager: boolean;
+  /**
+   * Directives (0097): council, anyone who runs meetings, or a manager.
+   * The same rule as sees_directives in the database.
+   */
+  seesDirectives: boolean;
 }
 
 export const getStrataAccess = cache(async (corpId: string): Promise<StrataAccess | null> => {
@@ -99,5 +106,7 @@ export const getStrataAccess = cache(async (corpId: string): Promise<StrataAcces
     isSuperAdmin: superAdmin === true,
     superAdminOnly: superAdmin === true && !membership,
     isCouncil: onCouncil === true,
+    isManager: Boolean(membership) && roles.includes("manager"),
+    seesDirectives: onCouncil === true || canRun === true || (Boolean(membership) && roles.includes("manager")),
   };
 });

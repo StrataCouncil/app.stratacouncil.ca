@@ -11,9 +11,9 @@ import type { StratasphereSource } from "./stratasphere.ts";
  * F the record the person is looking at, E a ledger decision, W a decision
  * made between meetings, awaiting ratification, M decisions made so far in
  * this meeting, L a Knowledge Base section, P precedent from other stratas,
- * R the platform records.
+ * R the platform records, T a directive (0097).
  */
-export type CitedKind = "document" | "bylaws" | "attachment" | "focus" | "decision" | "between_meetings" | "meeting" | "legislation" | "precedent" | "platform";
+export type CitedKind = "document" | "bylaws" | "attachment" | "focus" | "decision" | "between_meetings" | "meeting" | "legislation" | "precedent" | "platform" | "directive";
 
 export interface CitedRecord {
   tag: string;
@@ -41,6 +41,7 @@ export const KIND_LABELS: Record<CitedKind, string> = {
   legislation: "Knowledge Base",
   precedent: "Precedent from other stratas",
   platform: "Platform records",
+  directive: "Directive",
 };
 
 /** "s. 6.21", "Form B", "Standard Bylaw 3" from a section title, for grouping by Act. */
@@ -56,6 +57,7 @@ export function sourcesFromCitations(tags: string[], records: Map<string, CitedR
   const acts = new Map<string, string[]>();
   let decisions = false;
   let precedent = false;
+  let directives = false;
   for (const tag of tags) {
     const r = records.get(tag);
     if (!r) continue;
@@ -73,11 +75,14 @@ export function sourcesFromCitations(tags: string[], records: Map<string, CitedR
       decisions = true;
     } else if (r.kind === "precedent") {
       precedent = true;
+    } else if (r.kind === "directive") {
+      directives = true;
     }
   }
   for (const [act, refs] of acts) out.push({ kind: "legislation", title: refs.length ? `${act}, ${refs.join(", ")}` : act });
   if (precedent) out.push({ kind: "precedent" });
   if (decisions) out.push({ kind: "decisions" });
+  if (directives) out.push({ kind: "directives" });
   return out;
 }
 
@@ -90,6 +95,7 @@ export function untagContext(context: string): string {
   return context
     .replace(/^\[[DLP]\d+ \| /gm, "[")
     .replace(/^\[A\d+ ATTACHMENT: /gm, "[ATTACHMENT: ")
-    .replace(/^[EW]\d+ (?=\[)/gm, "")
-    .replace(/ \(cite as [A-Z]\)/g, "");
+    .replace(/^[EWT]\d+ (?=\[)/gm, "")
+    .replace(/ \(cite as [A-Z]\)/g, "")
+    .replace(/ \(cite as T1, T2, \.\.\.\)/g, "");
 }

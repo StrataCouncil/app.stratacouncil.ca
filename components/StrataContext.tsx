@@ -24,6 +24,8 @@ export interface StrataContextValue {
   isCouncil: boolean;
   /** Sees Discussions (0078): council, or anyone who runs meetings (a Super Admin included). */
   seesDiscussions: boolean;
+  /** Sees Directives (0097): council, anyone who runs meetings, or a manager. */
+  seesDirectives: boolean;
 }
 
 const StrataContext = createContext<StrataContextValue | null>(null);

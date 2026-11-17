@@ -11606,3 +11606,178 @@ button.design-editor__swatch {
     bottom: 16px;
   }
 }
+
+/* Discussions and Directives, side by side (0097). */
+.subtabs {
+  display: flex;
+  gap: 0.25rem;
+  margin: 0 0 1.25rem;
+  border-bottom: 1px solid var(--line);
+}
+.subtabs a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.55rem 0.9rem;
+  margin-bottom: -1px;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  font-weight: 600;
+  text-decoration: none;
+}
+.subtabs a[data-active="true"] {
+  color: var(--ink);
+  border-bottom-color: var(--accent);
+}
+.subtabs a:hover {
+  color: var(--ink);
+}
+.subtabs__count {
+  min-width: 1.4em;
+  padding: 0.05em 0.45em;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.72rem;
+  text-align: center;
+}
+
+/* The Directives list (0097). */
+.directives__tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+.directives__filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.directives__filters .button[data-active="true"] {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #fff;
+}
+.directives__tools input[type="search"] {
+  flex: 1;
+  min-width: 180px;
+  max-width: 320px;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font: inherit;
+  font-size: 0.92rem;
+  color: var(--ink);
+}
+.directives__tools .button-primary {
+  margin-left: auto;
+}
+.directive-list {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.6rem;
+}
+.directive-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+}
+.directive-card[data-overdue="true"] {
+  border-left: 4px solid var(--danger);
+}
+.directive-card[data-status="done"],
+.directive-card[data-status="cancelled"] {
+  background: var(--paper);
+}
+.directive-card[data-status="cancelled"] .directive-card__title {
+  text-decoration: line-through;
+  color: var(--muted);
+}
+.directive-card--form {
+  padding: 1rem 1.1rem;
+  margin: 0.75rem 0;
+}
+.directive-card--form h3 {
+  margin: 0 0 0.75rem;
+  font-size: 1.05rem;
+}
+.directive-card__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.4rem 1rem;
+  width: 100%;
+  padding: 0.8rem 1rem;
+  background: none;
+  border: 0;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.directive-card__title {
+  font-weight: 600;
+  flex: 1 1 320px;
+}
+.directive-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.9rem;
+  font-size: 0.86rem;
+  color: var(--muted);
+}
+.directive-card__meta [data-tone="bad"] {
+  color: var(--danger);
+  font-weight: 600;
+}
+.directive-card__meta .meeting-status {
+  margin-left: 0;
+}
+.meeting-status.directive-status[data-tone="open"] {
+  background: rgba(180, 96, 47, 0.12);
+  color: var(--accent-dark);
+}
+.meeting-status.directive-status[data-tone="done"] {
+  background: var(--free-bg);
+  color: var(--free);
+}
+.directive-card__body {
+  padding: 0 1rem 1rem;
+  border-top: 1px solid var(--line);
+}
+.directive-card__detail {
+  margin: 0.75rem 0 0.5rem;
+  white-space: pre-wrap;
+}
+.directive-card__motion {
+  margin: 0.25rem 0 0.75rem;
+  padding: 0.5rem 0.8rem;
+  border-left: 3px solid var(--line);
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.directive-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+.directive-card__close {
+  margin-top: 0.5rem;
+}
+.directive-card__history {
+  margin-top: 0.75rem;
+  font-size: 0.86rem;
+  color: var(--muted);
+}
+.directive-card__history ul {
+  margin: 0.4rem 0 0;
+  padding-left: 1.1rem;
+}

@@ -44,3 +44,10 @@ test("no Library or Decisions page inside a strata", () => {
   const all = [...labels("home", admin), ...labels("assistant", admin)];
   assert.ok(!all.includes("Library") && !all.includes("Decisions"));
 });
+
+test("a manager who isn't on council sees the Discussions tab, for Directives (0097)", () => {
+  const slugs = (who: Parameters<typeof navItemsFor>[1]) => navItemsFor("", who).map((i) => i.slug);
+  assert.ok(slugs({ canManage: true, canBill: false, seesDiscussions: false, seesDirectives: true }).includes("discussions"));
+  assert.ok(!slugs({ canManage: false, canBill: false, seesDiscussions: false, seesDirectives: false }).includes("discussions"));
+  assert.ok(!slugs({ canManage: false, canBill: false, seesDiscussions: false }).includes("discussions"));
+});

@@ -36,6 +36,7 @@ export const NAV_ITEMS: NavItem[] = [
   { slug: "", label: "Overview", section: "strata" },
   { slug: "meetings", label: "Meetings", section: "strata" },
   // Council votes between meetings (0070): council and those who run meetings.
+  // Directives (0097) live here too, so managers see the tab for those.
   { slug: "discussions", label: "Discussions", section: "strata", councilOnly: true },
   // The strata's document repository: every connected member, free to store.
   // Stratasphere reads it, but it belongs to the strata (2026-11-12).
@@ -52,7 +53,7 @@ export const NAV_ITEMS: NavItem[] = [
 /** The menu for a page: its section's items that this person sees. */
 export function navItemsFor(
   active: string,
-  who: { canManage: boolean; canBill: boolean; seesDiscussions: boolean }
+  who: { canManage: boolean; canBill: boolean; seesDiscussions: boolean; seesDirectives?: boolean }
 ): NavItem[] {
   const key = active === "home" ? "" : active;
   const section = NAV_ITEMS.find((i) => i.slug === key)?.section ?? "strata";
@@ -61,7 +62,7 @@ export function navItemsFor(
       i.section === section &&
       (!i.managersOnly || who.canManage) &&
       (!i.billingOnly || who.canBill) &&
-      (!i.councilOnly || who.seesDiscussions)
+      (!i.councilOnly || who.seesDiscussions || who.seesDirectives === true)
   );
 }
 

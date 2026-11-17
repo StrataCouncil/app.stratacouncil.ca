@@ -1,10 +1,11 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { StrataSphereNav } from "@/components/StrataSphereNav";
 import { listDiscussions } from "@/lib/data/discussions";
 import { getStrataAccess } from "@/lib/data/strata";
 import { VOTE_LABELS } from "@/lib/discussions/tally";
 import { DiscussionTable } from "@/components/discussions/DiscussionTable";
+import { DiscussionsTabs } from "@/components/discussions/DiscussionsTabs";
 
 /**
  * Discussions (0070): council votes between meetings. Council only. Each
@@ -21,12 +22,15 @@ export default async function DiscussionsPage({
   const { corpId } = await params;
   const { voted } = await searchParams;
   const access = await getStrataAccess(corpId);
+  // A manager who isn't on council sees the tab for Directives (0097).
+  if (!access?.seesDiscussions && access?.seesDirectives) redirect(`/strata/${corpId}/discussions/directives`);
   if (!access?.seesDiscussions) notFound();
   const discussions = await listDiscussions(corpId);
 
   return (
     <>
       <StrataSphereNav active="discussions" />
+      <DiscussionsTabs corpId={corpId} active="discussions" seesDiscussions />
       <div className="doc-header">
         <div>
           <h2>Discussions</h2>

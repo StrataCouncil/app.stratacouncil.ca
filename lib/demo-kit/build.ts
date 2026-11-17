@@ -14,6 +14,7 @@ import { queueDocumentIndexing } from "@/lib/kb/queue";
 import { fileDiscussionRecord } from "@/lib/discussions/server";
 import { kitMinutesTitle } from "./agenda";
 import { seedDiscussions } from "./discussions";
+import { seedDirectives, type DemoDecision } from "./directives";
 import { kitDates, longDate, type KitDates } from "./dates";
 import { kitDocuments, type KitDoc } from "./documents";
 import { HARBOURLINE_LOGO_PNG_BASE64 } from "./logo";
@@ -331,7 +332,10 @@ export async function buildDemoStrata(
       ...r,
     });
   }
-  await check(admin.from("decisions").insert(decisions, { defaultToNull: false }), "decisions");
+  const { data: insertedDecisions } = await check(
+    admin.from("decisions").insert(decisions, { defaultToNull: false }).select("id, meeting_id, title, motion_text, decided_at"),
+    "decisions"
+  );
 
   // Sample Discussions: one waiting for ratification at the next meeting, one open for the visitor's vote.
   const { data: councilProfiles } = await admin.from("profiles").select("id, full_name").in("id", council().map((c) => id(c.key)));
@@ -344,6 +348,17 @@ export async function buildDemoStrata(
   );
   // Filed in Meetings & Records, as closing one does.
   for (const discussionId of closedDiscussions) await fileDiscussionRecord(discussionId).catch(() => null);
+
+  // Sample Directives (0097): the follow-up from those decisions and the
+  // carpet Discussion, most of the older ones done, and one overdue.
+  await seedDirectives(
+    admin,
+    corpId,
+    ((insertedDecisions ?? []) as DemoDecision[]),
+    { manager: id("dev"), managerName: MANAGEMENT.manager.name, secretary: id("liam"), secretaryName: nameOf.get(id("liam")) || "Liam Fraser" },
+    closedDiscussions[0] ?? null,
+    now
+  );
 
   // Someone asking to join: the new owner of unit 305.
   await check(
