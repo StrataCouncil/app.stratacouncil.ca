@@ -1,8 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createCanvas } from "@napi-rs/canvas";
+import { createCanvas, GlobalFonts } from "@napi-rs/canvas";
 import { PDFDocument, StandardFonts } from "pdf-lib";
 import { mergeOcr, ocrPdfPages, OCR_UNCLEAR_BELOW, pdfTextByPage } from "../lib/kb/ocr.ts";
+
+// The "scan" is drawn in a font from the repo, not whatever "serif" the
+// machine has: on a runner without one the text came out as boxes and the
+// OCR read nothing (CI, 2026-11-17).
+GlobalFonts.registerFromPath(new URL("../lib/exports/fonts/WorkSans-Regular.ttf", import.meta.url).pathname, "TestScan");
 
 /** A two-page PDF: page 1 has a real text layer, page 2 is a picture of text (a "scan"). */
 async function mixedPdf(): Promise<Uint8Array> {
@@ -14,7 +19,7 @@ async function mixedPdf(): Promise<Uint8Array> {
   g.rotate(0.01); // a slightly crooked scan
   g.translate(-850, -1100);
   g.fillStyle = "#222";
-  g.font = "40px serif";
+  g.font = "40px TestScan";
   ["THE OWNERS, STRATA PLAN BCS1234", "MINUTES OF THE COUNCIL MEETING", "MOTION: THAT council approve the roof inspection.", "CARRIED 4-0."].forEach((l, i) =>
     g.fillText(l, 150, 260 + i * 80)
   );
