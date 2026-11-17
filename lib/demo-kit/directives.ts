@@ -145,7 +145,13 @@ export async function seedDirectives(
   });
 
   if (!rows.length) return;
-  const { data, error } = await admin.from("directives").insert(rows).select("id, created_at, created_by_name, status, closed_at, closed_by, closed_by_name, close_note");
+  // Rows here don't all name the same columns: without defaultToNull: false a
+  // batch insert sends null for the missing ones (status, close_note...),
+  // which the table refuses, and the whole demo strata fails to build.
+  const { data, error } = await admin
+    .from("directives")
+    .insert(rows, { defaultToNull: false })
+    .select("id, created_at, created_by_name, status, closed_at, closed_by, closed_by_name, close_note");
   if (error) throw new Error(`demo directives: ${error.message}`);
   const changes: Record<string, unknown>[] = [];
   for (const r of data ?? []) {
@@ -162,6 +168,6 @@ export async function seedDirectives(
       });
     }
   }
-  const { error: logError } = await admin.from("directive_changes").insert(changes);
+  const { error: logError } = await admin.from("directive_changes").insert(changes, { defaultToNull: false });
   if (logError) throw new Error(`demo directive history: ${logError.message}`);
 }
