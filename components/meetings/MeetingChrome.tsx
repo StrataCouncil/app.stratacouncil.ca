@@ -1,7 +1,10 @@
 "use client";
 
 import { tz } from "@/lib/time-zone";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useVideoRoom, VideoRoomProvider, type RoomPerson } from "@/components/meetings/VideoRoom";
+import { MAX_CHAT_LENGTH } from "@/lib/meetings/video-room";
+import { videoIdentity } from "@/lib/zoom/video-identity";
 import { MemberAvatar } from "@/components/MemberAvatar";
 import { inMeeting, type PresenceEvent, type Presenting } from "@/lib/meetings/live";
 import { getDocumentDownloadUrl } from "@/app/strata/[corpId]/documents/actions";
@@ -44,81 +47,354 @@ export function MeetingUser({ name, avatarUrl }: { name: string; avatarUrl: stri
 const clock = (iso: string) => new Date(iso).toLocaleTimeString("en-CA", { timeZone: tz("America/Vancouver", iso), hour: "numeric", minute: "2-digit" });
 
 /**
- * The right-hand column: the meeting's video, who's in the meeting, and
- * below them the Stratasphere assistant, collapsed until opened.
+ * The right-hand column: the meeting's video, then two tabs, one open at a
+ * time (either can be closed, leaving the video):
+ *
+ *   People: who's in the meeting (replacing "In attendance"), for whoever
+ *     runs it and their co-hosts. Raised hands at the top, in order, with
+ *     Ask to unmute and Lower; a menu on each person (mute, ask to unmute,
+ *     spotlight, co-host, remove from the video); and the meeting-wide
+ *     settings (mute everyone, chat on or off).
+ *   Chat: to everyone, never privately. Nothing is saved: it lives in the
+ *     browser while the video does, and goes when the meeting adjourns.
+ *
+ * Stratasphere isn't here any more: it floats (components/FloatingWindow.tsx).
  */
 export function MeetingSide(props: {
   presence: PresenceEvent[];
   names: Record<string, string>;
-  /** The assistant, rendered only while it's open. */
-  assistant: React.ReactNode;
-  /** The meeting's video, above who's in the meeting. */
+  /** The meeting's video, above the tabs. */
   video?: React.ReactNode;
   /**
    * Who's in the meeting: for the person running it. Members' screens leave
-   * it out, and Stratasphere opens in its place.
+   * it out unless they're a co-host.
    */
   showHere?: boolean;
   /** Roles under each name: "lot:SL005" or "user:<id>" to "President", "Manager". */
   roles?: Record<string, string>;
 }) {
-  const showHere = props.showHere ?? true;
-  // One panel open at a time: opening either closes the other.
-  const [open, setOpenRaw] = useState(!showHere);
-  const [hereOpen, setHereOpenRaw] = useState(showHere);
-  const setOpen = (f: (o: boolean) => boolean) => {
-    const next = f(open);
-    setOpenRaw(next);
-    if (next) setHereOpenRaw(false);
-  };
-  const setHereOpen = (f: (o: boolean) => boolean) => {
-    const next = f(hereOpen);
-    setHereOpenRaw(next);
-    if (next) setOpenRaw(false);
-  };
-  const here = inMeeting(props.presence);
   return (
-    <aside className="mm-side" aria-label="In attendance and Stratasphere">
+    <VideoRoomProvider>
+      <SideTabs {...props} />
+    </VideoRoomProvider>
+  );
+}
+
+function SideTabs(props: { presence: PresenceEvent[]; names: Record<string, string>; video?: React.ReactNode; showHere?: boolean; roles?: Record<string, string> }) {
+  const { state: room } = useVideoRoom();
+  const chair = room.amHost || room.amManager;
+  const showPeople = (props.showHere ?? true) || room.amManager;
+  const [tab, setTab] = useState<"people" | "chat" | null>((props.showHere ?? true) ? "people" : null);
+  // A co-host's People tab appears when they're made one; it goes if they stop being one.
+  useEffect(() => {
+    if (!showPeople && tab === "people") setTab(null);
+  }, [showPeople, tab]);
+  // Messages that arrived while Chat was closed.
+  const [seen, setSeen] = useState(0);
+  useEffect(() => {
+    if (tab === "chat" || room.chat.length < seen) setSeen(room.chat.length);
+  }, [tab, room.chat.length, seen]);
+  const unread = tab === "chat" ? 0 : Math.max(0, room.chat.length - seen);
+  const here = inMeeting(props.presence);
+  const hands = room.queue.length;
+
+  return (
+    <aside className="mm-side" aria-label="People and chat">
       {props.video}
-      {showHere && (
-      <div className="mm-side__here" data-testid="meeting-here" data-open={hereOpen || undefined}>
-        <button type="button" className="mm-side__toggle mm-side__toggle--here" onClick={() => setHereOpen((o) => !o)} aria-expanded={hereOpen} data-testid="here-toggle">
-          <span aria-hidden="true">{hereOpen ? "−" : "+"}</span> In attendance ({here.length})
+      <div className="mm-side__tabs" role="tablist" aria-label="People and chat">
+        {showPeople && (
+          <button
+            type="button"
+            role="tab"
+            className="mm-side__tab"
+            aria-selected={tab === "people"}
+            onClick={() => setTab(tab === "people" ? null : "people")}
+            data-testid="here-toggle"
+          >
+            People ({here.length})
+            {chair && hands > 0 && (
+              <span className="mm-side__badge" data-testid="hands-count">
+                {hands} {hands === 1 ? "hand" : "hands"}
+              </span>
+            )}
+          </button>
+        )}
+        <button type="button" role="tab" className="mm-side__tab" aria-selected={tab === "chat"} onClick={() => setTab(tab === "chat" ? null : "chat")} data-testid="chat-toggle">
+          Chat
+          {unread > 0 && (
+            <span className="mm-side__badge" data-testid="chat-unread">
+              {unread}
+            </span>
+          )}
         </button>
-        {hereOpen &&
-          (here.length === 0 ? (
-            <p className="card__meta mm-here__empty">Nobody has joined yet. Members join from the Meetings tab.</p>
+      </div>
+      {tab === "people" && showPeople && <PeoplePanel presence={props.presence} names={props.names} roles={props.roles} />}
+      {tab === "chat" && <ChatPanel />}
+    </aside>
+  );
+}
+
+/** Who's in the meeting, with the raised hands and the runner's controls. */
+function PeoplePanel(props: { presence: PresenceEvent[]; names: Record<string, string>; roles?: Record<string, string> }) {
+  const { state: room, actions } = useVideoRoom();
+  const chair = room.amHost || room.amManager;
+  const here = inMeeting(props.presence);
+  const byIdentity = new Map(room.people.map((p) => [p.identity, p]));
+  const matched = new Set<number>();
+  const rows = here.map((p) => {
+    const v = p.userId ? byIdentity.get(videoIdentity(p.userId)) : undefined;
+    if (v) matched.add(v.userId);
+    return { p, v };
+  });
+  // In the video but not signed in to the meeting page (rare): still listed, so the runner can see them.
+  const videoOnly = room.people.filter((v) => !matched.has(v.userId));
+  const nameOf = (userId: number) => {
+    const v = room.people.find((x) => x.userId === userId);
+    return v?.name ?? "Someone";
+  };
+  const [menu, setMenu] = useState<number | null>(null);
+  const [removing, setRemoving] = useState<number | null>(null);
+
+  const controls = (v: RoomPerson) =>
+    chair && v.userId !== room.me && menu === v.userId ? (
+      <div className="mm-here__menu" data-testid={`person-menu-${v.userId}`}>
+        {v.muted ? (
+          <button type="button" className="button button-secondary button-small" onClick={() => actions.askUnmute(v.userId)}>
+            Ask to unmute
+          </button>
+        ) : (
+          <button type="button" className="button button-secondary button-small" onClick={() => actions.mute(v.userId)}>
+            Mute
+          </button>
+        )}
+        <button type="button" className="button button-secondary button-small" onClick={() => actions.spotlight(v.spotlit ? null : v.userId)}>
+          {v.spotlit ? "Remove spotlight" : "Spotlight for everyone"}
+        </button>
+        {room.amHost && v.canCoHost && (
+          <button type="button" className="button button-secondary button-small" onClick={() => actions.setCoHost(v.userId, !v.isManager)} data-testid={`person-cohost-${v.userId}`}>
+            {v.isManager ? "Remove co-host" : "Make co-host"}
+          </button>
+        )}
+        {room.amHost &&
+          (removing === v.userId ? (
+            <span className="mm-here__confirm">
+              Remove from the video? They can rejoin.{" "}
+              <button
+                type="button"
+                className="link-button"
+                onClick={() => {
+                  actions.remove(v.userId);
+                  setRemoving(null);
+                  setMenu(null);
+                }}
+              >
+                Remove
+              </button>{" "}
+              <button type="button" className="link-button" onClick={() => setRemoving(null)}>
+                Keep
+              </button>
+            </span>
           ) : (
-            <>
-              <ul className="mm-here">
-                {here.map((p) => {
-                  const role = (p.lot ? props.roles?.[`lot:${p.lot}`] : undefined) ?? (p.userId ? props.roles?.[`user:${p.userId}`] : undefined);
-                  return (
-                    <li key={p.userId ?? p.lot ?? p.id}>
-                      <span className="mm-here__who">
-                        <span>
-                          {p.lot ? `${p.lot} · ${props.names[p.lot] || p.name}` : p.name}
-                          {p.event === "marked_joined" && <span title="Marked present by the person running the meeting">*</span>}
-                        </span>
-                        <span className="card__meta">{role ?? (p.lot ? "Council member" : "No vote")}</span>
-                      </span>
-                      <span className="card__meta">{clock(p.at)}</span>
-                    </li>
-                  );
-                })}
-              </ul>
-              {here.some((p) => p.event === "marked_joined") && <p className="card__meta mm-here__note">* Marked present by the person running the meeting</p>}
-            </>
+            <button type="button" className="button button-secondary button-small" onClick={() => setRemoving(v.userId)}>
+              Remove from video
+            </button>
           ))}
       </div>
+    ) : null;
+
+  const videoState = (v: RoomPerson | undefined) =>
+    !room.joined ? null : !v ? "Not in the video" : [v.isHost ? "Running the meeting" : v.isManager ? "Co-host" : "", v.muted ? "Muted" : "Unmuted", v.spotlit ? "Spotlit" : ""].filter(Boolean).join(" · ");
+
+  const menuButton = (v: RoomPerson | undefined) =>
+    chair && v && v.userId !== room.me ? (
+      <button
+        type="button"
+        className="mm-here__more"
+        aria-expanded={menu === v.userId}
+        aria-label={`Controls for ${v.name}`}
+        onClick={() => {
+          setMenu(menu === v.userId ? null : v.userId);
+          setRemoving(null);
+        }}
+        data-testid={`person-more-${v.userId}`}
+      >
+        &hellip;
+      </button>
+    ) : null;
+
+  return (
+    <div className="mm-side__here" data-testid="meeting-here" data-open="true">
+      {chair && room.joined && (
+        <section className="mm-hands" aria-label="Raised hands" data-testid="hands-queue">
+          <h3>Raised hands</h3>
+          {room.queue.length === 0 ? (
+            <p className="card__meta">No hands raised.</p>
+          ) : (
+            <ol>
+              {room.queue.map((id) => {
+                const v = room.people.find((x) => x.userId === id);
+                return (
+                  <li key={id} data-testid={`hand-${id}`}>
+                    <span>{nameOf(id)}</span>
+                    <span className="mm-hands__actions">
+                      {v?.muted !== false && (
+                        <button type="button" className="button button-primary button-small" onClick={() => actions.askUnmute(id)} data-testid={`hand-unmute-${id}`}>
+                          Ask to unmute
+                        </button>
+                      )}
+                      <button type="button" className="button button-secondary button-small" onClick={() => actions.lowerHand(id)} data-testid={`hand-lower-${id}`}>
+                        Lower
+                      </button>
+                    </span>
+                  </li>
+                );
+              })}
+            </ol>
+          )}
+        </section>
       )}
-      <div className="mm-side__assistant" data-open={open || undefined} data-fill={(!showHere && open) || undefined}>
-        <button type="button" className="mm-side__toggle" onClick={() => setOpen((o) => !o)} aria-expanded={open} data-testid="assistant-toggle">
-          <span aria-hidden="true">{open ? "−" : "+"}</span> Stratasphere&trade;
-        </button>
-        {open && <div className="mm-side__panel">{props.assistant}</div>}
-      </div>
-    </aside>
+      {chair && room.joined && (
+        <details className="mm-chair">
+          <summary>Meeting controls</summary>
+          <div className="mm-chair__body">
+            <button type="button" className="button button-secondary button-small" onClick={() => actions.muteAll()} data-testid="mute-all">
+              Mute everyone
+            </button>
+            {room.amHost && (
+              <label className="mm-chair__toggle">
+                <input type="checkbox" checked={room.chatOpen} onChange={(e) => actions.setChatOpen(e.target.checked)} data-testid="chat-open" /> Chat on
+              </label>
+            )}
+            <p className="card__meta">Zoom doesn&rsquo;t let anyone unmute someone else: Ask to unmute sends them a prompt.</p>
+          </div>
+        </details>
+      )}
+      {here.length === 0 && videoOnly.length === 0 ? (
+        <p className="card__meta mm-here__empty">Nobody has joined yet. Members join from the Meetings tab.</p>
+      ) : (
+        <>
+          <ul className="mm-here">
+            {rows.map(({ p, v }) => {
+              const role = (p.lot ? props.roles?.[`lot:${p.lot}`] : undefined) ?? (p.userId ? props.roles?.[`user:${p.userId}`] : undefined);
+              const state = videoState(v);
+              return (
+                <li key={p.userId ?? p.lot ?? p.id} data-speaking={v?.speaking || undefined}>
+                  <div className="mm-here__row">
+                    <span className="mm-here__who">
+                      <span>
+                        {p.lot ? `${p.lot} · ${props.names[p.lot] || p.name}` : p.name}
+                        {p.event === "marked_joined" && <span title="Marked present by the person running the meeting">*</span>}
+                      </span>
+                      <span className="card__meta">{role ?? (p.lot ? "Council member" : "No vote")}</span>
+                      {state && <span className="card__meta mm-here__video">{state}</span>}
+                    </span>
+                    <span className="mm-here__side">
+                      <span className="card__meta">{clock(p.at)}</span>
+                      {menuButton(v)}
+                    </span>
+                  </div>
+                  {v && controls(v)}
+                </li>
+              );
+            })}
+            {videoOnly.map((v) => (
+              <li key={`v${v.userId}`} data-speaking={v.speaking || undefined}>
+                <div className="mm-here__row">
+                  <span className="mm-here__who">
+                    <span>{v.name}</span>
+                    <span className="card__meta mm-here__video">{videoState(v)}</span>
+                  </span>
+                  <span className="mm-here__side">{menuButton(v)}</span>
+                </div>
+                {controls(v)}
+              </li>
+            ))}
+          </ul>
+          {here.some((p) => p.event === "marked_joined") && <p className="card__meta mm-here__note">* Marked present by the person running the meeting</p>}
+        </>
+      )}
+    </div>
+  );
+}
+
+const chatTime = (ms: number) => new Date(ms).toLocaleTimeString("en-CA", { timeZone: tz("America/Vancouver", ms), hour: "numeric", minute: "2-digit" });
+
+/** Chat to everyone: never saved, gone when the meeting adjourns. */
+function ChatPanel() {
+  const { state: room, actions } = useVideoRoom();
+  const [draft, setDraft] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
+  const log = useRef<HTMLOListElement>(null);
+  useEffect(() => {
+    log.current?.scrollTo({ top: log.current.scrollHeight });
+  }, [room.chat.length]);
+  const canSend = room.joined && (room.chatOpen || room.amHost);
+
+  async function send() {
+    if (!draft.trim() || sending) return;
+    setSending(true);
+    setError(null);
+    const err = await actions.sendChat(draft);
+    setSending(false);
+    if (err) setError(err);
+    else setDraft("");
+  }
+
+  return (
+    <div className="mm-chat" data-testid="chat-panel">
+      {!room.joined ? (
+        <p className="card__meta mm-chat__empty">Join the video to chat. Messages go to everyone in the meeting.</p>
+      ) : (
+        <>
+          <ol className="mm-chat__log" ref={log} aria-live="polite">
+            {room.chat.length === 0 && <li className="card__meta mm-chat__empty">No messages yet.</li>}
+            {room.chat.map((m) => (
+              <li key={m.id} data-mine={m.fromId === room.me || undefined}>
+                <span className="mm-chat__who">
+                  {m.fromId === room.me ? "You" : m.fromName} <span className="card__meta">{chatTime(m.at)}</span>
+                </span>
+                <span className="mm-chat__text">{m.text}</span>
+              </li>
+            ))}
+          </ol>
+          {!room.chatOpen && <p className="card__meta mm-chat__off">{room.amHost ? "Chat is off for everyone but you." : "The person running the meeting has turned chat off."}</p>}
+          <form
+            className="mm-chat__form"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void send();
+            }}
+          >
+            <textarea
+              rows={2}
+              value={draft}
+              maxLength={MAX_CHAT_LENGTH}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  void send();
+                }
+              }}
+              placeholder={canSend ? "Message everyone" : "Chat is off"}
+              disabled={!canSend}
+              aria-label="Message everyone"
+              data-testid="chat-input"
+            />
+            <button type="submit" className="button button-primary button-small" disabled={!canSend || sending || !draft.trim()} data-testid="chat-send">
+              Send
+            </button>
+          </form>
+          {error && (
+            <p className="form-error" role="alert">
+              {error}
+            </p>
+          )}
+        </>
+      )}
+      <p className="card__meta mm-chat__note">Chat goes to everyone. It isn&rsquo;t saved, it&rsquo;s gone when the meeting adjourns, and it isn&rsquo;t part of the minutes.</p>
+    </div>
   );
 }
 

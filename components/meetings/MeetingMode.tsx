@@ -42,7 +42,7 @@ import {
 import { callToOrderScript, zonedInstant } from "@/lib/meetings/scripts";
 import { clockTime } from "@/lib/meetings/minutes";
 import { currentStep, itemSteps, usesLiveVoting, type Step } from "@/lib/meetings/steps";
-import { MeetingStratasphere } from "@/components/meetings/MeetingStratasphere";
+import { MeetingAssistant } from "@/components/meetings/MeetingStratasphere";
 import { adjournMeeting, callToOrder, saveMeetingState } from "@/app/strata/[corpId]/meetings/[meetingId]/run/actions";
 import { saveItemNote } from "@/app/strata/[corpId]/meetings/actions";
 import { getDocumentDownloadUrl } from "@/app/strata/[corpId]/documents/actions";
@@ -753,7 +753,7 @@ export function MeetingMode(props: {
           Agenda
         </button>
         <button type="button" className="button button-secondary button-small mm__toggle" onClick={() => setPanel(panel === "assistant" ? "none" : "assistant")} aria-expanded={panel === "assistant"}>
-          In attendance
+          People and chat
         </button>
         <MeetingUser name={props.me.name} avatarUrl={props.me.avatarUrl} />
         <button type="button" className="button button-secondary button-small" onClick={() => setExitOpen(true)} data-testid="mm-hand-over">
@@ -1074,21 +1074,21 @@ export function MeetingMode(props: {
               ended={live?.status === "ADJOURNED"}
               people={videoPeople(live?.presence ?? [], names)}
               removeUsers={steppedOutUsers(conflicts, item?.id ?? null, live?.presence ?? [])}
-            />
-          }
-          assistant={
-            <MeetingStratasphere
-              corpId={corpId}
-              meetingId={meetingId}
-              item={item}
-              aiAvailable={props.aiAvailable}
-              demoLeft={demoLeft}
-              setDemoLeft={setDemoLeft}
-              beforeAsk={saveNow}
+              runners={(props.runnerCandidates ?? []).map((c) => c.userId)}
             />
           }
         />
       </div>
+
+      <MeetingAssistant
+        corpId={corpId}
+        meetingId={meetingId}
+        item={item}
+        aiAvailable={props.aiAvailable}
+        demoLeft={demoLeft}
+        setDemoLeft={setDemoLeft}
+        beforeAsk={saveNow}
+      />
 
       {editing && (
         <ItemEditor

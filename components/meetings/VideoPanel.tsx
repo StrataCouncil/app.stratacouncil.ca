@@ -8,11 +8,13 @@ import { STEPPED_OUT_VIDEO } from "@/lib/meetings/live";
 import { helpFor, type DeviceHelp, type DeviceTrouble } from "@/lib/meetings/device-help";
 import { videoIdentity } from "@/lib/zoom/video-identity";
 import { demoClip, nextSpeaker } from "@/lib/demo-video";
+import { addChat, applyHand, canCoHost, encodeCommand, MAX_CHAT_LENGTH, myPlace, parseCommand, pruneHands, type ChatLine, type Hand, type RoomCommand } from "@/lib/meetings/video-room";
+import { useVideoRoomPublisher, type RoomActions } from "@/components/meetings/VideoRoom";
 
 type Phase = "loading" | "ready" | "joining" | "joined" | "reconnecting" | "ended" | "failed" | "out";
 
 /** One person in the video session, as the tiles need them. */
-type Person = { userId: number; identity: string; name: string; video: boolean; muted: boolean; reconnecting: boolean };
+type Person = { userId: number; identity: string; name: string; video: boolean; muted: boolean; reconnecting: boolean; isHost: boolean; isManager: boolean };
 type Device = { id: string; label: string };
 
 /* The SDK is browser-only and large: loaded when a meeting's video opens, never on the server. */
@@ -24,8 +26,13 @@ type Stream = ReturnType<Client["getMediaStream"]>;
  * The meeting's video, at the top of the right-hand column in Meeting Mode and
  * on the members' page (Zoom Video SDK, lib/zoom/video-sdk.ts). Everything
  * here is ours: a tile per person ("Name, SL###"), a microphone and a camera
- * button, and a larger view. None of Zoom's interface appears, and none of
- * its features (chat, recording, sharing) is used.
+ * button, a larger view, speaker and gallery views, pinning, and a raised
+ * hand. Chat, the queue of raised hands, and the runner's controls (mute,
+ * ask to unmute, spotlight, co-host, remove) are shared with the People and
+ * Chat tabs beside it through components/meetings/VideoRoom.tsx. None of
+ * Zoom's interface appears; recording and screen sharing aren't used.
+ * Nothing that happens in the video is stored or goes in the minutes: chat
+ * and hands live in the browser and go when the meeting adjourns.
  *
  * Everyone joins with one click on "Join with camera and microphone" (or
  * "sound only"): the browser asks for both at once, at that moment, and if it
@@ -55,6 +62,8 @@ export function VideoPanel(props: {
   steppedOut?: boolean;
   /** The Runner's screen: our user ids to remove from the session (stepped out). */
   removeUsers?: string[];
+  /** Our user ids of everyone who can run meetings: the people who may be made co-hosts. */
+  runners?: string[];
 }) {
   const { meetingId } = props;
   const steppedOut = Boolean(props.steppedOut);
@@ -76,6 +85,21 @@ export function VideoPanel(props: {
   const [showDevices, setShowDevices] = useState(false);
   const [devices, setDevices] = useState<{ cameras: Device[]; mics: Device[]; camera: string; mic: string }>({ cameras: [], mics: [], camera: "", mic: "" });
   const [attempt, setAttempt] = useState(0);
+  // The room (lib/meetings/video-room.ts): raised hands, chat, views.
+  const [queueIds, setQueueIds] = useState<number[]>([]);
+  const [myHand, setMyHand] = useState(false);
+  const [chat, setChat] = useState<ChatLine[]>([]);
+  const [chatOpen, setChatOpenState] = useState(true);
+  const [speaking, setSpeaking] = useState<number[]>([]);
+  const [spotlit, setSpotlit] = useState<number[]>([]);
+  const [view, setView] = useState<"gallery" | "speaker">("gallery");
+  const [pinned, setPinned] = useState<number | null>(null);
+  const [askedToUnmute, setAskedToUnmute] = useState(false);
+  const [lastSpeaker, setLastSpeaker] = useState<number | null>(null);
+  const hands = useRef<Hand[]>([]);
+  const handSeq = useRef(0);
+  const myHandRef = useRef<{ up: boolean; at: number }>({ up: false, at: 0 });
+  const room = useVideoRoomPublisher();
 
   const chosenCamera = useRef<string | null>(null);
   // The video box's size, so the tiles can fill it (lib/meetings/video-grid.ts).
@@ -116,9 +140,20 @@ export function VideoPanel(props: {
         video: Boolean(u.bVideoOn),
         muted: u.audio === "" || Boolean(u.muted),
         reconnecting: Boolean(u.isInFailover),
+        isHost: Boolean(u.isHost),
+        isManager: Boolean(u.isManager),
       }))
     );
-  }, []);
+    // The host keeps the queue: anyone who left drops out of it.
+    if (s.client.isHost()) {
+      const present = new Set(all.map((u) => u.userId));
+      const kept = pruneHands(hands.current, present);
+      if (kept.length !== hands.current.length) {
+        hands.current = kept;
+        shareQueue();
+      }
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Cameras and microphones to choose from (a laptop's own camera, an external one, a virtual one).
   const refreshDevices = useCallback(() => {
@@ -150,6 +185,50 @@ export function VideoPanel(props: {
     const els = await s.stream.detachVideo(userId).catch(() => null);
     for (const el of Array.isArray(els) ? els : els ? [els] : []) el.remove();
   }, []);
+
+  // The command channel: raised hands (lib/meetings/video-room.ts).
+  function send(c: RoomCommand, to?: number) {
+    const s = sdk.current;
+    if (!s) return;
+    void s.client
+      .getCommandClient()
+      .send(encodeCommand(c), to)
+      .catch(() => undefined);
+  }
+  // The host's order of hands, sent round so everyone's place is the same.
+  function shareQueue() {
+    const ids = hands.current.map((h) => h.userId);
+    setQueueIds(ids);
+    send({ t: "queue", ids });
+  }
+  function setOwnHand(up: boolean) {
+    myHandRef.current = { up, at: up ? Date.now() : 0 };
+    setMyHand(up);
+    send({ t: "hand", up, at: myHandRef.current.at });
+  }
+  function onCommand(senderId: number, text: string) {
+    const s = sdk.current;
+    const c = parseCommand(text);
+    if (!s || !c) return;
+    const sender = s.client.getUser(senderId);
+    const fromChair = Boolean(sender?.isHost || sender?.isManager);
+    if (c.t === "hand" && s.client.isHost()) {
+      hands.current = applyHand(hands.current, senderId, c.up, c.at, ++handSeq.current);
+      shareQueue();
+    } else if (c.t === "queue" && sender?.isHost && !s.client.isHost()) {
+      setQueueIds(c.ids);
+    } else if (c.t === "lower" && fromChair && myHandRef.current.up) {
+      setOwnHand(false);
+    } else if (c.t === "sync" && sender?.isHost && myHandRef.current.up) {
+      // The host has (re)joined: say again that our hand is up, keeping its place.
+      send({ t: "hand", up: true, at: myHandRef.current.at });
+    }
+  }
+  function addMessage(m: { id?: string; message?: string; sender: { userId: number; name: string }; timestamp: number }) {
+    if (!m.message) return;
+    const line: ChatLine = { id: m.id ?? `${m.sender.userId}-${m.timestamp}`, fromId: m.sender.userId, fromName: m.sender.name, text: m.message, at: m.timestamp };
+    setChat((c) => addChat(c, line));
+  }
 
   // Join details from our server, then into the session.
   useEffect(() => {
@@ -211,6 +290,26 @@ export function VideoPanel(props: {
           setPhase("joined");
           refreshPeople();
 
+          // Raised hands, chat, who's talking, and the spotlight.
+          client.on("command-channel-message", (m) => onCommand(Number(m.senderId), m.text));
+          const chatClient = client.getChatClient();
+          client.on("chat-on-message", (m) => addMessage(m));
+          client.on("chat-privilege-change", (p) => setChatOpenState(p.chatPrivilege !== mod.ChatPrivilege.NoOne));
+          try {
+            setChatOpenState(chatClient.getPrivilege() !== mod.ChatPrivilege.NoOne);
+            for (const m of chatClient.getHistory()) addMessage(m);
+          } catch {
+            // Chat isn't ready yet; messages still arrive.
+          }
+          client.on("active-speaker", (list) => {
+            const ids = list.map((a) => a.userId);
+            setSpeaking(ids);
+            if (ids[0] != null) setLastSpeaker(ids[0]);
+          });
+          client.on("video-spotlight-change", (p) => setSpotlit(p.spotlightList.map((x) => x.userId)));
+          client.on("host-ask-unmute-audio", () => setAskedToUnmute(true));
+          if (client.isHost()) send({ t: "sync" });
+
           client.on("auto-play-audio-failed", () => {
             setProblem({ message: "Click anywhere on this page to hear the meeting." });
           });
@@ -261,6 +360,17 @@ export function VideoPanel(props: {
       setAudioReady(false);
       setMicOn(false);
       setCameraOn(false);
+    }
+    // Chat and hands live only while the meeting's video does: gone when it ends.
+    if (phase === "out" || phase === "ended") {
+      setChat([]);
+      setQueueIds([]);
+      setMyHand(false);
+      setSpeaking([]);
+      setSpotlit([]);
+      setAskedToUnmute(false);
+      hands.current = [];
+      myHandRef.current = { up: false, at: 0 };
     }
   }, [phase]);
 
@@ -316,10 +426,117 @@ export function VideoPanel(props: {
     });
   }
 
-  // Cameras already on when we joined, and ours once it starts: drawn as their tiles appear.
+  // Who's featured in speaker view: someone pinned here, then the spotlight, then whoever spoke last.
+  const featured =
+    view === "speaker" && people.length > 1
+      ? ([pinned, spotlit[0], lastSpeaker].find((id) => id != null && people.some((p) => p.userId === id)) ?? people.find((p) => p.userId !== me)?.userId ?? null)
+      : null;
+
+  // Cameras already on when we joined, and ours once it starts: drawn as their tiles appear (again after a change of view).
   useEffect(() => {
     for (const p of people) if (p.video) void attach(p.userId);
-  }, [people, attach]);
+  }, [people, attach, view, featured]);
+
+  // What the People and Chat tabs see (components/meetings/VideoRoom.tsx).
+  const runnerKey = (props.runners ?? []).join(",");
+  const amHost = phase === "joined" && Boolean(people.find((p) => p.userId === me)?.isHost);
+  const amManager = phase === "joined" && Boolean(people.find((p) => p.userId === me)?.isManager);
+  useEffect(() => {
+    if (!room) return;
+    const runners = new Set(runnerKey ? runnerKey.split(",").map(videoIdentity) : []);
+    room.publish({
+      joined: phase === "joined",
+      me,
+      amHost,
+      amManager,
+      people: people.map((p) => ({
+        userId: p.userId,
+        identity: p.identity,
+        name: p.name,
+        muted: p.muted,
+        video: p.video,
+        isHost: p.isHost,
+        isManager: p.isManager,
+        speaking: speaking.includes(p.userId),
+        spotlit: spotlit.includes(p.userId),
+        canCoHost: canCoHost(p.identity, runners, p.isHost),
+      })),
+      queue: queueIds,
+      myHand,
+      chat,
+      chatOpen,
+    });
+  }, [room, phase, me, amHost, amManager, people, speaking, spotlit, queueIds, myHand, chat, chatOpen, runnerKey]);
+
+  useEffect(() => {
+    if (!room) return;
+    const run = (f: (s: NonNullable<typeof sdk.current>) => Promise<unknown> | unknown) => {
+      const s = sdk.current;
+      if (!s) return;
+      void Promise.resolve()
+        .then(() => f(s))
+        .catch((err) => setProblem({ message: "That didn't work. Try again.", reason: describe(err) }));
+    };
+    const actions: RoomActions = {
+      raiseHand: (up) => setOwnHand(up),
+      lowerHand: (userId) =>
+        run((s) => {
+          if (s.client.isHost()) {
+            hands.current = applyHand(hands.current, userId, false, 0, ++handSeq.current);
+            shareQueue();
+          }
+          send({ t: "lower" }, userId);
+        }),
+      askUnmute: (userId) => run((s) => s.stream.unmuteAudio(userId)),
+      mute: (userId) => run((s) => s.stream.muteAudio(userId)),
+      muteAll: () => run((s) => s.stream.muteAllAudio()),
+      spotlight: (userId) => run((s) => (userId == null ? s.stream.removeAllSpotlightedVideos() : s.stream.spotlightVideo(userId, true))),
+      setCoHost: (userId, on) => run((s) => (on ? s.client.makeManager(userId) : s.client.revokeManager(userId))),
+      remove: (userId) => run((s) => s.client.removeUser(userId)),
+      sendChat: async (text) => {
+        const s = sdk.current;
+        const body = text.trim().slice(0, MAX_CHAT_LENGTH);
+        if (!s) return "Join the video to chat.";
+        if (!body) return null;
+        try {
+          const sent = await s.client.getChatClient().sendToAll(body);
+          if (sent && !(sent instanceof Error) && "sender" in sent) addMessage(sent as Parameters<typeof addMessage>[0]);
+          return null;
+        } catch (err) {
+          console.error("[video] chat", describe(err));
+          return chatOpen ? "Couldn't send that. Try again." : "The person running the meeting has turned chat off.";
+        }
+      },
+      setChatOpen: (on) =>
+        run(async (s) => {
+          await s.client.getChatClient().setPrivilege(on ? s.mod.ChatPrivilege.All : s.mod.ChatPrivilege.NoOne);
+          setChatOpenState(on);
+        }),
+    };
+    room.bind(actions);
+    return () => room.bind(null);
+  }); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // The person running the meeting asked to unmute: do it, and the hand goes down.
+  async function acceptUnmute() {
+    setAskedToUnmute(false);
+    const s = sdk.current;
+    if (!s) return;
+    try {
+      if (!audioReady) {
+        await s.stream.startAudio({ mute: false });
+        setAudioReady(true);
+        setMicOn(true);
+      } else if (!micOn) {
+        await s.stream.unmuteAudio();
+        setMicOn(true);
+      }
+      if (myHandRef.current.up) setOwnHand(false);
+    } catch (err) {
+      setProblem({ message: await deviceProblem(err, "microphone", "Couldn't unmute. Try the Unmute button."), reason: describe(err) });
+    }
+    refreshPeople();
+  }
 
   // Adjourned: the Runner ends the session for everyone; everyone else just leaves.
   useEffect(() => {
@@ -354,6 +571,9 @@ export function VideoPanel(props: {
       } else {
         await s.stream.unmuteAudio();
         setMicOn(true);
+        // Speaking now: the hand has done its job.
+        if (myHandRef.current.up) setOwnHand(false);
+        setAskedToUnmute(false);
       }
       setProblem(null);
     } catch (err) {
@@ -490,18 +710,34 @@ export function VideoPanel(props: {
   }
 
   const over = phase === "ended" || phase === "failed";
+  // Speaker view: the featured person large, up to four others in a strip under them.
+  const strip = featured != null ? people.filter((p) => p.userId !== featured).slice(0, 4) : [];
+  const shown = featured != null ? [people.find((p) => p.userId === featured)!, ...strip] : people;
   // Before the box is measured, lay out for the column's usual 4:3 box.
   const { cols, rows } = bestGrid(people.length, box.w || 400, box.h || 300);
+  const gridStyle =
+    featured != null
+      ? { gridTemplateColumns: `repeat(${Math.max(1, strip.length)}, minmax(0, 1fr))`, gridTemplateRows: strip.length ? "minmax(0, 3fr) minmax(0, 1fr)" : "minmax(0, 1fr)" }
+      : { gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))` };
+  const place = myPlace(queueIds, me);
+  const seesQueue = amHost || amManager;
   return (
     <section className={large ? "mm-video mm-video--large" : "mm-video"} aria-label="Meeting video" data-testid="video-panel" data-phase={phase}>
       {large && <div className="mm-video__scrim" onClick={() => setLarge(false)} aria-hidden="true" />}
       <div className="mm-video__frame" ref={frameRef}>
-        <video-player-container
-          className="mm-video__grid"
-          style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))` }}
-        >
-          {people.map((p) => (
-            <div key={p.userId} className="mm-video__person" data-video={p.video || undefined} data-testid="video-person">
+        <video-player-container className="mm-video__grid" data-view={featured != null ? "speaker" : "gallery"} style={gridStyle}>
+          {shown.map((p) => {
+            const hand = queueIds.indexOf(p.userId);
+            const showHand = p.userId === me ? myHand : seesQueue && hand >= 0;
+            return (
+            <div
+              key={p.userId}
+              className="mm-video__person"
+              data-video={p.video || undefined}
+              data-featured={p.userId === featured || undefined}
+              data-speaking={speaking.includes(p.userId) || undefined}
+              data-testid="video-person"
+            >
               <span className="mm-video__initials" aria-hidden="true">
                 {initials(p.name)}
               </span>
@@ -514,12 +750,37 @@ export function VideoPanel(props: {
               />
               <span className="mm-video__label">
                 {p.muted && <MicOffIcon />}
+                {showHand && (
+                  <span className="mm-video__hand" title={p.userId === me ? "Your hand is raised" : `Hand raised, ${hand + 1} in line`}>
+                    <HandIcon />
+                    {p.userId !== me && seesQueue ? hand + 1 : ""}
+                  </span>
+                )}
                 {p.name}
                 {p.userId === me ? " (you)" : ""}
                 {p.reconnecting ? " · reconnecting" : ""}
               </span>
+              {people.length > 1 && (
+                <button
+                  type="button"
+                  className="mm-video__pin"
+                  onClick={() => {
+                    if (pinned === p.userId) setPinned(null);
+                    else {
+                      setPinned(p.userId);
+                      setView("speaker");
+                    }
+                  }}
+                  aria-pressed={pinned === p.userId}
+                  title={pinned === p.userId ? "Unpin (only on your screen)" : "Pin, so they stay large on your screen"}
+                  data-testid="video-pin"
+                >
+                  {pinned === p.userId ? "Unpin" : "Pin"}
+                </button>
+              )}
             </div>
-          ))}
+            );
+          })}
         </video-player-container>
         {phase !== "joined" && (
           <div className="mm-video__overlay" role="status">
@@ -541,6 +802,19 @@ export function VideoPanel(props: {
           </div>
         )}
       </div>
+      {phase === "joined" && askedToUnmute && (
+        <div className="mm-video__ask" role="alert" data-testid="video-ask-unmute">
+          <span>The person running the meeting asks you to unmute.</span>
+          <span className="mm-video__ask-actions">
+            <button type="button" className="button button-primary button-small" onClick={() => void acceptUnmute()} data-testid="video-ask-unmute-yes">
+              Unmute
+            </button>
+            <button type="button" className="button button-secondary button-small" onClick={() => setAskedToUnmute(false)}>
+              Stay muted
+            </button>
+          </span>
+        </div>
+      )}
       {phase === "joined" && problem && (
         <p className="mm-video__problem" role="status">
           {problem.message}
@@ -571,13 +845,43 @@ export function VideoPanel(props: {
         >
           <CameraIcon /> {cameraOn ? "Stop camera" : "Start camera"}
         </button>
-        <button type="button" className="mm-video__size mm-video__push" onClick={() => setShowDevices((d) => !d)} aria-expanded={showDevices} disabled={phase !== "joined"} data-testid="video-devices">
+        {!amHost && (
+          <button
+            type="button"
+            className="mm-video__ctl"
+            data-on={myHand || undefined}
+            onClick={() => setOwnHand(!myHand)}
+            disabled={phase !== "joined"}
+            aria-pressed={myHand}
+            data-testid="video-hand"
+          >
+            <HandIcon /> {myHand ? "Lower hand" : "Raise hand"}
+          </button>
+        )}
+        <button
+          type="button"
+          className="mm-video__size mm-video__push"
+          onClick={() => {
+            setView((v) => (v === "gallery" ? "speaker" : "gallery"));
+            setPinned(null);
+          }}
+          disabled={phase !== "joined" || people.length < 2}
+          data-testid="video-view"
+        >
+          {view === "gallery" ? "Speaker view" : "Gallery view"}
+        </button>
+        <button type="button" className="mm-video__size" onClick={() => setShowDevices((d) => !d)} aria-expanded={showDevices} disabled={phase !== "joined"} data-testid="video-devices">
           Devices
         </button>
         <button type="button" className="mm-video__size" onClick={() => setLarge((l) => !l)} aria-pressed={large} data-testid="video-size">
           {large ? "Smaller video" : "Larger video"}
         </button>
       </div>
+      {phase === "joined" && myHand && place && (
+        <p className="mm-video__hint" role="status" data-testid="video-hand-place">
+          Your hand is raised. {place} in line. It goes down when you unmute.
+        </p>
+      )}
       {phase === "joined" && !audioReady && !problem && (
         <p className="mm-video__hint">Turn on sound to hear the meeting. Your microphone stays off until you unmute.</p>
       )}
@@ -755,6 +1059,17 @@ function CameraIcon() {
     <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M15 10l5-3v10l-5-3z" />
       <rect x="3" y="6" width="12" height="12" rx="2" />
+    </svg>
+  );
+}
+
+function HandIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M8 13V5.5a1.5 1.5 0 0 1 3 0V12" />
+      <path d="M11 11.5V4a1.5 1.5 0 0 1 3 0v7.5" />
+      <path d="M14 11.5V5.5a1.5 1.5 0 0 1 3 0V14" />
+      <path d="M8 13l-1.6-1.6a1.6 1.6 0 0 0-2.3 2.3L8 18c1.3 1.6 3 3 5.5 3H14a5 5 0 0 0 5-5V8.5a1.5 1.5 0 0 0-3 0" />
     </svg>
   );
 }

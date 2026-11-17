@@ -11,11 +11,49 @@ ours.
 - A video panel at the top of the right-hand column in Meeting Mode and on
   the members' page: one tile per person ("Name, SL###"), their camera or
   their initials, and a muted-microphone mark.
-- Three controls: **Mute/Unmute**, **Start/Stop camera**, **Larger video**
-  (Escape or a click outside returns it to the column).
+- Controls under the video: **Mute/Unmute**, **Start/Stop camera**, **Raise
+  hand** (everyone but whoever runs the meeting), **Speaker view / Gallery
+  view**, **Devices**, **Larger video** (Escape or a click outside returns it
+  to the column). Each tile has **Pin**, which keeps that person large on
+  your own screen only. Whoever is talking gets a green outline.
 - People join with the microphone off and the camera on.
-- Nothing else of Zoom's: no chat, recording, transcription, screen sharing,
-  waiting room, or notices.
+- Under the video, two tabs (one open at a time, or neither):
+  - **People** (replaces "In attendance"), for whoever runs the meeting and
+    their co-hosts: raised hands in order, with **Ask to unmute** and
+    **Lower**; **Meeting controls** (Mute everyone; Chat on or off, the
+    runner only); and on each person **Mute** or **Ask to unmute**,
+    **Spotlight for everyone**, **Make co-host** (only people who can run
+    meetings, the same people a meeting can be handed over to; the runner
+    only), and **Remove from video** (the runner only; they can rejoin).
+  - **Chat**: to everyone, never privately. The runner can turn it off.
+- Zoom never lets anyone unmute someone else: **Ask to unmute** sends a
+  prompt, and the person chooses. Unmuting lowers your own hand.
+- Members see only their own place in the queue ("You're 2nd"); the runner
+  and co-hosts see the whole queue.
+- Nothing that happens in the video is stored or minuted. Chat and hands
+  live in each browser while the video does, and are gone at adjournment.
+  The minutes only say the meeting's format (In person, Electronic, Hybrid).
+- Not used: recording, transcription, screen sharing (the app's own **Share
+  on screen** shows attachments to everyone), waiting room, Zoom's notices.
+
+## Raised hands
+
+They travel over Zoom's command channel, never through our database
+(lib/meetings/video-room.ts). Each person keeps their own hand; the host
+(the runner) keeps the order and sends it round. A queue or "lower" from
+anyone but the host or a co-host is ignored. When the host joins or
+rejoins, everyone with a hand up says so again and keeps their place.
+
+## Stratasphere floats
+
+Stratasphere isn't in the meeting's column any more. A button, bottom
+right as on every page, opens a window (in a meeting, first to the left of
+the People and Chat column, which leaves room under its chat box for the
+button) that can be moved
+by its title bar and resized from its corner, and remembers where it was
+left in that browser (components/FloatingWindow.tsx). The same window is
+used on every page of the site; on a phone it fills the screen. Owners
+never see it.
 
 ## How it works
 
