@@ -27,7 +27,11 @@ ours.
     only), and **Remove from video** (the runner only; they can rejoin).
   - **Chat**: to everyone, never privately. The runner can turn it off.
 - Zoom never lets anyone unmute someone else: **Ask to unmute** sends a
-  prompt, and the person chooses. Unmuting lowers your own hand.
+  prompt, and the person chooses. Unmuting lowers your own hand. Zoom's
+  own prompt reaches only someone whose sound has started; for anyone else
+  (their browser held the sound back), the ask goes over the command
+  channel instead, and their Unmute starts the sound as well. The People
+  list shows them as "Sound not on".
 - Members see only their own place in the queue ("You're 2nd"); the runner
   and co-hosts see the whole queue.
 - Nothing that happens in the video is stored or minuted. Chat and hands

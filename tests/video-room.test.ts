@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { addChat, applyHand, canCoHost, encodeCommand, MAX_CHAT, myPlace, ordinal, parseCommand, pruneHands, type ChatLine, type Hand, type RoomCommand } from "../lib/meetings/video-room.ts";
 
 test("commands round-trip, and anything else is ignored", () => {
-  for (const c of [{ t: "hand", up: true, at: 5 }, { t: "queue", ids: [3, 1] }, { t: "lower" }, { t: "sync" }] as RoomCommand[]) {
+  for (const c of [{ t: "hand", up: true, at: 5 }, { t: "queue", ids: [3, 1] }, { t: "lower" }, { t: "sync" }, { t: "unmute" }] as RoomCommand[]) {
     assert.deepEqual(parseCommand(encodeCommand(c)), c);
   }
   assert.equal(parseCommand("not json"), null);

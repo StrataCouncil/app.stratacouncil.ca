@@ -19,7 +19,12 @@ export type RoomCommand =
   /** The host or a co-host lowered this person's hand. */
   | { t: "lower" }
   /** The host has joined: everyone with a hand up, say so again. */
-  | { t: "sync" };
+  | { t: "sync" }
+  /**
+   * The host or a co-host asks this person to unmute, when their sound isn't
+   * on yet (Zoom's own ask only reaches people whose audio has started).
+   */
+  | { t: "unmute" };
 
 export function encodeCommand(c: RoomCommand): string {
   return JSON.stringify(c);
@@ -39,6 +44,7 @@ export function parseCommand(text: string): RoomCommand | null {
   if (c.t === "queue" && Array.isArray(c.ids) && c.ids.every((x) => Number.isInteger(x))) return { t: "queue", ids: (c.ids as number[]).slice(0, 2000) };
   if (c.t === "lower") return { t: "lower" };
   if (c.t === "sync") return { t: "sync" };
+  if (c.t === "unmute") return { t: "unmute" };
   return null;
 }
 

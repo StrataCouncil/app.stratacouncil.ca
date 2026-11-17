@@ -213,7 +213,7 @@ function PeoplePanel(props: { presence: PresenceEvent[]; names: Record<string, s
     ) : null;
 
   const videoState = (v: RoomPerson | undefined) =>
-    !room.joined ? null : !v ? "Not in the video" : [v.isHost ? "Running the meeting" : v.isManager ? "Co-host" : "", v.muted ? "Muted" : "Unmuted", v.spotlit ? "Spotlit" : ""].filter(Boolean).join(" · ");
+    !room.joined ? null : !v ? "Not in the video" : [v.isHost ? "Running the meeting" : v.isManager ? "Co-host" : "", !v.audio ? "Sound not on" : v.muted ? "Muted" : "Unmuted", v.spotlit ? "Spotlit" : ""].filter(Boolean).join(" · ");
 
   const menuButton = (v: RoomPerson | undefined) =>
     chair && v && v.userId !== room.me ? (
