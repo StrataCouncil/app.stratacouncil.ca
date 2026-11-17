@@ -104,6 +104,37 @@ export function addChat(lines: ChatLine[], line: ChatLine): ChatLine[] {
   return next.length > MAX_CHAT ? next.slice(next.length - MAX_CHAT) : next;
 }
 
+/** A piece of a chat message: plain text, or a web address to link. */
+export type ChatPiece = { text: string; href?: string };
+
+/**
+ * A chat message split so its web addresses can be links: http and https
+ * addresses, and ones starting "www." (linked as https). Punctuation that
+ * ends a sentence stays out of the link. Nothing else becomes a link, so a
+ * "javascript:" address in chat stays plain text.
+ */
+export function chatPieces(text: string): ChatPiece[] {
+  const out: ChatPiece[] = [];
+  const re = /\b(?:https?:\/\/|www\.)[^\s<>"]+/gi;
+  let last = 0;
+  for (const m of text.matchAll(re)) {
+    let url = m[0];
+    // A closing bracket belongs to the address only if it opened one.
+    while (/[.,;:!?'")\]]$/.test(url)) {
+      const end = url[url.length - 1];
+      if (end === ")" && (url.match(/\(/g)?.length ?? 0) >= (url.match(/\)/g)?.length ?? 0)) break;
+      if (end === "]" && (url.match(/\[/g)?.length ?? 0) >= (url.match(/\]/g)?.length ?? 0)) break;
+      url = url.slice(0, -1);
+    }
+    const start = m.index ?? 0;
+    if (start > last) out.push({ text: text.slice(last, start) });
+    out.push({ text: url, href: /^www\./i.test(url) ? `https://${url}` : url });
+    last = start + url.length;
+  }
+  if (last < text.length) out.push({ text: text.slice(last) });
+  return out;
+}
+
 /** The longest chat message; Zoom's own limit is higher. */
 export const MAX_CHAT_LENGTH = 1000;
 

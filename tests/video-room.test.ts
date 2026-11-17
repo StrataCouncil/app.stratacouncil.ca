@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { addChat, applyHand, canCoHost, encodeCommand, MAX_CHAT, myPlace, ordinal, parseCommand, pruneHands, type ChatLine, type Hand, type RoomCommand } from "../lib/meetings/video-room.ts";
+import { addChat, applyHand, canCoHost, chatPieces, encodeCommand, MAX_CHAT, myPlace, ordinal, parseCommand, pruneHands, type ChatLine, type Hand, type RoomCommand } from "../lib/meetings/video-room.ts";
 
 test("commands round-trip, and anything else is ignored", () => {
   for (const c of [{ t: "hand", up: true, at: 5 }, { t: "queue", ids: [3, 1] }, { t: "lower" }, { t: "sync" }, { t: "unmute" }] as RoomCommand[]) {
@@ -64,4 +64,19 @@ test("co-hosts are people who can run meetings, never the host", () => {
   assert.equal(canCoHost("abc", runners, true), false);
   assert.equal(canCoHost("zzz", runners, false), false);
   assert.equal(canCoHost("", runners, false), false);
+});
+
+test("web addresses in chat become links, and nothing else does", () => {
+  assert.deepEqual(chatPieces("https://www.google.com/"), [{ text: "https://www.google.com/", href: "https://www.google.com/" }]);
+  assert.deepEqual(chatPieces("See www.bclaws.gov.bc.ca, then reply."), [
+    { text: "See " },
+    { text: "www.bclaws.gov.bc.ca", href: "https://www.bclaws.gov.bc.ca" },
+    { text: ", then reply." },
+  ]);
+  assert.deepEqual(chatPieces("(https://example.com/a)"), [{ text: "(" }, { text: "https://example.com/a", href: "https://example.com/a" }, { text: ")" }]);
+  assert.deepEqual(chatPieces("https://en.wikipedia.org/wiki/Strata_(title)"), [
+    { text: "https://en.wikipedia.org/wiki/Strata_(title)", href: "https://en.wikipedia.org/wiki/Strata_(title)" },
+  ]);
+  assert.deepEqual(chatPieces("javascript:alert(1) and ftp://x"), [{ text: "javascript:alert(1) and ftp://x" }]);
+  assert.deepEqual(chatPieces("No links here."), [{ text: "No links here." }]);
 });
