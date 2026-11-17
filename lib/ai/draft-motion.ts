@@ -21,7 +21,14 @@ export async function draftMotionText(
   corpId: string,
   /** "council meeting", "council discussion between meetings" */
   setting: string,
-  input: { label: string; text: string; background: string; financial: string; risks: string; decisionType: string }
+  input: { label: string; text: string; background: string; financial: string; risks: string; decisionType: string },
+  /**
+   * Discussions (0097): improve the motion already written, if any, and word
+   * it so the follow-up is obvious (what, who, by when, any spending
+   * limit), since a carried motion becomes a directive. Agenda items keep
+   * the plain drafting.
+   */
+  options: { current?: string; actionable?: boolean } = {}
 ): Promise<{ ok: true; motionText: string } | { ok: false; error: string }> {
   const ctx = await loadStripContext(createAdminClient(), corpId);
   const p = pseudonymize(
@@ -31,6 +38,7 @@ export async function draftMotionText(
       input.financial.trim() && `Financial implications: ${input.financial.slice(0, 2000)}`,
       input.risks.trim() && `Risks / compliance: ${input.risks.slice(0, 2000)}`,
       `Decision type: ${input.decisionType}`,
+      options.current?.trim() && `Motion as written so far: ${options.current.slice(0, 3000)}`,
     ]
       .filter(Boolean)
       .join("\n"),
@@ -46,7 +54,11 @@ export async function draftMotionText(
         "Write one motion as a single sentence starting with \"THAT\" (or \"BE IT RESOLVED by a 3/4 vote of the owners that\" for a 3/4 resolution, and the matching wording for 80% or unanimous resolutions). " +
         "Be specific to the item, use plain language, and cite the Strata Property Act only where the item clearly calls for it. " +
         "Placeholders like [REF-3] stand for names and other details; copy them exactly. Use [square brackets] for anything the item doesn't say, such as an amount or date. " +
-        "Never invent facts.",
+        "Never invent facts." +
+        (options.current?.trim() ? " A motion has already been written: keep its meaning and decisions, and improve its wording rather than starting over." : "") +
+        (options.actionable
+          ? " If the motion asks for something to be done, word it so the follow-up is obvious: what is to be done, who does it (council, a named council role, or the strata manager), by when, and any spending limit, using what the item says and [square brackets] for what it doesn't."
+          : ""),
       messages: [{ role: "user", content: p.text }],
       schema: MOTION_SCHEMA,
     });

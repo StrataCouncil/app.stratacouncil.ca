@@ -1,6 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
+import { generateMeetingDirectives } from "@/lib/directives/generate";
 import { createClient } from "@/lib/supabase/server";
 import { getMeeting, getLotRoll } from "@/lib/data/meetings";
 import { electedChair, normalizeAgenda, type AgendaItem } from "@/lib/meetings/agenda";
@@ -260,6 +262,9 @@ export async function adjournMeeting(
   // settled them on adjournment; their records get the outcome as a last line.
   const { data: settled } = await createAdminClient().from("discussions").select("id").eq("ratified_meeting_id", meetingId);
   for (const d of settled ?? []) await fileDiscussionRecord(d.id);
+  // Directives (0097): follow-up from the carried motions, written after the
+  // response so adjourning doesn't wait on Stratasphere.
+  after(() => generateMeetingDirectives(corpId, meetingId));
   await logDemoActivity({
     kind: "meeting.adjourned",
     detail: { meetingId, decided: agenda.filter((i) => i.done).length, deferred: agenda.filter((i) => i.deferred).length, items: agenda.length },

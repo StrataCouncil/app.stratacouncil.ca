@@ -51,7 +51,7 @@ LEGISLATION IS PERMITTED, ADVICE IS NOT: May explain what legislation says, but 
 
 NO OPINIONS: Report what the sources say. Never offer opinions, judgments, predictions, or recommendations on what anyone should do, and never speculate about why something happened.
 
-CITE YOUR SOURCE: Every fact and figure is followed by the tag of each record it comes from, in square brackets: [D2], or [L1, E14] for more than one. Every record sent is tagged: D a document's passages, B the bylaws, A an agenda item's attachment, F the record the person is looking at, E and W decisions in the ledger, M decisions made so far in this meeting, L a Knowledge Base section (Acts, regulations, guidance), P precedent from other stratas, R the platform records. Cite only the records you actually used, and only tags given with this question or with the standing records; a record shown with an earlier question has no tag now, so name it in words. The tags are taken out before the person reads the answer and become its list of sources, so the text must read well without them. Still name an Act's section, a document, or a decision in words where the reader needs it (for example "Strata Property Regulation section 6.21(4)"). If a source can't be cited, the claim can't be made.
+CITE YOUR SOURCE: Every fact and figure is followed by the tag of each record it comes from, in square brackets: [D2], or [L1, E14] for more than one. Every record sent is tagged: D a document's passages, B the bylaws, A an agenda item's attachment, F the record the person is looking at, E and W decisions in the ledger, M decisions made so far in this meeting, L a Knowledge Base section (Acts, regulations, guidance), P precedent from other stratas, R the platform records, T a directive (follow-up council decided on). Cite only the records you actually used, and only tags given with this question or with the standing records; a record shown with an earlier question has no tag now, so name it in words. The tags are taken out before the person reads the answer and become its list of sources, so the text must read well without them. Still name an Act's section, a document, or a decision in words where the reader needs it (for example "Strata Property Regulation section 6.21(4)"). If a source can't be cited, the claim can't be made.
 
 IF YOU DON'T KNOW, SAY SO PRECISELY: If nothing in the context answers the question, say what you looked through and that you don't see it there, for example: "I don't see this in {CORP}'s bylaws, decision ledger, documents and minutes on file, or BC strata legislation." Never say "there is no record" or that something never happened or doesn't exist: say only that you don't see it in what you looked through. If the DOCUMENTS ON FILE list marks a document as not read or not readable and it could hold the answer (judge by its title and folder), name it: "There's a document called [title] on file that I couldn't read." Then give one concrete direction: the specific document type to check, or the strata manager. If only cross-platform precedent is relevant, answer from it and label it unmistakably as precedent from other strata corporations, never as this corporation's own data. For anything out of scope, say: "I can only answer questions about {CORP}'s own records and BC strata legislation. I'm not able to [look that up online / advise on what you should do legally / access another corporation's records]." Cross-platform precedent is not "another corporation's records": it is anonymized and included by design.
 
@@ -65,7 +65,7 @@ EARLIER ANSWERS RULE: The records found for each earlier question in this conver
 
 DISPUTED-FACT RULE: If a user says a cited fact is wrong, do not concede the point or change the answer — you have no way to independently verify a claim made in conversation. State exactly which document, section, and upload date the fact came from, and note that an updated version of that document can be uploaded if it's outdated or incorrect. Never revise a factual claim based on a user's assertion alone; only a new document in context can change what you cite.`;
 
-const PERMITTED = `PERMITTED KNOWLEDGE: Only what is in the context blocks below: this corporation's live records on StrataCouncil.ca (its owner roster, council, meetings and agendas, the list of documents on file, its management company, platform announcements and the Library), its documents and minutes, its decision ledger, the legislation excerpts, and anonymized precedent from other strata corporations on the platform. The platform records are current as of this question: use them for counts and lists (lots, owners, council, meetings, documents), and say they come from the platform's records. Precedent is always framed explicitly as cross-platform precedent, never presented as if it were this corporation's own data. General knowledge may be used only to read and understand those sources (plain meaning of words), never as a source of facts. Arithmetic is done with the calculate tool.
+const PERMITTED = `PERMITTED KNOWLEDGE: Only what is in the context blocks below: this corporation's live records on StrataCouncil.ca (its owner roster, council, meetings and agendas, the list of documents on file, its management company, platform announcements and the Library), its documents and minutes, its decision ledger, its directives (the follow-up council decided on, and whether each is open, done, or cancelled), the legislation excerpts, and anonymized precedent from other strata corporations on the platform. The platform records are current as of this question: use them for counts and lists (lots, owners, council, meetings, documents), and say they come from the platform's records. Precedent is always framed explicitly as cross-platform precedent, never presented as if it were this corporation's own data. General knowledge may be used only to read and understand those sources (plain meaning of words), never as a source of facts. Arithmetic is done with the calculate tool.
 
 PIPA: Refer to owners who are people by strata lot number only (e.g. SL061), never by name. Text in the context has already had names and personal details replaced with lot numbers or placeholders such as [name redacted]; never try to guess what a placeholder stands for. Owners are never named on the roster, whether people or companies: an "Owner A" or "Company A" code marks the lots one owner holds. Use the codes to count and group lots, and never guess who an owner is. If asked who owns a lot, say the platform doesn't share owners' names and point to the roster in the app.
 
@@ -92,6 +92,7 @@ export interface MeetingScope {
 export type StratasphereSource =
   | { kind: "document"; title: string; documentId: string }
   | { kind: "decisions" }
+  | { kind: "directives" }
   | { kind: "precedent" }
   | { kind: "legislation"; title: string };
 
@@ -504,6 +505,52 @@ async function ledgerBlock(supabase: SupabaseClient, corpId: string, ctx: StripC
   return { text: [awaiting, text].filter(Boolean).join("\n"), ids: sent.map((l) => l.id), sent, older, awaitingRecords };
 }
 
+/** Directives read at most: every open one, and the latest closed ones. */
+const MAX_DIRECTIVES = 300;
+
+/**
+ * Directives (0097): the follow-up council decided on, open ones first,
+ * each tagged T1, T2, ... so an answer can cite it. Read as the person
+ * asking (Stratasphere's users all see directives). Names are stripped like
+ * everything else.
+ */
+async function directivesBlock(supabase: SupabaseClient, corpId: string, ctx: StripContext) {
+  const { data, error } = await supabase
+    .from("directives")
+    .select("id, title, detail, source, source_text, assignee_kind, assignee_name, due_date, status, closed_at, closed_by_name, close_note, created_at, meeting:meetings(meeting_date)")
+    .eq("corporation_id", corpId)
+    .order("created_at", { ascending: false })
+    .limit(MAX_DIRECTIVES);
+  if (error) {
+    console.error("[askStratasphere] directives", error.message);
+    return { text: "", records: [] as CitedRecord[] };
+  }
+  const rows = [...(data ?? [])].sort((a, b) => (a.status === "open" ? 0 : 1) - (b.status === "open" ? 0 : 1));
+  const records: CitedRecord[] = [];
+  const lines = rows.map((d, i) => {
+    const tag = `T${i + 1}`;
+    const meeting = (Array.isArray(d.meeting) ? d.meeting[0] : d.meeting) as { meeting_date: string } | null;
+    const who = d.assignee_kind === "manager" ? "assigned to the strata manager" : d.assignee_kind === "person" ? `assigned to ${d.assignee_name}` : "not assigned";
+    const state =
+      d.status === "open"
+        ? `open, ${who}${d.due_date ? `, due ${d.due_date}` : ""}`
+        : `${d.status === "done" ? "done" : "cancelled"} ${String(d.closed_at ?? "").slice(0, 10)}${d.closed_by_name ? ` by ${d.closed_by_name}` : ""}${d.close_note ? ` (${d.close_note})` : ""}, was ${who}`;
+    const from =
+      d.source === "meeting"
+        ? `from a motion carried at the meeting of ${meeting?.meeting_date ?? "an earlier date"}`
+        : d.source === "discussion"
+          ? "from a council Discussion that council supported"
+          : `added by hand on ${String(d.created_at).slice(0, 10)}`;
+    const line = stripForCorporation(
+      `${tag} [${state}; ${from}] ${d.title}${d.detail ? ` Detail: ${d.detail}` : ""}${d.source_text ? ` Motion: ${d.source_text}` : ""}`,
+      ctx
+    );
+    records.push({ tag, kind: "directive", title: String(d.title).slice(0, 160), excerpt: line.replace(/^T\d+ /, "") });
+    return line;
+  });
+  return { text: lines.join("\n"), records };
+}
+
 function liveDecisionsBlock(agenda: AgendaItem[], ctx: StripContext) {
   return agenda
     .filter((it) => it.done && it.motion?.outcome)
@@ -704,7 +751,7 @@ export async function assembleStratasphere({
   const disclosures: string[] = [];
 
   let searchFailed = false;
-  const [profile, attachments, ledgerResult, bylaws, meaningHits, keywordHits] = await Promise.all([
+  const [profile, attachments, ledgerResult, bylaws, meaningHits, keywordHits, directives] = await Promise.all([
     profileBlock(supabase, corpId, ctx).catch((err) => {
       console.error("[askStratasphere] profile", err instanceof Error ? err.message : err);
       return "";
@@ -731,6 +778,10 @@ export async function assembleStratasphere({
     withTimeout(searchKeywords(supabase, corpId, strippedQuestion), SEARCH_TIMEOUT_MS).catch((err) => {
       console.error("[askStratasphere] keyword search", err instanceof Error ? err.message : err);
       return [] as KnowledgeHit[];
+    }),
+    directivesBlock(supabase, corpId, ctx).catch((err) => {
+      console.error("[askStratasphere] directives", err instanceof Error ? err.message : err);
+      return { text: "", records: [] as CitedRecord[] };
     }),
   ]);
   const hits = mergeHits(meaningHits, keywordHits);
@@ -798,6 +849,10 @@ export async function assembleStratasphere({
     `${corpName.toUpperCase()} ON STRATACOUNCIL.CA (live platform records: the roster, council, meetings, documents on file, management, announcements, and the Library) (cite as R)`,
     profile
   );
+  const directivesText = block(
+    "DIRECTIVES (what council decided should be done, from carried motions, supported Discussions, or added by hand; open first, then done or cancelled, newest first) (cite as T1, T2, ...)",
+    directives.text
+  );
 
   const hour = { type: "ephemeral", ttl: "1h" } as const;
   const system: Anthropic.Beta.BetaTextBlockParam[] = [
@@ -805,7 +860,7 @@ export async function assembleStratasphere({
     { type: "text", text: records || "=== STANDING RECORDS ===\nNo bylaws or decisions are on file.", cache_control: hour },
     {
       type: "text",
-      text: `${platform || "=== PLATFORM RECORDS ===\nNot available for this question."}\n\nEach question below comes with the records found for it. Answer only what is supported by these records and those excerpts.`,
+      text: `${platform || "=== PLATFORM RECORDS ===\nNot available for this question."}${directivesText ? `\n${directivesText}` : ""}\n\nEach question below comes with the records found for it. Answer only what is supported by these records and those excerpts.`,
       cache_control: hour,
     },
   ];
@@ -908,6 +963,7 @@ export async function assembleStratasphere({
       ...globalBlock.records,
       ...legislationText.records,
       ...(platform ? [{ tag: "R", kind: "platform" as const, title: "The strata's records on StrataCouncil.ca" }] : []),
+      ...directives.records,
     ],
     bylawSources: bylaws.sources,
     diagnostics: {

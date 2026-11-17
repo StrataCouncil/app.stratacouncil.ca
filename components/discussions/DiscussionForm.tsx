@@ -110,8 +110,10 @@ export function DiscussionForm({
           <span>Motion</span>
           <textarea rows={3} value={fields.motion} onChange={set("motion")} maxLength={4000} required placeholder="THAT council obtain three quotes for roof replacement." data-testid="discussion-motion" />
           <span className="field__hint item-editor__motion-tools">
-            Draft it with AI from the title and the details above, then edit as needed. Once anyone has voted, the motion and its attachments
-            can&rsquo;t be changed.
+            {fields.motion.trim()
+              ? "AI can improve the wording, so it says what's to be done, by whom, by when, and any spending limit. A motion that carries becomes a directive."
+              : "Draft it with AI from the title and the details above, then edit as needed. A motion that carries becomes a directive."}{" "}
+            Once anyone has voted, the motion and its attachments can&rsquo;t be changed.
             <button
               type="button"
               className="button button-secondary button-small"
@@ -120,7 +122,7 @@ export function DiscussionForm({
               title={fields.title.trim() ? undefined : "Give the discussion a title first."}
               data-testid="discussion-draft-motion"
             >
-              {drafting ? "Drafting…" : "Draft with AI"}
+              {drafting ? (fields.motion.trim() ? "Improving…" : "Drafting…") : fields.motion.trim() ? "Improve with AI" : "Draft with AI"}
             </button>
           </span>
         </label>

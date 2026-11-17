@@ -41,7 +41,7 @@ export const maxDuration = 120;
 
 function sourceName(s: StratasphereSource) {
   if (s.kind === "document" || s.kind === "legislation") return s.title;
-  return s.kind === "decisions" ? "Decision ledger" : "Cross-platform precedent";
+  return s.kind === "decisions" ? "Decision ledger" : s.kind === "directives" ? "Directives" : "Cross-platform precedent";
 }
 
 /** About 120k tokens of conversation (questions, answers and their records) before the oldest turns drop. */

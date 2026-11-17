@@ -127,6 +127,7 @@ export default async function StrataSphereLayout({
               canBill: access?.canBill ?? false,
               isCouncil: access?.isCouncil ?? false,
               seesDiscussions: access?.seesDiscussions ?? false,
+              seesDirectives: access?.seesDirectives ?? false,
             }}
           >
             {/* One Stratasphere assistant (PR 4a): council, managers, and admins. Subscribed: Stratasphere; not: what it is, free. */}

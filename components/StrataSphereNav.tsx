@@ -45,8 +45,8 @@ function LockIcon() {
 }
 
 export function StrataSphereNav({ active }: { active: string }) {
-  const { corpId, subscribed, pending, canBill, canManage, seesDiscussions } = useStrata();
-  const items = navItemsFor(active, { canManage, canBill, seesDiscussions });
+  const { corpId, subscribed, pending, canBill, canManage, seesDiscussions, seesDirectives } = useStrata();
+  const items = navItemsFor(active, { canManage, canBill, seesDiscussions, seesDirectives });
   const [prompt, setPrompt] = useState<string | null>(null);
 
   return (

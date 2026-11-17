@@ -3,6 +3,8 @@
 import { nudgeDemoCouncil } from "@/lib/demo-council";
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
+import { generateDiscussionDirectives } from "@/lib/directives/generate";
 import { acceptedExtensions, fileExtension, MAX_DOCUMENT_BYTES } from "@/lib/documents";
 import { DISCUSSION_FILES_BUCKET, emailCouncil, fileDiscussionRecord } from "@/lib/discussions/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -175,6 +177,8 @@ export async function closeDiscussion(corpId: string, id: string): Promise<Ok | 
   // The vote is closed whatever happens next; a record or email that fails is logged, not undone.
   await fileDiscussionRecord(id);
   await emailCouncil(id, "closed", user.id);
+  // Directives (0097): if council supported it, its follow-up, after the response.
+  after(() => generateDiscussionDirectives(id));
   refresh(corpId, id);
   revalidatePath(`/strata/${corpId}/documents`, "layout");
   return { ok: true };
@@ -291,7 +295,7 @@ export async function registerDiscussionFiles(
  */
 export async function draftDiscussionMotion(
   corpId: string,
-  input: { title: string; background: string; financial: string; risks: string }
+  input: { title: string; background: string; financial: string; risks: string; motion?: string }
 ): Promise<Ok<{ motionText: string }> | Fail | DemoLimitFail> {
   const access = await getStrataAccess(corpId);
   // Only those who run meetings start, and so draft, a discussion (0093).
@@ -311,7 +315,7 @@ export async function draftDiscussionMotion(
     financial: String(input.financial ?? ""),
     risks: String(input.risks ?? ""),
     decisionType: "Majority of council",
-  });
+  }, { current: String(input.motion ?? "").slice(0, 4000), actionable: true });
   if (!r.ok) {
     if (IS_DEMO) await refundDemoAllowance("motions");
     return r;
