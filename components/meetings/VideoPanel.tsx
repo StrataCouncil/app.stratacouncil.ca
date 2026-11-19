@@ -7,7 +7,7 @@ import { bestGrid } from "@/lib/meetings/video-grid";
 import { STEPPED_OUT_VIDEO } from "@/lib/meetings/live";
 import { helpFor, type DeviceHelp, type DeviceTrouble } from "@/lib/meetings/device-help";
 import { videoIdentity } from "@/lib/zoom/video-identity";
-import { demoClip, nextSpeaker } from "@/lib/demo-video";
+import { demoClip, demoOffset } from "@/lib/demo-video";
 import { addChat, applyHand, canCoHost, encodeCommand, MAX_CHAT_LENGTH, myPlace, parseCommand, pruneHands, type ChatLine, type Hand, type RoomCommand } from "@/lib/meetings/video-room";
 import { useVideoRoomPublisher, type RoomActions } from "@/components/meetings/VideoRoom";
 
@@ -962,15 +962,13 @@ async function deviceProblem(err: unknown, kind: "camera" | "microphone", otherw
 
 /**
  * The demo site's video (lib/demo-video.ts): the fictional council's
- * cameras as short silent loops, with whoever seems to be speaking outlined,
- * as Zoom does. A loop that can't play shows its still; with reduced motion
- * only the stills show. Everyone else gets their initials.
+ * cameras as silent loops of people listening, each starting at a different
+ * point so they don't all look down at once. Nobody is shown speaking. A
+ * loop that can't play shows its still; with reduced motion only the stills
+ * show. Everyone else gets their initials.
  */
 export function DemoTiles({ people }: { people: Array<{ key: string; name: string; lot: string | null }> }) {
   const shown = people.slice(0, 9);
-  const withClip = shown.filter((p) => demoClip(p.name)).map((p) => p.key);
-  const clipKeys = withClip.join("|");
-  const [speaker, setSpeaker] = useState<string | null>(null);
   const [still, setStill] = useState(false);
   const [broken, setBroken] = useState<Record<string, boolean>>({});
 
@@ -979,21 +977,10 @@ export function DemoTiles({ people }: { people: Array<{ key: string; name: strin
     setStill(Boolean(reduce?.matches));
   }, []);
 
-  useEffect(() => {
-    const keys = clipKeys ? clipKeys.split("|") : [];
-    if (!keys.length || still) {
-      setSpeaker(null);
-      return;
-    }
-    setSpeaker((cur) => (cur && keys.includes(cur) ? cur : nextSpeaker(keys, null)));
-    const timer = setInterval(() => setSpeaker((cur) => nextSpeaker(keys, cur)), 5200);
-    return () => clearInterval(timer);
-  }, [clipKeys, still]);
-
   return (
     <section className="mm-video" aria-label="Meeting video" data-testid="video-demo">
       <div className="mm-video__tiles">
-        {shown.map((p) => {
+        {shown.map((p, i) => {
           const clip = demoClip(p.name);
           const label = p.lot ? `${p.name}, ${p.lot}` : p.name;
           if (!clip) {
@@ -1006,9 +993,8 @@ export function DemoTiles({ people }: { people: Array<{ key: string; name: strin
               </div>
             );
           }
-          const speaking = speaker === p.key;
           return (
-            <div key={p.key} className={`mm-video__tile mm-video__tile--media${speaking ? " mm-video__tile--speaking" : ""}`} data-testid="video-demo-camera">
+            <div key={p.key} className="mm-video__tile mm-video__tile--media" data-testid="video-demo-camera">
               {still || broken[p.key] ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img className="mm-video__media" src={clip.poster} alt="" />
@@ -1022,6 +1008,10 @@ export function DemoTiles({ people }: { people: Array<{ key: string; name: strin
                   playsInline
                   preload="auto"
                   aria-hidden="true"
+                  onLoadedMetadata={(e) => {
+                    const v = e.currentTarget;
+                    if (Number.isFinite(v.duration)) v.currentTime = demoOffset(i, v.duration);
+                  }}
                 >
                   <source src={clip.webm} type="video/webm" />
                   <source
@@ -1033,7 +1023,7 @@ export function DemoTiles({ people }: { people: Array<{ key: string; name: strin
                 </video>
               )}
               <span className="mm-video__label">
-                <DemoMicIcon on={speaking} />
+                <DemoMicIcon />
                 <span>{label}</span>
               </span>
             </div>
@@ -1048,12 +1038,13 @@ export function DemoTiles({ people }: { people: Array<{ key: string; name: strin
   );
 }
 
-function DemoMicIcon({ on }: { on: boolean }) {
+/** Muted: nobody in the sample video speaks. */
+function DemoMicIcon() {
   return (
     <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <rect x="9" y="3" width="6" height="11" rx="3" />
       <path d="M5 11a7 7 0 0 0 14 0M12 18v3" />
-      {!on && <path d="M4 4l16 16" />}
+      <path d="M4 4l16 16" />
     </svg>
   );
 }
