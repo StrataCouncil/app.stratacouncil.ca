@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
-import { demoClip, nextSpeaker } from "../lib/demo-video.ts";
+import { demoClip, demoOffset } from "../lib/demo-video.ts";
 
 test("each fictional person who joins a demo meeting has a loop and a still", () => {
   for (const name of ["Tomasz Kowalczyk", "Adaeze Okafor", "Liam Fraser", "Ruth Gallagher", "Dev Malhotra"]) {
@@ -19,12 +19,11 @@ test("the visitor, and anyone they invite, get an ordinary tile", () => {
   assert.equal(demoClip(""), null);
 });
 
-test("the speaker changes to someone else, and only among people with a clip", () => {
-  assert.equal(nextSpeaker([], null), null);
-  assert.equal(nextSpeaker(["a"], "a"), "a");
-  for (let i = 0; i < 20; i++) {
-    const next = nextSpeaker(["a", "b", "c"], "b");
-    assert.ok(next === "a" || next === "c");
-  }
-  assert.equal(nextSpeaker(["a", "b"], null, 0.99), "b");
+test("each tile's loop starts somewhere different, inside the loop", () => {
+  const starts = [0, 1, 2, 3, 4].map((i) => demoOffset(i, 20));
+  assert.equal(starts[0], 0);
+  assert.equal(new Set(starts.map((s) => Math.round(s))).size, 5);
+  for (const s of starts) assert.ok(s >= 0 && s < 20);
+  assert.equal(demoOffset(3, 0), 0);
+  assert.equal(demoOffset(3, Number.NaN), 0);
 });
