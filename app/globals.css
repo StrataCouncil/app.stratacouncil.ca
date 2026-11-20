@@ -10145,6 +10145,10 @@ button.design-editor__swatch {
   height: 100%;
   object-fit: cover;
 }
+/* Your own camera, as a mirror (as Zoom shows it to you). */
+.mm-video__media--mirror {
+  transform: scaleX(-1);
+}
 .mm-video__label {
   position: absolute;
   z-index: 1;
