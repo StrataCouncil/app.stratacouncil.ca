@@ -10,13 +10,12 @@ models, not the fictional characters whose names appear on their tiles.
 
 | File | Mixkit clip |
 | --- | --- |
-| liam.mp4 | 14037, "Conference video call at home" |
 | ruth.mp4 | 11589, "Woman talking online with headphones" |
 | dev.mp4 | 46021, "Man being interviewed over a video call" |
 
 ## Generated clips
 
-tomasz and adaeze are generated (ElevenLabs, Seedance 2.5 Flash, from text
+tomasz, adaeze and liam are generated (ElevenLabs, Seedance 2.5 Flash, from text
 descriptions, no real person), 10 seconds played forward then back: a
 20-second loop at 640x360, no sound. The people are fictional, like the
 characters whose names appear on their tiles.
