@@ -658,7 +658,7 @@ export function VideoPanel(props: {
 
   if (!join || join.kind === "none") return null;
 
-  if (join.kind === "demo") return <DemoTiles people={props.people} />;
+  if (join.kind === "demo") return <DemoTiles people={props.people} me={join.me} />;
 
   if (join.kind === "join" && phase === "ready") {
     if (props.ended) return null;
@@ -966,11 +966,43 @@ async function deviceProblem(err: unknown, kind: "camera" | "microphone", otherw
  * point so they don't all look down at once. Nobody is shown speaking. A
  * loop that can't play shows its still; with reduced motion only the stills
  * show. Everyone else gets their initials.
+ *
+ * The visitor can turn on their own camera: it shows in their own tile, on
+ * their screen only. Nothing is sent anywhere, and it stops when they turn
+ * it off or leave the page.
  */
-export function DemoTiles({ people }: { people: Array<{ key: string; name: string; lot: string | null }> }) {
+export function DemoTiles({ people, me }: { people: Array<{ key: string; name: string; lot: string | null }>; me?: string }) {
   const shown = people.slice(0, 9);
   const [still, setStill] = useState(false);
   const [broken, setBroken] = useState<Record<string, boolean>>({});
+  const [camera, setCamera] = useState<MediaStream | null>(null);
+  const [cameraProblem, setCameraProblem] = useState<string | null>(null);
+  const [cameraBusy, setCameraBusy] = useState(false);
+  const cameraRef = useRef<MediaStream | null>(null);
+
+  // Stop the camera when the tiles go (the meeting ends, or they leave the page).
+  useEffect(() => () => cameraRef.current?.getTracks().forEach((t) => t.stop()), []);
+
+  async function toggleCamera() {
+    if (cameraBusy) return;
+    if (camera) {
+      camera.getTracks().forEach((t) => t.stop());
+      cameraRef.current = null;
+      setCamera(null);
+      return;
+    }
+    setCameraBusy(true);
+    setCameraProblem(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      cameraRef.current = stream;
+      setCamera(stream);
+    } catch (err) {
+      setCameraProblem(await deviceProblem(err, "camera", "Couldn't start your camera. Try again."));
+    } finally {
+      setCameraBusy(false);
+    }
+  }
 
   useEffect(() => {
     const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)");
@@ -983,13 +1015,36 @@ export function DemoTiles({ people }: { people: Array<{ key: string; name: strin
         {shown.map((p, i) => {
           const clip = demoClip(p.name);
           const label = p.lot ? `${p.name}, ${p.lot}` : p.name;
+          if (p.key === me && camera) {
+            return (
+              <div key={p.key} className="mm-video__tile mm-video__tile--media" data-testid="video-demo-me">
+                <video
+                  className="mm-video__media mm-video__media--mirror"
+                  autoPlay
+                  muted
+                  playsInline
+                  aria-label="Your camera"
+                  ref={(el) => {
+                    if (el && el.srcObject !== camera) el.srcObject = camera;
+                  }}
+                />
+                <span className="mm-video__label">
+                  <DemoMicIcon />
+                  <span>{label} (you)</span>
+                </span>
+              </div>
+            );
+          }
           if (!clip) {
             return (
               <div key={p.key} className="mm-video__tile">
                 <span className="mm-video__initials" aria-hidden="true">
                   {initials(p.name)}
                 </span>
-                <span className="mm-video__name">{label}</span>
+                <span className="mm-video__name">
+                  {label}
+                  {p.key === me ? " (you)" : ""}
+                </span>
               </div>
             );
           }
@@ -1031,8 +1086,20 @@ export function DemoTiles({ people }: { people: Array<{ key: string; name: strin
         })}
         {people.length === 0 && <div className="mm-video__tile mm-video__tile--empty">Nobody has joined yet</div>}
       </div>
+      {cameraProblem && (
+        <p className="mm-video__problem" role="status">
+          {cameraProblem}
+        </p>
+      )}
+      {me && people.some((p) => p.key === me) && (
+        <div className="mm-video__bar">
+          <button type="button" className="mm-video__ctl" data-on={camera ? true : undefined} onClick={() => void toggleCamera()} disabled={cameraBusy} data-testid="video-demo-camera-toggle">
+            <CameraIcon /> {camera ? "Stop camera" : "Start camera"}
+          </button>
+        </div>
+      )}
       <p className="mm-video__note">
-        <CameraIcon /> Sample video. In a real meeting, each person&rsquo;s own camera appears here.
+        <CameraIcon /> Sample video. Your camera shows only on your screen; in a real meeting, everyone sees each other.
       </p>
     </section>
   );

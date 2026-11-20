@@ -258,7 +258,8 @@ export async function takeOverMeeting(meetingId: string): Promise<Ok | Fail> {
 /** What the video panel needs: details to join the meeting's video session, or why there's no video. */
 export type VideoJoin =
   | { kind: "none" }
-  | { kind: "demo" }
+  /** Demo visitors: sample tiles; `me` is their own tile's key, where their camera can show (on their screen only). */
+  | { kind: "demo"; me: string }
   | { kind: "message"; tone: "info" | "error"; message: string }
   /** No built-in video (it comes with Stratasphere, 0090): the council's own link, if it set one. */
   | { kind: "link"; url: string | null }
@@ -291,7 +292,12 @@ export async function getVideoJoin(meetingId: string): Promise<VideoJoin> {
   const { data: m } = await supabase.from("meetings").select("corporation_id, format, launched_by, status, video_link").eq("id", meetingId).maybeSingle();
   if (!m || m.format === "in_person" || !m.launched_by || m.status === "ADJOURNED") return { kind: "none" };
   // Demo visitors get tiles; a Super Admin's sandbox gets real video, for testing off the live site.
-  if (await demoRestricted()) return { kind: "demo" };
+  if (await demoRestricted()) {
+    const live = await getLiveState(meetingId);
+    if (!live) return { kind: "none" };
+    // The same key the tiles use (lib/meetings/live.ts videoPeople).
+    return { kind: "demo", me: live.myLot ? `lot:${live.myLot}` : `user:${user.id}` };
+  }
   // Only someone who may follow the meeting (council, manager, runners) gets past here.
   const live = await getLiveState(meetingId);
   if (!live) return { kind: "none" };
