@@ -1,6 +1,6 @@
 /**
  * The demo's sample meeting video (public/demo/council, CREDITS.md there):
- * a 20-second silent loop (looking at the camera, then down at their notes,
+ * a silent 20 to 26 second loop (looking at the camera, then down at their notes,
  * and back) and a still for each fictional person who joins a
  * visitor's meeting, matched by name (lib/demo-kit/people.ts). Anyone else
  * (the visitor, or someone they invited) gets an ordinary tile.

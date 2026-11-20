@@ -962,7 +962,7 @@ async function deviceProblem(err: unknown, kind: "camera" | "microphone", otherw
 
 /**
  * The demo site's video (lib/demo-video.ts): the fictional council's
- * cameras as silent loops of people listening, each starting at a different
+ *  cameras as silent loops of people listening, of different lengths and each starting at a different
  * point so they don't all look down at once. Nobody is shown speaking. A
  * loop that can't play shows its still; with reduced motion only the stills
  * show. Everyone else gets their initials.

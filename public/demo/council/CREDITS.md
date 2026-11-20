@@ -1,20 +1,19 @@
 # Demo meeting video
 
-Short loops shown as the fictional council's cameras on the demo site
-(components/meetings/VideoPanel.tsx, lib/demo-video.ts). Cut to 5 seconds (MP4 and WebM),
-played forward then back so they loop seamlessly, 640x360, no sound.
+Silent loops shown as the fictional council's cameras on the demo site
+(components/meetings/VideoPanel.tsx, lib/demo-video.ts): each person looks
+at the camera, glances down at their notes, and looks back up.
 
-Source: Mixkit (mixkit.co), under the Mixkit Free License for stock video
-(free for commercial use, no attribution required). The people shown are
-models, not the fictional characters whose names appear on their tiles.
+Generated with ElevenLabs (Seedance 2.5 Flash) from text descriptions, not
+from photos of anyone: the people are fictional, like the characters whose
+names appear on their tiles. Each 10-second clip is played forward then
+back so it loops seamlessly, at 640x360 with no sound. They're slowed by
+different amounts so the loops run 20 to 26 seconds and drift apart.
 
-| File | Mixkit clip |
-| --- | --- |
-| dev.mp4 | 46021, "Man being interviewed over a video call" |
-
-## Generated clips
-
-tomasz, adaeze, liam and ruth are generated (ElevenLabs, Seedance 2.5 Flash, from text
-descriptions, no real person), 10 seconds played forward then back: a
-20-second loop at 640x360, no sound. The people are fictional, like the
-characters whose names appear on their tiles.
+| File | Speed | Loop |
+| --- | --- | --- |
+| tomasz | 1.0 | 20 s |
+| dev | 1.1 | 22 s |
+| adaeze | 1.15 | 23 s |
+| ruth | 1.2 | 24 s |
+| liam | 1.3 | 26 s |
