@@ -14,15 +14,28 @@ select pg_temp.expect('3 + 8 + 4 + 5 + 6 modules by track',
   (select array_agg(n order by o) from (select t.order_index o, count(*) n from training_modules m join training_tracks t on t.id = m.track_id group by t.order_index) x)
   = array[3, 8, 4, 5, 6]::bigint[]);
 -- 0063: Council Ready rebuilt: role, decisions, money, building, managers, owners and disputes, special situations, leading.
-select pg_temp.expect('0063: Council Ready is eight modules in teaching order, 107 minutes, each ending on a scenario check',
+select pg_temp.expect('0063 and 0098: Council Ready is eight modules in teaching order, 114 minutes, each ending on a scenario check',
   (select array_agg(curriculum_key order by order_index) from training_modules where curriculum_key like 'cr%')
   = array['cr1','cr2','cr3','cr5','cr6','cr4','cr7','cr8']
-  and (select sum(estimated_minutes) from training_modules where curriculum_key like 'cr%') = 107
+  and (select sum(estimated_minutes) from training_modules where curriculum_key like 'cr%') = 114
   and (select count(*) from training_modules where curriculum_key like 'cr%'
        and jsonb_array_length(objectives) between 1 and 3 and jsonb_array_length(further_reading) >= 3
        and blueprint -> -1 ->> 'activity' = 'knowledge_check' and blueprint -> -1 ->> 'topic' = 'Scenario') = 8
   and (select title from training_modules where curriculum_key = 'cr6') = 'Working with your strata manager and contractors'
   and (select description from training_tracks where code = 'council_ready') like 'The essentials for every council member%');
+-- 0098: Module 5 rebuilt: the management relationship in depth, then contractors.
+select pg_temp.expect('0098: Module 5 is 20 minutes, 30 steps, three objectives, every step within the limits, ending on a scenario check',
+  (select estimated_minutes from training_modules where curriculum_key = 'cr6') = 20
+  and (select jsonb_array_length(blueprint) from training_modules where curriculum_key = 'cr6') = 30
+  and (select jsonb_array_length(objectives) from training_modules where curriculum_key = 'cr6') = 3
+  and (select jsonb_array_length(further_reading) from training_modules where curriculum_key = 'cr6') = 5
+  and not exists (select 1 from training_modules m, jsonb_array_elements(m.blueprint) s
+                  where m.curriculum_key = 'cr6'
+                    and (length(s ->> 'teach') > 1400 or length(s ->> 'topic') > 200
+                         or s ->> 'activity' not in ('none', 'knowledge_check', 'accordion', 'flip_cards')))
+  and (select count(*) from training_modules m, jsonb_array_elements(m.blueprint) s
+       where m.curriculum_key = 'cr6' and s ->> 'activity' = 'knowledge_check') = 9
+  and (select blueprint -> 28 ->> 'topic' from training_modules where curriculum_key = 'cr6') = 'Working with contractors');
 -- Re-running 0063, or 0042 after it, changes nothing.
 update training_modules set title = 'My money module' where curriculum_key = 'cr3';
 \i supabase/migrations/0063_council_ready_rebuilt.sql
