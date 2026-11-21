@@ -36,6 +36,10 @@ select pg_temp.expect('0098: Module 5 is 20 minutes, 30 steps, three objectives,
   and (select count(*) from training_modules m, jsonb_array_elements(m.blueprint) s
        where m.curriculum_key = 'cr6' and s ->> 'activity' = 'knowledge_check') = 9
   and (select blueprint -> 28 ->> 'topic' from training_modules where curriculum_key = 'cr6') = 'Working with contractors');
+-- 0099: Module 1 states section 32 correctly: leave unless asked to stay.
+select pg_temp.expect('0099: Module 1 teaches that a conflicted member leaves unless council asks them to stay',
+  (select blueprint::text from training_modules where curriculum_key = 'cr1') like '%must leave the meeting while it is discussed (unless council asks them to stay to provide information) and while council votes%'
+  and (select blueprint::text from training_modules where curriculum_key = 'cr1') not like '%leave the discussion if asked%');
 -- Re-running 0063, or 0042 after it, changes nothing.
 update training_modules set title = 'My money module' where curriculum_key = 'cr3';
 \i supabase/migrations/0063_council_ready_rebuilt.sql
