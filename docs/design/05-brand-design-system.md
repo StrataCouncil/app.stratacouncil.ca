@@ -61,6 +61,16 @@ There is one attention colour (`--danger`), not a separate amber tier.
 - Locked features are greyed (`--locked`, `--locked-bg`) with a stroke padlock. Admins are offered a subscription; everyone else is told to ask an admin.
 - Floating windows (the Stratasphere assistant) drag by the title bar, resize from the corner, remember where they were left, and fill the screen on phones. The Ask Stratasphere button sits bottom right in the same place on every page except the Stratasphere page itself.
 
+### Motion
+
+Quick and quiet: movement confirms what just happened and never decorates. Tokens in `app/globals.css` (`--ease-spring`, `--ease-roll`, `--ease-out`, `--dur-press`, `--dur-spring`, `--dur-open`); everything below is switched off for anyone whose device asks for reduced motion.
+
+- **Sink, then spring:** every `.button`, icon button, and the members' For/Against/Abstain buttons press in to 95% and spring back.
+- **Roll, don't jump** (`components/motion/RollingNumber.tsx`): numbers that change while you watch roll digit by digit, ones digit first, 100 ms apart. Used for the live vote counts the person running the meeting sees. The plain number stays in the page for screen readers. Numbers that don't change on screen (billing prices, closed Discussion results) don't roll.
+- **Draw the win** (`components/motion/SuccessTick.tsx`): a green circle draws, then the tick (about half a second). Only for real successes: your vote recorded (in a meeting or from a Discussion email), a motion carried, minutes just finalized, a training module complete.
+- **Fast, then slow:** things that open (training accordions and flip cards, the People tab sections, Directives, the Stratasphere window) arrive with one 350 ms ease-out.
+- Not used: pull-to-refresh, and drag-to-reorder (no drag reordering exists yet). The animations are the same on every plan.
+
 ## 6. Writing style
 
 Part of the brand as much as the colours:

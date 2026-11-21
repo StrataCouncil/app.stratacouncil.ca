@@ -14,6 +14,7 @@ import { MemberVote } from "@/components/meetings/LiveVote";
 import { MeetingAssistant } from "@/components/meetings/MeetingStratasphere";
 import { videoPeople } from "@/lib/meetings/live";
 import { VideoPanel } from "@/components/meetings/VideoPanel";
+import { SuccessTick } from "@/components/motion/SuccessTick";
 import { ConflictDialog, MeetingSide, MeetingUser, SharedViewer, TypedConfirm, useLeaveWarning } from "@/components/meetings/MeetingChrome";
 
 /**
@@ -301,6 +302,7 @@ export function LiveMeeting(props: {
                 )
               ) : lastClosed ? (
                 <p className="live-info" data-testid="live-result">
+                  {item.done && m.outcome === "CARRIED" && <SuccessTick className="live-info__tick" />}
                   <b>{item.done && m.outcome ? (m.outcome === "CARRIED" ? "Carried" : "Defeated") : "Vote closed"}:</b>{" "}
                   {lastClosed.against === 0 && lastClosed.abstain + lastClosed.missing === 0 && lastClosed.for > 0
                     ? `unanimous, ${lastClosed.for} in favour`
@@ -309,6 +311,7 @@ export function LiveMeeting(props: {
                 </p>
               ) : item.done && m.outcome ? (
                 <p className="live-info">
+                  {m.outcome === "CARRIED" && <SuccessTick className="live-info__tick" />}
                   <b>{m.outcome === "CARRIED" ? "Carried" : "Defeated"}</b>: {m.for} in favour, {m.against} opposed{m.abstain ? `, ${m.abstain} abstaining` : ""}.
                 </p>
               ) : null}

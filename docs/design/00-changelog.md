@@ -8,9 +8,19 @@
 
 ---
 
+## 2026-11-21 (evening) — Motion
+
+Small animations that make the app feel finished, on every plan, and off for anyone whose device asks for reduced motion (05, Motion):
+
+- **Buttons** press in to 95% and spring back.
+- **Live vote counts** in Meeting Mode roll digit by digit as votes arrive, instead of jumping. How votes are cast, counted, and closed is unchanged.
+- **A drawn tick** marks real successes: a member's vote recorded in a meeting or from a Discussion email, a motion carried (runner and members), minutes just finalized (with a new "Minutes finalized" note), and a training module complete.
+- **Opening** settles with one 350 ms ease-out: training accordions and flip cards, the People tab sections, Directives, and the Stratasphere window.
+- New `components/motion` (RollingNumber, SuccessTick) and `tests/motion.test.ts`.
+
 ## 2026-11-21 (later) — Library: management RFP; placeholders removed
 
-- **Request for proposal: strata management services (migration 0100):** a ready-to-fill RFP added to the Library as a draft Form for a Super Admin to review and publish. Guidance boxes on the page (how to run the RFP, what the service agreement must contain, cancellation rights) don't go into the Word download; the RFP itself does: the strata's details, services to price, what each proposal must include, fees, disclosures, timeline, evaluation weights, and conditions. Legal points checked against the SPA (ss. 27, 37, 39, 97) and the Real Estate Services Rules (ss. 30, 43, 52, 56, 58, 77). It goes with Council Ready Module 5.
+- **Hiring a strata management company (migration 0100, then the console):** 0100 added "Request for proposal: strata management services" to the Library as a draft Form. Correction: the RFP material is an Operational Guide, "Hiring a strata management company: running an RFP", written and published in the console rather than by migration. It covers who decides (SPA ss. 4, 26, 27, 97), ending the current agreement (ss. 24, 39), council's duties (ss. 31, 32), and ten steps from defining what the strata needs to the handover. The draft Form 0100 added stays unpublished until a Super Admin reworks or deletes it; a companion RFP template and checklist will be made in the console and linked from the guide's Step 3. It goes with Council Ready Module 5.
 - **Placeholder articles removed:** the hard-coded "Coming soon" sample articles (depreciation reports, fire alarm, pet policy and the rest) are gone from the Library and Forms & Templates. Every item is now written and published in the console; an empty list says "Nothing published here yet." Old links to a placeholder land back on the Library.
 - 0049 now lists the Form kind in its check, so re-running it never narrows the check under a Library that holds forms.
 

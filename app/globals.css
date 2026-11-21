@@ -24,6 +24,14 @@
 
   --radius-sm: 6px;
   --radius-lg: 12px;
+
+  /* Motion (05-brand-design-system.md, Motion). Quick and quiet. */
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-roll: cubic-bezier(0.34, 1.3, 0.64, 1);
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --dur-press: 90ms;
+  --dur-spring: 380ms;
+  --dur-open: 350ms;
 }
 
 * {
@@ -85,7 +93,7 @@ button {
   border: 1px solid transparent;
   cursor: pointer;
   text-decoration: none;
-  transition: background-color 0.15s ease, border-color 0.15s ease;
+  transition: background-color 0.15s ease, border-color 0.15s ease, transform var(--dur-spring) var(--ease-spring);
 }
 
 .button-primary {
@@ -12120,4 +12128,141 @@ button.design-editor__swatch {
 }
 .mm-fold .mm-here {
   margin-top: 0.25rem;
+}
+
+/* ------------------------------------------------------------------
+   Motion (05-brand-design-system.md, Motion)
+   Sink, then spring: buttons press in to 95% and spring back.
+   Roll, don't jump: RollingNumber digits.
+   Draw the win: SuccessTick.
+   Fast, then slow: things that open settle with one ease-out.
+   All of it is off under prefers-reduced-motion.
+   ------------------------------------------------------------------ */
+
+.button:active:not(:disabled):not([aria-disabled="true"]) {
+  transform: scale(0.95);
+  transition-duration: 0.15s, 0.15s, var(--dur-press);
+  transition-timing-function: ease, ease, ease-out;
+}
+.icon-button:active:not(:disabled),
+.live-vote__button:active:not(:disabled) {
+  transform: scale(0.95);
+  transition-duration: var(--dur-press);
+  transition-timing-function: ease-out;
+}
+.icon-button,
+.live-vote__button {
+  transition: transform var(--dur-spring) var(--ease-spring);
+}
+
+.roll {
+  display: inline-flex;
+  font-variant-numeric: tabular-nums;
+}
+.roll__digit {
+  display: inline-block;
+  width: 1ch;
+  height: 1.2em;
+  line-height: 1.2em;
+  overflow: hidden;
+  vertical-align: bottom;
+}
+.roll__digit::before {
+  content: "0\A 1\A 2\A 3\A 4\A 5\A 6\A 7\A 8\A 9";
+  display: block;
+  white-space: pre;
+  text-align: center;
+  transform: translateY(calc(var(--d, 0) * -1.2em));
+  transition: transform 0.6s var(--ease-roll);
+  transition-delay: inherit;
+}
+
+.success-tick {
+  display: inline-block;
+  flex: none;
+  vertical-align: -0.25em;
+  color: var(--free);
+}
+.success-tick__circle,
+.success-tick__tick {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+}
+.success-tick__circle {
+  animation: tick-draw 0.3s var(--ease-out) both;
+}
+.success-tick__tick {
+  animation: tick-draw 0.17s var(--ease-out) 0.3s both;
+}
+@keyframes tick-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+.success-line {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.player__complete .success-line {
+  justify-content: center;
+}
+.live-info__tick {
+  margin-right: 0.4rem;
+}
+
+@keyframes open-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes window-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.lesson-accordion__body,
+.lesson-card__face,
+.directive-card__body,
+.mm-fold[data-open] > :not(.mm-fold__head) {
+  animation: open-in var(--dur-open) var(--ease-out) both;
+}
+.float-win:not([hidden]) {
+  animation: window-in var(--dur-open) var(--ease-out) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .button,
+  .icon-button,
+  .live-vote__button,
+  .roll__digit::before {
+    transition: none !important;
+  }
+  .button:active,
+  .icon-button:active,
+  .live-vote__button:active {
+    transform: none !important;
+  }
+  .success-tick__circle,
+  .success-tick__tick,
+  .lesson-accordion__body,
+  .lesson-card__face,
+  .directive-card__body,
+  .mm-fold[data-open] > :not(.mm-fold__head),
+  .float-win:not([hidden]) {
+    animation: none !important;
+  }
 }

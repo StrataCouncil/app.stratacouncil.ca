@@ -53,6 +53,7 @@ import { VideoPanel } from "@/components/meetings/VideoPanel";
 import { checkInAsRunner, fetchLiveState } from "@/lib/meetings/live-client";
 import { MeetingSide, MeetingUser, SharedViewer, TypedConfirm, useLeaveWarning } from "@/components/meetings/MeetingChrome";
 import { ConflictsPanel, RunnerVotePanel } from "@/components/meetings/LiveVote";
+import { SuccessTick } from "@/components/motion/SuccessTick";
 import { applyPresence, inMeeting, isJoin, presentForItem, steppedOutUsers, type Presenting, takesConflicts, type Choice, type ClosedVote, type LiveConflict, type LiveState, type OpenVote } from "@/lib/meetings/live";
 import {
   acknowledgeConflict,
@@ -1700,7 +1701,11 @@ function ItemPanel(props: {
                 : ""}
             </p>
           )}
-          <p className="mm-threshold" data-state={it.done ? m.outcome?.toLowerCase() : vote && vote.total > 0 ? (vote.passing ? "passing" : "failing") : "pending"}>
+          <p
+            className={it.done && m.outcome === "CARRIED" ? "mm-threshold success-line" : "mm-threshold"}
+            data-state={it.done ? m.outcome?.toLowerCase() : vote && vote.total > 0 ? (vote.passing ? "passing" : "failing") : "pending"}
+          >
+            {it.done && m.outcome === "CARRIED" && <SuccessTick />}
             {it.done
               ? m.outcome
               : vote && vote.total > 0
