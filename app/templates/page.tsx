@@ -3,7 +3,7 @@ import { KnowledgeLibrary, type LibraryCard } from "@/components/KnowledgeLibrar
 import { LibraryDisclaimer } from "@/components/library/LibraryDisclaimer";
 import { ResourcesNav } from "@/components/ResourcesNav";
 import { listPublishedLibrary } from "@/lib/data/library";
-import { isFormOrTemplate, knowledgeResources } from "@/lib/library/catalogue";
+import { isFormOrTemplate } from "@/lib/library/catalogue";
 
 // Read per request: published items change, and the page needs the signed-in person.
 export const dynamic = "force-dynamic";
@@ -27,7 +27,6 @@ export default async function TemplatesPage() {
       jurisdictionLevel: "provincial" as const,
       jurisdiction: "BC",
     })),
-    ...knowledgeResources.map((r) => ({ ...r, sample: true })),
   ].filter((c) => isFormOrTemplate(c.kind));
 
   return (

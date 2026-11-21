@@ -11,7 +11,6 @@ import { isUuid } from "@/lib/library/library";
 import {
   isDownloadableKind,
   knowledgeResourceKindLabels,
-  knowledgeResources,
 } from "@/lib/library/catalogue";
 
 /**
@@ -41,10 +40,9 @@ export default async function KnowledgeResourcePage({
     await logUserActivity({ kind: "guide_opened", strata: null, ref: item.id, label: item.title });
     return <LibraryItemPage item={item} />;
   }
-  // Placeholder articles show on the Library as "Coming soon" and don't
-  // open; an old link to one lands back on the Library.
-  if (!knowledgeResources.some((r) => r.id === resourceId)) notFound();
-  redirect("/library");
+  // The old placeholder articles had short ids ("kb3"); a link to one lands back on the Library.
+  if (/^kb\d+$/.test(resourceId)) redirect("/library");
+  notFound();
 }
 
 /** A published Library item (0049). Templates and forms download blank. */

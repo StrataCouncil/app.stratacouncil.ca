@@ -8,6 +8,12 @@
 
 ---
 
+## 2026-11-21 (later) — Library: management RFP; placeholders removed
+
+- **Request for proposal: strata management services (migration 0100):** a ready-to-fill RFP added to the Library as a draft Form for a Super Admin to review and publish. Guidance boxes on the page (how to run the RFP, what the service agreement must contain, cancellation rights) don't go into the Word download; the RFP itself does: the strata's details, services to price, what each proposal must include, fees, disclosures, timeline, evaluation weights, and conditions. Legal points checked against the SPA (ss. 27, 37, 39, 97) and the Real Estate Services Rules (ss. 30, 43, 52, 56, 58, 77). It goes with Council Ready Module 5.
+- **Placeholder articles removed:** the hard-coded "Coming soon" sample articles (depreciation reports, fire alarm, pet policy and the rest) are gone from the Library and Forms & Templates. Every item is now written and published in the console; an empty list says "Nothing published here yet." Old links to a placeholder land back on the Library.
+- 0049 now lists the Form kind in its check, so re-running it never narrows the check under a Library that holds forms.
+
 ## 2026-11-21 — Design docs move into the repo; Council Ready Modules 1 and 5
 
 **Design docs (this PR):** docs 00 to 05 now live in `docs/design` and are rewritten to describe what is built. Doc 04 (technical and deployment) is new, written from the code. The reference product is no longer named anywhere, and privacy is stated under PIPA only. From here, each PR updates the docs it changes.

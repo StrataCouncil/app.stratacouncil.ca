@@ -48,10 +48,8 @@ const kinds = Object.keys(knowledgeResourceKindLabels) as KnowledgeResourceKind[
  * actual content-maintenance view is ever built, it belongs on its own
  * admin-only screen, not layered onto the library members browse.
  */
-/** A card in the list: a published Library item, or one of the sample articles. */
-export type LibraryCard = Pick<KnowledgeResource, "id" | "kind" | "title" | "summary" | "tags" | "jurisdictionLevel" | "jurisdiction"> & {
-  sample?: boolean;
-};
+/** A card in the list: a published Library item. */
+export type LibraryCard = Pick<KnowledgeResource, "id" | "kind" | "title" | "summary" | "tags" | "jurisdictionLevel" | "jurisdiction">;
 
 export function KnowledgeLibrary({
   resources,
@@ -111,7 +109,11 @@ export function KnowledgeLibrary({
         ))}
       </div>
 
-      {filtered.length === 0 ? (
+      {resources.length === 0 ? (
+        <p className="card__meta" data-testid="knowledge-empty">
+          Nothing published here yet.
+        </p>
+      ) : filtered.length === 0 ? (
         <p className="card__meta" data-testid="knowledge-empty">
           Nothing matches &ldquo;{query}&rdquo; in{" "}
           {activeKind === "all" ? "any category" : knowledgeResourceKindLabels[activeKind]}.
@@ -119,28 +121,6 @@ export function KnowledgeLibrary({
       ) : (
         <div className="grid-cards kb-grid" data-testid="knowledge-results">
           {filtered.map((r) => {
-            if (r.sample) {
-              return (
-                <div className="card kb-card kb-card--soon" aria-disabled="true" key={r.id} data-testid={`knowledge-card-${r.id}`}>
-                  <div className="kb-card__meta-row">
-                    <span className={`kb-card__kind kb-card__kind--${r.kind}`}>{knowledgeResourceKindLabels[r.kind]}</span>
-                    <div className="kb-card__meta-row-right">
-                      <span className="pill pill--locked kb-card__soon" title="Being written. It'll open here once it's ready.">
-                        <svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true" focusable="false">
-                          <path
-                            fill="currentColor"
-                            d="M5 7V5a3 3 0 0 1 6 0v2h.5A1.5 1.5 0 0 1 13 8.5v5a1.5 1.5 0 0 1-1.5 1.5h-7A1.5 1.5 0 0 1 3 13.5v-5A1.5 1.5 0 0 1 4.5 7H5Zm1.5 0h3V5a1.5 1.5 0 0 0-3 0v2Z"
-                          />
-                        </svg>
-                        Coming soon
-                      </span>
-                    </div>
-                  </div>
-                  <h3>{r.title}</h3>
-                  <p>{r.summary}</p>
-                </div>
-              );
-            }
             // Templates and forms are free since 2026-11-12; the lock stays wired in case it returns.
             const locked = isTemplateLocked(r, true);
             return (

@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { isDownloadableKind, isTemplateLocked, knowledgeResources, knowledgeResourceKindLabels } from "../lib/library/catalogue.ts";
+import * as catalogue from "../lib/library/catalogue.ts";
+import { isDownloadableKind, isTemplateLocked, knowledgeResourceKindLabels } from "../lib/library/catalogue.ts";
 
 test("forms are a Library category, downloadable like policy templates, and free (2026-11-12)", () => {
   assert.equal(knowledgeResourceKindLabels.form, "Form");
@@ -11,6 +12,6 @@ test("forms are a Library category, downloadable like policy templates, and free
   assert.equal(isTemplateLocked({ kind: "playbook" }, false), false);
 });
 
-test("the alterations placeholder is gone", () => {
-  assert.ok(!knowledgeResources.some((r) => /alteration agreement/i.test(r.title)));
+test("the Library has no hard-coded placeholder articles: everything is published from the console", () => {
+  assert.ok(!("knowledgeResources" in catalogue));
 });
