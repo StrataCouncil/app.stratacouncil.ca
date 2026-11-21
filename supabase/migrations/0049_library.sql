@@ -32,8 +32,10 @@ create table if not exists public.library_resources (
 );
 
 alter table public.library_resources drop constraint if exists library_resources_kind_check;
+-- 'form' (added by 0060) is listed here too, so re-running this file never
+-- narrows the check under a Library that already holds forms (2026-11-21).
 alter table public.library_resources add constraint library_resources_kind_check
-  check (kind in ('playbook', 'emergency_playbook', 'policy_template', 'operational_guide', 'financial_insight', 'legislation_update'));
+  check (kind in ('playbook', 'emergency_playbook', 'policy_template', 'form', 'operational_guide', 'financial_insight', 'legislation_update'));
 
 create index if not exists library_resources_published_idx on public.library_resources (published_at desc) where published is not null;
 
