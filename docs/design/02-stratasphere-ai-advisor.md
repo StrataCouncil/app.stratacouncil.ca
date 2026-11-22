@@ -37,7 +37,7 @@ Indexing is the Inngest function `index-document`, run on upload (on a subscribe
 
 Agenda attachments on a free strata are stored and viewable but not read. Link attachments are never fetched for the AI; it's told only that a link exists.
 
-Legislation is uploaded by Super Admins to the Legislation Library and indexed the same way (scope `legislation`), with versions superseding older ones rather than replacing them. The same library feeds training content drafting, so the two never disagree on the law.
+Acts and regulations in the Legislation Library are read from BC Laws by their links and refreshed weekly when BC Laws publishes a newer consolidation (0101); guidance is uploaded by Super Admins. Both are indexed the same way (scope `legislation`), with versions superseding older ones rather than replacing them. The same library feeds training content drafting, so the two never disagree on the law.
 
 ## 4. Finding the records for a question
 

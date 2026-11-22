@@ -19,6 +19,7 @@ Vercel is on the Hobby plan. Preview deployments for pull requests sometimes ref
 - **Inngest** for background jobs (`lib/inngest`):
   - `index-document`: read, strip, classify, split, embed, and store a strata document's passages (doc 02 §3);
   - `index-legislation`: the same for the Legislation Library;
+  - `refresh-legislation` and `check-legislation-sources` (weekly): read Knowledge Base entries with a BC Laws link straight from BC Laws, and refresh them when a newer consolidation is published (0101);
   - `fingerprint-document`: the SHA-256 of a stored file, to spot identical copies;
   - `reread-scans`: hourly, queues scanned PDFs filed before OCR existed;
   - `lifecycle`: hourly, sends what each email journey owes people now, between 9:00 and 17:00 BC time, only once a Super Admin turns a journey on; never on the demo.

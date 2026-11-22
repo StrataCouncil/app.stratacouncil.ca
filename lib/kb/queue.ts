@@ -4,6 +4,7 @@ import {
   DOCUMENT_FINGERPRINT_EVENT,
   DOCUMENT_INDEX_EVENT,
   LEGISLATION_INDEX_EVENT,
+  LEGISLATION_REFRESH_EVENT,
   inngest,
 } from "@/lib/inngest/client";
 
@@ -48,6 +49,22 @@ export async function queueLegislationIndexing(legislationIds: string[]) {
     await inngest.send(legislationIds.map((legislationId) => ({ name: LEGISLATION_INDEX_EVENT, data: { legislationId } })));
   } catch (err) {
     console.error("[queueLegislationIndexing]", err instanceof Error ? err.message : err);
+  }
+}
+
+/**
+ * Ask for Knowledge Base entries to be read again from BC Laws (0101).
+ * `force` replaces the stored text even if the "current to" date hasn't
+ * changed. Returns false if the request couldn't be queued.
+ */
+export async function queueLegislationRefresh(legislationIds: string[], force = false) {
+  if (legislationIds.length === 0) return true;
+  try {
+    await inngest.send(legislationIds.map((legislationId) => ({ name: LEGISLATION_REFRESH_EVENT, data: { legislationId, force } })));
+    return true;
+  } catch (err) {
+    console.error("[queueLegislationRefresh]", err instanceof Error ? err.message : err);
+    return false;
   }
 }
 

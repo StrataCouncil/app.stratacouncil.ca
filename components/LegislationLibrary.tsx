@@ -4,10 +4,12 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import {
+  checkAllLegislationSources,
   createLegislationUploads,
   deleteLegislation,
   getLegislationDownloadUrl,
   registerLegislation,
+  refreshLegislationFromSource,
   reindexLegislation,
   updateLegislation,
 } from "@/app/admin/legislation/actions";
@@ -38,6 +40,11 @@ interface Staged {
 
 const kindLabel = (k: LegislationKind) => LEGISLATION_KINDS.find((x) => x.value === k)?.label ?? k;
 
+/** "Nov 24, 2026, 1:41 a.m. PT" */
+function pacific(iso: string) {
+  return `${new Date(iso).toLocaleString("en-CA", { timeZone: "America/Vancouver", dateStyle: "medium", timeStyle: "short" })} PT`;
+}
+
 function statusText(e: LegislationEntry) {
   switch (e.status) {
     case "indexed":
@@ -45,7 +52,7 @@ function statusText(e: LegislationEntry) {
         ? `Indexed: ${e.sectionCount} sections`
         : `Indexed: ${e.chunkCount ?? 0} passages${e.kind === "guidance" ? "" : " (no sections found)"}`;
     case "pending":
-      return "Waiting to index";
+      return e.sourceUrl && !e.fileName ? "Waiting to read from BC Laws" : "Waiting to index";
     case "processing":
       return e.readFromScan ? "Reading the scan…" : "Indexing";
     case "needs_text":
@@ -66,6 +73,7 @@ function EntryRow({ e, onError }: { e: LegislationEntry; onError: (m: string) =>
     shortName: e.shortName ?? "",
     kind: e.kind as string,
     currentTo: e.currentTo ?? "",
+    sourceUrl: e.sourceUrl ?? "",
   });
 
   async function run(p: Promise<{ ok: boolean; error?: string }>) {
@@ -104,6 +112,13 @@ function EntryRow({ e, onError }: { e: LegislationEntry; onError: (m: string) =>
               ))}
             </select>
             <input type="date" value={form.currentTo} onChange={(ev) => setForm({ ...form, currentTo: ev.target.value })} aria-label="Current to" />
+            <input
+              value={form.sourceUrl}
+              onChange={(ev) => setForm({ ...form, sourceUrl: ev.target.value })}
+              aria-label="BC Laws link"
+              placeholder="BC Laws link (complete document)"
+              type="url"
+            />
             <button type="submit" className="button button-primary button-small" disabled={busy}>
               Save and re-index
             </button>
@@ -122,6 +137,15 @@ function EntryRow({ e, onError }: { e: LegislationEntry; onError: (m: string) =>
         <strong>{e.title}</strong>
         {e.shortName ? <span className="roster-table__meta"> ({e.shortName})</span> : null}
         <div className="roster-table__meta">{e.fileName}</div>
+        {e.sourceUrl ? (
+          <div className="roster-table__meta">
+            <a href={e.sourceUrl} target="_blank" rel="noreferrer">
+              From BC Laws
+            </a>
+            {e.sourceCheckedAt ? `, checked ${pacific(e.sourceCheckedAt)}` : ", not checked yet"}
+          </div>
+        ) : null}
+        {e.sourceError ? <div className="roster-table__meta legis-row-error">BC Laws: {e.sourceError}</div> : null}
       </td>
       <td>{kindLabel(e.kind)}</td>
       <td>{e.currentTo ?? <span className="roster-table__meta">Not set</span>}</td>
@@ -141,6 +165,11 @@ function EntryRow({ e, onError }: { e: LegislationEntry; onError: (m: string) =>
         <button type="button" className="link-button" onClick={() => setEditing(true)} disabled={busy}>
           Edit
         </button>
+        {e.sourceUrl ? (
+          <button type="button" className="link-button" onClick={() => run(refreshLegislationFromSource(e.id))} disabled={busy}>
+            Update from BC Laws
+          </button>
+        ) : null}
         <button type="button" className="link-button" onClick={() => run(reindexLegislation(e.id))} disabled={busy}>
           Re-index
         </button>
@@ -176,7 +205,9 @@ export function LegislationLibrary({ entries }: { entries: LegislationEntry[] })
   const [staged, setStaged] = useState<Staged[]>([]);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
+  const [checking, setChecking] = useState(false);
   const picker = useRef<HTMLInputElement>(null);
+  const linked = entries.filter((e) => e.sourceUrl).length;
 
   // Keep statuses fresh while anything is still indexing.
   const working = entries.some((e) => e.status === "pending" || e.status === "processing");
@@ -334,7 +365,32 @@ export function LegislationLibrary({ entries }: { entries: LegislationEntry[] })
         )}
       </section>
 
-      <h2 style={{ margin: "2rem 0 1rem" }}>In the Knowledge Base</h2>
+      <div className="legis-upload__head" style={{ margin: "2rem 0 1rem" }}>
+        <div>
+          <h2>In the Knowledge Base</h2>
+          <p className="roster-table__meta">
+            Entries with a BC Laws link are read from BC Laws and checked for a newer version every Monday at 1:41 a.m. PT.
+            {` ${linked} of ${entries.length} have a link.`}
+          </p>
+        </div>
+        {linked > 0 ? (
+          <button
+            type="button"
+            className="button button-secondary"
+            disabled={checking}
+            onClick={async () => {
+              setError("");
+              setChecking(true);
+              const res = await checkAllLegislationSources();
+              setChecking(false);
+              if (!res.ok) setError(res.error);
+              else router.refresh();
+            }}
+          >
+            {checking ? "Checking" : "Check BC Laws now"}
+          </button>
+        ) : null}
+      </div>
       {entries.length === 0 ? (
         <p className="roster-notice">
           Nothing yet. Until legislation is added, Stratasphere tells people it can&rsquo;t answer questions of law from

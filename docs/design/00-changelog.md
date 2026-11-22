@@ -8,6 +8,43 @@
 
 ---
 
+## 2026-11-22 — Knowledge Base read from BC Laws (migration 0101)
+
+**Why:** an audit found every BC Laws entry out of date. BC Laws had all of them current to November 17, 2026, but the library held:
+
+| Entries | Current to |
+| --- | --- |
+| Strata Property Act | July 14 |
+| Strata Property Regulation, RESA, the Rules, and PIPA | June 2 |
+| Everything else | October 6 or earlier |
+
+The Rules had also been filed as guidance, so they were never split by section and couldn't be cited by section. The Real Estate Services Regulation and BC's Human Rights Code (named in SPA s. 121) were missing.
+
+**What changed:**
+
+- **Each Act or regulation carries its BC Laws link.** The app reads the HTML straight from BC Laws, including every part of a long Act: the SPA has 18 parts, the Land Title Act 32, and the Workers Compensation Act 11. It stores the text, indexes it, and every Monday at 1:41 a.m. PT checks for a newer consolidation. It replaces the text only when BC Laws has a newer one. `lib/kb/bclaws.ts`, `lib/inngest/refresh-legislation.ts`.
+- **Knowledge Base screen:**
+  - Edit takes a BC Laws link;
+  - each entry shows when BC Laws was last checked, and any error;
+  - "Update from BC Laws" re-reads one entry, and "Check BC Laws now" checks them all.
+- **Only BC Laws complete-document links are accepted.** They are checked in code and by a table constraint. Nothing else is fetched.
+- **The conversion was checked against the live site for all 22 linked instruments.** The section counts match what the library already had, for example SPA 332, SPR 117, RESA 126, and PIPA 62. Three differ: the Rules now give 103 sections (previously 78 unsplit passages), the Land Title Act 520 (was 523), and the Residential Tenancy Act 135 (was 132). The last two are plausibly changes in the newer consolidations. Spot-check them after the refresh.
+- **Migration 0101:**
+  - adds `source_url`, `source_checked_at`, and `source_error`;
+  - links every existing BC Laws entry by name;
+  - files the Rules as a regulation;
+  - adds the Real Estate Services Regulation and the Human Rights Code.
+
+  It is safe to re-run, and no grants are needed. Database suite `legislation-sources` covers it.
+
+**After running 0101:** press "Check BC Laws now". The owner was also asked to delete four entries by hand:
+- PIPEDA, because privacy is under PIPA only;
+- FIPPA, which governs public bodies;
+- the Canadian Human Rights Act, which is federal (the Human Rights Code replaces it);
+- the separate Standard Bylaws PDF, because the SPA's own Schedule is now the source.
+
+Guidance with no date or publisher still needs its source and published date.
+
 ## 2026-11-22 — Motion: cards, menus, completed training
 
 Follow-up to yesterday's motion work (05, Motion), all off under reduced motion:

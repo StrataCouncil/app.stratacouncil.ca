@@ -18,6 +18,10 @@ export interface LegislationEntry {
   /** Read from a scan by OCR (0071), and how many pages were hard to read. */
   readFromScan: boolean;
   unclearPages: number;
+  /** Read from BC Laws (0101): the link, when it was last checked, and why the last check failed. */
+  sourceUrl: string | null;
+  sourceCheckedAt: string | null;
+  sourceError: string | null;
 }
 
 /** Every library entry, for the Super Admin screen. Null when the caller isn't a Super Admin. */
@@ -27,7 +31,7 @@ export async function listLegislation(): Promise<LegislationEntry[] | null> {
   const { data } = await admin.supabase
     .from("legislation_documents")
     .select(
-      "id, title, short_name, kind, current_to, file_name, size_bytes, indexing_status, indexing_error, section_count, chunk_count, uploaded_at, indexed_at, text_source, ocr_unclear_pages"
+      "id, title, short_name, kind, current_to, file_name, size_bytes, indexing_status, indexing_error, section_count, chunk_count, uploaded_at, indexed_at, text_source, ocr_unclear_pages, source_url, source_checked_at, source_error"
     )
     .order("kind")
     .order("title");
@@ -47,5 +51,8 @@ export async function listLegislation(): Promise<LegislationEntry[] | null> {
     indexedAt: r.indexed_at,
     readFromScan: r.text_source === "ocr",
     unclearPages: r.ocr_unclear_pages ?? 0,
+    sourceUrl: r.source_url,
+    sourceCheckedAt: r.source_checked_at,
+    sourceError: r.source_error,
   }));
 }
