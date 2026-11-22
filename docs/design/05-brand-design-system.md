@@ -67,7 +67,9 @@ Quick and quiet: movement confirms what just happened and never decorates. Token
 
 - **Sink, then spring:** every `.button`, icon button, and the members' For/Against/Abstain buttons press in to 95% and spring back.
 - **Roll, don't jump** (`components/motion/RollingNumber.tsx`): numbers that change while you watch roll digit by digit, ones digit first, 100 ms apart. Used for the live vote counts the person running the meeting sees. The plain number stays in the page for screen readers. Numbers that don't change on screen (billing prices, closed Discussion results) don't roll.
-- **Draw the win** (`components/motion/SuccessTick.tsx`): a green circle draws, then the tick (about half a second). Only for real successes: your vote recorded (in a meeting or from a Discussion email), a motion carried, minutes just finalized, a training module complete.
+- **Draw the win** (`components/motion/SuccessTick.tsx`): a green circle draws, then the tick (about half a second). Only for real successes: your vote recorded (in a meeting or from a Discussion email), a motion carried, minutes just finalized, a training module complete. Completed training steps use the filled version (the circle draws, fills green, and a white tick draws), staggered down the list: modules on a track's path, finished topics in a module's menu, and finished tracks under Your progress.
+- **Cards** that open something (Library and Forms & Templates items, training tracks, document folders, flip cards) lift 2px with a soft shadow on hover and press in to 98%, springing back like buttons.
+- **Text menus** (the top menu, the section tabs, the account menu): colour eases on hover, a tab's underline grows from the centre, a press sinks slightly, and the account menu opens with a short ease-out.
 - **Fast, then slow:** things that open (training accordions and flip cards, the People tab sections, Directives, the Stratasphere window) arrive with one 350 ms ease-out.
 - Not used: pull-to-refresh, and drag-to-reorder (no drag reordering exists yet). The animations are the same on every plan.
 

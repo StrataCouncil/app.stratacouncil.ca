@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { PhotoCreditLine } from "@/components/training/PhotoPicker";
+import { SuccessTick } from "@/components/motion/SuccessTick";
 import type { TrainingTrack } from "@/lib/data/training";
 import type { ModuleCover } from "@/lib/training/slides";
 import { formatMinutes, lockedBehind, minutesLeft, nextModule, trackStatus, type TrackStatus } from "@/lib/training/progress";
@@ -76,12 +77,13 @@ export function TrainingOverview({
                 const done = published.filter((m) => m.completed).length;
                 return (
                   <li key={t.id}>
-                    <span
-                      className="training-dot"
-                      data-earned={Boolean(t.credential)}
-                      role="img"
-                      aria-label={t.credential ? "Complete" : "Not complete"}
-                    />
+                    {t.credential ? (
+                      <span className="training-progress__tick" role="img" aria-label="Complete">
+                        <SuccessTick filled size={16} />
+                      </span>
+                    ) : (
+                      <span className="training-dot" data-earned={false} role="img" aria-label="Not complete" />
+                    )}
                     <span className="training-progress__name">{t.title}</span>
                     <span className="training-progress__count">
                       {t.credential ? "Complete" : published.length ? `${done}/${t.modules.length}` : "Soon"}
@@ -104,7 +106,7 @@ export function TrainingOverview({
               </div>
             </dl>
             <p className="training-panel__note">
-              A filled circle means the track is complete. It&rsquo;s also marked as complete beside your name on your strata&rsquo;s roster.
+              A green tick means the track is complete. It&rsquo;s also marked as complete beside your name on your strata&rsquo;s roster.
             </p>
           </section>
 
