@@ -153,7 +153,7 @@ function Cards({ el, onDone }: { el: FlipCards; onDone?: () => void }) {
             aria-pressed={open.has(i.id)}
             onClick={() => toggle(i.id)}
           >
-            <span className="lesson-card__face">{open.has(i.id) ? i.back : i.front}</span>
+            <span className="lesson-card__face" key={open.has(i.id) ? "back" : "front"}>{open.has(i.id) ? i.back : i.front}</span>
             <span className="lesson-card__hint">{open.has(i.id) ? "Select to flip back" : "Select to reveal"}</span>
           </button>
         ))}

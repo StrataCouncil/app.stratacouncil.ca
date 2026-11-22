@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { RollingNumber } from "@/components/motion/RollingNumber";
+import { SuccessTick } from "@/components/motion/SuccessTick";
 import { choiceLabels, votedLine, type Choice, type ClosedVote, type LiveBallot, type LiveConflict, type OpenVote } from "@/lib/meetings/live";
 
 /**
@@ -156,13 +158,13 @@ export function RunnerVotePanel(props: {
       })}
       <div className="mm-live__foot">
         <span>
-          <b>{tally.for}</b> For
+          <b><RollingNumber value={tally.for} /></b> For
         </span>
         <span>
-          <b>{tally.against}</b> Against
+          <b><RollingNumber value={tally.against} /></b> Against
         </span>
         <span>
-          <b>{tally.abstain}</b> Abstain
+          <b><RollingNumber value={tally.abstain} /></b> Abstain
         </span>
         <span className="card__meta">
           Needs {need} For: a majority of the {vote.eligibleLots.length} council {vote.eligibleLots.length === 1 ? "member" : "members"} present for this item
@@ -373,7 +375,8 @@ export function MemberVote(props: {
           </button>
         ))}
       </div>
-      <p className="live-vote__note" role="status">
+      <p className={mine ? "live-vote__note success-line" : "live-vote__note"} role="status">
+        {mine && <SuccessTick key={mine} />}
         {mine
           ? `You voted ${choiceLabels[mine]}. You can change it until ${props.runnerName ?? "the person running the meeting"} closes the vote. The result shows here when it closes.`
           : "Choose For, Against, or Abstain. You can change your vote until the vote closes."}

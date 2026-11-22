@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { SuccessTick } from "@/components/motion/SuccessTick";
 import { castVote } from "@/app/strata/[corpId]/discussions/actions";
 
 /** The one button on the email vote's confirm page (0081). */
@@ -11,8 +12,11 @@ export function ConfirmVote(props: { corpId: string; discussionId: string; choic
   // Stays here when done: on a phone, the rest of Discussions needs a larger screen.
   if (done) {
     return (
-      <p className="vote-confirm__done" role="status" data-testid="vote-confirm-done">
-        Your vote is recorded: <strong>{props.label}</strong>. You can close this page.
+      <p className="vote-confirm__done success-line" role="status" data-testid="vote-confirm-done">
+        <SuccessTick />
+        <span>
+          Your vote is recorded: <strong>{props.label}</strong>. You can close this page.
+        </span>
       </p>
     );
   }

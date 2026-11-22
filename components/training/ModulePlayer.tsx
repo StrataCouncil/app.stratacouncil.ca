@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { completeSection } from "@/app/training/actions";
 import { SlideView, Transcript } from "@/components/training/SlideView";
+import { SuccessTick } from "@/components/motion/SuccessTick";
 import { type FurtherReading, type Objective, type PlayerContent, type PlayerSlide } from "@/lib/training/slides";
 
 type Page =
@@ -251,7 +252,10 @@ export function ModulePlayer({
 
         {finished ? (
           <section className="player__complete">
-            <h2>{allDone ? "Module complete" : "Almost there"}</h2>
+            <h2 className={allDone ? "success-line" : undefined}>
+              {allDone && <SuccessTick size={28} />}
+              {allDone ? "Module complete" : "Almost there"}
+            </h2>
             <p>{allDone ? `You've finished "${moduleTitle}".` : "Some topics still need finishing. Pick one from the menu."}</p>
             {credential && (
               <p className="sync-note sync-note--ok" role="status">

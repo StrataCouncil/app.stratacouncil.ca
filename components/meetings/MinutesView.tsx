@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { SuccessTick } from "@/components/motion/SuccessTick";
 import { attendanceLines, clockTime, voteLine, type MinutesContent } from "@/lib/meetings/minutes";
 import { finalizeMeetingMinutes, saveMinutesSummaries } from "@/app/strata/[corpId]/meetings/[meetingId]/minutes/actions";
 
@@ -29,6 +30,8 @@ export function MinutesView({
   );
   const [dirty, setDirty] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Set after finalizing here, so the tick plays once, not on every later visit.
+  const [justFinalized, setJustFinalized] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -59,6 +62,7 @@ export function MinutesView({
         const result = await finalizeMeetingMinutes(corpId, meetingId);
         setConfirming(false);
         if (!result.ok) return setError(result.error);
+        setJustFinalized(true);
         router.refresh();
       });
     if (dirty) save(run);
@@ -81,6 +85,12 @@ export function MinutesView({
         </div>
       )}
       {error && <p className="form-error" role="alert">{error}</p>}
+      {final && justFinalized && (
+        <p className="sync-note sync-note--ok success-line" role="status" data-testid="minutes-finalized">
+          <SuccessTick />
+          <span>Minutes finalized. The final PDF is saved to your strata&rsquo;s records.</span>
+        </p>
+      )}
 
       <header className="minutes__head">
         {!final && <p className="minutes__draft">Draft — not yet final</p>}
