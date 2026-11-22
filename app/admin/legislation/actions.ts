@@ -3,7 +3,8 @@
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
-import { mirrorLegislationToDemo } from "@/lib/demo-mirror";
+import { mirrorLegislationToDemo, mirrorLibraryToDemo, mirrorTrainingToDemo } from "@/lib/demo-mirror";
+import { repairCitations, resolveCitation, type CitationReport } from "@/lib/kb/citation-repair-server";
 import { requireSuperAdmin } from "@/lib/data/admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { queueLegislationIndexing, queueLegislationRefresh } from "@/lib/kb/queue";
@@ -211,8 +212,18 @@ export async function deleteLegislation(id: string): Promise<Done> {
   if (error || !data?.length) return { ok: false, error: "Couldn't delete that entry." };
   const path = data[0].storage_path as string | null;
   if (path) await createAdminClient().storage.from(LEGISLATION_BUCKET).remove([path]);
-  // And from the demo site's copy (lib/demo-mirror.ts).
-  after(() => mirrorLegislationToDemo().then(() => undefined));
+  // And from the demo site's copy (lib/demo-mirror.ts). Then re-link any
+  // citation to the deleted entry that has a certain replacement; the rest
+  // show under "Citations" for a person.
+  after(async () => {
+    await mirrorLegislationToDemo();
+    try {
+      const r = await repairCitations({ withCandidates: false });
+      if (r.relinked.length || r.publishedPatched) await Promise.all([mirrorTrainingToDemo(), mirrorLibraryToDemo()]);
+    } catch (err) {
+      console.error("[deleteLegislation] citation repair", err instanceof Error ? err.message : err);
+    }
+  });
   revalidatePath("/admin/legislation");
   return { ok: true };
 }
@@ -231,4 +242,45 @@ export async function getLegislationDownloadUrl(id: string): Promise<{ ok: true;
     .createSignedUrl(doc.storage_path, 300, { download: doc.file_name || true });
   if (error || !data) return { ok: false, error: "Couldn't prepare the download." };
   return { ok: true, url: data.signedUrl };
+}
+
+/**
+ * Citations to passages that no longer exist, across training, the
+ * Library and recall cases. Applies the certain re-links and returns the
+ * rest, with suggested sections, for a choice.
+ */
+export async function checkCitations(): Promise<{ ok: true; report: CitationReport } | Fail> {
+  if (!(await requireSuperAdmin())) return notAllowed;
+  try {
+    const report = await repairCitations();
+    if (report.relinked.length || report.publishedPatched || report.droppedUnread) {
+      after(() => Promise.all([mirrorTrainingToDemo(), mirrorLibraryToDemo()]).then(() => undefined));
+    }
+    return { ok: true, report };
+  } catch (err) {
+    console.error("[checkCitations]", err instanceof Error ? err.message : err);
+    return { ok: false, error: "Couldn't check the citations. Please try again." };
+  }
+}
+
+/** Replace one citation with a chosen section, or remove it (replacementId null). */
+export async function chooseCitation(input: {
+  where: "slide" | "library" | "recall";
+  rowId: string;
+  chunkId: string;
+  replacementId: string | null;
+}): Promise<Done> {
+  if (!(await requireSuperAdmin())) return notAllowed;
+  if (!["slide", "library", "recall"].includes(input.where)) return { ok: false, error: "That citation isn't valid." };
+  const uuid = /^[0-9a-f-]{36}$/i;
+  if (!uuid.test(input.rowId) || !uuid.test(input.chunkId) || (input.replacementId && !uuid.test(input.replacementId))) {
+    return { ok: false, error: "That citation isn't valid." };
+  }
+  try {
+    await resolveCitation(input);
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Couldn't change that citation." };
+  }
+  after(() => Promise.all([mirrorTrainingToDemo(), mirrorLibraryToDemo()]).then(() => undefined));
+  return { ok: true };
 }
