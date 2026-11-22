@@ -2,6 +2,7 @@ import { serve } from "inngest/next";
 import { inngest } from "@/lib/inngest/client";
 import { indexDocument } from "@/lib/inngest/index-document";
 import { indexLegislation } from "@/lib/inngest/index-legislation";
+import { checkLegislationSources, refreshLegislation } from "@/lib/inngest/refresh-legislation";
 import { fingerprintCorporation, fingerprintDocument } from "@/lib/inngest/fingerprint-document";
 import { rereadScans } from "@/lib/inngest/reread-scans";
 import { lifecycleEmails } from "@/lib/inngest/lifecycle";
@@ -14,6 +15,8 @@ export const { GET, POST, PUT } = serve({
   functions: [
     indexDocument,
     indexLegislation,
+    refreshLegislation,
+    checkLegislationSources,
     fingerprintDocument,
     fingerprintCorporation,
     rereadScans,

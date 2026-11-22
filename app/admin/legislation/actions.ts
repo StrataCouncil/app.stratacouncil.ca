@@ -6,7 +6,8 @@ import { after } from "next/server";
 import { mirrorLegislationToDemo } from "@/lib/demo-mirror";
 import { requireSuperAdmin } from "@/lib/data/admin";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { queueLegislationIndexing } from "@/lib/kb/queue";
+import { queueLegislationIndexing, queueLegislationRefresh } from "@/lib/kb/queue";
+import { normalizeBcLawsLink } from "@/lib/kb/bclaws";
 
 import {
   cleanFileName,
@@ -123,13 +124,18 @@ export async function registerLegislation(entries: NewLegislation[]): Promise<Do
  */
 export async function updateLegislation(
   id: string,
-  patch: { title: string; shortName: string; kind: string; currentTo: string }
+  patch: { title: string; shortName: string; kind: string; currentTo: string; sourceUrl: string }
 ): Promise<Done> {
   const auth = await requireSuperAdmin();
   if (!auth) return notAllowed;
   const title = patch.title.replace(/\s+/g, " ").trim().slice(0, 200);
   if (!title) return { ok: false, error: "Give it a name." };
   if (!isLegislationKind(patch.kind)) return { ok: false, error: "Choose a type." };
+  const sourceUrl = patch.sourceUrl.trim() ? normalizeBcLawsLink(patch.sourceUrl) : null;
+  if (patch.sourceUrl.trim() && !sourceUrl) {
+    return { ok: false, error: "The BC Laws link must be a complete-document link, like https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/98043_00." };
+  }
+  const { data: before } = await auth.supabase.from("legislation_documents").select("source_url").eq("id", id).maybeSingle();
   const { data, error } = await auth.supabase
     .from("legislation_documents")
     .update({
@@ -137,13 +143,16 @@ export async function updateLegislation(
       short_name: patch.shortName.trim().slice(0, 30) || null,
       kind: patch.kind,
       current_to: cleanDate(patch.currentTo),
+      source_url: sourceUrl,
       indexing_status: "pending",
       indexing_error: null,
     })
     .eq("id", id)
     .select("id");
   if (error || !data?.length) return { ok: false, error: "Couldn't save that change." };
-  await queueLegislationIndexing([id]);
+  // A new BC Laws link means reading the entry from there now.
+  if (sourceUrl && sourceUrl !== before?.source_url) await queueLegislationRefresh([id], true);
+  else await queueLegislationIndexing([id]);
   revalidatePath("/admin/legislation");
   return { ok: true };
 }
@@ -158,6 +167,34 @@ export async function reindexLegislation(id: string): Promise<Done> {
     .select("id");
   if (!data?.length) return { ok: false, error: "That entry isn't available." };
   await queueLegislationIndexing([id]);
+  revalidatePath("/admin/legislation");
+  return { ok: true };
+}
+
+/** Read one entry again from BC Laws now, replacing its text even if the date hasn't changed. */
+export async function refreshLegislationFromSource(id: string): Promise<Done> {
+  const auth = await requireSuperAdmin();
+  if (!auth) return notAllowed;
+  const { data } = await auth.supabase
+    .from("legislation_documents")
+    .update({ source_error: null })
+    .eq("id", id)
+    .not("source_url", "is", null)
+    .select("id");
+  if (!data?.length) return { ok: false, error: "That entry has no BC Laws link. Add one with Edit." };
+  if (!(await queueLegislationRefresh([id], true))) return { ok: false, error: "Couldn't start the update. Please try again." };
+  revalidatePath("/admin/legislation");
+  return { ok: true };
+}
+
+/** Check every entry with a BC Laws link, updating those BC Laws has a newer version of. */
+export async function checkAllLegislationSources(): Promise<Done> {
+  const auth = await requireSuperAdmin();
+  if (!auth) return notAllowed;
+  const { data } = await auth.supabase.from("legislation_documents").select("id").not("source_url", "is", null);
+  const ids = (data ?? []).map((d) => d.id as string);
+  if (!ids.length) return { ok: false, error: "No entries have a BC Laws link yet." };
+  if (!(await queueLegislationRefresh(ids))) return { ok: false, error: "Couldn't start the check. Please try again." };
   revalidatePath("/admin/legislation");
   return { ok: true };
 }

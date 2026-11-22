@@ -20,8 +20,9 @@ export default async function LegislationPage() {
           <h1>Knowledge Base</h1>
           <p>
             BC Acts, regulations, and official guidance that Stratasphere quotes and cites for every strata on the
-            platform. It explains the law only from what&rsquo;s here, never from memory, so keep each entry current:
-            when BC Laws publishes a newer version, upload it and delete the old one.
+            platform. It explains the law only from what&rsquo;s here, never from memory. Acts and regulations are read
+            from BC Laws and updated automatically when BC Laws publishes a newer version; give each one its BC Laws link
+            with Edit. Guidance without a BC Laws page is uploaded, with its published date.
           </p>
         </div>
         <LegislationLibrary entries={entries} />

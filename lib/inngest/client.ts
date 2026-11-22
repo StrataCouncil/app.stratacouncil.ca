@@ -19,6 +19,7 @@ export const inngest = new Inngest({ id: IS_DEMO ? "stratacouncil-demo" : "strat
 const EVENT_PREFIX = IS_DEMO ? "demo/" : "";
 export const DOCUMENT_INDEX_EVENT = `${EVENT_PREFIX}documents/index.requested`;
 export const LEGISLATION_INDEX_EVENT = `${EVENT_PREFIX}legislation/index.requested`;
+export const LEGISLATION_REFRESH_EVENT = `${EVENT_PREFIX}legislation/refresh.requested`;
 export const DOCUMENT_FINGERPRINT_EVENT = `${EVENT_PREFIX}documents/fingerprint.requested`;
 export const CORPORATION_FINGERPRINT_EVENT = `${EVENT_PREFIX}documents/fingerprint-all.requested`;
 
