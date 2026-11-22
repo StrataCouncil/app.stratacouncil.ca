@@ -232,7 +232,7 @@ export function ModulePlayer({
                 >
                   <span>{s.title}</span>
                   <span className="player__section-icon" aria-hidden="true">
-                    {state === "done" ? <TickIcon /> : state === "locked" ? <LockIcon /> : null}
+                    {state === "done" ? <SuccessTick size={18} delay={si * 60} /> : state === "locked" ? <LockIcon /> : null}
                   </span>
                   <span className="visually-hidden">{state === "done" ? " (complete)" : state === "locked" ? " (locked)" : ""}</span>
                 </button>
@@ -514,13 +514,6 @@ function Toggle({ label, on, onChange }: { label: string; on: boolean; onChange:
 }
 
 const svg = { width: 18, height: 18, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round" as const, strokeLinejoin: "round" as const, "aria-hidden": true };
-function TickIcon() {
-  return (
-    <svg {...svg}>
-      <path d="M5 12.5l4.5 4.5L19 7.5" />
-    </svg>
-  );
-}
 function LockIcon() {
   return (
     <svg {...svg}>

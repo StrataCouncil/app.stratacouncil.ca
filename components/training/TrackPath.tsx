@@ -3,6 +3,7 @@ import Link from "next/link";
 import { moduleStatuses, type TrainingTrack } from "@/lib/data/training";
 import { lockedBehind } from "@/lib/training/progress";
 import { SIGNUP_URL } from "@/lib/demo";
+import { SuccessTick } from "@/components/motion/SuccessTick";
 
 /**
  * A track as a learning path: its modules in order, each done, open,
@@ -58,7 +59,7 @@ export function TrackPath({
           return (
             <li key={m.id} className="path__step" data-status={status}>
               <span className="path__node" aria-hidden="true">
-                {status === "done" ? <Tick /> : status === "locked" ? <Lock /> : i + 1}
+                {status === "done" ? <SuccessTick filled size={40} delay={i * 90} /> : status === "locked" ? <Lock /> : i + 1}
               </span>
               <div className="path__card">
                 <div>
@@ -116,13 +117,6 @@ const icon = {
   strokeLinecap: "round" as const,
   strokeLinejoin: "round" as const,
 };
-function Tick() {
-  return (
-    <svg {...icon}>
-      <path d="M5 12.5l4.5 4.5L19 7.5" />
-    </svg>
-  );
-}
 function Lock() {
   return (
     <svg {...icon}>

@@ -8,6 +8,14 @@
 
 ---
 
+## 2026-11-22 — Motion: cards, menus, completed training
+
+Follow-up to yesterday's motion work (05, Motion), all off under reduced motion:
+
+- **Cards** that open something (Library and Forms & Templates items, training tracks, document folders, flip cards) lift on hover and press in like buttons.
+- **Text menus** (top menu, section tabs, account menu) ease their colour, grow a tab's underline from the centre on hover, sink slightly when pressed, and the account menu opens with a short ease-out.
+- **Completed training** uses the drawn tick: the circle draws, fills green, and the tick draws in white, staggered down the list, on a track's path, a module's topic menu, and Your progress (whose note now says a green tick means the track is complete).
+
 ## 2026-11-21 (evening) — Motion
 
 Small animations that make the app feel finished, on every plan, and off for anyone whose device asks for reduced motion (05, Motion):

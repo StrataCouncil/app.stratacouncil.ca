@@ -12189,10 +12189,38 @@ button.design-editor__swatch {
   stroke-dashoffset: 0;
 }
 .success-tick__circle {
-  animation: tick-draw 0.3s var(--ease-out) both;
+  animation: tick-draw 0.3s var(--ease-out) var(--tick-delay, 0ms) both;
 }
 .success-tick__tick {
-  animation: tick-draw 0.17s var(--ease-out) 0.3s both;
+  animation: tick-draw 0.17s var(--ease-out) calc(var(--tick-delay, 0ms) + 0.3s) both;
+}
+/* Filled: the circle draws, fills green, then the tick draws in white. */
+.success-tick--filled .success-tick__circle {
+  fill: currentColor;
+  animation:
+    tick-draw 0.3s var(--ease-out) var(--tick-delay, 0ms) both,
+    tick-fill 0.15s ease-out calc(var(--tick-delay, 0ms) + 0.22s) both;
+}
+.success-tick--filled .success-tick__tick {
+  stroke: #ffffff;
+}
+@keyframes tick-fill {
+  from {
+    fill-opacity: 0;
+  }
+  to {
+    fill-opacity: 1;
+  }
+}
+/* A finished step on the training path: the tick is the node. */
+.path__step[data-status="done"] .path__node {
+  background: none;
+  border: 0;
+  color: var(--free);
+}
+.training-progress__tick {
+  display: inline-flex;
+  flex: none;
 }
 @keyframes tick-draw {
   from {
@@ -12242,6 +12270,117 @@ button.design-editor__swatch {
 }
 .float-win:not([hidden]) {
   animation: window-in var(--dur-open) var(--ease-out) both;
+}
+
+/* Cards that open something lift on hover and press in like buttons. */
+a.kb-card,
+a.track-card,
+a.folder-card,
+.lesson-card {
+  transition:
+    border-color 0.15s ease,
+    opacity 0.15s ease,
+    box-shadow 0.2s ease,
+    transform var(--dur-spring) var(--ease-spring);
+}
+a.kb-card:hover,
+a.track-card:hover,
+a.folder-card:hover,
+.lesson-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(27, 42, 65, 0.08);
+}
+a.kb-card:active,
+a.track-card:active,
+a.folder-card:active,
+.lesson-card:active {
+  transform: scale(0.98);
+  box-shadow: none;
+  transition-duration: 0.15s, 0.15s, 0.1s, var(--dur-press);
+  transition-timing-function: ease, ease, ease, ease-out;
+}
+
+/* Text menus: colour eases, a tab's underline grows from the centre on
+   hover, and a press sinks slightly. */
+.app-nav a,
+.substrata-nav a,
+.substrata-nav__locked,
+.account-menu__item {
+  transition:
+    color 0.15s ease,
+    background-color 0.15s ease,
+    transform var(--dur-spring) var(--ease-spring);
+}
+.app-nav a:active,
+.substrata-nav a:active,
+.substrata-nav__locked:active,
+.account-menu__item:active {
+  transform: scale(0.96);
+  transition-duration: 0.15s, 0.15s, var(--dur-press);
+}
+.app-nav a:hover:not([data-active="true"]) {
+  background: rgba(248, 246, 241, 0.06);
+}
+.substrata-nav a,
+.substrata-nav__locked {
+  position: relative;
+}
+.substrata-nav a::after,
+.substrata-nav__locked::after {
+  content: "";
+  position: absolute;
+  left: 0.7em;
+  right: 0.7em;
+  bottom: -2px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--line);
+  transform: scaleX(0);
+  transition: transform 0.25s var(--ease-out);
+}
+.substrata-nav a:hover::after,
+.substrata-nav__locked:hover::after {
+  transform: scaleX(1);
+}
+.substrata-nav a[data-active="true"]::after {
+  background: var(--accent);
+  transform: scaleX(1);
+}
+.account-menu__panel {
+  transform-origin: top right;
+  animation: window-in 0.2s var(--ease-out) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  a.kb-card,
+  a.track-card,
+  a.folder-card,
+  .lesson-card,
+  .app-nav a,
+  .substrata-nav a,
+  .substrata-nav__locked,
+  .account-menu__item,
+  .substrata-nav a::after,
+  .substrata-nav__locked::after {
+    transition: none !important;
+  }
+  a.kb-card:hover,
+  a.track-card:hover,
+  a.folder-card:hover,
+  .lesson-card:hover,
+  a.kb-card:active,
+  a.track-card:active,
+  a.folder-card:active,
+  .lesson-card:active,
+  .app-nav a:active,
+  .substrata-nav a:active,
+  .substrata-nav__locked:active,
+  .account-menu__item:active {
+    transform: none !important;
+  }
+  .account-menu__panel {
+    animation: none !important;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
