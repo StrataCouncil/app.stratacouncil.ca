@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { AdminTabs } from "@/components/AdminTabs";
 import { AppShell } from "@/components/AppShell";
+import { CitationCheck } from "@/components/CitationCheck";
 import { LegislationLibrary } from "@/components/LegislationLibrary";
 import { listLegislation } from "@/lib/data/legislation";
 
@@ -26,6 +27,7 @@ export default async function LegislationPage() {
           </p>
         </div>
         <LegislationLibrary entries={entries} />
+        <CitationCheck />
       </div>
     </AppShell>
   );

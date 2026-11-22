@@ -8,6 +8,23 @@
 
 ---
 
+## 2026-11-22 — Citations repaired when the Knowledge Base changes
+
+**Why:** training slides, Library items, and recall cases cite Knowledge Base passages by ID. When BC Laws publishes a new version (0101) or an entry is deleted (PIPEDA, FIPPA, the Canadian Human Rights Act, the Standard Bylaws PDF), a passage can change ID or disappear, and its citations point at nothing. Sources change as often as monthly, so this has to be automatic.
+
+**What changed:**
+
+- **Certain re-links happen automatically after every re-index and every deletion** (`lib/kb/citation-repair.ts`). A citation is re-linked automatically only when its label names a section of an entry still in the library ("Strata Property Act, s. 45 ...", "Standard Bylaw 20", "Form B") and that section exists. A numbered Standard Bylaw cited from the deleted PDF moves to the Act's Schedule.
+- **The published copy is updated too.** Learners read only labels, so the published copy of each affected training module has those labels corrected in place. Library items have both their draft and published sources fixed.
+- **Unread references are dropped.** Dangling IDs nobody reads (AI build inputs on training imports, and section suggestions on flagged Library statements) are removed.
+- **Guesses go to a person.** Anything that would be a guess goes to **Citations** on the Knowledge Base screen, with up to three suggested sections found by meaning, to "Use" or "Remove". That covers:
+  - whole-entry citations (the Rules were cited as a whole while they were filed as guidance, and the PDF had no sections);
+  - citations of deleted laws with no same-law successor (federal Acts are never swapped for BC ones automatically);
+  - sections that no longer exist.
+- **Recall cases keep only IDs,** and their questions hold real records, so they're listed without meaning search.
+
+**Not tested end to end here:** the database side needs a live Supabase API. The matching rules have unit tests. After deploying, press **Check citations** on the Knowledge Base screen.
+
 ## 2026-11-22 — Knowledge Base read from BC Laws (migration 0101)
 
 **Why:** an audit found every BC Laws entry out of date. BC Laws had all of them current to November 17, 2026, but the library held:

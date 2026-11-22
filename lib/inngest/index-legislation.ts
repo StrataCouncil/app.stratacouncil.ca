@@ -8,6 +8,7 @@ import { stripForLibrary } from "@/lib/kb/privacy";
 import { LEGISLATION_INDEX_EVENT, inngest } from "@/lib/inngest/client";
 import { LEGISLATION_BUCKET } from "@/lib/legislation";
 import { mirrorLegislationToDemo } from "@/lib/demo-mirror";
+import { repairCitations } from "@/lib/kb/citation-repair-server";
 
 /**
  * Index one Knowledge Base entry (doc04 §5): read the file on our own
@@ -148,6 +149,14 @@ export const indexLegislation = inngest.createFunction(
         })
         .eq("id", id);
       return { status: "indexed", sections, chunks: rows.length };
+    });
+
+    // Re-indexing can renumber passages that training slides and Library
+    // items cite: re-link the ones whose section is certain. Anything else
+    // waits under "Citations" on the Knowledge Base screen.
+    await step.run("repair citations", async () => {
+      const r = await repairCitations({ withCandidates: false });
+      return { relinked: r.relinked.length, needsReview: r.review.length };
     });
 
     // The demo site answers from the same library (lib/demo-mirror.ts).
