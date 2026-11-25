@@ -332,8 +332,7 @@ button {
    block has to be last so its flex-basis: 100% actually sticks on
    mobile instead of silently getting reset back to 0%. */
 /* On a phone (2026-11-25): the mark on the left and the account menu on
-   the right of the first row, the sections centred on a second row under
-   a thin rule. */
+   the right of the first row, the sections centred on a second row. */
 @media (max-width: 720px) {
   .app-header__inner {
     justify-content: space-between;
@@ -358,8 +357,6 @@ button {
     flex-wrap: wrap;
     justify-content: center;
     gap: 0.1rem;
-    padding-top: 0.5rem;
-    border-top: 1px solid rgba(248, 246, 241, 0.12);
   }
 
   .app-nav a {
