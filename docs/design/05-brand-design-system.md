@@ -51,6 +51,7 @@ There is one attention colour (`--danger`), not a separate amber tier.
 - Used in the app header, on sign-in, sign-up, two-step, unsubscribe and investor pages, and on the demo's "Setting up your demo" page.
 - Static exports exist only where `currentColor` can't reach: `app/icon.svg` (favicon), `app/apple-icon.png`, and the email header.
 - The site footer reads "Powered by" with the Trickfilm logo (`components/TrickfilmLogo.tsx`).
+- **App header on a phone** (720px and narrower): the mark alone on the left, the account menu on the right, and the sections (Resources, Your Strata, Stratasphere, and Super Admin for staff) centred on one row beneath a thin rule. On the narrowest phones (400px and under) Super Admin reads "Admin" so the row doesn't wrap.
 
 ## 5. Visual language
 
