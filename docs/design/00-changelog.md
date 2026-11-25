@@ -8,6 +8,10 @@
 
 ---
 
+## 2026-11-25 — Phone header: no rule above the sections
+
+The thin rule between the header's first row and the centred sections is gone (it wasn't wanted). Nothing else changed.
+
 ## 2026-11-25 — App header tidied on phones
 
 **Why:** on a phone the account menu sat beside the logo and the section menu wrapped unevenly under both, left-aligned.
