@@ -47,8 +47,9 @@ export function TopNav({
         Stratasphere&trade;
       </Link>
       {isSuperAdmin && (
-        <Link href="/admin" data-active={active === "admin"} data-testid="top-admin">
-          Super Admin
+        <Link href="/admin" data-active={active === "admin"} data-testid="top-admin" aria-label="Super Admin">
+          {/* "Admin" alone on the narrowest phones, so the sections keep to one row. */}
+          <span className="app-nav__long">Super </span>Admin
         </Link>
       )}
     </nav>

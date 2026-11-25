@@ -8,6 +8,14 @@
 
 ---
 
+## 2026-11-25 — App header tidied on phones
+
+**Why:** on a phone the account menu sat beside the logo and the section menu wrapped unevenly under both, left-aligned.
+
+**What changed:** at 720px and narrower, the mark sits on the left, the account menu on the right, and the sections are centred on one row beneath a thin rule. On phones 400px and narrower, Super Admin (staff only) reads "Admin", with "Super Admin" kept as its accessible name, so four sections still fit on one row down to 360px. Wider screens are unchanged.
+
+**Checked:** the header was rendered with the app's stylesheet at 360, 390, 700, and 1280px, with and without Super Admin. Every width kept one row of sections and no sideways scroll.
+
 ## 2026-11-25 — New accounts land on the page they were sent to
 
 **Why:** a link to a Library item (the AGM card, say) sent to someone without an account ended on the Training page after they signed up, not on the item. Sign-in already kept the page (`next`), but the links from sign-in to sign-up dropped it, and the sign-up form didn't send it.
