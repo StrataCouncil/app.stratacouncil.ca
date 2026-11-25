@@ -7,6 +7,7 @@ import { Logo } from "@/components/Logo";
 import { sendOtp } from "@/lib/auth/actions";
 import { Turnstile } from "@/components/Turnstile";
 import { initialSendOtpState } from "@/lib/auth/otp-state";
+import { authHref } from "@/lib/auth/auth-links";
 
 /**
  * Passwordless sign-in (doc00 changelog 2026-09-29). Never creates an
@@ -90,7 +91,7 @@ function LoginForm() {
                 an account.
               </p>
               <Link
-                href={`/signup?email=${encodeURIComponent(state.email ?? "")}`}
+                href={authHref("/signup", { email: state.email, next })}
                 className="button button-secondary button-small"
                 data-testid="login-create-account"
               >
@@ -114,7 +115,10 @@ function LoginForm() {
           </button>
         </form>
         <div className="auth-card__footer">
-          Don&rsquo;t have an account? <Link href="/signup">Start free training</Link>
+          Don&rsquo;t have an account?{" "}
+          <Link href={authHref("/signup", { next })} data-testid="login-signup-link">
+            Start free training
+          </Link>
         </div>
       </div>
     </div>

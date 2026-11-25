@@ -12,9 +12,10 @@ import { safeNext } from "@/lib/safe-next";
  * this is just a redirect target, not a page — nothing to render either
  * way.
  *
- * `next` lets a caller send the user somewhere other than the dashboard
- * after confirming (unused today, kept for when a deep link — e.g. an
- * invite — needs to survive the auth round-trip).
+ * `next` sends the user on to the page they were sent to sign in for (an
+ * email's vote button, a Library item's link) instead of the dashboard,
+ * for a new account as much as a sign-in: the login and sign-up pages
+ * both carry it into the email's link (lib/auth/auth-links.ts).
  */
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
