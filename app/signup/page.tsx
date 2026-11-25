@@ -5,6 +5,7 @@ import { Suspense, useActionState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Logo } from "@/components/Logo";
 import { sendOtp } from "@/lib/auth/actions";
+import { authHref } from "@/lib/auth/auth-links";
 import { Turnstile } from "@/components/Turnstile";
 import { initialSendOtpState } from "@/lib/auth/otp-state";
 import { readCampaign } from "@/lib/campaign";
@@ -29,6 +30,9 @@ function SignupForm() {
   const params = useSearchParams();
   // From the login page's "Create an account", when the email had no account.
   const prefilledEmail = params.get("email") ?? "";
+  // The page they were sent to sign in for (a Library item, say): the
+  // confirmation email's link brings them back to it (lib/auth/auth-links.ts).
+  const next = params.get("next") ?? "";
   // Campaign tags from stratacouncil.ca's sign-up links, saved on the new account (0066).
   const campaign = readCampaign(params);
 
@@ -67,6 +71,7 @@ function SignupForm() {
         <p>No strata plan number needed &mdash; just your name and email.</p>
         <form action={formAction}>
           <input type="hidden" name="intent" value="signup" />
+          <input type="hidden" name="next" value={next} />
           {campaign &&
             Object.entries(campaign).map(([key, value]) => <input key={key} type="hidden" name={key} value={value} />)}
           <div className="field">
@@ -141,7 +146,10 @@ function SignupForm() {
           </button>
         </form>
         <div className="auth-card__footer">
-          Already have an account? <Link href="/login">Sign in</Link>
+          Already have an account?{" "}
+          <Link href={authHref("/login", { next })} data-testid="signup-login-link">
+            Sign in
+          </Link>
         </div>
       </div>
     </div>

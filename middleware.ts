@@ -2,6 +2,7 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { IS_DEMO } from "@/lib/demo";
 import { MFA_BACKUP_COOKIE_NAME, verifyMfaBackupCookieValue } from "@/lib/auth/mfa-session";
+import { safeNext } from "@/lib/safe-next";
 
 // Reachable without a session. Everything else redirects to /login.
 // /start and /demo: the demo site's personal links and the page that
@@ -74,8 +75,10 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
+  // Already signed in: straight on to the page they were sent to (a
+  // Library item's link, say), or the dashboard.
   if (user && (pathname === "/login" || pathname === "/signup")) {
-    return NextResponse.redirect(new URL("/", request.url));
+    return NextResponse.redirect(new URL(safeNext(request.nextUrl.searchParams.get("next")), request.url));
   }
 
   // Two-step verification (0053; everyone, 2026-11-13). Anyone who has set

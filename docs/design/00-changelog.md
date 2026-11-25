@@ -8,6 +8,19 @@
 
 ---
 
+## 2026-11-25 — New accounts land on the page they were sent to
+
+**Why:** a link to a Library item (the AGM card, say) sent to someone without an account ended on the Training page after they signed up, not on the item. Sign-in already kept the page (`next`), but the links from sign-in to sign-up dropped it, and the sign-up form didn't send it.
+
+**What changed:**
+
+- The sign-in page's "Create an account" and "Start free training" links, and the sign-up page's "Sign in" link, carry `next` (`lib/auth/auth-links.ts`).
+- The sign-up form sends `next` with the request, so the confirmation email's link (`/auth/confirm?next=…`) brings the new account to that page.
+- Someone already signed in who opens `/login` or `/signup` with a `next` goes straight to that page instead of the dashboard.
+- Only pages on the app are ever carried (`safeNext`), so a link can't send people to another site.
+
+**Checked:** unit tests for the links. A browser run on a local build followed a Library link through sign-in, sign-up, and back to sign-in, then submitted the sign-up. The request carried `/auth/confirm?next=%2Flibrary%2F…` as the email's link. The last step (clicking the real email) needs the live site.
+
 ## 2026-11-22 — Citations repaired when the Knowledge Base changes
 
 **Why:** training slides, Library items, and recall cases cite Knowledge Base passages by ID. When BC Laws publishes a new version (0101) or an entry is deleted (PIPEDA, FIPPA, the Canadian Human Rights Act, the Standard Bylaws PDF), a passage can change ID or disappear, and its citations point at nothing. Sources change as often as monthly, so this has to be automatic.
