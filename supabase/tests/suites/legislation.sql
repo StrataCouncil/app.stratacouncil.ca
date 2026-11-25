@@ -17,6 +17,10 @@ grant execute on function pg_temp.vec(int) to authenticated;
 -- Revoke the flow's blanket grants so the migration's own grants are what's tested.
 revoke all on legislation_documents from authenticated;
 grant select, insert, update, delete on legislation_documents to authenticated;
+-- Start from an empty Knowledge Base: 0101 adds two BC Laws entries (the
+-- Real Estate Services Regulation and the Human Rights Code), and the
+-- checks below count what a Super Admin and a strata admin can see.
+delete from legislation_documents;
 insert into subscriptions (corporation_id, status) values ('BCS-1234', 'active')
   on conflict (corporation_id) do update set status = 'active';
 

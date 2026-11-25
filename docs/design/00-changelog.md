@@ -19,7 +19,9 @@
 - Someone already signed in who opens `/login` or `/signup` with a `next` goes straight to that page instead of the dashboard.
 - Only pages on the app are ever carried (`safeNext`), so a link can't send people to another site.
 
-**Checked:** unit tests for the links. A browser run on a local build followed a Library link through sign-in, sign-up, and back to sign-in, then submitted the sign-up. The request carried `/auth/confirm?next=%2Flibrary%2F…` as the email's link. The last step (clicking the real email) needs the live site.
+**Also fixed:** the `legislation` database suite assumed an empty Knowledge Base. 0101 (#244) adds two BC Laws entries, which broke the suite on main. It now clears them first.
+
+**Checked:** unit tests for the links; every database suite passes. A browser run on a local build followed a Library link through sign-in, sign-up, and back to sign-in, then submitted the sign-up. The request carried `/auth/confirm?next=%2Flibrary%2F…` as the email's link. The last step (clicking the real email) needs the live site.
 
 ## 2026-11-22 — Citations repaired when the Knowledge Base changes
 
