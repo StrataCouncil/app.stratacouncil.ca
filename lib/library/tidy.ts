@@ -33,7 +33,7 @@ Also return
 - title: short, without "BC" or "Playbook" unless needed.
 - summary: one sentence, at most 30 words, saying what it helps with.
 - tags: 3 to 6 lowercase keywords.
-- claims: up to ${CLAIMS_MAX} statements in the content about what a law, regulation, standard bylaw, tribunal, or insurance rule requires or allows (for example "an owner must allow emergency entry without notice"). For each, the statement as it appears (shortened if long) and a search query to find the section in BC legislation (for example "emergency entry to strata lot without notice standard bylaw"). Don't list practical advice.`;
+- claims: up to ${CLAIMS_MAX} statements in the content about what a law, regulation, standard bylaw, tribunal, or insurance rule requires or allows (for example "an owner must allow emergency entry without notice"). For each, the statement as it appears (shortened if long) and a search query to find the section in BC legislation (for example "emergency entry to strata lot without notice standard bylaw"). When the content names the section the statement relies on, the query is that law's full name and the section, nothing else (for example "Strata Property Act s. 37" or "Real Estate Services Rules s. 88"); name each law in full, never an abbreviation. Don't list practical advice.`;
 
 export function tidyRequest(text: string) {
   return `The author's draft:\n\n<draft>\n${text.slice(0, PASTE_MAX_CHARS)}\n</draft>`;

@@ -8,6 +8,14 @@
 
 ---
 
+## 2026-11-27 — Citing a section finds the right Act
+
+**Why:** in the console's source search (Library and Council Training), "Strata Property Act, s. 37" returned section 37 of five other laws and not the Strata Property Act. The lookup matched the section number only, ignored the Act's name, and kept the first four matches from the whole Knowledge Base.
+
+**What changed:** a reference that names a Knowledge Base entry, by title or by an abbreviation of three or more capitals (SPA, RESA), now returns only that entry's sections. A bare number ("37") returns that section from every entry, up to 20 rather than 4, with the Strata Property Act first, then the Regulation, the Real Estate Services Act, and its Rules (`lib/training/library.ts`, `lib/training/library-server.ts`). The sections suggested for statements flagged when tidying a Library draft use the same lookup, so they're more precise too. When the draft names the section a flagged statement relies on, the tidy step now puts that law's full name and section in the statement's search (`lib/library/tidy.ts`), so the suggestion is that exact section rather than a guess by meaning. Before, "the old company must return the records within 4 weeks" found no section even though the draft cited s. 37.
+
+**Checked:** unit tests for reading labels, matching named entries, and ordering. The lookup itself runs against the live Knowledge Base, so check it in the console after deploying.
+
 ## 2026-11-25 — Phone header: no rule above the sections
 
 The thin rule between the header's first row and the centred sections is gone (it wasn't wanted). Nothing else changed.
