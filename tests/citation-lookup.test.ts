@@ -46,3 +46,9 @@ test("bare-number matches list the Strata Property Act first", () => {
     "Land Title Act",
   ]);
 });
+
+test("a flagged statement with its section in the query finds that section in that Act", () => {
+  const text = "The old company must give the strata its records within 4 weeks after the agreement ends, or pay the strata $1,000. Strata Property Act s. 37";
+  assert.deepEqual(citationLabels(text), ["s. 37"]);
+  assert.deepEqual(namedDocuments(text, docs), ["spa"]);
+});
