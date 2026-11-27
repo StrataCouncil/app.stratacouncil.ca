@@ -1,6 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { embed, toVectorLiteral } from "@/lib/kb/embed";
-import { mergeHits, type LibraryPassage } from "@/lib/training/library";
+import { byCitationOrder, citationLabels, mergeHits, namedDocuments, type LibraryPassage } from "@/lib/training/library";
 
 /**
  * Searching the Knowledge Base for Council Training (0037). Server
@@ -69,28 +69,41 @@ export async function loadPassages(ids: string[]): Promise<LibraryPassage[]> {
 /**
  * The passages a reference names ("Strata Property Act, s. 45",
  * "Standard Bylaw 23"), looked up by their labels rather than by meaning.
+ * When the reference names a Knowledge Base entry, only that entry's
+ * sections are returned; a bare number ("s. 37") returns that section from
+ * every entry, up to 20, so the one wanted isn't crowded out.
  */
 export async function passagesForCitations(references: string[]): Promise<LibraryPassage[]> {
-  const labels = new Set<string>();
-  for (const ref of references) {
-    for (const m of ref.matchAll(/\bs(?:ection|s?\.)?\s*(\d{1,3}(?:\.\d{1,3})?)/gi)) labels.add(`s. ${m[1]}`);
-    for (const m of ref.matchAll(/Standard Bylaw\s+(\d{1,3}(?:\.\d{1,3})?)/gi)) labels.add(`Standard Bylaw ${m[1]}`);
-  }
-  if (!labels.size) return [];
+  const wanted = references.map((ref) => ({ ref, labels: citationLabels(ref) })).filter((w) => w.labels.length);
+  if (!wanted.length) return [];
   const admin = createAdminClient();
+  const { data: docRows } = await admin.from("legislation_documents").select("id, title, short_name");
+  const docs = (docRows ?? []).map((d) => ({ id: d.id as string, title: (d.title as string) ?? "", shortName: (d.short_name as string | null) ?? null }));
   const columns = "id, legislation_document_id, title, chunk_text, chunk_index";
+  const lookups = wanted
+    .flatMap(({ ref, labels }) => {
+      const docIds = namedDocuments(ref, docs);
+      return labels.map((label) => ({ label, docIds }));
+    })
+    .slice(0, 30);
   const rows = (
     await Promise.all(
-      [...labels].slice(0, 30).map(async (label) => {
+      lookups.map(async ({ label, docIds }) => {
+        const limit = docIds.length ? 4 : 20;
         // "s. 45" alone, or "s. 45 Notice of general meetings" (never "s. 450").
-        const [exact, headed] = await Promise.all([
-          admin.from("knowledge_chunks").select(columns).eq("scope", "legislation").eq("title", label).limit(4),
-          admin.from("knowledge_chunks").select(columns).eq("scope", "legislation").like("title", `${label} %`).limit(4),
-        ]);
+        const query = (exact: boolean) => {
+          let q = admin.from("knowledge_chunks").select(columns).eq("scope", "legislation");
+          q = exact ? q.eq("title", label) : q.like("title", `${label} %`);
+          if (docIds.length) q = q.in("legislation_document_id", docIds);
+          return q.limit(limit);
+        };
+        const [exact, headed] = await Promise.all([query(true), query(false)]);
         for (const r of [exact, headed]) if (r.error) console.error("[passagesForCitations]", label, r.error.message);
         return [...(exact.data ?? []), ...(headed.data ?? [])];
       })
     )
   ).flat();
-  return withDocuments(rows.map((r) => ({ ...(r as Omit<Row, "similarity">), similarity: 1 })));
+  const seen = new Set<string>();
+  const unique = rows.filter((r) => !seen.has(r.id as string) && seen.add(r.id as string));
+  return (await withDocuments(unique.map((r) => ({ ...(r as Omit<Row, "similarity">), similarity: 1 })))).sort(byCitationOrder);
 }
