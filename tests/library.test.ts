@@ -129,3 +129,8 @@ test("a disclaimer can be fine print", () => {
     { type: "box", tone: "fineprint", title: null, blocks: [{ type: "paragraph", text: "Not legal advice." }] },
   ]);
 });
+
+test("an item keeps every source it cites, however many", () => {
+  const many = Array.from({ length: 45 }, (_, i) => ({ chunkId: `c${i}`, label: `SPA s. ${i + 1}` }));
+  assert.equal(normalizeSources(many).length, 45);
+});

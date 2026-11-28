@@ -8,7 +8,6 @@ import { MARKUP_MAX_CHARS } from "./markup.ts";
 
 export const LIBRARY_KINDS = Object.keys(knowledgeResourceKindLabels) as KnowledgeResourceKind[];
 export const PASTE_MAX_CHARS = 40000;
-const SOURCES_MAX = 20;
 export const CLAIMS_MAX = 15;
 
 /** A Knowledge Base section an item cites. */
@@ -62,8 +61,8 @@ export function normalizeSources(v: unknown): LibrarySource[] {
       const o = (x ?? {}) as Record<string, unknown>;
       return { chunkId: str(o.chunkId, 64), label: str(o.label, 300) };
     })
-    .filter((s) => s.chunkId && !seen.has(s.chunkId) && seen.add(s.chunkId))
-    .slice(0, SOURCES_MAX);
+    // No cap on how many: an item cites what it relies on (a budget playbook cites about 40 sections).
+    .filter((s) => s.chunkId && !seen.has(s.chunkId) && seen.add(s.chunkId));
 }
 
 export function normalizeClaims(v: unknown): LibraryClaim[] {

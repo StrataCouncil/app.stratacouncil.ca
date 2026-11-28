@@ -8,6 +8,14 @@
 
 ---
 
+## 2026-11-28 — Library items keep every source
+
+**Why:** saving a Library item kept only its first 20 sources and dropped the rest without saying so. The budget playbook cites about 40 sections.
+
+**What changed:** no limit on how many sources an item keeps (`lib/library/library.ts`). Duplicates and empty entries are still removed. An item saved before this change keeps only the 20 sources it was saved with; attach any missing ones again.
+
+**Checked:** typecheck and unit tests, including a 45-source item.
+
 ## 2026-11-28 — Library Share opens the share sheet; cleaner printing
 
 **Why:** Share copied the link on a computer even where the browser has a share sheet (Messages, Mail). On paper, the item's card edge ran down every sheet, and the browser's page header read "StrataCouncil.ca" rather than the item.
