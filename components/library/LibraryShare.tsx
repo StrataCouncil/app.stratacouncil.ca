@@ -3,8 +3,9 @@
 import { useState } from "react";
 
 /**
- * Share and Print for a Library item. Share opens the phone's share sheet;
- * on a computer it copies the link. Someone without an account who opens
+ * Share and Print for a Library item. Share opens the device's own share
+ * sheet (Messages, Mail, and the rest) wherever the browser has one, on a
+ * phone or a computer; where it doesn't, it copies the link. Someone without an account who opens
  * the link signs up and lands back on the item (the `next` carried through
  * sign-up, lib/auth/auth-links.ts). Print is the browser's own dialog,
  * which can also save a PDF; the print styles keep just the item, its
@@ -15,14 +16,15 @@ export function LibraryShare({ url, title }: { url: string; title: string }) {
 
   async function share() {
     setNote("");
-    const phone = typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
-    if (phone && typeof navigator.share === "function") {
+    const data = { title, text: title, url };
+    if (typeof navigator.share === "function" && (typeof navigator.canShare !== "function" || navigator.canShare(data))) {
       try {
-        await navigator.share({ title, url });
-      } catch {
-        // Closing the share sheet isn't an error worth showing.
+        await navigator.share(data);
+        return;
+      } catch (e) {
+        // Closing the share sheet isn't an error worth showing; anything else falls back to copying.
+        if (e instanceof DOMException && e.name === "AbortError") return;
       }
-      return;
     }
     try {
       await navigator.clipboard.writeText(url);

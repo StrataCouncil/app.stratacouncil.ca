@@ -8,6 +8,14 @@
 
 ---
 
+## 2026-11-28 — Library Share opens the share sheet; cleaner printing
+
+**Why:** Share copied the link on a computer even where the browser has a share sheet (Messages, Mail). On paper, the item's card edge ran down every sheet, and the browser's page header read "StrataCouncil.ca" rather than the item.
+
+**What changed:** Share opens the device's own share sheet wherever the browser offers one, phone or computer, and copies the link only where it doesn't (`components/library/LibraryShare.tsx`). The item's name is now the page title, so it shows in the browser tab, the share sheet, and the top of a printed page (`app/library/[resourceId]/page.tsx`). Printed, the item has no card border and the page has even margins (`app/globals.css`). The date, page number and address at the very top and bottom of a printed page come from the browser; its "Headers and footers" setting turns them off, and the item's own address still prints at the end.
+
+**Checked:** typecheck and unit tests.
+
 ## 2026-11-28 — Stratasphere keeps its conversation; Share and Print in the Library
 
 **Why:** after "Ask" beside a document in a list (Documents), the floating Stratasphere window showed the answer, then emptied. The conversation was saved (the full page had it) but the window had gone back to following the page, which is about no one document. The window also had no "still working" dots, and a document still being read gave no warning until the answer said it couldn't be used. Library items had no way to share or print.

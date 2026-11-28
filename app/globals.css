@@ -8356,6 +8356,9 @@ a.track-card:focus-visible {
 }
 
 /* A printed playbook: just the item, then its sources and its address. */
+@page {
+  margin: 0.6in 0.7in;
+}
 @media print {
   .app-header,
   .substrata-nav,
@@ -8387,6 +8390,13 @@ a.track-card:focus-visible {
   }
   .kb-article {
     display: block;
+  }
+  /* On paper the item is the page: no card edge running down each sheet. */
+  .kb-article__main {
+    border: 0;
+    border-radius: 0;
+    padding: 0;
+    background: none;
   }
   .lib-box,
   .lib-article__table,
