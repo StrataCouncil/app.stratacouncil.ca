@@ -1,5 +1,7 @@
 import { tz } from "@/lib/time-zone";
 import Link from "next/link";
+import { cache } from "react";
+import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { ResourcesNav } from "@/components/ResourcesNav";
@@ -30,6 +32,15 @@ import {
  * `reviewStatus` is a data field only, not shown anywhere on this page —
  * see the note on `reviewStatus` in lib/library/catalogue.ts for why.
  */
+const publishedItem = cache(getPublishedLibraryItem);
+
+/** The item's name as the page title: the browser tab, the share sheet, and the top of a printed page. */
+export async function generateMetadata({ params }: { params: Promise<{ resourceId: string }> }): Promise<Metadata> {
+  const { resourceId } = await params;
+  const item = isUuid(resourceId) ? await publishedItem(resourceId) : null;
+  return item ? { title: `${item.title} | StrataCouncil.ca` } : {};
+}
+
 export default async function KnowledgeResourcePage({
   params,
 }: {
@@ -37,7 +48,7 @@ export default async function KnowledgeResourcePage({
 }) {
   const { resourceId } = await params;
   if (isUuid(resourceId)) {
-    const item = await getPublishedLibraryItem(resourceId);
+    const item = await publishedItem(resourceId);
     if (!item) notFound();
     await logUserActivity({ kind: "guide_opened", strata: null, ref: item.id, label: item.title });
     return <LibraryItemPage item={item} />;
