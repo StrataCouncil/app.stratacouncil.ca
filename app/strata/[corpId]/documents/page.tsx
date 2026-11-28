@@ -4,6 +4,7 @@ import { StrataSphereNav } from "@/components/StrataSphereNav";
 import { DocumentUpload } from "@/components/DocumentUpload";
 import { DocumentExportRequest } from "@/components/DocumentExportRequest";
 import { GoogleDriveImport } from "@/components/GoogleDriveImport";
+import { DuplicateCheck } from "@/components/DuplicateCheck";
 import { getStrataAccess } from "@/lib/data/strata";
 import { IndexingNote } from "@/components/IndexingNote";
 import { documentCountsByCategory, hasUnfingerprintedFiles } from "@/lib/data/documents";
@@ -45,7 +46,7 @@ export default async function DocumentsPage({ params }: { params: Promise<{ corp
           <h2>Documents</h2>
           <p className="card__meta">
             Bylaws, minutes, financials, and more. Uploading is free, and every
-            PDF, Word, and text file is indexed so Stratasphere&trade; can use it.
+            PDF, Word, Excel, text and image file is indexed so Stratasphere&trade; can use it.
           </p>
         </div>
         <div className="doc-header__actions">
@@ -53,6 +54,8 @@ export default async function DocumentsPage({ params }: { params: Promise<{ corp
           <DocumentUpload corpId={corpId} />
         </div>
       </div>
+
+      {access.isAdmin && !IS_DEMO && <DuplicateCheck corpId={corpId} />}
 
       <div className="grid-cards" data-testid="document-folders">
         {uncategorized > 0 && (

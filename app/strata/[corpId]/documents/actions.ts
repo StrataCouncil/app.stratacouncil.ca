@@ -16,13 +16,15 @@ import {
   pickableDocumentCategories,
   type DocumentCategory,
 } from "@/lib/documents";
-import { queueDocumentFingerprints, queueDocumentIndexing } from "@/lib/kb/queue";
+import { queueCorporationFingerprints, queueDocumentFingerprints, queueDocumentIndexing } from "@/lib/kb/queue";
 import { IS_DEMO, demoLimitFail } from "@/lib/demo";
 import { demoRestricted } from "@/lib/demo-sandbox";
 import { logDemoActivity } from "@/lib/demo-usage";
 import { logUserActivity } from "@/lib/user-activity";
 import { isWebUrl } from "@/lib/web-url";
 import { isSha256Hex } from "@/lib/fingerprint";
+import { groupDuplicates, type DuplicateGroup } from "@/lib/documents-duplicates";
+import { documentAttachmentUses, hasUnfingerprintedFiles } from "@/lib/data/documents";
 
 /**
  * Document repository actions (doc01 §4a — free for every member, always).
@@ -322,7 +324,7 @@ export async function mergeDuplicateDocument(corpId: string, duplicateId: string
     p_keep_id: keepId,
   });
   if (error) {
-    if (error.message.includes("not the same file")) return { ok: false, error: "Those two files aren't identical." };
+    if (error.message.includes("not the same file")) return { ok: false, error: "Those two documents aren't the same file or the same text." };
     if (error.message.includes("stays")) return { ok: false, error: "That document is part of the strata's records, so it stays." };
     console.error("[mergeDuplicateDocument]", error.code, error.message);
     return { ok: false, error: "Couldn't remove the duplicate." };
@@ -336,6 +338,75 @@ export async function mergeDuplicateDocument(corpId: string, duplicateId: string
   revalidatePath(`/strata/${access.corpId}/documents`, "layout");
   revalidatePath(`/strata/${access.corpId}/meetings`, "layout");
   return { ok: true };
+}
+
+/**
+ * "Check for duplicates" on Documents (admins): every set of copies of the
+ * same document, matched on the file or on its text (0103). `pending` says
+ * whether some files are still being fingerprinted or read, so more may
+ * turn up later.
+ */
+export async function findDuplicateDocuments(corpId: string): Promise<{ ok: true; groups: DuplicateGroup[]; pending: boolean } | Fail> {
+  const access = await getStrataAccess(corpId);
+  if (!access?.isAdmin) return { ok: false, error: "Only an admin can check for duplicates." };
+  const supabase = await createClient();
+  const rows: Array<Record<string, unknown>> = [];
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await supabase
+      .from("documents")
+      .select("id, title, file_name, category, source_type, uploaded_at, content_sha256, text_fingerprint")
+      .eq("corporation_id", access.corpId)
+      .eq("is_current", true)
+      .order("uploaded_at", { ascending: true })
+      .range(from, from + 999);
+    if (error) {
+      console.error("[findDuplicateDocuments]", error.code, error.message);
+      return { ok: false, error: "Couldn't check for duplicates. Try again." };
+    }
+    rows.push(...(data ?? []));
+    if (!data || data.length < 1000) break;
+  }
+  const [uses, unfingerprinted, { count: unread }] = await Promise.all([
+    documentAttachmentUses(access.corpId),
+    hasUnfingerprintedFiles(access.corpId),
+    supabase
+      .from("documents")
+      .select("id", { count: "exact", head: true })
+      .eq("corporation_id", access.corpId)
+      .in("indexing_status", ["pending", "processing"]),
+  ]);
+  if (unfingerprinted && !IS_DEMO) await queueCorporationFingerprints(access.corpId);
+  const groups = groupDuplicates(
+    rows.map((d) => ({
+      id: d.id as string,
+      title: ((d.title as string | null) || (d.file_name as string | null) || "Untitled").slice(0, 300),
+      category: (d.category as string | null) ?? null,
+      sourceType: (d.source_type as string) ?? "upload",
+      uploadedAt: d.uploaded_at as string,
+      sha256: (d.content_sha256 as string | null) ?? null,
+      textFingerprint: (d.text_fingerprint as string | null) ?? null,
+      uses: uses.get(d.id as string)?.length ?? 0,
+    }))
+  );
+  return { ok: true, groups, pending: unfingerprinted || (unread ?? 0) > 0 };
+}
+
+/** Keep one copy and remove the others (each through mergeDuplicateDocument). Reports how many went and any that stayed. */
+export async function removeDuplicateCopies(
+  corpId: string,
+  keepId: string,
+  removeIds: string[]
+): Promise<{ ok: true; removed: number; problems: string[] } | Fail> {
+  if (!removeIds.length) return { ok: true, removed: 0, problems: [] };
+  let removed = 0;
+  const problems: string[] = [];
+  for (const id of [...new Set(removeIds)].filter((x) => x !== keepId)) {
+    const result = await mergeDuplicateDocument(corpId, id, keepId);
+    if (result.ok) removed++;
+    else if (removed === 0 && problems.length === 0 && result.error.startsWith("Only an admin")) return result;
+    else problems.push(result.error);
+  }
+  return { ok: true, removed, problems };
 }
 
 export interface AttachableDocument {

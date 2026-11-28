@@ -8,6 +8,17 @@
 
 ---
 
+## 2026-11-28 — Duplicates matched on content; Check for duplicates (0103)
+
+**Why:** Documents had many copies of the same document: uploaded, then attached again to an agenda item, then uploaded again. Identical files were already caught, but a re-export from Google Drive, a re-scan or a re-save has different bytes, so it slipped through.
+
+**What changed:**
+- **0103:** `documents.text_fingerprint`, a hash of the read text (lower-cased, whitespace collapsed; none under 200 characters, where short texts match too easily), kept up to date by a trigger and filled in for every document already read. `merge_duplicate_document` accepts the same text as well as the same file, and now points a Discussion's vote record at the copy kept. Safe to re-run; the function's grants are unchanged.
+- **Check for duplicates** on Documents (admins): every set of copies with the same file or the same text, grouped (`lib/documents-duplicates.ts`). Each set suggests the copy to keep (a strata record first, then one in a folder, then the most attached to agenda items, then the oldest); you can choose another. Removing the others points their agenda items at the kept one. Minutes and the Strata Plan are never removed. If documents are still being read, the panel says more may turn up.
+- Agenda uploads already reuse a file that's identical to one in Documents; a copy with only the same text is found once it's read, and shows up in the check.
+
+**Checked:** typecheck; unit tests for grouping, the suggested copy and what can be removed; database suite `duplicates-by-text` (fingerprints, the trigger, merging a re-export, agenda re-pointing) and the existing `documents` suite.
+
 ## 2026-11-28 — Scanned pages read twice, the better reading kept
 
 **Why:** monthly financial statements scanned from paper often showed "some pages unclear". Nothing had got worse (scans weren't read at all before November 3), but tables of figures are the hardest case for OCR, and the confidence score alone can mislead: on a poor test scan the reading reported 93% confidence and found none of the figures.
