@@ -8,6 +8,16 @@
 
 ---
 
+## 2026-11-28 — Scanned pages read twice, the better reading kept
+
+**Why:** monthly financial statements scanned from paper often showed "some pages unclear". Nothing had got worse (scans weren't read at all before November 3), but tables of figures are the hardest case for OCR, and the confidence score alone can mislead: on a poor test scan the reading reported 93% confidence and found none of the figures.
+
+**What changed:** the background indexer reads each scanned page a second way, at about 300 dots per inch and as one block (Tesseract page segmentation mode 6), and keeps whichever reading recovered more text, weighted by confidence (`betterReading`, `lib/kb/ocr.ts`). Reads someone waits on (historic minutes, an uploaded agenda, a Strata Plan) keep the single, faster reading. Scans read before this are read again once, 20 an hour (`lib/inngest/reread-scans.ts`).
+
+**Measured** on made-up scanned statements (20 accounts, 60 figures): clean scans unchanged (97%); a fax-quality scan 88% to 97%; a poor 120 dpi scan 0% to 70%. A very poor 100 dpi scan stays unreadable either way. Each scanned page takes about twice as long to read in the background.
+
+**Checked:** typecheck; unit tests, including the choice between readings and a careful read of a test scan.
+
 ## 2026-11-28 — Agenda links stay on the agenda; spreadsheets and photos are read (0102)
 
 **Why:** links attached to agenda items were also filed in Documents and fetched for Stratasphere, but most point at shared drives that need a sign-in, so they failed ("The link returned an error (401)") and cluttered Documents. Spreadsheets and photos could be uploaded but were never read.

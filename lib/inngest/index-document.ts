@@ -127,7 +127,7 @@ export const indexDocument = inngest.createFunction(
           ...(await step.run(`ocr-pages-${batch[0]}-${batch[batch.length - 1]}`, async () => {
             const loaded = await loadDocument(documentId);
             if (!loaded) throw new NonRetriableError("The document was deleted.");
-            return ocrPdfPages(loaded.bytes, batch);
+            return ocrPdfPages(loaded.bytes, batch, { careful: true });
           }))
         );
       }
