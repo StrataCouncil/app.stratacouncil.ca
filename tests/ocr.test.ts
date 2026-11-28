@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createCanvas, GlobalFonts } from "@napi-rs/canvas";
 import { PDFDocument, StandardFonts } from "pdf-lib";
-import { mergeOcr, ocrPdfPages, OCR_UNCLEAR_BELOW, pdfTextByPage } from "../lib/kb/ocr.ts";
+import { betterReading, mergeOcr, ocrPdfPages, OCR_UNCLEAR_BELOW, pdfTextByPage } from "../lib/kb/ocr.ts";
 
 // The "scan" is drawn in a font from the repo, not whatever "serif" the
 // machine has: on a runner without one the text came out as boxes and the
@@ -64,4 +64,19 @@ test("a blank scanned page doesn't count as unclear", () => {
   const { summary } = mergeOcr(["", ""], [{ page: 1, text: "Text.", confidence: 90 }, { page: 2, text: "", confidence: 0 }], 0);
   assert.equal(summary.unclear, 0);
   assert.equal(summary.confidence, 90);
+});
+
+test("the careful reading keeps whichever reading recovered more", () => {
+  const confidentButEmpty = { text: "EPS 0000", confidence: 93 };
+  const fullTable = { text: "Insurance 4,512.30 4,000.00 512.30\nHydro 1,204.11 1,350.00 -145.89", confidence: 83 };
+  assert.equal(betterReading(confidentButEmpty, fullTable), fullTable);
+  assert.equal(betterReading(fullTable, confidentButEmpty), fullTable);
+  const same = { text: "Same text", confidence: 90 };
+  assert.equal(betterReading(same, { text: "Same text", confidence: 90 }), same);
+});
+
+test("a careful read still reads the scanned page", { timeout: 180000 }, async () => {
+  const [page] = await ocrPdfPages(await mixedPdf(), [2], { careful: true });
+  assert.match(page.text, /STRATA PLAN BCS1234/);
+  assert.match(page.text, /roof inspection/);
 });

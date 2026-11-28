@@ -27,7 +27,7 @@ Everything sent to an AI service is stripped of personal information first, ever
 
 Indexing is the Inngest function `index-document`, run on upload (on a subscribed strata) and on Re-index. Documents stored while unsubscribed are read when the strata subscribes.
 
-1. Read the file on our own servers: PDF text layer, .docx, plain text, spreadsheets (.xlsx and .csv, each sheet as rows of cells, `lib/kb/spreadsheet.ts`), and photos (.jpg and .png, by OCR). Pages with no text layer, and photos, are read by OCR on our own servers (Tesseract, `lib/kb/ocr.ts`); Documents shows "Read from scan" or "Some pages unclear". Old .doc files are stored but not read.
+1. Read the file on our own servers: PDF text layer, .docx, plain text, spreadsheets (.xlsx and .csv, each sheet as rows of cells, `lib/kb/spreadsheet.ts`), and photos (.jpg and .png, by OCR). Pages with no text layer, and photos, are read by OCR on our own servers (Tesseract, `lib/kb/ocr.ts`). In the background indexer each scanned page is read twice, at about 180 and 300 dots per inch (the second as one block, which keeps table columns together), and the reading that recovered more text is kept; Documents shows "Read from scan" or "Some pages unclear". Old .doc files are stored but not read.
 2. Keep the raw text on the document row.
 3. Strip it against the roster and member names.
 4. Classify the document type from a stripped sample.
