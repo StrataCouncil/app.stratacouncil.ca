@@ -18,6 +18,10 @@
 begin;
 
 -- ── 1. Agenda attachments become inline links ───────────────────────────
+-- Adjourned meetings included: the address and title don't change, so
+-- the record doesn't either. The meetings guard (0014) allows this only
+-- with app.meeting_lifecycle on, for this transaction only.
+select set_config('app.meeting_lifecycle', 'on', true);
 update public.meetings m
 set agenda = (
   select coalesce(jsonb_agg(
@@ -56,6 +60,8 @@ where jsonb_typeof(m.agenda) = 'array'
       and d.corporation_id = m.corporation_id
       and position(d.id::text in m.agenda::text) > 0
   );
+
+select set_config('app.meeting_lifecycle', '', true);
 
 -- ── 2. Remove the link documents ────────────────────────────────────────
 delete from public.documents d

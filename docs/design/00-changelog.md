@@ -24,7 +24,7 @@
 
 **What changed:**
 - **Links:** a link added to an agenda item is kept on that item only: not filed in Documents, not fetched or read. The panel says so and suggests uploading the file instead (`addLinkAttachment`, `components/meetings/ItemEditor.tsx`).
-- **0102:** every agenda attachment that pointed at a link document becomes an inline link with the same address and title; the link documents and their passages are removed; `documents_no_links` stops new ones. Safe to re-run; no new grants.
+- **0102:** every agenda attachment that pointed at a link document becomes an inline link with the same address and title, adjourned meetings included (the meetings guard is lifted for that update only); the link documents and their passages are removed; `documents_no_links` stops new ones. Safe to re-run; no new grants. (Fixed the same day: the first version stopped at an adjourned meeting with a filed link and changed nothing.)
 - **Spreadsheets:** .xlsx (every sheet, one line per row, dates as YYYY-MM-DD, formulas as their saved result) and .csv are read on our own servers (`lib/kb/spreadsheet.ts`).
 - **Photos:** .jpg and .png are read by OCR on our own servers, like a scanned page. A file that isn't really an image is marked unreadable rather than crashing the reader.
 - **Already uploaded:** spreadsheets and photos stored as "not indexable" are queued by the hourly job, 50 an hour, until none are left (`lib/inngest/reread-scans.ts`).
