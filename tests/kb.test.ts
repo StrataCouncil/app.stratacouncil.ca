@@ -37,9 +37,11 @@ test("txt is extracted and whitespace normalized", async () => {
   assert.deepEqual(r, { status: "ok", text: "a b\n\nc" });
 });
 
-test("images and spreadsheets are unsupported", async () => {
+test("a file that isn't really an image fails cleanly, and odd formats are unsupported", async () => {
   const r = await extractDocumentText(new Uint8Array([1, 2, 3]), "photo.jpg", "image/jpeg");
-  assert.equal(r.status, "unsupported");
+  assert.deepEqual(r, { status: "unsupported", reason: "This image couldn't be opened." });
+  const doc = await extractDocumentText(new Uint8Array([1, 2, 3]), "old.doc", "application/msword");
+  assert.equal(doc.status, "unsupported");
 });
 
 test("html to text drops scripts and tags", () => {

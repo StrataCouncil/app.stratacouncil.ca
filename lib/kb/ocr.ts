@@ -51,6 +51,34 @@ export async function ocrPdfPages(bytes: Uint8Array, pages: number[]): Promise<O
   }
 }
 
+/**
+ * Reads a photo or scanned image (JPEG or PNG) as one page. The image is
+ * decoded and redrawn as a PNG first: a file that isn't really an image
+ * fails here with an ordinary error (Tesseract's own reader would crash
+ * its worker instead).
+ */
+export async function ocrImage(bytes: Uint8Array): Promise<OcrPage> {
+  const { createCanvas, loadImage } = await import("@napi-rs/canvas");
+  let png: Buffer;
+  try {
+    const img = await loadImage(Buffer.from(bytes));
+    const canvas = createCanvas(img.width, img.height);
+    canvas.getContext("2d").drawImage(img, 0, 0);
+    png = canvas.toBuffer("image/png");
+  } catch {
+    throw new Error("This image couldn't be opened.");
+  }
+  const { createWorker, OEM } = await import("tesseract.js");
+  const worker = await createWorker("eng", OEM.LSTM_ONLY, { langPath: TESSDATA, cachePath: tmpdir(), gzip: true });
+  try {
+    const { data } = await worker.recognize(png);
+    const text = data.text.trim();
+    return { page: 1, text, confidence: text ? Math.round(data.confidence) : 0 };
+  } finally {
+    await worker.terminate();
+  }
+}
+
 /** A PDF's text, page by page, from its text layer; and which pages have none. */
 export async function pdfTextByPage(bytes: Uint8Array): Promise<{ pages: string[]; scanned: number[] }> {
   const pdf = await getDocumentProxy(new Uint8Array(bytes));

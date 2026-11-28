@@ -85,7 +85,7 @@ Locally the same: `npm run typecheck`, `npm test`, `npm run build`, `npm run tes
 - Row-level security on every table, security definer functions for writes, column grants on `meetings`, nothing for `anon` (doc 01 §1).
 - The service role key is server-only.
 - Webhooks are signature-checked (Stripe, Supabase, Inngest). Cron calls carry `CRON_SECRET`.
-- Links fetched for indexing go through an SSRF guard.
+- Links are no longer fetched for indexing (0102); `lib/kb/fetch-link.ts` and its SSRF guard remain for any future fetch.
 - Workflows use a read-only GitHub token.
 - Dependency advisories are patched as GitHub reports them (Zod 4.6.7 in November; Next.js 15.5.29).
 - No test data on the live site; testing happens in the demo site's sandboxes.
