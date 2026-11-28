@@ -12495,3 +12495,42 @@ a.folder-card:active,
     animation: none !important;
   }
 }
+
+/* Check for duplicates on Documents */
+.dup-check {
+  margin: 0 0 1.25rem;
+}
+.dup-check__panel {
+  margin-top: 0.75rem;
+  padding: 1rem 1.25rem;
+}
+.dup-check__error {
+  color: var(--danger, #a33);
+}
+.dup-check__groups {
+  margin: 0.75rem 0;
+  padding-left: 1.25rem;
+}
+.dup-check__group {
+  margin-bottom: 1rem;
+}
+.dup-check__match {
+  margin: 0 0 0.35rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.dup-check__copies {
+  list-style: none;
+  margin: 0 0 0.5rem;
+  padding: 0;
+}
+.dup-check__copies label {
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+  padding: 0.2rem 0;
+  overflow-wrap: anywhere;
+}
