@@ -8,6 +8,10 @@
 
 ---
 
+## 2026-11-28 — Notes: bringing people into a strata
+
+`docs/joining-a-strata.md`: how invites and access requests differ, the order of steps that keeps a council lot's role when approving a request (roles first, then the lot), the two email fields on a lot, the risk of role mailboxes as sign-ins, and possible improvements not yet built. Docs only; no change to the app.
+
 ## 2026-11-28 — Library items keep every source
 
 **Why:** saving a Library item kept only its first 20 sources and dropped the rest without saying so. The budget playbook cites about 40 sections.

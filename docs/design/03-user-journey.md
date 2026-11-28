@@ -24,6 +24,7 @@ A separate site and repo. It sells free training to council members and Stratasp
 
 - **Sign-up:** name and email, a required Terms and Privacy checkbox, and an optional "Send me occasional updates" checkbox. The app emails a one-time link and code (Supabase Auth, sent through Mailtrap). No password.
 - **Sign-in:** email only, link or code. Signing in never creates an account; an unknown email is told to sign up.
+- **Invite or request:** an invite from a council lot ties the person to that lot and its role when they accept; an approved access request joins them with no lot or role. See `docs/joining-a-strata.md` for the order of steps after approving a council member's request.
 - **Coming back to the page they were sent to:** a link to any page in the app (a Library item, say) sends someone who isn't signed in to sign-in with that page remembered (`next`). It stays with them if they go on to sign up instead, and the email's link brings them to that page, not the dashboard, whether they signed in or created an account. Someone already signed in goes straight there. Only pages on the app itself are carried.
 - **Two-step authentication is optional.** Anyone can set up an authenticator app (with ten backup codes) from their account. Anyone who has set one up is asked for its code at sign-in. It isn't required at sign-up or for connecting to a strata; requiring it is a decision for when there are paying customers.
 - **Landing page:** Council Training.
