@@ -1,5 +1,6 @@
 import mammoth from "mammoth";
-import { mergeOcr, ocrPdfPages, pdfTextByPage, type OcrSummary } from "./ocr.ts";
+import { mergeOcr, ocrImage, ocrPdfPages, pdfTextByPage, type OcrSummary } from "./ocr.ts";
+import { csvText, xlsxText } from "./spreadsheet.ts";
 
 /**
  * Text out of an uploaded or fetched file. Runs entirely on our own
@@ -37,7 +38,23 @@ export async function extractDocumentText(bytes: Uint8Array, fileName: string, m
   if (mime.startsWith("text/html") || ext === "html" || ext === "htm") {
     return { status: "ok", text: normalize(htmlToText(new TextDecoder().decode(bytes))) };
   }
-  return { status: "unsupported", reason: "Only PDF, Word (.docx) and text files can be indexed." };
+  if (ext === "xlsx" || mime.includes("spreadsheetml")) {
+    const text = normalize(await xlsxText(bytes));
+    return text ? { status: "ok", text } : { status: "needs_text" };
+  }
+  if (ext === "csv" || mime === "text/csv") {
+    const text = normalize(csvText(new TextDecoder().decode(bytes)));
+    return text ? { status: "ok", text } : { status: "needs_text" };
+  }
+  if (["jpg", "jpeg", "png"].includes(ext) || mime === "image/jpeg" || mime === "image/png") {
+    // A photo or scanned image: read by OCR here, as one page.
+    try {
+      return finishOcr([""], [await ocrImage(bytes)], 0);
+    } catch (e) {
+      return { status: "unsupported", reason: e instanceof Error ? e.message : "This image couldn't be opened." };
+    }
+  }
+  return { status: "unsupported", reason: "Only PDF, Word (.docx), Excel (.xlsx), CSV, text and image (JPEG, PNG) files can be read." };
 }
 
 /**

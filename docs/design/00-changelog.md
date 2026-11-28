@@ -8,6 +8,19 @@
 
 ---
 
+## 2026-11-28 — Agenda links stay on the agenda; spreadsheets and photos are read (0102)
+
+**Why:** links attached to agenda items were also filed in Documents and fetched for Stratasphere, but most point at shared drives that need a sign-in, so they failed ("The link returned an error (401)") and cluttered Documents. Spreadsheets and photos could be uploaded but were never read.
+
+**What changed:**
+- **Links:** a link added to an agenda item is kept on that item only: not filed in Documents, not fetched or read. The panel says so and suggests uploading the file instead (`addLinkAttachment`, `components/meetings/ItemEditor.tsx`).
+- **0102:** every agenda attachment that pointed at a link document becomes an inline link with the same address and title; the link documents and their passages are removed; `documents_no_links` stops new ones. Safe to re-run; no new grants.
+- **Spreadsheets:** .xlsx (every sheet, one line per row, dates as YYYY-MM-DD, formulas as their saved result) and .csv are read on our own servers (`lib/kb/spreadsheet.ts`).
+- **Photos:** .jpg and .png are read by OCR on our own servers, like a scanned page. A file that isn't really an image is marked unreadable rather than crashing the reader.
+- **Already uploaded:** spreadsheets and photos stored as "not indexable" are queued by the hourly job, 50 an hour, until none are left (`lib/inngest/reread-scans.ts`).
+
+**Checked:** typecheck; unit tests (521), including a two-sheet workbook, CSV quoting, dates and a photo of a notice read by OCR; database suites, including a new one (`agenda-links`) that runs 0102 over a meeting with a filed link, twice.
+
 ## 2026-11-28 — Notes: bringing people into a strata
 
 `docs/joining-a-strata.md`: how invites and access requests differ, the order of steps that keeps a council lot's role when approving a request (roles first, then the lot), the two email fields on a lot, the risk of role mailboxes as sign-ins, and possible improvements not yet built. Docs only; no change to the app.

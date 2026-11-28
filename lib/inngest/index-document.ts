@@ -82,7 +82,8 @@ export const indexDocument = inngest.createFunction(
         return { status: "ocr" as const, pages, skipped: result.scanned.length - pages.length };
       }
       if (result.status === "needs_text") {
-        await admin.from("documents").update({ indexing_status: "needs_text" }).eq("id", documentId);
+        // An image already went through OCR in extractDocumentText: don't queue it for another try.
+        await admin.from("documents").update({ indexing_status: "needs_text", ocr_attempted_at: new Date().toISOString() }).eq("id", documentId);
         return { status: "stopped" as const };
       }
       if (result.status === "unsupported") {
@@ -96,9 +97,22 @@ export const indexDocument = inngest.createFunction(
         await admin.from("documents").update({ indexing_status: "needs_text" }).eq("id", documentId);
         return { status: "stopped" as const };
       }
+      // A photo (read by OCR as one page) keeps how the reading went; anything else is text.
       const { error: saveError } = await admin
         .from("documents")
-        .update({ document_text: result.text, text_source: "text", ocr_pages: null, ocr_unclear_pages: null, ocr_skipped_pages: null, ocr_confidence: null })
+        .update(
+          result.ocr
+            ? {
+                document_text: result.text,
+                text_source: "ocr",
+                ocr_attempted_at: new Date().toISOString(),
+                ocr_pages: result.ocr.read,
+                ocr_unclear_pages: result.ocr.unclear,
+                ocr_skipped_pages: result.ocr.skipped,
+                ocr_confidence: result.ocr.confidence,
+              }
+            : { document_text: result.text, text_source: "text", ocr_pages: null, ocr_unclear_pages: null, ocr_skipped_pages: null, ocr_confidence: null }
+        )
         .eq("id", documentId);
       if (saveError) throw new Error(`Couldn't save the document's text: ${saveError.message}`);
       return { status: "ok" as const };

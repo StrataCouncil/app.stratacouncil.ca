@@ -1,6 +1,7 @@
 "use server";
 
 import { nudgeDemoCouncil } from "@/lib/demo-council";
+import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -29,7 +30,6 @@ import { checkRatificationLinks } from "@/lib/data/discussions";
 import { agendaVersion } from "@/lib/meetings/agenda-version";
 import { draftMotionText } from "@/lib/ai/draft-motion";
 import { isGeneralMeeting } from "@/lib/meetings/rules";
-import { queueDocumentIndexing } from "@/lib/kb/queue";
 import { DEMO_EDITABLE_ITEM_ID, IS_DEMO, demoLimitFail, type DemoLimitFail } from "@/lib/demo";
 import { demoRestricted } from "@/lib/demo-sandbox";
 import { demoMeetingAgenda } from "@/lib/demo-kit/agenda";
@@ -337,22 +337,18 @@ export async function registerAgendaAttachments(
 }
 
 /**
- * A link attachment: filed as a document in the folder the person chose,
- * and fetched once in the background (with the link guard) so its content
- * is indexed for Stratasphere like any other attachment.
+ * A link attachment: kept on the agenda item only, saved with the agenda.
+ * It isn't filed in Documents or read for Stratasphere (links to shared
+ * drives mostly need a sign-in our server doesn't have). To have
+ * Stratasphere read something, upload the file.
  */
 export async function addLinkAttachment(
   corpId: string,
-  meetingId: string,
-  itemId: string,
   rawUrl: string,
-  label: string,
-  category: string
+  label: string
 ): Promise<Ok<{ attachment: Attachment }> | Fail | DemoLimitFail> {
   if (await demoRestricted()) return demoLimitFail();
-  const access = await runner(corpId);
-  if (!access) return { ok: false, error: "You can't add attachments to this agenda." };
-  if (!isDocumentCategory(category)) return { ok: false, error: "Choose the folder this link goes in." };
+  if (!(await runner(corpId))) return { ok: false, error: "You can't add attachments to this agenda." };
   let url: URL;
   try {
     url = new URL(rawUrl.trim());
@@ -361,30 +357,7 @@ export async function addLinkAttachment(
   }
   if (url.protocol !== "https:" && url.protocol !== "http:") return { ok: false, error: "Only web links (http or https) can be attached." };
   const title = (label.trim() || url.hostname).slice(0, 300);
-
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("documents")
-    .insert({
-      corporation_id: access.corpId,
-      category,
-      title,
-      file_name: null,
-      source_type: "link",
-      url: url.toString(),
-      uploaded_by: access.userId,
-      meeting_id: meetingId,
-      agenda_item_id: itemId,
-    })
-    .select("id")
-    .single();
-  if (error || !data) {
-    console.error("[addLinkAttachment]", error?.code, error?.message);
-    return { ok: false, error: "Couldn't add that link." };
-  }
-  await queueDocumentIndexing([data.id]);
-  revalidatePath(`/strata/${corpId}/documents`, "layout");
-  return { ok: true, attachment: { id: `a_${data.id}`, kind: "link", documentId: data.id, url: url.toString(), title } };
+  return { ok: true, attachment: { id: `l_${randomUUID()}`, kind: "link", documentId: null, url: url.toString(), title } };
 }
 
 const MOTION_SCHEMA = {

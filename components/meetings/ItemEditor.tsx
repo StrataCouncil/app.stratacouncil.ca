@@ -66,7 +66,7 @@ export function ItemEditor({
   const [noteDraft, setNoteDraft] = useState(note);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  // Attaching: upload files to a folder, add a link to a folder, or pick
+  // Attaching: upload files to a folder, add a link (kept on the item only), or pick
   // something already in Documents.
   const [adding, setAdding] = useState<"upload" | "link" | "library" | null>(null);
   const [folder, setFolder] = useState("");
@@ -207,10 +207,9 @@ export function ItemEditor({
 
   async function addLink() {
     if (!linkUrl.trim()) return;
-    if (!folder) return setError("Choose the folder this link goes in.");
     setError(null);
     setBusy("Adding link…");
-    const result = await addLinkAttachment(corpId, meetingId, draft.id, linkUrl, linkLabel, folder);
+    const result = await addLinkAttachment(corpId, linkUrl, linkLabel);
     setBusy(null);
     if (!result.ok) return setError(result.error);
     attach([result.attachment]);
@@ -413,17 +412,24 @@ export function ItemEditor({
                   <input value={linkLabel} onChange={(e) => setLinkLabel(e.target.value)} placeholder="Label (optional)" aria-label="Link label" maxLength={300} />
                 </div>
               )}
-              <label className="field">
-                <span>Folder in Documents</span>
-                <select value={folder} onChange={(e) => setFolder(e.target.value)} disabled={Boolean(busy)} data-testid="item-attach-folder">
-                  <option value="">Choose a folder</option>
-                  {pickableDocumentCategories.map((c) => (
-                    <option key={c} value={c}>
-                      {documentCategoryLabels[c]}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              {adding === "upload" ? (
+                <label className="field">
+                  <span>Folder in Documents</span>
+                  <select value={folder} onChange={(e) => setFolder(e.target.value)} disabled={Boolean(busy)} data-testid="item-attach-folder">
+                    <option value="">Choose a folder</option>
+                    {pickableDocumentCategories.map((c) => (
+                      <option key={c} value={c}>
+                        {documentCategoryLabels[c]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : (
+                <p className="field__hint" data-testid="item-link-hint">
+                  A link stays on this item only. It isn&rsquo;t filed in Documents, and Stratasphere can&rsquo;t read it. To
+                  have Stratasphere read something, upload the file instead.
+                </p>
+              )}
 
               {already ? (
                 <div className="item-editor__already" role="alert" data-testid="item-attach-already">
@@ -499,7 +505,7 @@ export function ItemEditor({
           )}
 
           <p className="field__hint">
-            Uploads and links are filed in the folder you choose and indexed so Stratasphere can use them.
+            Uploads are filed in the folder you choose and indexed so Stratasphere can use them. Links stay on this item only.
             Remove takes a document off this item only; it stays in Documents.
           </p>
         </fieldset>

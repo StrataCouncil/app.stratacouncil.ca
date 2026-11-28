@@ -27,7 +27,7 @@ Everything sent to an AI service is stripped of personal information first, ever
 
 Indexing is the Inngest function `index-document`, run on upload (on a subscribed strata) and on Re-index. Documents stored while unsubscribed are read when the strata subscribes.
 
-1. Read the file on our own servers: PDF text layer, .docx, plain text, or a link fetched once behind an SSRF guard. Pages with no text layer are read by OCR on our own servers (Tesseract, `lib/kb/ocr.ts`); Documents shows "Read from scan" or "Some pages unclear".
+1. Read the file on our own servers: PDF text layer, .docx, plain text, spreadsheets (.xlsx and .csv, each sheet as rows of cells, `lib/kb/spreadsheet.ts`), and photos (.jpg and .png, by OCR). Pages with no text layer, and photos, are read by OCR on our own servers (Tesseract, `lib/kb/ocr.ts`); Documents shows "Read from scan" or "Some pages unclear". Old .doc files are stored but not read.
 2. Keep the raw text on the document row.
 3. Strip it against the roster and member names.
 4. Classify the document type from a stripped sample.
@@ -35,7 +35,7 @@ Indexing is the Inngest function `index-document`, run on upload (on a subscribe
 6. Embed with Voyage `voyage-3` (1,024 dimensions; pgvector with an HNSW cosine index).
 7. Replace the document's passages. A subscribed strata also contributes an identity-stripped copy to the cross-platform precedent pool.
 
-Agenda attachments on a free strata are stored and viewable but not read. Link attachments are never fetched for the AI; it's told only that a link exists.
+Agenda attachments on a free strata are stored and viewable but not read. Link attachments stay on the agenda item and are never fetched or read; the AI is told only that a link exists.
 
 Acts and regulations in the Legislation Library are read from BC Laws by their links and refreshed weekly when BC Laws publishes a newer consolidation (0101); guidance is uploaded by Super Admins. Both are indexed the same way (scope `legislation`), with versions superseding older ones rather than replacing them. Citations in training and the Library are re-linked to the same section automatically after each re-index or deletion; anything uncertain is listed under Citations on the Knowledge Base screen for a choice. The same library feeds training content drafting, so the two never disagree on the law.
 
