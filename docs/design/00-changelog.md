@@ -8,6 +8,19 @@
 
 ---
 
+## 2026-11-28 — Stratasphere keeps its conversation; Share and Print in the Library
+
+**Why:** after "Ask" beside a document in a list (Documents), the floating Stratasphere window showed the answer, then emptied. The conversation was saved (the full page had it) but the window had gone back to following the page, which is about no one document. The window also had no "still working" dots, and a document still being read gave no warning until the answer said it couldn't be used. Library items had no way to share or print.
+
+**What changed:**
+- **Conversation kept:** the window follows the page only when the page changes what it shows, not when an answer finishes (`components/StratasphereDock.tsx`).
+- **Dots:** the pulsing dots from the full page now show in the window, after "Searching your records" and at the end of the text while it writes.
+- **Still reading:** asking about a document that's still being read shows "Still reading this document. Answers won't include it until it's done." under "Looking at". It goes away when the document is read (`components/DocumentList.tsx`).
+- **Share and Print** under a Library item's date (`components/library/LibraryShare.tsx`). Share opens the phone's share sheet; on a computer it copies the link. Print keeps just the item, then its legislation (the sidebar doesn't print) and the page's address.
+- **Printing fixed everywhere:** the print rule for MFA backup codes hid everything on every page; it now applies only to the page that shows backup codes (`app/globals.css`).
+
+**Checked:** typecheck and unit tests. In a browser, with the answer stream simulated: on the old code the conversation and "Looking at" vanished when the answer finished; on the new code both stay, the dots show, and the reading note clears when reading finishes. Share copied the link; the printed page shows the item, its sources, and its address.
+
 ## 2026-11-27 — Citing a section finds the right Act
 
 **Why:** in the console's source search (Library and Council Training), "Strata Property Act, s. 37" returned section 37 of five other laws and not the Strata Property Act. The lookup matched the section number only, ignored the Act's name, and kept the first four matches from the whole Knowledge Base.

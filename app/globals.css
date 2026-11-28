@@ -2400,8 +2400,9 @@ button.chat-source:hover {
   margin-top: 0;
 }
 
+/* Printing backup codes prints only them, and only on the page that shows them. */
 @media print {
-  body * {
+  body:has(.backup-codes) * {
     visibility: hidden;
   }
   .backup-codes,
@@ -8337,15 +8338,52 @@ a.track-card:focus-visible {
   }
 }
 
-/* A printed playbook: just the item. */
+/* Share and Print under a Library item's date */
+.lib-share {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+.lib-share__note {
+  font-size: 0.85rem;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.lib-print-only {
+  display: none;
+}
+
+/* A printed playbook: just the item, then its sources and its address. */
 @media print {
   .app-header,
   .substrata-nav,
   .kb-article__back,
   .kb-article__sidebar,
+  .lib-share,
+  .dock-fab,
   .site-footer,
   .demo-banner {
     display: none !important;
+  }
+  .lib-print-only {
+    display: block;
+    margin-top: 1.5rem;
+    break-inside: avoid;
+  }
+  .lib-print-only__title {
+    font-size: 1rem;
+    margin: 0 0 0.4rem;
+  }
+  .lib-print-only ul {
+    margin: 0 0 1rem;
+    padding-left: 1.2rem;
+    font-size: 0.85rem;
+  }
+  .lib-print-only__url {
+    font-size: 0.75rem;
+    color: var(--muted);
   }
   .kb-article {
     display: block;
@@ -11496,6 +11534,16 @@ button.design-editor__swatch {
   line-height: 1;
   color: var(--muted);
   cursor: pointer;
+}
+
+/* The document looked at is still being read */
+.dock-panel__reading {
+  margin: 0;
+  padding: 0.5rem 1rem;
+  background: var(--paper);
+  border-bottom: 1px solid var(--line);
+  font-size: 0.8rem;
+  color: var(--muted);
 }
 
 .dock-panel__body {

@@ -5,6 +5,8 @@ import { AppShell } from "@/components/AppShell";
 import { ResourcesNav } from "@/components/ResourcesNav";
 import { LibraryDisclaimer } from "@/components/library/LibraryDisclaimer";
 import { LibraryArticle } from "@/components/library/LibraryArticle";
+import { LibraryShare } from "@/components/library/LibraryShare";
+import { APP_URL } from "@/lib/app-url";
 import { getPublishedLibraryItem, listPublishedLibrary, type PublishedLibraryEntry } from "@/lib/data/library";
 import { logUserActivity } from "@/lib/user-activity";
 import { isUuid } from "@/lib/library/library";
@@ -54,6 +56,7 @@ async function LibraryItemPage({ item }: { item: PublishedLibraryEntry }) {
     .sort((a, b) => b.score - a.score)
     .slice(0, 4)
     .map((x) => x.r);
+  const pageUrl = `${APP_URL}/library/${item.id}`;
   const updated = new Date(item.publishedAt).toLocaleDateString("en-CA", { timeZone: tz("America/Vancouver", item.publishedAt), year: "numeric", month: "long", day: "numeric" });
 
   return (
@@ -83,6 +86,7 @@ async function LibraryItemPage({ item }: { item: PublishedLibraryEntry }) {
           <h1 className="kb-article__title">{item.title}</h1>
           <p className="kb-article__summary">{item.summary}</p>
           <span className="card__meta">Updated {updated}</span>
+          <LibraryShare url={pageUrl} title={item.title} />
           <div style={{ marginTop: "1.25rem" }}>
             <LibraryDisclaimer compact />
           </div>
@@ -104,6 +108,21 @@ async function LibraryItemPage({ item }: { item: PublishedLibraryEntry }) {
           )}
 
           <LibraryArticle markup={item.markup} />
+
+          {/* On paper only: the sidebar doesn't print, so its sources come here, with the page's address. */}
+          <div className="lib-print-only" aria-hidden="true">
+            {item.sources.length > 0 && (
+              <>
+                <h2 className="lib-print-only__title">Legislation referenced</h2>
+                <ul>
+                  {item.sources.map((s) => (
+                    <li key={s.chunkId}>{s.label}</li>
+                  ))}
+                </ul>
+              </>
+            )}
+            <p className="lib-print-only__url">{pageUrl}</p>
+          </div>
         </article>
 
         <aside className="kb-article__sidebar">
