@@ -29,13 +29,16 @@ import { FloatingWindow } from "@/components/FloatingWindow";
  * (components/meetings/MeetingStratasphere.tsx, about the agenda item).
  */
 
-export type PageFocus = { ref: FocusRef; label: string; title: string };
+/** `reading`: a document Stratasphere is still reading, so answers can't use it yet. */
+export type PageFocus = { ref: FocusRef; label: string; title: string; reading?: boolean };
 
 type FocusApi = {
   /** The page's record (null when the page is about nothing in particular). */
   setPageFocus: (f: PageFocus | null) => void;
   /** Open the panel about a record ("Ask about this"). */
   askAbout: (f: PageFocus) => void;
+  /** The same record, with fresher details (say, it has finished being read). */
+  refreshFocus: (f: PageFocus) => void;
 };
 
 const FocusContext = createContext<FocusApi | null>(null);
@@ -57,6 +60,12 @@ export function LookingAt({ focus }: { focus: PageFocus | null }) {
 /** A small "Ask Stratasphere" link beside a record; nothing if the person can't use Stratasphere. */
 export function AskAboutButton({ focus, className }: { focus: PageFocus; className?: string }) {
   const api = useContext(FocusContext);
+  const key = JSON.stringify(focus);
+  useEffect(() => {
+    api?.refreshFocus(focus);
+    // The focus is compared by value.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [api, key]);
   if (!api) return null;
   return (
     <button type="button" className={className ?? "button button-secondary button-small"} onClick={() => api.askAbout(focus)} data-testid="ask-about">
@@ -125,13 +134,27 @@ export function StratasphereDock({ mode, children }: { mode: "chat" | "pitch" | 
         setOpen(true);
         requestAnimationFrame(() => input.current?.focus());
       },
+      refreshFocus: (f) => {
+        if (!focusNow.current || !sameFocus(focusNow.current.ref, f.ref)) return;
+        focusNow.current = f;
+        setFocus(f);
+      },
     }),
     [switchTo]
   );
 
-  // The page's record becomes the panel's focus, unless a question is being answered.
+  // The page's record becomes the panel's focus when the page changes what
+  // it shows, or once an answer finishes if it changed meanwhile. An answer
+  // finishing alone doesn't: after "Ask" beside a document in a list, the
+  // page shows no one record, and following it would drop that document's
+  // conversation from the panel.
+  const followed = useRef<string | null>(null);
   useEffect(() => {
-    if (!streaming) switchTo(pageFocus);
+    if (streaming) return;
+    const key = pageFocus ? JSON.stringify(pageFocus) : "";
+    if (followed.current === key) return;
+    followed.current = key;
+    switchTo(pageFocus);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pageFocus, streaming]);
 
@@ -267,6 +290,11 @@ export function StratasphereDock({ mode, children }: { mode: "chat" | "pitch" | 
                   </button>
                 </div>
               )}
+              {active?.reading && (
+                <p className="dock-panel__reading" role="status" data-testid="dock-reading">
+                  Still reading this document. Answers won&rsquo;t include it until it&rsquo;s done.
+                </p>
+              )}
               <div className="dock-panel__body" ref={transcript}>
                 {messages.length === 0 ? (
                   <div className="dock-suggest" data-testid="dock-suggestions">
@@ -281,7 +309,25 @@ export function StratasphereDock({ mode, children }: { mode: "chat" | "pitch" | 
                   messages.map((m) => (
                     <div className="dock-msg" data-role={m.role} key={m.id}>
                       <div className="dock-msg__bubble">
-                        {m.pending && !m.content ? <span className="chat-thinking">Searching your records&hellip;</span> : m.content}
+                        {m.pending && !m.content ? (
+                          <span className="chat-thinking" role="status">
+                            Searching your records
+                            <span className="chat-dots" aria-hidden="true">
+                              <span />
+                              <span />
+                              <span />
+                            </span>
+                          </span>
+                        ) : (
+                          m.content
+                        )}
+                        {m.pending && m.content ? (
+                          <span className="chat-dots chat-dots--inline" aria-label="Still writing">
+                            <span />
+                            <span />
+                            <span />
+                          </span>
+                        ) : null}
                       </div>
                       {m.role === "assistant" && !m.pending && (
                         <>

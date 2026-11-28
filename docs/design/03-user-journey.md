@@ -63,7 +63,7 @@ There is no seat limit. Strata creation is reviewed because a strata's records c
 - **Management:** the strata management company's details and logo, printed at the top of agendas and minutes (admins and managers only).
 - **Billing:** admins and billing contacts only.
 
-The Library and Forms & Templates (in Resources) are free to everyone signed in. Every item is written and published by Super Admins in the console; templates and forms download as Word, blank, for council to fill in.
+The Library and Forms & Templates (in Resources) are free to everyone signed in. Every item is written and published by Super Admins in the console; templates and forms download as Word, blank, for council to fill in. Each item has Share (the phone's share sheet, or on a computer the link copied) and Print (just the item, then its legislation and its address; the browser's dialog also saves a PDF). A shared link brings someone without an account through sign-up and back to the item.
 
 ## 6. Subscribing to Stratasphere (paid)
 

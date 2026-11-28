@@ -61,6 +61,7 @@ There is one attention colour (`--danger`), not a separate amber tier.
 - One clay button per moment. It marks the next step, and it moves: while an agenda has unsaved changes, Save is clay and Launch is secondary and disabled; once saved, they swap.
 - Locked features are greyed (`--locked`, `--locked-bg`) with a stroke padlock. Admins are offered a subscription; everyone else is told to ask an admin.
 - Floating windows (the Stratasphere assistant) drag by the title bar, resize from the corner, remember where they were left, and fill the screen on phones. The Ask Stratasphere button sits bottom right in the same place on every page except the Stratasphere page itself.
+- Stratasphere working: three pulsing dots (`.chat-dots`, still under reduced motion) after "Searching your records" and at the end of the text while it writes, in the full page and the floating window alike.
 
 ### Motion
 

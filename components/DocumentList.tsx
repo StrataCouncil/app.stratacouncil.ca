@@ -181,7 +181,12 @@ export function DocumentList({
                 {/* Opens the Stratasphere panel looking at this document (PR 4a); shown only to those who can use it. */}
                 <AskAboutButton
                   className="text-action"
-                  focus={{ ref: { kind: "document", documentId: doc.id }, label: doc.title, title: doc.title }}
+                  focus={{
+                    ref: { kind: "document", documentId: doc.id },
+                    label: doc.title,
+                    title: doc.title,
+                    reading: !stuck && (doc.indexingStatus === "pending" || doc.indexingStatus === "processing"),
+                  }}
                 />
                 {canIndex && (
                   <button
